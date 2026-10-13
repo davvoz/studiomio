@@ -3,15 +3,17 @@ import type { AudioClip } from '../../model/audio-clip';
 import type { AudioTrack, Track } from '../../model/track';
 import { dbToGain } from '../audio-graph';
 import type { PlayableProvider } from '../clip-audio';
-import type { ScheduleWindow } from '../scheduler';
-import { placementEnd } from '../../model/arrangement';
-import { placementSegments, segmentToStart, type Segment } from '../segments';
-import { ActiveNodes, type PlayerContext, type TrackPlayer } from './track-player';
+import { timeAtClock, type ScheduleWindow } from '../scheduler';
+import { placementSegments, type Segment } from '../segments';
+import { piecesInWindow, type Piece } from '../track-content';
+import { ActiveNodes, stopQuietly, type PlayerContext, type TrackPlayer } from './track-player';
 
 /** Dissolvenza agli estremi di ogni tratto: evita i clic su tagli e giri di loop. */
 const FADE = 0.002;
 
-/** Suona le clip audio della timeline: un nodo di lettura per ogni tratto continuo. */
+const EPS = 1e-9;
+
+/** Suona le clip audio della traccia (timeline e session): un nodo di lettura per ogni tratto continuo. */
 export class AudioTrackPlayer implements TrackPlayer {
   private track: AudioTrack;
   private readonly segments = new WeakMap<Placement, Segment[]>();
@@ -30,14 +32,14 @@ export class AudioTrackPlayer implements TrackPlayer {
   }
 
   schedule(w: ScheduleWindow): void {
-    const lo = Math.max(w.from, w.runStart);
-    for (const p of this.track.arrangement) {
-      if (p.start >= w.to || placementEnd(p) <= lo) continue;
-      for (const seg of this.segmentsOf(p)) {
-        const s = segmentToStart(seg, w);
-        if (s) this.play(p.clip, s, w);
-      }
+    const from = w.from + w.shift, to = w.to + w.shift;
+    for (const piece of piecesInWindow(this.track, this.ctx.programs(), w, p => this.segmentsOf(p))) {
+      if (piece.start >= from - EPS && piece.start < to - EPS) this.play(piece, w);
     }
+  }
+
+  cut(at: number): void {
+    this.active.cutAt(at);
   }
 
   stopAll(): void {
@@ -57,17 +59,17 @@ export class AudioTrackPlayer implements TrackPlayer {
     return s;
   }
 
-  private play(clip: AudioClip, s: Segment, w: ScheduleWindow): void {
+  private play({ clip, start, end: stop, contentStart }: Piece<AudioClip>, w: ScheduleWindow): void {
     const playable = this.clips.playable(clip);
     if (!playable) {
       this.ctx.missing(); // l'audio arriva: il motore riprogrammerà quando è pronto
       return;
     }
     const { buffer, rate } = playable;
-    let when = w.timeAt(s.start);
-    const end = w.timeAt(s.end);
+    let when = timeAtClock(w, start);
+    const end = timeAtClock(w, stop);
     // punto del buffer (in secondi di buffer) che corrisponde all'inizio del tratto
-    let offset = w.tempo.secondsAt(s.contentStart - playable.startBeat) * rate;
+    let offset = w.tempo.secondsAt(contentStart - playable.startBeat) * rate;
     if (offset < 0) {
       // il tratto inizia prima del sample: si aspetta che il sample cominci
       when -= offset / rate;
@@ -91,9 +93,19 @@ export class AudioTrackPlayer implements TrackPlayer {
     amp.connect(output);
     src.start(when, offset, duration * rate);
     src.stop(when + duration);
+    const ends = when + duration;
     this.active.add(src, () => {
       src.disconnect();
       amp.disconnect();
+    }, at => {
+      if (at >= ends) return;
+      // tagliato prima di partire: non suona; altrimenti una breve dissolvenza fino ad `at`
+      if (at > when) {
+        amp.gain.cancelScheduledValues(at - FADE);
+        amp.gain.setValueAtTime(g, Math.max(when, at - FADE));
+        amp.gain.linearRampToValueAtTime(0, at);
+      }
+      stopQuietly(src, Math.max(at, when));
     });
   }
 }

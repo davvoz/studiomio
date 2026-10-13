@@ -1,5 +1,6 @@
 import type { Beats } from '../core/music-time';
 import type { Placement } from '../model/arrangement';
+import type { Clip } from '../model/clip';
 
 /** Un tratto continuo di una clip sulla timeline: da `start` a `end` suona il contenuto
  *  della clip a partire dal battito `contentStart`, senza salti. */
@@ -43,4 +44,25 @@ export function segmentToStart(
   const end = Math.min(s.end, window.runEnd);
   if (start < window.from - EPS || start >= window.to - EPS || end - start <= EPS) return null;
   return { start, end, contentStart: s.contentStart + (start - s.start) };
+}
+
+/** I tratti di una clip lanciata nella session: suona da `origin` (dove parte il suo inizio)
+ *  e, se è in loop, ripete senza fine. Restituisce solo i tratti che toccano [lo, hi), così
+ *  una clip che gira da ore costa come una appena partita. */
+export function clipSegmentsBetween(clip: Clip, origin: number, lo: number, hi: number): Segment[] {
+  const { region, loop } = clip;
+  const out: Segment[] = [];
+  // il primo tratto va dall'inizio della clip alla fine del loop (o della clip); poi i giri
+  const firstLen = (loop.enabled ? loop.end : region.end) - region.start;
+  if (!loop.enabled) {
+    if (origin < hi && origin + firstLen > lo) out.push({ start: origin, end: origin + firstLen, contentStart: region.start });
+    return out;
+  }
+  const loopLen = loop.end - loop.start;
+  if (origin + firstLen > lo && origin < hi) out.push({ start: origin, end: origin + firstLen, contentStart: region.start });
+  let k = Math.max(0, Math.floor((lo - origin - firstLen) / loopLen));
+  for (let start = origin + firstLen + k * loopLen; start < hi; k++, start += loopLen) {
+    if (start + loopLen > lo) out.push({ start, end: start + loopLen, contentStart: loop.start });
+  }
+  return out;
 }

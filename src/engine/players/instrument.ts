@@ -11,6 +11,9 @@ export interface Instrument {
   /** Nuovi valori dei parametri (stesso tipo di strumento). */
   update(settings: InstrumentSettings): void;
   stopAll(): void;
+  /** Toglie le note che partirebbero da `at` (secondi del contesto) e chiude lì quelle che
+   *  suonerebbero oltre. */
+  cut(at: number): void;
   dispose(): void;
 }
 

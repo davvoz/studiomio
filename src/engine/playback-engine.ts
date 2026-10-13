@@ -1,6 +1,7 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { DeviceId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
+import { launchQuantumBeats } from '../model/launch';
 import type { ChainOwner, Project } from '../model/project';
 import type { AudioTrack, MidiTrack, Track } from '../model/track';
 import type { AudioGraph } from './audio-graph';
@@ -14,6 +15,7 @@ import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
 import { Scheduler, type ScheduledSource } from './scheduler';
+import { Session, slotClip, type TrackSessionState } from './session';
 
 /** Servizi di cui i player hanno bisogno. */
 export interface EngineServices {
@@ -56,11 +58,14 @@ export interface EngineOptions {
 
 type EngineEvents = {
   state: [playing: boolean];
+  /** Una clip lanciata o fermata, un ritorno all'arrangement. */
+  session: [];
 };
 
 /** Trasporto e riproduzione del progetto. Riceve ogni nuova versione del progetto con
  *  `setProject`: aggiorna mixer e player e, se sta suonando e qualcosa che si sente è
- *  cambiato, riprogramma dalla posizione corrente. */
+ *  cambiato, riprogramma dalla posizione corrente. Suona la timeline e le clip lanciate
+ *  nella session, quantizzate sull'orologio continuo del trasporto. */
 export class PlaybackEngine {
   private project: Project | null = null;
   private readonly mixer: MixerGraph;
@@ -78,6 +83,7 @@ export class PlaybackEngine {
   private cursor: Beats = 0;
   /** Qualche tratto non è partito perché il suo audio non era pronto. */
   private missed = false;
+  private readonly session = new Session();
 
   constructor(private readonly graph: AudioGraph, private readonly services: EngineServices, opts: EngineOptions = {}) {
     this.timer = opts.timer ?? intervalTimer;
@@ -120,13 +126,109 @@ export class PlaybackEngine {
     return this.events.on('state', fn);
   }
 
+  onSessionChange(fn: () => void): Unsubscribe {
+    return this.events.on('session', fn);
+  }
+
+  // ---------------------------------------------------------------- session
+
+  /** Lancia la clip dello slot (slot vuoto: ferma la traccia) al prossimo confine della
+   *  quantizzazione; a trasporto fermo lo fa partire, e la clip con lui. */
+  launchSlot(track: TrackId, slot: number): void {
+    this.launch([[track, slot]]);
+  }
+
+  /** Lancia una scena: in ogni traccia la clip della riga, e dove lo slot è vuoto lo stop. */
+  launchScene(index: number): void {
+    this.launch(this.project?.tracks.map(t => [t.id, index] as const) ?? []);
+  }
+
+  /** Ferma la clip della traccia al prossimo confine (la traccia resta muta, come in Live). */
+  stopTrack(track: TrackId): void {
+    if (!this.playing) return;
+    this.switchTracks([track], at => this.session.stop(track, at));
+  }
+
+  /** Ferma tutte le clip della session (le tracce che seguono la timeline continuano). */
+  stopAllClips(): void {
+    if (!this.playing || !this.project) return;
+    const clock = this.clock;
+    const busy = this.project.tracks.filter(t => {
+      const s = this.session.state(t, clock);
+      return s.playing || (s.queued && s.queued !== 'stop');
+    }).map(t => t.id);
+    this.switchTracks(busy, (at, id) => this.session.stop(id, at));
+  }
+
+  /** Le tracce prese dalla session tornano subito alla loro timeline. */
+  backToArrangement(): void {
+    const at = this.playing ? this.scheduler.scheduledClock : -Infinity;
+    for (const id of this.session.backToArrangement(at)) if (this.playing) this.players.get(id)?.player.cut(this.scheduler.timeAtClock(at));
+    this.events.emit('session');
+  }
+
+  sessionState(track: Track): TrackSessionState {
+    return this.session.state(track, this.clock);
+  }
+
+  /** Vero se qualche traccia non segue la timeline (si accende "Torna all'arrangement"). */
+  get arrangementOverridden(): boolean {
+    return this.session.overridden;
+  }
+
+  /** L'orologio continuo adesso. */
+  private get clock(): number {
+    return (this.playing ? this.scheduler.clockAt(this.graph.currentTime) : null) ?? this.cursor;
+  }
+
+  /** Il prossimo confine della quantizzazione non ancora programmato. */
+  private boundary(): number {
+    const p = this.project!, q = launchQuantumBeats(p.launchQuantization, p.signature);
+    const earliest = this.scheduler.scheduledClock;
+    return q > 0 ? Math.ceil(earliest / q - 1e-9) * q : earliest;
+  }
+
+  private launch(items: readonly (readonly [TrackId, number])[]): void {
+    const p = this.project;
+    if (!p) return;
+    const clips = items.map(([id, slot]) => [id, p.track(id)?.slots[slot] ?? null] as const);
+    if (this.playing) {
+      this.switchTracks(clips.map(([id]) => id), (at, id) => {
+        const clip = clips.find(([t]) => t === id)![1];
+        if (clip) this.session.launch(id, clip.id, at);
+        else this.session.stop(id, at);
+      });
+      return;
+    }
+    // da fermo: le clip partono con il trasporto, dal cursore
+    if (!clips.some(([, c]) => c)) return;
+    for (const [id, clip] of clips) {
+      if (clip) this.session.launch(id, clip.id, this.cursor);
+      else this.session.stop(id, this.cursor);
+    }
+    this.play();
+    this.events.emit('session');
+  }
+
+  /** Cambia la scaletta delle tracce al prossimo confine e taglia lì ciò che era già programmato. */
+  private switchTracks(tracks: readonly TrackId[], change: (at: number, track: TrackId) => void): void {
+    if (!tracks.length) return;
+    const at = this.boundary();
+    this.session.prune(this.clock);
+    for (const id of tracks) {
+      change(at, id);
+      this.players.get(id)?.player.cut(this.scheduler.timeAtClock(at));
+    }
+    this.events.emit('session');
+  }
+
   setProject(next: Project): void {
     const prev = this.project;
     this.project = next;
     this.mixer.sync(next);
     const changed = this.syncPlayers(next);
     const audible = changed || !prev || prev.tempo !== next.tempo || prev.loop !== next.loop;
-    if (this.playing && audible) this.restart(this.position);
+    if (this.playing && audible) this.resume();
   }
 
   play(from: Beats = this.cursor): void {
@@ -139,10 +241,12 @@ export class PlaybackEngine {
 
   stop(): void {
     if (!this.playing) return;
+    this.session.reset(this.clock);
     this.scheduler.stop();
     this.cancelTimer?.();
     this.cancelTimer = null;
     this.events.emit('state', false);
+    this.events.emit('session');
   }
 
   /** Sposta la testina; se sta suonando continua da lì. */
@@ -154,7 +258,7 @@ export class PlaybackEngine {
   /** Da chiamare quando arriva dell'audio che mancava: se qualcosa è stato saltato,
    *  riprogramma dalla posizione corrente così si sente. */
   refresh(): void {
-    if (this.playing && this.missed) this.restart(this.position);
+    if (this.playing && this.missed) this.resume();
   }
 
   /** Fa sentire subito una nota con lo strumento della traccia (piano roll, tastiera). */
@@ -174,11 +278,24 @@ export class PlaybackEngine {
     this.players.clear();
   }
 
+  /** Riprogramma da `beat` (play, salto del cursore). Se stava già suonando l'orologio
+   *  continua (le clip della session restano in fase), altrimenti parte dal battito. */
   private restart(beat: Beats): void {
+    this.restartAt(beat, this.playing ? this.clock : beat, this.graph.currentTime + this.startLatency);
+  }
+
+  /** Riprogramma senza spostarsi (dopo una modifica): si riparte da dove il trasporto sarà
+   *  quando il nuovo suono arriva, così niente slitta. */
+  private resume(): void {
+    const at = this.graph.currentTime + this.startLatency;
+    this.restartAt(this.scheduler.positionAt(at) ?? this.position, this.scheduler.clockAt(at) ?? this.clock, at);
+  }
+
+  private restartAt(beat: Beats, clock: number, time: number): void {
     const p = this.project!;
     this.scheduler.stop();
     this.missed = false;
-    this.scheduler.start(beat, this.graph.currentTime + this.startLatency, p.tempo, p.loop);
+    this.scheduler.start(beat, time, p.tempo, p.loop, clock);
     this.scheduler.advance(this.graph.currentTime);
   }
 
@@ -196,7 +313,8 @@ export class PlaybackEngine {
       present.add(t.id);
       const entry = this.players.get(t.id);
       if (entry && entry.kind === t.kind) {
-        if (prevTracks.get(t.id)?.arrangement !== t.arrangement) changed = true;
+        const prev = prevTracks.get(t.id);
+        if (prev?.arrangement !== t.arrangement || (prev && this.playingClipChanged(prev, t))) changed = true;
         entry.player.update(t);
         continue;
       }
@@ -207,7 +325,11 @@ export class PlaybackEngine {
         this.players.delete(t.id);
         continue;
       }
-      const ctx: PlayerContext = { graph: this.graph, output: this.mixer.input(t.id), missing: () => { this.missed = true; } };
+      const id = t.id;
+      const ctx: PlayerContext = {
+        graph: this.graph, output: this.mixer.input(id), missing: () => { this.missed = true; },
+        programs: () => this.session.programs(id),
+      };
       this.players.set(t.id, { kind: t.kind, player: factory(t, ctx, this.services) });
       changed = true;
     }
@@ -215,10 +337,17 @@ export class PlaybackEngine {
       if (!present.has(id)) {
         player.dispose();
         this.players.delete(id);
+        this.session.remove(id);
         changed = true;
       }
     }
     this.previousTracks = new Map(project.tracks.map(t => [t.id, t]));
     return changed;
+  }
+
+  /** Vero se è cambiata una clip della session che la traccia suona o suonerà. */
+  private playingClipChanged(prev: Track, next: Track): boolean {
+    if (prev.slots === next.slots) return false;
+    return this.session.programs(next.id).some(p => p.source.kind === 'clip' && slotClip(prev, p.source.clip) !== slotClip(next, p.source.clip));
   }
 }

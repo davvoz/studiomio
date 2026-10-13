@@ -13,6 +13,8 @@ export type InstrumentMessage =
   | { readonly type: 'params'; readonly params: Readonly<Record<string, number>> }
   /** Toglie le note programmate e spegne quelle che suonano. */
   | { readonly type: 'stop' }
+  /** Taglia all'istante `at`: le note dopo spariscono, quelle a cavallo finiscono lì. */
+  | { readonly type: 'cut'; readonly at: number }
   /** Risponde con 'pong' quando tutti i messaggi precedenti sono stati ricevuti. */
   | { readonly type: 'ping'; readonly id: number }
   | { readonly type: 'dispose' };

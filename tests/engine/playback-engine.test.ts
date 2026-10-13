@@ -135,7 +135,9 @@ describe('PlaybackEngine: clip audio', () => {
     r.engine.refresh();
     const last = starts(r.graph).at(-1)!;
     expect(last.when).toBeCloseTo(0.6, 6);
-    expect(last.offset).toBeCloseTo(1, 6); // battito 1 a 60 BPM = 1 s nel buffer nuovo
+    // riparte da dove il trasporto è quando il suono nuovo arriva (0.6 s = battito 1.1), senza
+    // risuonare il pezzo già sentito: battito 1.1 a 60 BPM = 1.1 s nel buffer nuovo
+    expect(last.offset).toBeCloseTo(1.1, 6);
   });
 
   it('se il render non è pronto la clip parte appena arriva', async () => {

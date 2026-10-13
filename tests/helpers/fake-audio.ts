@@ -95,8 +95,10 @@ export class FakeInstrument implements Instrument {
   readonly notes: { pitch: number; velocity: number; when: number; duration: number }[] = [];
   readonly updates: InstrumentSettings[] = [];
   stops = 0;
+  readonly cuts: number[] = [];
   disposed = false;
   constructor(readonly type: string) {}
+  cut(at: number) { this.cuts.push(at); }
   play(pitch: number, velocity: number, when: number, duration: number) { this.notes.push({ pitch, velocity, when, duration }); }
   update(s: InstrumentSettings) { this.updates.push(s); }
   stopAll() { this.stops++; }

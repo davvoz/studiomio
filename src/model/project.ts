@@ -2,6 +2,7 @@ import type { IdFactory, ProjectId, SampleId, SceneId, TrackId } from '../core/i
 import { Tempo, TimeSignature, type Beats } from '../core/music-time';
 import { AudioClip } from './audio-clip';
 import type { EffectList } from './effect-list';
+import { DEFAULT_LAUNCH_QUANTUM } from './launch';
 import type { SampleRef } from './sample';
 import { DEFAULT_MIXER, type MixerSettings, type Track } from './track';
 
@@ -36,6 +37,8 @@ export interface ProjectProps {
   readonly master: MixerSettings;
   /** Effetti sul mix di tutte le tracce, prima del volume del master. */
   readonly masterEffects: EffectList;
+  /** Quantizzazione del lancio delle clip della session (un id di LAUNCH_QUANTA). */
+  readonly launchQuantization: string;
 }
 
 /** Radice del modello. Immutabile: ogni modifica restituisce un nuovo progetto che
@@ -65,6 +68,7 @@ export class Project {
       loop: { enabled: false, start: 0, end: 16 },
       master: DEFAULT_MIXER,
       masterEffects: [],
+      launchQuantization: DEFAULT_LAUNCH_QUANTUM,
     });
   }
 
@@ -82,6 +86,7 @@ export class Project {
   get loop(): LoopRegion { return this.props.loop; }
   get master(): MixerSettings { return this.props.master; }
   get masterEffects(): EffectList { return this.props.masterEffects; }
+  get launchQuantization(): string { return this.props.launchQuantization; }
 
   track(id: TrackId): Track | undefined {
     return this.tracks.find(t => t.id === id);
@@ -105,6 +110,7 @@ export class Project {
   withTempo(bpm: number): Project { return this.with({ tempo: new Tempo(bpm) }); }
   withSignature(signature: TimeSignature): Project { return this.with({ signature }); }
   withMaster(patch: Partial<MixerSettings>): Project { return this.with({ master: { ...this.master, ...patch } }); }
+  withLaunchQuantization(id: string): Project { return this.with({ launchQuantization: id }); }
 
   withLoop(patch: Partial<LoopRegion>): Project {
     const loop = { ...this.loop, ...patch };

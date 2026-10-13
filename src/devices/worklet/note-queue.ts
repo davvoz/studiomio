@@ -35,6 +35,16 @@ export class NoteQueue {
     this.events = [];
   }
 
+  /** Toglie le note che partirebbero da `frame` in poi e anticipa a `frame` la fine di quelle
+   *  che suonerebbero oltre (anche quelle già partite). */
+  cutAt(frame: number): void {
+    const dropped = new Set(this.events.filter(e => e.kind === 'on' && e.frame >= frame).map(e => e.id));
+    this.events = this.events
+      .filter(e => !dropped.has(e.id))
+      .map(e => (e.kind === 'off' && e.frame > frame ? { ...e, frame } : e))
+      .sort(before);
+  }
+
   get size(): number {
     return this.events.length;
   }

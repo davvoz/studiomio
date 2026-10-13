@@ -2,6 +2,7 @@ import { asId } from '../core/id';
 import { Tempo, TimeSignature } from '../core/music-time';
 import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
+import { DEFAULT_LAUNCH_QUANTUM } from '../model/launch';
 import { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
 import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
@@ -10,7 +11,7 @@ import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 4;
+export const PROJECT_VERSION = 5;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -52,6 +53,8 @@ const migrations: Record<number, Migration> = {
   2: json => ({ ...json, tracks: (json.tracks as JsonObject[]).map(t => ({ ...t, effects: [] })) }),
   // 3 → 4: anche il master ha una catena di effetti
   3: json => ({ ...json, masterEffects: [] }),
+  // 4 → 5: la session ha una quantizzazione del lancio
+  4: json => ({ ...json, launchQuantization: DEFAULT_LAUNCH_QUANTUM }),
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
@@ -84,6 +87,7 @@ export class ProjectCodec {
       loop: { enabled: p.loop.enabled, start: p.loop.start, end: p.loop.end },
       master: encodeMixer(p.master),
       masterEffects: p.masterEffects.map(encodeEffect),
+      launchQuantization: p.launchQuantization,
       scenes: p.scenes.map(s => ({ id: s.id, name: s.name })),
       samples: p.samples.map(encodeSample),
       tracks: p.tracks.map(t => ({
@@ -113,6 +117,7 @@ export class ProjectCodec {
         loop: { enabled: loop.bool('enabled'), start: loop.num('start'), end: loop.num('end') },
         master: decodeMixer(r.get('master')),
         masterEffects: r.array('masterEffects').map(decodeEffect),
+        launchQuantization: r.str('launchQuantization'),
         scenes: r.array('scenes').map(s => ({ id: asId(s.str('id')), name: s.str('name') })),
         samples: r.array('samples').map(decodeSample),
         tracks: r.array('tracks').map(t => this.decodeTrack(t)),

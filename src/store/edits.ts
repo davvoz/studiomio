@@ -22,6 +22,9 @@ export const renameProject = (name: string): Edit => edit('Rinomina progetto', p
 
 export const setLoopRegion = (patch: Partial<LoopRegion>): Edit => edit('Regione di loop', p => p.withLoop(patch));
 
+export const setLaunchQuantization = (id: string): Edit =>
+  edit('Quantizzazione del lancio', p => (p.launchQuantization === id ? p : p.withLaunchQuantization(id)));
+
 // ------------------------------------------------------------------ tracce
 
 /** Fabbriche delle tracce per tipo: aggiungere un tipo di traccia è aggiungere una voce. */

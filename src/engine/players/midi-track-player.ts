@@ -1,15 +1,16 @@
-import { placementEnd, type Placement } from '../../model/arrangement';
+import type { Placement } from '../../model/arrangement';
 import type { InstrumentSettings } from '../../model/device';
 import type { MidiClip } from '../../model/midi-clip';
 import type { MidiTrack, Track } from '../../model/track';
-import type { ScheduleWindow } from '../scheduler';
+import { timeAtClock, type ScheduleWindow } from '../scheduler';
 import { placementSegments, type Segment } from '../segments';
+import { piecesInWindow, type Piece } from '../track-content';
 import type { Instrument, InstrumentHost } from './instrument';
 import type { PlayerContext, TrackPlayer } from './track-player';
 
-/** Suona le clip MIDI della timeline con lo strumento della traccia. Una nota parte se il
- *  suo inizio cade nella finestra; viene tagliata alla fine del tratto (giro di loop, bordo
- *  della clip) e della corsa del trasporto. */
+/** Suona le clip MIDI della traccia (timeline e session) con il suo strumento. Una nota parte
+ *  se il suo inizio cade nella finestra; viene tagliata alla fine del tratto (giro di loop,
+ *  bordo della clip, fine della corsa, clip lanciata al suo posto). */
 export class MidiTrackPlayer implements TrackPlayer {
   private track: MidiTrack;
   private instrument: Instrument;
@@ -27,11 +28,11 @@ export class MidiTrackPlayer implements TrackPlayer {
   }
 
   schedule(w: ScheduleWindow): void {
-    const lo = Math.max(w.from, w.runStart);
-    for (const p of this.track.arrangement) {
-      if (p.start >= w.to || placementEnd(p) <= lo) continue;
-      for (const seg of this.segmentsOf(p)) this.playSegment(p.clip, seg, w, lo);
-    }
+    for (const piece of piecesInWindow(this.track, this.ctx.programs(), w, p => this.segmentsOf(p))) this.playPiece(piece, w);
+  }
+
+  cut(at: number): void {
+    this.instrument.cut(at);
   }
 
   audition(pitch: number, velocity: number, duration: number): void {
@@ -68,17 +69,15 @@ export class MidiTrackPlayer implements TrackPlayer {
     return s;
   }
 
-  private playSegment(clip: MidiClip, seg: Segment, w: ScheduleWindow, lo: number): void {
-    const from = Math.max(lo, seg.start), to = Math.min(w.to, seg.end, w.runEnd);
+  private playPiece({ clip, start, end, contentStart }: Piece<MidiClip>, w: ScheduleWindow): void {
+    const from = Math.max(w.from + w.shift, start), to = Math.min(w.to + w.shift, end);
     if (to <= from) return;
-    const cut = Math.min(seg.end, w.runEnd);
-    // note il cui inizio, riportato sulla timeline, cade in [from, to)
-    const c0 = seg.contentStart + (from - seg.start), c1 = seg.contentStart + (to - seg.start);
+    // note il cui inizio, riportato sull'orologio, cade in [from, to)
+    const c0 = contentStart + (from - start), c1 = contentStart + (to - start);
     for (const n of clip.notesIn(c0, c1)) {
-      const at = seg.start + (n.start - seg.contentStart);
-      const end = Math.min(at + n.duration, cut);
-      const when = w.timeAt(at);
-      this.instrument.play(n.pitch, n.velocity, when, w.timeAt(end) - when);
+      const at = start + (n.start - contentStart);
+      const when = timeAtClock(w, at);
+      this.instrument.play(n.pitch, n.velocity, when, timeAtClock(w, Math.min(at + n.duration, end)) - when);
     }
   }
 }
