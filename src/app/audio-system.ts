@@ -23,7 +23,7 @@ export class AudioSystem {
   readonly clips: ClipAudio;
   readonly engine: PlaybackEngine;
   private readonly worklet = new DeviceWorklet();
-  readonly instruments = new WorkletInstruments(this.worklet);
+  readonly instruments = new WorkletInstruments(this.worklet, id => this.library.get(id));
   readonly effects = new WorkletEffects(this.worklet);
   /** Misuratori di livello, solo dal vivo (nell'export non servono). */
   private readonly meters = new WorkletMeters(this.worklet);

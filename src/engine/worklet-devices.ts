@@ -10,7 +10,9 @@ import {
   type InstrumentMessage, type InstrumentProcessorOptions, type InstrumentReply, type MeterMessage,
   type MeterProcessorOptions, type MeterReply, type ModMessage,
 } from '../devices/worklet/protocol';
-import type { EffectSettings, InstrumentSettings } from '../model/device';
+import type { SampleId } from '../core/id';
+import type { SampleData } from '../devices/dsp/core';
+import type { DeviceSamples, EffectSettings, InstrumentSettings } from '../model/device';
 import type { AudioGraph } from './audio-graph';
 import type { Effect, EffectHost, EffectMonitor } from './effect-chain';
 import type { Meter, MeterHost, MeterReading } from './meters';
@@ -29,6 +31,16 @@ const workletModulation = (send: (m: ModMessage) => void): DeviceModulation => (
   }),
 });
 
+/** Dove si trovano i campioni dei sample del progetto (la SampleLibrary). */
+export type SampleSource = (id: SampleId) => SampleData | undefined;
+
+/** I campioni dei sample di un dispositivo, per posto (quelli non ancora caricati mancano). */
+const samplesOf = (samples: DeviceSamples | undefined, source: SampleSource): Record<string, SampleData> =>
+  Object.fromEntries(Object.entries(samples ?? {}).flatMap(([slot, id]) => {
+    const data = source(id);
+    return data ? [[slot, { sampleRate: data.sampleRate, channels: [...data.channels] }]] : [];
+  }));
+
 /** I parametri completi da mandare al motore (i tipi sconosciuti suonano muti). */
 const fullParams = (s: InstrumentSettings) => {
   const t = instrumentType(s.type);
@@ -46,7 +58,7 @@ class WorkletInstrument implements Instrument {
 
   constructor(
     private readonly ctx: BaseAudioContext, settings: InstrumentSettings, ready: Promise<void> | null,
-    private readonly onDispose: () => void,
+    private readonly source: SampleSource, private readonly onDispose: () => void,
   ) {
     this.type = settings.type;
     this.settings = settings;
@@ -61,8 +73,10 @@ class WorkletInstrument implements Instrument {
   }
 
   update(settings: InstrumentSettings): void {
+    const prev = this.settings;
     this.settings = settings;
-    this.send({ type: 'params', params: fullParams(settings) });
+    if (settings.params !== prev.params) this.send({ type: 'params', params: fullParams(settings) });
+    if (settings.samples !== prev.samples) this.sendSamples(prev.samples, settings.samples);
   }
 
   stopAll(): void {
@@ -92,8 +106,20 @@ class WorkletInstrument implements Instrument {
     });
   }
 
+  /** Solo i posti cambiati: un sample già nel motore non si rimanda. */
+  private sendSamples(prev: DeviceSamples | undefined, next: DeviceSamples | undefined): void {
+    for (const slot of new Set([...Object.keys(prev ?? {}), ...Object.keys(next ?? {})])) {
+      const id = next?.[slot];
+      if (id === prev?.[slot]) continue;
+      const sample = id ? samplesOf({ [slot]: id }, this.source)[slot] ?? null : null;
+      this.send({ type: 'sample', slot, sample });
+    }
+  }
+
   private build(): void {
-    const processorOptions: InstrumentProcessorOptions = { type: this.settings.type, params: fullParams(this.settings) };
+    const processorOptions: InstrumentProcessorOptions = {
+      type: this.settings.type, params: fullParams(this.settings), samples: samplesOf(this.settings.samples, this.source),
+    };
     this.node = new AudioWorkletNode(this.ctx, INSTRUMENT_PROCESSOR, {
       numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2], processorOptions,
     });
@@ -134,7 +160,7 @@ export class DeviceWorklet {
 export class WorkletInstruments implements InstrumentHost {
   private readonly live = new WeakMap<BaseAudioContext, Set<WorkletInstrument>>();
 
-  constructor(private readonly worklet: DeviceWorklet) {}
+  constructor(private readonly worklet: DeviceWorklet, private readonly samples: SampleSource = () => undefined) {}
 
   prepare(graph: AudioGraph): Promise<void> {
     return this.worklet.prepare(graph);
@@ -145,7 +171,7 @@ export class WorkletInstruments implements InstrumentHost {
     let set = this.live.get(ctx);
     if (!set) this.live.set(ctx, (set = new Set()));
     const all = set;
-    const instrument: WorkletInstrument = new WorkletInstrument(ctx, settings, this.worklet.pending(graph), () => all.delete(instrument));
+    const instrument: WorkletInstrument = new WorkletInstrument(ctx, settings, this.worklet.pending(graph), this.samples, () => all.delete(instrument));
     all.add(instrument);
     return instrument;
   }

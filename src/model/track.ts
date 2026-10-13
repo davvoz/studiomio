@@ -3,7 +3,7 @@ import type { Beats } from '../core/music-time';
 import * as lane from './arrangement';
 import { AudioClip } from './audio-clip';
 import type { Clip, Color } from './clip';
-import { DEFAULT_INSTRUMENT, type EffectSettings, type InstrumentSettings } from './device';
+import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings, type InstrumentSettings } from './device';
 import type { EffectList } from './effect-list';
 import { MidiClip } from './midi-clip';
 
@@ -56,6 +56,9 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
   get arrangement(): lane.Lane<C> { return this.props.arrangement; }
   get slots(): readonly (C | null)[] { return this.props.slots; }
   get effects(): readonly EffectSettings[] { return this.props.effects; }
+
+  /** Tutti i dispositivi della traccia: lo strumento (se c'è) e gli effetti. */
+  get devices(): readonly DeviceSettings[] { return this.effects; }
 
   /** Tutte le clip della traccia, timeline e session. */
   get clips(): C[] {
@@ -184,6 +187,8 @@ export class MidiTrack extends Track<MidiClip, MidiTrackProps> {
   }
 
   get instrument(): InstrumentSettings { return this.props.instrument; }
+
+  override get devices(): readonly DeviceSettings[] { return [this.instrument, ...this.effects]; }
 
   withInstrument(instrument: InstrumentSettings): this {
     return this.with({ instrument });

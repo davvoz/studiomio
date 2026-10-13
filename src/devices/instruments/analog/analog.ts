@@ -1,12 +1,20 @@
 /* "Analog": il primo synth di studiomio. Sottrattivo classico: due oscillatori, filtro
- * risonante con il suo inviluppo, inviluppo del volume e un LFO. Qui c'è solo la descrizione
- * (parametri e preset); il suono è in analog-core.ts. */
+ * risonante con il suo inviluppo, inviluppo del volume e un LFO. Si suona polifonico o a una
+ * voce: in "Legato" le note che si sovrappongono scivolano l'una nell'altra senza ripartire
+ * (lo slide della 303), e l'accento rende più forti e più aperte le note con velocity alta.
+ * Qui c'è solo la descrizione (parametri e preset); il suono è in analog-core.ts. */
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam } from '../../params';
 
 export const WAVES = ['Saw', 'Square', 'Triangle', 'Sine'] as const;
 export const FILTER_TYPES = ['Low-pass', 'Band-pass', 'High-pass'] as const;
 export const LFO_WAVES = ['Sine', 'Triangle', 'Square'] as const;
+/** Poli: ogni nota la sua voce. Mono: una voce, ogni nota riparte (con glide se c'è). Legato:
+ *  una voce, le note sovrapposte scivolano senza far ripartire gli inviluppi. */
+export const VOICE_MODES = ['Poli', 'Mono', 'Legato'] as const;
+export const VOICE_MODE = { poly: 0, mono: 1, legato: 2 } as const;
+/** Sopra questa velocity una nota è accentata (come gli accenti di un sequencer 303). */
+export const ACCENT_VELOCITY = 100;
 
 const num = (id: string, label: string, min: number, max: number, def: number, unit = '', extra: Partial<NumberParam> = {}): NumberParam =>
   ({ kind: 'number', id, label, min, max, default: def, unit, ...extra });
@@ -27,6 +35,14 @@ export const ANALOG: DeviceType = {
         num('oscBSemi', 'B semitoni', -24, 24, 0, 'st', { step: 1 }),
         num('oscBFine', 'B fine', -50, 50, 7, 'ct', { step: 1 }),
         percent('mix', 'Mix A/B', 50),
+      ],
+    },
+    {
+      label: 'Voce',
+      params: [
+        choice('voiceMode', 'Modo', VOICE_MODES),
+        num('glide', 'Glide', 0, 500, 0, 'ms', { step: 1, when: { param: 'voiceMode', is: [VOICE_MODE.mono, VOICE_MODE.legato] } }),
+        percent('accent', 'Accento', 0),
       ],
     },
     {
@@ -70,8 +86,13 @@ export const ANALOG: DeviceType = {
     },
     {
       name: 'Acid',
-      params: { oscA: 0, mix: 0, cutoff: 300, resonance: 82, filterEnv: 70, keyTrack: 20, fDecay: 0.18, fSustain: 0,
-        fRelease: 0.08, sustain: 100, release: 0.05, velocity: 80, volume: -9 },
+      params: { oscA: 0, mix: 0, voiceMode: 2, glide: 60, accent: 70, cutoff: 300, resonance: 82, filterEnv: 70, keyTrack: 20,
+        fDecay: 0.18, fSustain: 0, fRelease: 0.08, sustain: 100, release: 0.05, velocity: 35, volume: -9 },
+    },
+    {
+      name: 'Acid quadra',
+      params: { oscA: 1, mix: 0, voiceMode: 2, glide: 70, accent: 85, cutoff: 220, resonance: 88, filterEnv: 80, keyTrack: 25,
+        fDecay: 0.24, fSustain: 0, fRelease: 0.08, sustain: 100, release: 0.04, velocity: 35, volume: -10 },
     },
     {
       name: 'Pad',

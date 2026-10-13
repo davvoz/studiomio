@@ -11,7 +11,7 @@ import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 6;
+export const PROJECT_VERSION = 7;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -57,6 +57,8 @@ const migrations: Record<number, Migration> = {
   4: json => ({ ...json, launchQuantization: DEFAULT_LAUNCH_QUANTUM }),
   // 5 → 6: le clip possono avere modulazioni (campo facoltativo: non cambia nulla)
   5: json => json,
+  // 6 → 7: i dispositivi possono suonare sample del progetto (campo facoltativo)
+  6: json => json,
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
@@ -202,14 +204,19 @@ const decodeSample = (r: JsonReader): SampleRef => ({
   analysis: r.nullable('analysis', a => ({ tempo: a.num('tempo'), sensitivity: a.num('sensitivity'), transients: a.numbers('transients') })),
 });
 
-const encodeInstrument = (i: DeviceSettings): JsonObject => ({ type: i.type, preset: i.preset, params: { ...i.params } });
+const encodeInstrument = (i: DeviceSettings): JsonObject => ({
+  type: i.type, preset: i.preset, params: { ...i.params },
+  ...(i.samples ? { samples: { ...i.samples } } : {}),
+});
 
 const decodeInstrument = (r: JsonReader): DeviceSettings => {
   const params = r.get('params');
+  const samples = r.has('samples') ? r.get('samples') : null;
   return {
     type: r.str('type'),
     preset: r.nullable('preset', p => p.asString()),
     params: Object.fromEntries(params.keys().map(k => [k, params.num(k)])),
+    ...(samples ? { samples: Object.fromEntries(samples.keys().map(k => [k, asId<'sample'>(samples.str(k))])) } : {}),
   };
 };
 

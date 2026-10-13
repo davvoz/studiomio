@@ -25,6 +25,10 @@ npm run dev        # http://localhost:5173 – l'app (Chrome o Edge: servono per
 
 Per usare gli algoritmi WebAssembly nell'app: `VITE_DSP_WASM=1 npm run dev`.
 
+Gli script in `scripts/` girano con i moduli dell'app (risolti da Vite):
+`node scripts/run.mjs scripts/<nome>.ts <argomenti…>`. Per ora c'è `build-acid-live.ts`, che
+costruisce il live "Acido crudo" come cartella di progetto (vedi sotto, "Acido crudo").
+
 Requisiti: Node 22+, Rust (`rustup target add wasm32-unknown-unknown`) e `wasm-pack`.
 Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una volta
 `npm run wasm` e `npm run wasm:test` (servono anche per i test e la build).
@@ -112,7 +116,9 @@ src/
     codec/             WAV e ZIP
     wasm/              ponte verso il crate Rust
   workers/             RPC tipizzato, worker pool, worker DSP, DspService
-  demo/                loop e progetto demo
+  demo/                loop e progetto demo; patterns.ts (parti scritte come su una drum
+                       machine o una 303) e acid-live.ts (il live "Acido crudo")
+scripts/               script in Node con i moduli dell'app (run.mjs li avvia)
 crates/dsp/            phase vocoder in Rust → WebAssembly (SIMD)
 tests/                 un file per modulo; test di equivalenza con WarpMio
 ```
@@ -260,22 +266,36 @@ perdono nessun picco e leggerli non costa nulla.
 
 **Analog**: due oscillatori (Saw, Square, Triangle, Sine; il secondo intonabile), filtro
 passa-basso/banda/alto risonante con inviluppo e key track, inviluppo del volume, LFO su
-intonazione e cutoff, 16 voci. Preset: Init, Basso, Acid, Pad, Pluck, Lead.
+intonazione e cutoff. La voce: **Poli** (16 voci), **Mono** (una voce, ogni nota riparte, con
+il glide dalla nota di prima) o **Legato** (una voce: le note che si sovrappongono scivolano
+senza far ripartire gli inviluppi, lo slide della 303; le note staccate ripartono senza glide).
+**Accento**: le note con velocity oltre 100 suonano più forti e aprono il filtro con un
+inviluppo breve che si accumula sugli accenti vicini (il "wow" della 303). Preset: Init, Basso,
+Acid e Acid quadra (Legato, glide e accento), Pad, Pluck, Lead.
 
 **Drum Machine**: 16 pad sulle note da C1 (36) a D#2 (51), come il Drum Rack di Live, con il
 kit di partenza sulla mappa General MIDI (36 cassa, 38 rullante, 42 hi-hat chiuso, 46 aperto…),
 così le parti di batteria scritte altrove suonano giuste. Ogni pad ha un suono sintetizzato
-(niente sample): Cassa, Cassa 808, Rullante, Clap, Rimshot, Hi-hat chiuso e aperto, Piatto, Tom,
-Campanaccio, Shaker; e i suoi controlli: intonazione, decay, tono, snap (il significato di tono
-e snap dipende dal suono ed è scritto accanto al menu), livello, pan e gruppo di choke (un pad
-ferma gli altri del suo gruppo: l'hi-hat chiuso ferma l'aperto). Un colpo nuovo sullo stesso pad
-fa sfumare quello prima in 4 ms, senza click; la durata delle note non conta.
+(Cassa, Cassa 808, Rullante, Clap, Rimshot, Hi-hat chiuso e aperto, Piatto, Tom, Campanaccio,
+Shaker) o un **Sample**; e i suoi controlli: intonazione, decay, tono, snap (il significato di
+tono e snap dipende dal suono ed è scritto accanto al menu), livello, pan e gruppo di choke (un
+pad ferma gli altri del suo gruppo: l'hi-hat chiuso ferma l'aperto). Un colpo nuovo sullo
+stesso pad fa sfumare quello prima in 4 ms, senza click; la durata delle note non conta.
+
+I pad **Sample** suonano un file audio del progetto: un file trascinato da Esplora risorse su un
+pad lo carica lì (più file: sui pad dopo), oppure "Carica…" o il menu dei sample del progetto
+accanto al suono. Il file si copia nella cartella del progetto come quelli delle clip audio e il
+pad prende il suo nome. Intonazione in semitoni (anche se il file ha un'altra frequenza di
+campionamento), Decay che accorcia il sample restando pieno fino quasi alla fine, Tono come un
+filtro da DJ (a sinistra passa-basso, a destra passa-alto, a metà aperto), Snap come
+saturazione. Scambiando o copiando i pad il sample va con loro.
 
 | Gesto | Azione |
 | --- | --- |
 | clic su un pad | lo sceglie (a destra i suoi controlli) e lo suona |
 | trascina un pad su un altro · con Ctrl | li scambia · lo copia |
-| tasto destro su un pad | il suono; "Riporta il pad com'era nel kit di partenza" |
+| tasto destro su un pad | il suono; "Carica un sample…", "Togli il sample"; "Riporta il pad com'era nel kit di partenza" |
+| file audio trascinati su un pad | diventano i sample di quel pad e dei successivi |
 | menu del suono | il pad prende il suono con i suoi valori di decay, tono e snap |
 
 Mentre suona, i pad delle note che partono si accendono. Nel piano roll la tastiera mostra i
@@ -342,6 +362,26 @@ Un dispositivo che vuole un'interfaccia sua (come l'EQ o la Drum Machine) la reg
 piano roll. I
 processori AudioWorklet sono due, uno per gli strumenti (riceve le note con il tempo del
 contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli effetti.
+
+## Acido crudo
+
+Un piccolo live hard acid a 150 BPM in La, montato per la session con i sample della libreria
+dell'utente (in `src/demo/acid-live.ts`; i file sono elencati in `scripts/build-acid-live.ts`):
+
+```sh
+node scripts/run.mjs scripts/build-acid-live.ts "C:/Users/<utente>/Music" "C:/…/Acido crudo"
+```
+
+poi **Apri** sulla cartella creata. Otto tracce: Cassa, Clap, Piatti, Percussioni ed FX sono Drum
+Machine con pad Sample (casse distorte intonate in La, clap, rullanti e rullo, hi-hat, ride,
+percussioni metalliche, crash, sirena, riser e discese); Rumble è un seno di Analog che rotola
+sui sedicesimi in levare, saturato dal Drive; Acido e Acido 2 sono due Analog in Legato con
+slide e accenti (dente di sega e quadra), distorti (Dura, Fuzz), con eco a tempo. Dieci scene:
+Intro, Cassa e rumble, Entra l'acido, Acido pieno, Break (rullo che sale anche d'intonazione e
+riser che arriva sul drop), Drop, Acido 2, Martello (casse doppie, Drive dell'acido che sale a
+scalini), Break 2, Outro. Le modulazioni delle clip aprono e chiudono i filtri, alzano l'eco e
+sfumano l'uscita; sul master un Drive a nastro leggero incolla. La timeline ne tiene una
+registrazione di 160 battute (circa 4 minuti), utile anche per l'export.
 
 ## Principi
 

@@ -1,5 +1,6 @@
 /* Messaggi dal thread principale ai processori di strumenti ed effetti. I tempi sono secondi
  * del contesto audio: il processore li trasforma nel campione esatto. */
+import type { SampleData } from '../dsp/core';
 
 /** Un evento di modulazione di un parametro (vedi mod-timeline.ts): scalino, rampa, o "tieni
  *  il valore che c'è e dimentica il resto" da `time`. */
@@ -16,12 +17,16 @@ export const INSTRUMENT_PROCESSOR = 'studiomio-instrument';
 export interface InstrumentProcessorOptions {
   readonly type: string;
   readonly params: Readonly<Record<string, number>>;
+  /** I sample caricati, per posto (vedi SamplePlayer). */
+  readonly samples: Readonly<Record<string, SampleData>>;
 }
 
 export type InstrumentMessage =
   | { readonly type: 'note'; readonly pitch: number; readonly velocity: number; readonly on: number; readonly off: number }
   | { readonly type: 'params'; readonly params: Readonly<Record<string, number>> }
   | ModMessage
+  /** Un sample nuovo (o null: tolto) al posto `slot`. */
+  | { readonly type: 'sample'; readonly slot: string; readonly sample: SampleData | null }
   /** Toglie le note programmate e spegne quelle che suonano. */
   | { readonly type: 'stop' }
   /** Taglia all'istante `at`: le note dopo spariscono, quelle a cavallo finiscono lì. */

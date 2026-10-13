@@ -67,7 +67,8 @@ describe('Drum Machine: descrizione', () => {
 });
 
 describe('Drum Machine: suono', () => {
-  it.each(DRUM_MODELS.map((m, i) => [m.label, i] as const))('%s: suona, non satura e finisce', (_label, model) => {
+  // i modelli sintetizzati (il Sample ha i suoi test, in drum-samples.test.ts)
+  it.each(DRUM_MODELS.flatMap((m, i) => (m.id === 'sample' ? [] : [[m.label, i] as const])))('%s: suona, non satura e finisce', (_label, model) => {
     const { core, queue } = kit(onPad1(model));
     queue.add(36, 127, 0, 10);
     const frames = Math.round(SR * (DRUM_MODELS[model].decay * 2.2 + 0.1));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANALOG } from '../../src/devices/instruments/analog/analog';
+import { ANALOG, VOICE_MODE } from '../../src/devices/instruments/analog/analog';
 import { AnalogCore } from '../../src/devices/instruments/analog/analog-core';
 import { paramsOf, paramSpec, resolveParams } from '../../src/devices/device-type';
 import { clampParam, formatParam, paramFromUnit, paramToUnit } from '../../src/devices/params';
@@ -137,6 +137,83 @@ describe('Analog', () => {
     const out = run(core, queue, 256, 4800);
     // il guadagno scende gradualmente: i primi campioni sono ancora quasi pieni
     expect(Math.max(...out.subarray(0, 32).map(Math.abs))).toBeGreaterThan(0.5);
+  });
+});
+
+/** Frequenza dai passaggi per lo zero in [from, to). */
+const frequency = (x: Float32Array, from: number, to: number) => {
+  let first = -1, last = -1, n = 0;
+  for (let i = from + 1; i < to; i++) {
+    if (x[i - 1] < 0 && x[i] >= 0) {
+      if (first < 0) first = i;
+      else n++;
+      last = i;
+    }
+  }
+  return n ? (n * SR) / (last - first) : 0;
+};
+
+describe('Analog a una voce: legato, glide, accento', () => {
+  it('Legato: due note sovrapposte scivolano senza ripartire, su una voce sola', () => {
+    const { core, queue } = synth({ ...PURE, voiceMode: VOICE_MODE.legato, glide: 40, decay: 0.05, sustain: 50 });
+    queue.add(57, 100, 0, 9600); // La3 220 Hz, tenuta fin dentro la nota dopo
+    queue.add(69, 100, 7200, 14400); // La4 440 Hz
+    const out = run(core, queue, 14400);
+    expect(core.activeVoices).toBe(1);
+    expect(frequency(out, 2400, 7000)).toBeCloseTo(220, -0.5);
+    expect(frequency(out, 7200 + 0.1 * SR, 14000)).toBeCloseTo(440, -0.5);
+    // a metà del glide l'intonazione sta in mezzo
+    const mid = frequency(out, 7200 + 0.004 * SR, 7200 + 0.016 * SR);
+    expect(mid).toBeGreaterThan(240);
+    expect(mid).toBeLessThan(420);
+    // gli inviluppi non ripartono: il livello resta quello del sustain, niente nuovo attacco
+    expect(rms(out, 7200, 7200 + 480)).toBeCloseTo(rms(out, 6000, 7200), 1);
+  });
+
+  it('Legato: note staccate ripartono da capo, senza glide', () => {
+    const { core, queue } = synth({ ...PURE, voiceMode: VOICE_MODE.legato, glide: 200, decay: 0.05, sustain: 50 });
+    queue.add(57, 100, 0, 4800);
+    queue.add(69, 100, 7200, 14400);
+    const out = run(core, queue, 14400);
+    expect(frequency(out, 7200 + 0.002 * SR, 7200 + 0.03 * SR)).toBeCloseTo(440, -0.5);
+    // l'attacco riparte: il livello all'inizio della seconda nota è sopra il sustain
+    expect(rms(out, 7200, 7200 + 480)).toBeGreaterThan(rms(out, 12000, 14000) * 1.3);
+  });
+
+  it('Mono: ogni nota riparte, il glide parte dalla nota di prima', () => {
+    const { core, queue } = synth({ ...PURE, voiceMode: VOICE_MODE.mono, glide: 100 });
+    queue.add(57, 100, 0, 4800);
+    queue.add(69, 100, 7200, 24000);
+    const out = run(core, queue, 24000);
+    expect(frequency(out, 7200 + 0.003 * SR, 7200 + 0.02 * SR)).toBeLessThan(400);
+    expect(frequency(out, 7200 + 0.25 * SR, 24000)).toBeCloseTo(440, -0.5);
+    expect(core.activeVoices).toBe(1);
+  });
+
+  it('accento: le note oltre velocity 100 suonano più forti e più aperte', () => {
+    const play = (accent: number, velocity: number) => {
+      const { core, queue } = synth({ oscA: 0, mix: 0, cutoff: 300, resonance: 50, filterEnv: 30, keyTrack: 0, sustain: 100, velocity: 0, volume: 0,
+        voiceMode: VOICE_MODE.legato, accent });
+      queue.add(45, velocity, 0, 4800);
+      const out = run(core, queue, 4800);
+      const diff = out.map((v, i) => (i ? v - out[i - 1] : 0));
+      return { level: rms(out, 0, 2400), bright: rms(diff, 0, 2400) / rms(out, 0, 2400) };
+    };
+    const plain = play(100, 90), accented = play(100, 127), off = play(0, 127);
+    expect(accented.level).toBeGreaterThan(plain.level * 1.4);
+    expect(accented.bright).toBeGreaterThan(plain.bright * 1.5);
+    expect(off.level).toBeCloseTo(plain.level, 2); // senza accento la velocity alta non cambia nulla
+  });
+
+  it('passare da poli a una voce ferma quello che suona e riparte pulito', () => {
+    const { core, queue } = synth();
+    for (const p of [48, 52, 55]) queue.add(p, 100, 0, SR);
+    run(core, queue, 4800);
+    core.setParams(resolveParams(ANALOG, { voiceMode: VOICE_MODE.mono }));
+    queue.add(60, 100, 4800 + 2400, 4800 + 9600);
+    const out = run(core, queue, 4800, 4800);
+    expect(core.activeVoices).toBe(1); // le tre di prima sono sfumate, suona solo la nuova
+    expect(out.every(Number.isFinite)).toBe(true);
   });
 });
 

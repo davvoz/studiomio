@@ -6,7 +6,9 @@ import { placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
 import type { Clip } from '../model/clip';
 import { paletteColor } from '../model/colors';
-import { newEffect, withParam, withParams, withPreset, type EffectSettings, type InstrumentSettings, type ParamValues } from '../model/device';
+import {
+  newEffect, withParam, withParams, withPreset, withSample, type EffectSettings, type InstrumentSettings, type ParamValues,
+} from '../model/device';
 import * as chain from '../model/effect-list';
 import { MidiClip } from '../model/midi-clip';
 import type { ChainOwner, LoopRegion } from '../model/project';
@@ -74,6 +76,23 @@ export const setInstrumentParam = (id: TrackId, param: string, value: number): E
 /** Più parametri dello strumento insieme (es. il suono di un pad con i suoi valori). */
 export const setInstrumentParams = (id: TrackId, values: ParamValues): Edit =>
   updatingInstrument('Parametri dello strumento', id, s => withParams(s, values));
+
+/** Sample nello strumento, per posto (null: tolto), insieme ai parametri che servono a suonarli
+ *  (es. il modello Sample del pad): un passo solo. Un sample nuovo entra anche nel progetto. */
+export const setInstrumentSamples = (id: TrackId, changes: Readonly<Record<string, SampleRef | SampleId | null>>, values: ParamValues = {}): Edit =>
+  edit('Sample dello strumento', p => {
+    let next = p;
+    const ids: Record<string, SampleId | null> = {};
+    for (const [slot, s] of Object.entries(changes)) {
+      if (s && typeof s === 'object' && !next.sample(s.id)) next = next.addingSample(s);
+      ids[slot] = s && typeof s === 'object' ? s.id : s;
+    }
+    return next.updatingTrack(id, t => {
+      if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
+      const settings = Object.entries(ids).reduce((s, [slot, sample]) => withSample(s, slot, sample), withParams(t.instrument, values));
+      return t.withInstrument(settings);
+    });
+  });
 
 /** Carica un preset: i parametri tornano ai predefiniti del tipo più quelli del preset. */
 export const loadPreset = (id: TrackId, name: string, params: ParamValues): Edit =>

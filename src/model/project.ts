@@ -1,6 +1,7 @@
 import type { IdFactory, ProjectId, SampleId, SceneId, TrackId } from '../core/id';
 import { Tempo, TimeSignature, type Beats } from '../core/music-time';
 import { AudioClip } from './audio-clip';
+import { deviceSampleIds, type DeviceSettings } from './device';
 import type { EffectList } from './effect-list';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
 import type { SampleRef } from './sample';
@@ -96,14 +97,25 @@ export class Project {
     return this.samples.find(s => s.id === id);
   }
 
+  /** I nomi dei sample caricati in un dispositivo, per posto. */
+  sampleNames(device: DeviceSettings): Map<string, string> {
+    return new Map(Object.entries(device.samples ?? {}).flatMap(([slot, id]) => {
+      const s = this.sample(id);
+      return s ? [[slot, s.name] as const] : [];
+    }));
+  }
+
   /** Fine dell'ultima clip sulla timeline. */
   get arrangementEnd(): Beats {
     return this.tracks.reduce((m, t) => Math.max(m, t.arrangementEnd), 0);
   }
 
   /** Sample usati da almeno una clip audio. */
+  /** I sample usati dalle clip audio e dai dispositivi (es. i pad della Drum Machine). */
   usedSampleIds(): Set<SampleId> {
-    return new Set(this.tracks.flatMap(t => t.clips).filter(c => c instanceof AudioClip).map(c => c.sample));
+    const clips = this.tracks.flatMap(t => t.clips).filter(c => c instanceof AudioClip).map(c => c.sample);
+    const devices = [...this.tracks.flatMap(t => t.devices), ...this.masterEffects].flatMap(deviceSampleIds);
+    return new Set([...clips, ...devices]);
   }
 
   withName(name: string): Project { return this.with({ name }); }
@@ -198,9 +210,9 @@ export class Project {
     return this.with({ samples: this.samples.map(s => (s.id === id ? { ...fn(s), id } : s)) });
   }
 
-  /** Un sample si può togliere solo se nessuna clip lo usa. */
+  /** Un sample si può togliere solo se nessuna clip (o dispositivo) lo usa. */
   removingSample(id: SampleId): Project {
-    if (this.usedSampleIds().has(id)) throw new Error('il sample è usato da almeno una clip');
+    if (this.usedSampleIds().has(id)) throw new Error('il sample è usato da almeno una clip o un dispositivo');
     return this.with({ samples: this.samples.filter(s => s.id !== id) });
   }
 
@@ -235,7 +247,7 @@ export class Project {
     }
     const known = new Set(this.samples.map(s => s.id));
     for (const id of this.usedSampleIds()) {
-      if (!known.has(id)) throw new Error(`una clip usa il sample ${id}, che non è nel progetto`);
+      if (!known.has(id)) throw new Error(`una clip o un dispositivo usa il sample ${id}, che non è nel progetto`);
     }
   }
 }

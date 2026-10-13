@@ -366,7 +366,8 @@ export class PianoRoll implements RollHost {
   private noteNames(): ReadonlyMap<number, string> | null {
     const instrument = this.target()?.track.instrument;
     const type = instrument && instrumentType(instrument.type);
-    const names = type && instrument ? type.noteNames?.(resolveParams(type, instrument.params)) : undefined;
+    const names = type && instrument
+      ? type.noteNames?.(resolveParams(type, instrument.params), this.deps.store.project.sampleNames(instrument)) : undefined;
     return names?.size ? names : null;
   }
 

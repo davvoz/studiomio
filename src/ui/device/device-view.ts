@@ -1,4 +1,5 @@
 import type { DeviceId, TrackId } from '../../core/id';
+import type { SampleRef } from '../../model/sample';
 import { resolveParams } from '../../devices/device-type';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, type EffectSettings } from '../../model/device';
@@ -7,7 +8,7 @@ import { MASTER, type ChainOwner } from '../../model/project';
 import { MidiTrack, type Track } from '../../model/track';
 import {
   addEffect, loadEffectPreset, loadPreset, moveEffect, removeEffect, setEffectEnabled, setEffectParam,
-  setEffectParams, setInstrument, setInstrumentParam, setInstrumentParams,
+  setEffectParams, setInstrument, setInstrumentParam, setInstrumentParams, setInstrumentSamples,
 } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { showContextMenu } from '../context-menu';
@@ -25,6 +26,8 @@ export interface DeviceViewDeps {
   /** Per seguire le note che la traccia suona: ogni chiamata della funzione data restituisce
    *  quelle partite dalla chiamata prima. */
   readonly playedNotes: (track: TrackId) => () => readonly number[];
+  /** Copia un file audio nel progetto e lo carica nel motore (per i sample degli strumenti). */
+  readonly importSample: (file: File) => Promise<SampleRef>;
 }
 
 /** La chiave del pannello dello strumento (gli effetti usano il loro id). */
@@ -160,7 +163,8 @@ export class DeviceView {
     // la nota di prova: il Do3, o il primo nome che lo strumento dà alle note (la cassa della drum machine)
     const testPitch = () => {
       const t = store.project.track(track.id);
-      const names = t instanceof MidiTrack ? type.noteNames?.(resolveParams(type, t.instrument.params)) : undefined;
+      const names = t instanceof MidiTrack
+        ? type.noteNames?.(resolveParams(type, t.instrument.params), store.project.sampleNames(t.instrument)) : undefined;
       return names?.size ? Math.min(...names.keys()) : 60;
     };
     const test = el<HTMLButtonElement>('button', { className: 'mini', textContent: '♪', title: 'Suona una nota di prova', onclick: () => audition(track.id, testPitch()) });
@@ -170,6 +174,14 @@ export class DeviceView {
       openSpectrum: () => NO_SPECTRUM,
       audition: (pitch, velocity) => audition(track.id, pitch, velocity),
       playedNotes: this.deps.playedNotes(track.id),
+      samples: {
+        list: () => store.project.samples,
+        load: async (slot, file, values) => {
+          const sample = await this.deps.importSample(file);
+          store.apply(setInstrumentSamples(track.id, { [slot]: sample }, values));
+        },
+        assign: (changes, values) => store.apply(setInstrumentSamples(track.id, changes, values)),
+      },
     });
     const panel = new DevicePanel({
       type, settings: track.instrument, before: [select], after: [test], display,

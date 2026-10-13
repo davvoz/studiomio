@@ -1,14 +1,15 @@
 /* Il suono della Drum Machine: ogni pad ha due voci del suo modello (un colpo nuovo fa
  * sfumare in pochi millisecondi quello prima, senza click) e i modelli sono piccole sintesi
  * classiche: seni con caduta d'intonazione per casse e tom, rumore filtrato per rullante, clap
- * e shaker, sei quadre stonate tra loro per hi-hat e piatti (come la 808). Gira
- * nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
-import { dbToGain, type InstrumentCore } from '../../dsp/core';
+ * e shaker, sei quadre stonate tra loro per hi-hat e piatti (come la 808). Il modello Sample
+ * suona il file caricato sul pad. Gira nell'AudioWorklet; qui niente Web Audio, così si prova
+ * anche in Node. */
+import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { decayCoef } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
 import { WAVE_TABLE } from '../../dsp/oscillators';
 import { Svf } from '../../dsp/svf';
-import { DRUM_MODELS, DRUM_PADS, padOfNote, padsOf, type DrumPad } from './drums';
+import { DRUM_MODELS, DRUM_PADS, padOfNote, padOfSlot, padsOf, type DrumPad } from './drums';
 
 /** Sotto questo livello una voce è finita (−100 dB). */
 const FLOOR = 1e-5;
@@ -25,6 +26,8 @@ interface Hit {
   /** Tono e snap in 0..1. */
   readonly tone: number;
   readonly snap: number;
+  /** Il sample del pad (solo il modello Sample lo usa). */
+  readonly sample: SampleData | null;
 }
 
 /** Saturazione morbida che tiene il picco a 1: `drive` 0 = pulito. */
@@ -39,8 +42,8 @@ const saturate = (x: number, drive: number): number => {
 export abstract class DrumVoice {
   /** Livello dell'inviluppo principale: sotto FLOOR la voce è finita. */
   protected amp = 0;
-  private gainL = 0;
-  private gainR = 0;
+  protected gainL = 0;
+  protected gainR = 0;
   private fade = 1;
   private choking = false;
   private readonly chokeK: number;
@@ -69,15 +72,17 @@ export abstract class DrumVoice {
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const { gainL, gainR } = this;
     for (let i = from; i < to; i++) {
-      let v = this.next();
-      if (this.choking) {
-        this.fade *= this.chokeK;
-        v *= this.fade;
-      }
+      const v = this.next() * this.chokeGain();
       left[i] += v * gainL;
       right[i] += v * gainR;
       if (!this.active) break;
     }
+  }
+
+  /** Il guadagno della sfumatura, un campione alla volta (1 se la voce non è fermata). */
+  protected chokeGain(): number {
+    if (this.choking) this.fade *= this.chokeK;
+    return this.fade;
   }
 
   protected abstract start(hit: Hit): void;
@@ -391,6 +396,94 @@ class Shaker extends DrumVoice {
   }
 }
 
+/** Interpolazione di Hermite a 4 punti tra x[k] e x[k+1] (bordi ripetuti). */
+const hermite = (x: Float32Array, k: number, f: number): number => {
+  const n = x.length;
+  const xm = x[k > 0 ? k - 1 : 0], x0 = x[k], x1 = x[k + 1 < n ? k + 1 : n - 1], x2 = x[k + 2 < n ? k + 2 : n - 1];
+  const c1 = 0.5 * (x1 - xm), c2 = xm - 2.5 * x0 + 2 * x1 - 0.5 * x2, c3 = 0.5 * (x2 - xm) + 1.5 * (x0 - x1);
+  return ((c3 * f + c2) * f + c1) * f + x0;
+};
+
+/** Gli ultimi campioni di un sample sfumano, se il file finisce di colpo. */
+const END_FADE = 64;
+
+/** Il sample del pad: suonato dall'inizio all'intonazione del pad (interpolazione di Hermite,
+ *  anche quando il file ha un'altra frequenza di campionamento), con il decay che lo accorcia
+ *  (resta pieno e cade verso la fine), Tono come filtro DJ (sotto metà passa-basso, sopra
+ *  passa-alto) e Snap come saturazione. È stereo: fa da sé il giro del campione. */
+class SampleVoice extends DrumVoice {
+  private data: SampleData | null = null;
+  private pos = 0;
+  private step = 1;
+  /** Il tempo della voce in unità del decay: a 1 è finita. */
+  private t = 0;
+  private tStep = 0;
+  private drive = 0;
+  private filtered = false;
+  private readonly filterL = new Svf(this.sampleRate);
+  private readonly filterR = new Svf(this.sampleRate);
+
+  protected start(hit: Hit): void {
+    const d = hit.sample;
+    this.data = d && d.channels.length && d.channels[0].length > 1 ? d : null;
+    this.amp = this.data ? 1 : 0;
+    if (!this.data) return;
+    this.pos = 0;
+    this.step = (hit.ratio * this.data.sampleRate) / this.sampleRate;
+    this.t = 0;
+    this.tStep = 1 / (hit.decay * this.sampleRate);
+    this.drive = hit.snap;
+    const tone = hit.tone - 0.5;
+    this.filtered = Math.abs(tone) > 0.02;
+    if (this.filtered) {
+      // passa-basso da 20 kHz giù fino a 100 Hz, passa-alto da 20 Hz su fino a 5 kHz
+      const [cutoff, type] = tone < 0 ? [20000 * Math.pow(100 / 20000, -2 * tone), LP] : [20 * Math.pow(250, 2 * tone), HP];
+      for (const f of [this.filterL, this.filterR]) {
+        f.reset();
+        f.set(cutoff, 0.15, type);
+      }
+    }
+  }
+
+  protected next(): number {
+    return 0; // non serve: render fa tutto, in stereo
+  }
+
+  override render(left: Float32Array, right: Float32Array, from: number, to: number): void {
+    const d = this.data;
+    if (!d) return;
+    const L = d.channels[0], R = d.channels[1] ?? L, last = L.length - 1, stereo = R !== L;
+    const { gainL, gainR, drive, filtered } = this;
+    for (let i = from; i < to; i++) {
+      const k = Math.floor(this.pos);
+      if (k >= last || this.t >= 1) {
+        this.amp = 0;
+        break;
+      }
+      const f = this.pos - k;
+      let l = hermite(L, k, f), r = stereo ? hermite(R, k, f) : l;
+      if (filtered) {
+        l = this.filterL.process(l);
+        r = stereo ? this.filterR.process(r) : l;
+      }
+      if (drive > 0.01) {
+        l = saturate(l, drive);
+        r = stereo ? saturate(r, drive) : l;
+      }
+      // pieno all'inizio, poi cade verso la fine del decay; gli ultimi campioni sfumano
+      const t2 = this.t * this.t, tail = last - k;
+      const g = (1 - t2 * t2) * this.chokeGain() * (tail < END_FADE ? tail / END_FADE : 1);
+      // il livello dell'inviluppo dice se la voce è viva (non la sfumatura dei bordi del file)
+      this.amp = Math.max(FLOOR, 1 - t2 * t2);
+      left[i] += l * g * gainL;
+      right[i] += r * g * gainR;
+      this.pos += this.step;
+      this.t += this.tStep;
+      if (!this.active) break;
+    }
+  }
+}
+
 /** Le voci per id del modello: aggiungere un suono è una riga qui e una in DRUM_MODELS. */
 const VOICES: Readonly<Record<string, (sampleRate: number) => DrumVoice>> = {
   kick: sr => new Kick(sr),
@@ -404,11 +497,14 @@ const VOICES: Readonly<Record<string, (sampleRate: number) => DrumVoice>> = {
   tom: sr => new Tom(sr),
   cowbell: sr => new Cowbell(sr),
   shaker: sr => new Shaker(sr),
+  sample: sr => new SampleVoice(sr),
 };
 
 /** Un pad: due voci per modello (nate quando servono) e i suoi valori. */
 class Pad {
   settings: DrumPad | null = null;
+  /** Il sample caricato sul pad (suona se il modello è Sample). */
+  sample: SampleData | null = null;
   private readonly voices = new Map<number, readonly [DrumVoice, DrumVoice]>();
   private current = 0;
 
@@ -430,7 +526,7 @@ class Pad {
     this.current ^= 1;
     const gain = dbToGain(s.level) * velocityGain, pan = s.pan / 100;
     pair[this.current].trigger(
-      { ratio: Math.pow(2, s.tune / 12), decay: s.decay, tone: s.tone / 100, snap: s.snap / 100 },
+      { ratio: Math.pow(2, s.tune / 12), decay: s.decay, tone: s.tone / 100, snap: s.snap / 100, sample: this.sample },
       gain * Math.min(1, 1 - pan), gain * Math.min(1, 1 + pan));
   }
 
@@ -448,7 +544,7 @@ class Pad {
   }
 }
 
-export class DrumCore implements InstrumentCore {
+export class DrumCore implements InstrumentCore, SamplePlayer {
   private readonly pads: Pad[];
   private velocity = 0.7;
   private volume = 1;
@@ -470,6 +566,12 @@ export class DrumCore implements InstrumentCore {
     });
     this.velocity = (params.velocity ?? 70) / 100;
     this.volume = dbToGain(params.volume ?? -4);
+  }
+
+  /** Il sample del pad di `slot` ("p1"…): il colpo che suona già tiene il suo, il prossimo usa questo. */
+  setSample(slot: string, sample: SampleData | null): void {
+    const pad = this.pads[padOfSlot(slot)];
+    if (pad) pad.sample = sample;
   }
 
   noteOn(_id: number, pitch: number, velocity: number): void {

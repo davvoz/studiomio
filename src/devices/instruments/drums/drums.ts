@@ -1,13 +1,17 @@
 /* "Drum Machine": 16 pad, uno per nota da C1 (36) in su come nel Drum Rack di Live, ognuno con
- * un suono sintetizzato scelto tra i modelli (cassa, rullante, hi-hat…) e i suoi controlli.
- * Niente sample: tutto nasce dal DSP, in drums-core.ts. Qui c'è la descrizione (parametri,
- * kit predefinito, preset). */
+ * un suono scelto tra i modelli (cassa, rullante, hi-hat…) e i suoi controlli. I modelli sono
+ * sintetizzati dal DSP, in drums-core.ts; il modello "Sample" suona invece un file audio del
+ * progetto, caricato sul pad. Qui c'è la descrizione (parametri, kit predefinito, preset). */
 import type { DeviceType, Preset } from '../../device-type';
 import type { ChoiceParam, NumberParam, ParamSection } from '../../params';
 
 export const DRUM_PADS = 16;
 /** La nota del primo pad: C1, come in Live. */
 export const FIRST_PAD_NOTE = 36;
+
+/** Il decay più lungo di un pad: abbastanza per un riser o un piatto lasciato andare (al
+ *  massimo un pad Sample suona tutto il file). */
+export const MAX_DECAY = 12;
 
 /** Un modello di suono. I valori sono quelli che il pad prende quando lo si sceglie; `tone` e
  *  `snap` hanno un significato per modello, scritto in `hint`. */
@@ -33,6 +37,7 @@ export const DRUM_MODELS: readonly DrumModel[] = [
   { id: 'tom', label: 'Tom', decay: 0.4, tone: 25, snap: 35, hint: 'Tono: pelle (rumore) · Snap: caduta d\'intonazione' },
   { id: 'cowbell', label: 'Campanaccio', decay: 0.35, tone: 50, snap: 50, hint: 'Tono: filtro · Snap: attacco' },
   { id: 'shaker', label: 'Shaker', decay: 0.09, tone: 65, snap: 50, hint: 'Tono: brillantezza · Snap: attacco veloce' },
+  { id: 'sample', label: 'Sample', decay: MAX_DECAY, tone: 50, snap: 0, hint: 'Decay: accorcia · Tono: ◂ passa-basso, ▸ passa-alto · Snap: satura' },
 ];
 
 /** Modello per id, nell'ordine dei valori. */
@@ -60,6 +65,16 @@ export const padParam = (index: number, key: PadKey): string => `p${index + 1}${
 
 export const padNote = (index: number): number => FIRST_PAD_NOTE + index;
 
+/** Il posto del sample del pad `index` (da 0) nei sample del dispositivo: "p1", "p12"… */
+export const padSlot = (index: number): string => `p${index + 1}`;
+
+/** Il pad di un posto dei sample, o −1. */
+export const padOfSlot = (slot: string): number => {
+  const m = /^p(\d+)$/.exec(slot);
+  const i = m ? Number(m[1]) - 1 : -1;
+  return i >= 0 && i < DRUM_PADS ? i : -1;
+};
+
 /** Il pad di una nota, o −1 se la nota non ne ha. */
 export const padOfNote = (pitch: number): number => {
   const i = pitch - FIRST_PAD_NOTE;
@@ -79,15 +94,16 @@ export const padsOf = (values: Readonly<Record<string, number>>): DrumPad[] =>
     choke: values[padParam(i, 'choke')],
   }));
 
-/** I nomi dei pad: quello del modello, numerato se lo stesso modello è su più pad (Tom 1, Tom 2…). */
-export function padNames(values: Readonly<Record<string, number>>): string[] {
-  const models = padsOf(values).map(p => p.model);
-  const seen = new Map<number, number>();
-  return models.map(m => {
-    const label = DRUM_MODELS[m]?.label ?? '?';
-    if (models.filter(x => x === m).length < 2) return label;
-    const n = (seen.get(m) ?? 0) + 1;
-    seen.set(m, n);
+/** I nomi dei pad: quello del modello, numerato se lo stesso modello è su più pad (Tom 1, Tom 2…);
+ *  i pad Sample prendono il nome del loro sample. */
+export function padNames(values: Readonly<Record<string, number>>, samples: ReadonlyMap<string, string> = new Map()): string[] {
+  const labels = padsOf(values).map((p, i) =>
+    (p.model === MODEL.sample ? samples.get(padSlot(i)) : undefined) ?? DRUM_MODELS[p.model]?.label ?? '?');
+  const seen = new Map<string, number>();
+  return labels.map(label => {
+    if (labels.filter(x => x === label).length < 2) return label;
+    const n = (seen.get(label) ?? 0) + 1;
+    seen.set(label, n);
     return `${label} ${n}`;
   });
 }
@@ -152,7 +168,7 @@ function padSection(i: number): ParamSection {
     params: [
       { kind: 'choice', id: id('model'), label: 'Suono', options: DRUM_MODELS.map(m => m.label), default: d.model },
       num(id('tune'), 'Intonazione', -24, 24, d.tune, 'st', { step: 1 }),
-      num(id('decay'), 'Decay', 0.01, 5, d.decay, 's', { scale: 'log' }),
+      num(id('decay'), 'Decay', 0.01, MAX_DECAY, d.decay, 's', { scale: 'log' }),
       percent(id('tone'), 'Tono', d.tone),
       percent(id('snap'), 'Snap', d.snap),
       num(id('level'), 'Livello', -36, 6, d.level, 'dB', { step: 0.5 }),
@@ -196,7 +212,7 @@ export const DRUMS: DeviceType = {
     { label: 'Uscita', params: [percent('velocity', 'Velocity', 70), num('volume', 'Volume', -36, 6, -4, 'dB', { step: 0.5 })] },
   ],
   presets: PRESETS,
-  noteNames: values => new Map(padNames(values).map((name, i) => [padNote(i), name])),
+  noteNames: (values, samples) => new Map(padNames(values, samples).map((name, i) => [padNote(i), name])),
 };
 
 /** I valori che un pad prende quando gli si cambia modello: quelli del modello, il resto resta. */

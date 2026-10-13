@@ -87,6 +87,12 @@ export class ProjectSession {
     }
   }
 
+  /** Copia un file audio nella cartella del progetto e lo carica nel motore, senza metterlo da
+   *  nessuna parte: il riferimento lo usa chi lo chiede (es. un pad della Drum Machine). */
+  importSampleFile(file: File): Promise<SampleRef> {
+    return this.loadFile(file);
+  }
+
   /** Mette nella cartella del progetto un audio già in memoria (es. il loop demo). */
   async addAudio(name: string, data: AudioData, wav: Uint8Array): Promise<SampleRef> {
     const file = await this.folder.importAudio(name, wav);

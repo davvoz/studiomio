@@ -1,12 +1,14 @@
 /* Il pannello della Drum Machine: a sinistra i 16 pad in griglia 4×4 (il primo in basso a
  * sinistra, come sui controller), a destra i controlli del pad scelto e l'uscita. Un clic su
- * un pad lo sceglie e lo suona; trascinarlo su un altro li scambia (con Ctrl lo copia). */
+ * un pad lo sceglie e lo suona; trascinarlo su un altro li scambia (con Ctrl lo copia). Un file
+ * audio lasciato su un pad ci diventa il suo sample (più file: sui pad dopo). */
+import type { SampleId } from '../../../core/id';
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import {
-  DRUM_MODELS, DRUM_PADS, modelDefaults, padNames, padNote, padOfNote, padParam, padsOf, type DrumPad, type PadKey,
+  DRUM_MODELS, DRUM_PADS, MODEL, modelDefaults, padNames, padNote, padOfNote, padParam, padsOf, padSlot, type DrumPad, type PadKey,
 } from '../../../devices/instruments/drums/drums';
 import type { ParamSpec } from '../../../devices/params';
-import type { DeviceSettings, ParamValues } from '../../../model/device';
+import { sampleAt, type DeviceSettings, type ParamValues } from '../../../model/device';
 import { SEPARATOR, showContextMenu } from '../../context-menu';
 import { el } from '../../dom';
 import { pitchName } from '../../piano-roll/pitch-axis';
@@ -17,7 +19,15 @@ import type { DeviceDisplay, DisplayContext } from '../displays';
 const MODEL_COLORS: Readonly<Record<string, string>> = {
   kick: '#ff9d2e', boom: '#ff7a2e', snare: '#f2d14b', clap: '#f2d14b', rim: '#e8c06a',
   hatClosed: '#4fd1e0', hatOpen: '#4fd1e0', cymbal: '#7fb6ff', tom: '#7bd88f', cowbell: '#c79bff', shaker: '#c79bff',
+  sample: '#ef6fa6',
 };
+
+/** I file che si possono lasciare su un pad. */
+const isAudio = (f: File) => f.type.startsWith('audio/') || /\.(wav|aiff?|flac|mp3|ogg|m4a)$/i.test(f.name);
+
+/** Il pad diventa un pad Sample (con i valori del modello, se non lo era già). */
+const asSamplePad = (pad: DrumPad, index: number): Record<string, number> =>
+  pad.model === MODEL.sample ? {} : modelDefaults(index, MODEL.sample);
 
 /** I controlli del pad, nell'ordine in cui compaiono (il suono ha il suo menu). */
 const PAD_CONTROLS: readonly PadKey[] = ['tune', 'decay', 'tone', 'snap', 'level', 'pan', 'choke'];
@@ -36,6 +46,11 @@ export class DrumDisplay implements DeviceDisplay {
     ...DRUM_MODELS.map((m, i) => el('option', { value: String(i), textContent: m.label })));
   private readonly padTitle = el('div', { className: 'drum-pad-title' });
   private readonly hint = el('div', { className: 'drum-hint muted' });
+  /** Il sample del pad (solo per il modello Sample): scelto tra quelli del progetto o caricato. */
+  private readonly sampleChoice = el<HTMLSelectElement>('select', { className: 'drum-sample', title: 'Il sample del pad (tra quelli del progetto)' });
+  private readonly loadButton = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Carica…', title: 'Carica un file audio sul pad' });
+  private readonly sampleRow = el('div', { className: 'drum-sample-row' }, this.sampleChoice, this.loadButton);
+  private settings: DeviceSettings;
   private readonly controls = el('div', { className: 'device-controls' });
   private readonly padControls = new Map<string, { spec: ParamSpec; control: ParamControl }>();
   private values: Record<string, number> = {};
@@ -46,6 +61,7 @@ export class DrumDisplay implements DeviceDisplay {
   private shown = false;
 
   constructor(private readonly ctx: DisplayContext) {
+    this.settings = ctx.settings;
     this.read(ctx.settings.params);
     this.padButtons = Array.from({ length: DRUM_PADS }, (_, i) => this.padButton(i));
     // il primo pad in basso a sinistra: le righe vanno dall'alto (pad 13-16) al basso (1-4)
@@ -55,9 +71,16 @@ export class DrumDisplay implements DeviceDisplay {
       this.ctx.setParams(modelDefaults(this.selected, Number(this.model.value)), true);
       this.play(this.selected);
     };
+    this.sampleChoice.onchange = () => {
+      const id = (this.sampleChoice.value || null) as SampleId | null;
+      this.ctx.samples?.assign({ [padSlot(this.selected)]: id }, {});
+      if (id) this.play(this.selected);
+    };
+    this.loadButton.onclick = () => this.pickFile(this.selected);
+    this.sampleRow.hidden = !ctx.samples;
     const global = (id: string) => this.control(paramSpec(ctx.type, id)!);
     this.element.append(grid, el('div', { className: 'drum-editor' },
-      el('div', { className: 'drum-pad-head' }, this.padTitle, this.model, this.hint),
+      el('div', { className: 'drum-pad-head' }, this.padTitle, this.model, this.sampleRow, this.hint),
       el('div', { className: 'drum-controls' }, this.controls, el('div', { className: 'eq-sep' }), global('velocity'), global('volume'))));
     this.update(ctx.settings, true);
     this.select(0);
@@ -76,8 +99,18 @@ export class DrumDisplay implements DeviceDisplay {
   };
 
   update(settings: DeviceSettings, _enabled: boolean): void {
+    this.settings = settings;
     if (settings.params !== this.params) this.read(settings.params);
     this.refresh();
+  }
+
+  /** I nomi dei sample caricati, per posto. */
+  private sampleNames(): Map<string, string> {
+    const all = this.ctx.samples?.list() ?? [];
+    return new Map(Object.entries(this.settings.samples ?? {}).flatMap(([slot, id]) => {
+      const s = all.find(x => x.id === id);
+      return s ? [[slot, s.name] as const] : [];
+    }));
   }
 
   private read(params: ParamValues): void {
@@ -92,7 +125,7 @@ export class DrumDisplay implements DeviceDisplay {
   }
 
   private refresh(): void {
-    const names = padNames(this.values);
+    const names = padNames(this.values, this.sampleNames());
     this.padButtons.forEach((b, i) => {
       const model = DRUM_MODELS[this.pads[i].model];
       b.querySelector('.drum-pad-name')!.textContent = names[i];
@@ -102,7 +135,15 @@ export class DrumDisplay implements DeviceDisplay {
     const pad = this.pads[this.selected];
     this.padTitle.textContent = `Pad ${this.selected + 1} · ${pitchName(padNote(this.selected))}`;
     this.model.value = String(pad.model);
-    this.hint.textContent = DRUM_MODELS[pad.model]?.hint ?? '';
+    const isSample = pad.model === MODEL.sample, current = sampleAt(this.settings, padSlot(this.selected));
+    this.sampleRow.classList.toggle('off', !isSample);
+    if (isSample) {
+      const all = this.ctx.samples?.list() ?? [];
+      this.sampleChoice.replaceChildren(el('option', { value: '', textContent: '— nessun sample —' }),
+        ...all.map(s => el('option', { value: s.id, textContent: s.name })));
+      this.sampleChoice.value = current ?? '';
+    }
+    this.hint.textContent = isSample && !current ? 'Trascina un file audio sul pad, o Carica…' : DRUM_MODELS[pad.model]?.hint ?? '';
     for (const { spec, control } of this.padControls.values()) {
       control.set(this.values[spec.id]);
       setActive(control, paramActive(spec, this.values));
@@ -150,7 +191,51 @@ export class DrumDisplay implements DeviceDisplay {
       this.select(i);
       this.menu(i, e.clientX, e.clientY);
     });
+    // file audio dal sistema: diventano i sample del pad (e dei pad dopo)
+    const files = (e: DragEvent) => !!this.ctx.samples && !!e.dataTransfer?.types.includes('Files');
+    b.addEventListener('dragover', e => {
+      if (!files(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer!.dropEffect = 'copy';
+      b.classList.add('drop');
+    });
+    b.addEventListener('dragleave', () => b.classList.remove('drop'));
+    b.addEventListener('drop', e => {
+      if (!files(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      b.classList.remove('drop');
+      void this.loadFiles(i, [...e.dataTransfer!.files].filter(isAudio));
+    });
     return b;
+  }
+
+  /** Carica i file sui pad da `first` in su, uno per pad; poi suona il primo. */
+  private async loadFiles(first: number, files: readonly File[]): Promise<void> {
+    const samples = this.ctx.samples;
+    if (!samples) return;
+    for (const [k, file] of files.entries()) {
+      const i = first + k;
+      if (i >= DRUM_PADS) break;
+      try {
+        await samples.load(padSlot(i), file, asSamplePad(this.pads[i], i));
+      } catch (err) {
+        this.hint.textContent = `Impossibile caricare "${file.name}": ${err instanceof Error ? err.message : err}`;
+        return;
+      }
+    }
+    if (files.length) {
+      this.select(first);
+      this.play(first);
+    }
+  }
+
+  /** Sceglie un file dal disco per il pad. */
+  private pickFile(i: number): void {
+    const input = el<HTMLInputElement>('input', { type: 'file', accept: 'audio/*' });
+    input.onchange = () => void this.loadFiles(i, [...(input.files ?? [])]);
+    input.click();
   }
 
   /** Trascinare un pad su un altro: rilasciando, i due si scambiano (o, con Ctrl, si copia). */
@@ -178,20 +263,34 @@ export class DrumDisplay implements DeviceDisplay {
 
   private movePad(from: number, to: number, copy: boolean): void {
     const a = this.pads[from], b = this.pads[to];
-    this.ctx.setParams(copy ? padValues(a, to) : { ...padValues(a, to), ...padValues(b, from) }, true);
+    const values = copy ? padValues(a, to) : { ...padValues(a, to), ...padValues(b, from) };
+    const sa = sampleAt(this.settings, padSlot(from)), sb = sampleAt(this.settings, padSlot(to));
+    // i sample vanno con i pad
+    if (this.ctx.samples && (sa || sb)) {
+      this.ctx.samples.assign(copy ? { [padSlot(to)]: sa } : { [padSlot(to)]: sa, [padSlot(from)]: sb }, values);
+    } else this.ctx.setParams(values, true);
     this.select(to);
   }
 
   private menu(i: number, x: number, y: number): void {
     const kit = resolveParams(this.ctx.type, {});
     const fresh = padsOf(kit)[i];
+    const samples = this.ctx.samples, loaded = sampleAt(this.settings, padSlot(i));
     showContextMenu(x, y, [
       ...DRUM_MODELS.map((m, k) => ({
         label: m.label, checked: this.pads[i].model === k,
         run: () => { this.ctx.setParams(modelDefaults(i, k), true); this.play(i); },
       })),
       SEPARATOR,
-      { label: 'Riporta il pad com\'era nel kit di partenza', run: () => this.ctx.setParams(padValues(fresh, i), true) },
+      ...(samples ? [
+        { label: 'Carica un sample…', run: () => this.pickFile(i) },
+        { label: 'Togli il sample', disabled: !loaded, run: () => samples.assign({ [padSlot(i)]: null }, {}) },
+        SEPARATOR,
+      ] : []),
+      {
+        label: 'Riporta il pad com\'era nel kit di partenza',
+        run: () => (samples && loaded ? samples.assign({ [padSlot(i)]: null }, padValues(fresh, i)) : this.ctx.setParams(padValues(fresh, i), true)),
+      },
     ]);
   }
 }

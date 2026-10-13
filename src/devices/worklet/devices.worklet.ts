@@ -1,7 +1,7 @@
 /* I processori AudioWorklet dei dispositivi: uno per tutti gli strumenti, uno per tutti gli
  * effetti. Ognuno crea il motore del tipo richiesto e riceve parametri (e note) dalla porta. */
 import { paramsOf, type DeviceType } from '../device-type';
-import type { EffectCore, InstrumentCore } from '../dsp/core';
+import { playsSamples, type EffectCore, type InstrumentCore } from '../dsp/core';
 import type { NumberParam } from '../params';
 import { effectType, instrumentType } from '../registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from './cores';
@@ -50,10 +50,14 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     const o = options.processorOptions as InstrumentProcessorOptions;
     this.core = INSTRUMENT_CORES[o.type]?.(sampleRate) ?? silentInstrument;
     this.mod = new ParamModulation(numberSpecs(instrumentType(o.type)), o.params);
+    const core = this.core;
+    const setSample = playsSamples(core) ? core.setSample.bind(core) : () => {};
+    for (const [slot, sample] of Object.entries(o.samples ?? {})) setSample(slot, sample);
     listen<InstrumentMessage>(this.port, {
       note: m => this.queue.add(m.pitch, m.velocity, Math.round(m.on * sampleRate), Math.round(m.off * sampleRate)),
       params: m => this.mod.setBase(m.params),
       mod: m => this.mod.event(m.param, m.kind, m.value, m.time),
+      sample: m => setSample(m.slot, m.sample),
       stop: () => {
         this.queue.clear();
         this.core.silence();

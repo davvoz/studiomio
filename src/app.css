@@ -290,7 +290,7 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
   background: #262a30; text-align: left; overflow: hidden; touch-action: none; user-select: none;
 }
 .drum-pad:hover { background: #2d3138; }
-.drum-pad-name { font-size: 11px; line-height: 1.15; color: var(--text); }
+.drum-pad-name { font-size: 11px; line-height: 1.15; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .drum-pad-note { font: 10px ui-monospace, monospace; color: var(--muted); }
 .drum-pad.selected { background: color-mix(in srgb, var(--pad) 20%, #262a30); box-shadow: inset 0 0 0 1px var(--pad); }
 .drum-pad.drop { box-shadow: inset 0 0 0 2px #fff; }
@@ -301,6 +301,9 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drum-pad-title { font-weight: 600; font-size: 12px; white-space: nowrap; }
 .drum-model { font-size: 12px; padding: 1px 4px; }
 .drum-hint { font-size: 11px; white-space: nowrap; }
+.drum-sample-row { display: flex; align-items: center; gap: 4px; }
+.drum-sample-row.off { display: none; }
+.drum-sample { font-size: 12px; padding: 1px 4px; max-width: 180px; }
 .drum-controls { display: flex; align-items: flex-start; gap: 2px; }
 
 /* Drive: curva, spettro, forme, controlli */

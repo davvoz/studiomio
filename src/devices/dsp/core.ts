@@ -15,6 +15,19 @@ export interface InstrumentCore {
 
 export type CoreFactory = (sampleRate: number) => InstrumentCore;
 
+/** Un sample caricato in un dispositivo (es. su un pad): i campioni e la loro frequenza. */
+export interface SampleData {
+  readonly sampleRate: number;
+  readonly channels: readonly Float32Array[];
+}
+
+/** Un motore che suona sample: li riceve per posto (null = posto vuoto). */
+export interface SamplePlayer {
+  setSample(slot: string, sample: SampleData | null): void;
+}
+
+export const playsSamples = (core: object): core is SamplePlayer => typeof (core as Partial<SamplePlayer>).setSample === 'function';
+
 /** Il motore di un effetto, eseguito nell'AudioWorklet: trasforma l'ingresso nell'uscita un
  *  blocco alla volta. Lo spegnimento (bypass) lo gestisce il processore, non l'effetto. */
 export interface EffectCore {

@@ -81,6 +81,7 @@ export class App implements Commands, FileCommands, TimelineActions {
           return notes;
         };
       },
+      importSample: file => this.session.importSampleFile(file),
     });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
