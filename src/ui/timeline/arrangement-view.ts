@@ -11,6 +11,7 @@ import {
   LoopRegionGesture, MarqueeGesture, MoveClipsGesture, ResizeClipGesture, ScrubGesture,
   type Gesture, type GestureHost, type Pointer,
 } from './gestures';
+import { LOOP_CURSOR, loopPartAt } from '../loop-drag';
 import { Surface } from '../surface';
 import { paintLanes, paintPlayhead, paintRuler, RULER_LOOP_BAND } from './painters';
 
@@ -197,7 +198,7 @@ export class ArrangementView implements GestureHost {
     el.addEventListener('pointermove', e => {
       const p = this.pointer(e, el);
       if (this.gesture) this.gesture.move(p);
-      else el.style.cursor = p.y < RULER_LOOP_BAND + 2 ? 'ew-resize' : 'text';
+      else el.style.cursor = p.y < RULER_LOOP_BAND + 2 ? LOOP_CURSOR[loopPartAt(this.store.project.loop, p.x, b => this.geo.beatToX(b))] : 'text';
     });
     this.bindGestureEnd(el);
   }

@@ -2,6 +2,8 @@ import type { PlacementId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import { placementEnd, type Placement } from '../../model/arrangement';
 import { resizePlacement, setLoopRegion } from '../../store/edits';
+import type { LoopRegion } from '../../model/project';
+import { dragLoop, LOOP_CURSOR, loopPartAt, type LoopPart } from '../loop-drag';
 import type { ProjectStore } from '../../store/project-store';
 import { addedPlacements, relocate, type Relocation } from '../../store/selection-edits';
 import type { UiState } from '../ui-state';
@@ -192,25 +194,30 @@ export class MarqueeGesture implements Gesture {
   }
 }
 
-/** Nella fascia alta del righello: trascinare disegna il loop, un clic lo accende o spegne. */
+/** Nella fascia alta del righello: dai bordi si allunga o accorcia il loop tenendo fermo
+ *  l'altro estremo, dal corpo lo si sposta, fuori se ne disegna uno nuovo; un clic lo accende o spegne. */
 export class LoopRegionGesture implements Gesture {
-  readonly cursor = 'ew-resize';
+  readonly cursor: string;
   readonly hidden = NONE;
   private moved = false;
   private readonly anchor: Beats;
+  private readonly part: LoopPart;
+  private readonly original: LoopRegion;
 
   constructor(private readonly host: GestureHost, private readonly origin: Pointer) {
     this.anchor = snapped(host, origin, host.geo.xToBeat(origin.x));
+    this.original = host.store.project.loop;
+    this.part = loopPartAt(this.original, origin.x, b => host.geo.beatToX(b));
+    this.cursor = this.part === 'body' ? 'grabbing' : LOOP_CURSOR[this.part];
   }
 
   move(p: Pointer): void {
     if (!this.moved && Math.abs(p.x - this.origin.x) < CLICK_PX) return;
     this.moved = true;
-    const b = snapped(this.host, p, this.host.geo.xToBeat(p.x));
-    const [start, end] = [Math.min(b, this.anchor), Math.max(b, this.anchor)];
-    if (end - start < 1e-6) return;
+    const r = dragLoop(this.part, this.original, this.anchor, snapped(this.host, p, this.host.geo.xToBeat(p.x)), 0);
+    if (!r) return;
     // durante il trascinamento il loop cambia davvero (si sente subito), in un solo passo di annullamento
-    this.host.store.apply(setLoopRegion({ enabled: true, start, end }), { mergeKey: 'loop-drag' });
+    this.host.store.apply(setLoopRegion({ enabled: true, ...r }), { mergeKey: 'loop-drag' });
   }
 
   end(): void {

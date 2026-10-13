@@ -4,6 +4,7 @@ import type { WarpMarkers } from '../../model/warp-markers';
 import type { Pointer } from '../timeline/gestures';
 import { snapTo } from '../timeline/geometry';
 import { shiftAudioUnderMarker, withLoopSafe, withRegionSafe, type BeatAxis } from './clip-geometry';
+import { dragLoop, LOOP_CURSOR, loopPartAt, type BeatRange, type LoopPart } from '../loop-drag';
 import { LAYOUT } from './editor-painter';
 
 /** Ciò che i gesti usano dell'editor. */
@@ -34,7 +35,7 @@ export interface EditorGesture {
 }
 
 export type EditorHit =
-  | { readonly kind: 'loop' }
+  | { readonly kind: 'loop'; readonly part: LoopPart }
   | { readonly kind: 'flag'; readonly edge: 'start' | 'end' }
   | { readonly kind: 'ruler' }
   | { readonly kind: 'marker'; readonly index: number }
@@ -47,7 +48,7 @@ const MARKER_PX = 7, FLAG_PX = 8, TRANSIENT_PX = 6, CLICK_PX = 3;
 /** Cosa c'è sotto il puntatore nell'editor. */
 export function editorHit(host: EditorHost, clip: AudioClip, x: number, y: number): EditorHit {
   const { axis } = host;
-  if (y < LAYOUT.loopBand) return { kind: 'loop' };
+  if (y < LAYOUT.loopBand) return { kind: 'loop', part: loopPartAt(clip.loop, x, b => axis.beatToX(b)) };
   if (y < LAYOUT.ruler) {
     if (Math.abs(axis.beatToX(clip.region.start) - x) < FLAG_PX && x >= axis.beatToX(clip.region.start) - 2) return { kind: 'flag', edge: 'start' };
     if (Math.abs(axis.beatToX(clip.region.end) - x) < FLAG_PX) return { kind: 'flag', edge: 'end' };
@@ -156,27 +157,29 @@ export class FlagGesture implements EditorGesture {
   }
 }
 
-/** Fascia del loop: trascinare disegna il loop della clip, un clic lo accende o spegne. */
+/** Fascia del loop della clip: bordi, corpo e fuori come sul righello della timeline; un clic lo accende o spegne. */
 export class LoopBandGesture implements EditorGesture {
-  readonly cursor = 'ew-resize';
-  private range: [Beats, Beats] | null = null;
+  readonly cursor: string;
+  private dragged = false;
+  private range: BeatRange | null = null;
   private readonly anchor: Beats;
 
-  constructor(private readonly host: EditorHost, private readonly origin: Pointer) {
+  constructor(private readonly host: EditorHost, private readonly original: BeatRange, private readonly part: LoopPart, private readonly origin: Pointer) {
     this.anchor = snapped(host, origin, host.axis.xToBeat(origin.x));
+    this.cursor = part === 'body' ? 'grabbing' : LOOP_CURSOR[part];
   }
 
   move(p: Pointer): void {
-    if (!this.range && !moved(p, this.origin)) return;
-    const b = snapped(this.host, p, this.host.axis.xToBeat(p.x));
-    this.range = [Math.min(b, this.anchor), Math.max(b, this.anchor)];
+    if (!this.dragged && !moved(p, this.origin)) return;
+    this.dragged = true;
+    this.range = dragLoop(this.part, this.original, this.anchor, snapped(this.host, p, this.host.axis.xToBeat(p.x))) ?? this.range;
     this.host.invalidate();
   }
 
   end(): void {
     const r = this.range;
-    if (!r) return this.host.commit('Loop della clip', c => withLoopSafe(c, c.loop.start, c.loop.end, !c.loop.enabled));
-    if (r[1] - r[0] > 1e-6) this.host.commit('Loop della clip', c => withLoopSafe(c, r[0], r[1]));
+    if (!this.dragged) return this.host.commit('Loop della clip', c => withLoopSafe(c, c.loop.start, c.loop.end, !c.loop.enabled));
+    if (r) this.host.commit('Loop della clip', c => withLoopSafe(c, r.start, r.end));
   }
 
   cancel(): void {
@@ -186,7 +189,7 @@ export class LoopBandGesture implements EditorGesture {
 
   preview(clip: AudioClip): AudioClip {
     const r = this.range;
-    return r && r[1] - r[0] > 1e-6 ? withLoopSafe(clip, r[0], r[1]) : clip;
+    return r ? withLoopSafe(clip, r.start, r.end) : clip;
   }
 }
 
@@ -230,7 +233,7 @@ export class IdleGesture implements EditorGesture {
 
 /** Quale gesto inizia premendo su ciascuna cosa. */
 export const editorGestureFor: { readonly [K in EditorHit['kind']]: (host: EditorHost, clip: AudioClip, hit: Extract<EditorHit, { kind: K }>, p: Pointer) => EditorGesture } = {
-  loop: (h, _c, _hit, p) => new LoopBandGesture(h, p),
+  loop: (h, c, hit, p) => new LoopBandGesture(h, c.loop, hit.part, p),
   flag: (h, _c, hit) => new FlagGesture(h, hit.edge),
   ruler: (h, _c, _hit, p) => new PanGesture(h, p),
   marker: (h, c, hit, p) => new MarkerGesture(h, c.warp.markers, hit.index, p),
@@ -243,6 +246,12 @@ export const editorGestureFor: { readonly [K in EditorHit['kind']]: (host: Edito
   wave: (h, _c, _hit, p) => new PanGesture(h, p),
 };
 
-export const editorCursor: { readonly [K in EditorHit['kind']]: string } = {
-  loop: 'ew-resize', flag: 'ew-resize', ruler: 'pointer', marker: 'ew-resize', transient: 'copy', strip: 'default', wave: 'grab',
+export const editorCursor: { readonly [K in EditorHit['kind']]: (hit: Extract<EditorHit, { kind: K }>) => string } = {
+  loop: hit => LOOP_CURSOR[hit.part],
+  flag: () => 'ew-resize',
+  ruler: () => 'pointer',
+  marker: () => 'ew-resize',
+  transient: () => 'copy',
+  strip: () => 'default',
+  wave: () => 'grab',
 };

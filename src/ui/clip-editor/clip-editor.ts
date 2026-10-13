@@ -262,7 +262,7 @@ export class ClipEditor implements EditorHost {
       const h = this.hit(p);
       const hover = h?.hit.kind === 'transient' ? h.hit.t : null;
       if (hover !== this.hover) { this.hover = hover; this.invalidate(); }
-      el.style.cursor = h ? editorCursor[h.hit.kind] : 'default';
+      el.style.cursor = h ? (editorCursor[h.hit.kind] as (hit: EditorHit) => string)(h.hit) : 'default';
     });
     el.addEventListener('pointerup', e => {
       const g = this.gesture;

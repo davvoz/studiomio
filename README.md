@@ -96,7 +96,7 @@ MioBrano/
 | Trascina una clip | sposta (anche su un'altra traccia dello stesso tipo); con Ctrl copia; con Alt senza griglia |
 | Trascina il bordo di una clip | accorcia o allunga |
 | Trascina nel vuoto | selezione a riquadro; un clic sposta il cursore |
-| Fascia alta del righello | trascina per disegnare il loop, clic per accenderlo/spegnerlo |
+| Fascia alta del righello | bordi del loop: sposta quell'estremo tenendo fermo l'altro · corpo: sposta il loop · fuori: disegna un loop nuovo · clic: accende/spegne |
 | Doppio clic su una traccia MIDI vuota | nuova clip di una battuta |
 | Spazio · Invio | play/stop · stop e torna all'inizio |
 | Ctrl+Z / Ctrl+Y · Canc · Ctrl+D · Ctrl+E | annulla/ripeti · elimina · duplica · dividi al cursore |
@@ -114,7 +114,7 @@ Doppio clic su una clip audio: si apre in basso (Esc per chiudere).
 | Trascina da un transiente (segni grigi) | crea un marker lì e lo trascina |
 | Doppio clic sulla striscia o sulla forma d'onda | aggiunge un warp marker |
 | Canc | elimina il marker selezionato |
-| Fascia arancione in alto | trascina per il loop della clip, clic per accenderlo/spegnerlo |
+| Fascia arancione in alto | come la fascia del loop sul righello, per il loop della clip |
 | Bandierine bianche | inizio e fine della clip |
 | Trascina la forma d'onda · clic | scorre la vista · porta lì il cursore della timeline |
 | Pannello | warp, modalità e opzioni, BPM della clip o del segmento, :2 ×2, 1.1.1 qui, Auto-Warp, Segui tempo, Quantizza, Azzera, transpose, detune, gain |
