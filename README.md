@@ -1,8 +1,8 @@
 # studiomio
 
-DAW nel browser con warp in stile Ableton Live. Si parte dall'arrangement (timeline);
-il modello è pensato fin dall'inizio per aggiungere la session view, le clip MIDI col
-piano roll e gli strumenti.
+DAW nel browser con warp in stile Ableton Live: arrangement (timeline), clip audio con
+warp, clip MIDI con piano roll e strumenti in AudioWorklet. Il modello è pensato per
+aggiungere la session view.
 
 Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
@@ -36,8 +36,10 @@ src/
   core/                id tipizzati, eventi, tempo musicale (battiti, tempo, metro)
   model/               il progetto, immutabile
     project.ts         radice: tracce, scene, sample, tempo, loop
-    track.ts           Track → AudioTrack, MidiTrack (mixer, timeline, slot della session)
+    track.ts           Track → AudioTrack, MidiTrack (mixer, timeline, slot della session, strumento)
     clip.ts            Clip → AudioClip (sample + warp), MidiClip (note)
+    note-edits.ts      operazioni del piano roll sulle note (funzioni pure)
+    instrument.ts      impostazioni dello strumento di una traccia (tipo, preset, parametri)
     arrangement.ts     clip posate sulla timeline (sovrapposizioni come in Live)
     warp-markers.ts    mappa di warp di una clip audio
   store/
@@ -51,7 +53,8 @@ src/
     playback-engine.ts trasporto: play/stop/seek, aggiornamento a ogni versione del progetto
     scheduler.ts       programmazione in anticipo, loop della timeline a corse
     segments.ts        clip posata → tratti continui di contenuto
-    players/           un player per tipo di traccia (audio, MIDI), strumenti, metronomo
+    players/           un player per tipo di traccia (audio, MIDI), interfaccia degli strumenti, metronomo
+    worklet-instruments.ts  gli strumenti nel browser: nodi AudioWorklet
     clip-audio.ts      clip audio → buffer pronto (render di warp o sample originale)
     render-cache.ts    render di warp per contenuto, LRU con budget di memoria
     mixer-graph.ts     canali con volume, pan, mute/solo e master
@@ -66,8 +69,17 @@ src/
     track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume)
     transport-bar.ts   barra in alto
     keymap.ts          scorciatoie da tastiera (una riga per comando)
-    clip-editor/       editor delle clip audio: asse, disegno, gesti, pannello
+    clip-editor/       editor delle clip audio; clip-frame.ts è la cornice comune (righello, loop, bandierine)
+    piano-roll/        editor delle note: tastiera, griglia, velocity, gesti, pannello
+    device/            vista dello strumento: manopole e scelte generate dai parametri
+    bottom-panel.ts    l'area in basso, una vista alla volta
     waveform.ts        picchi della forma d'onda a più risoluzioni
+  instruments/         gli strumenti
+    params.ts          descrizione dei parametri (da cui nascono controlli, default, validazione)
+    registry.ts        i tipi di strumento disponibili
+    analog/            il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
+    dsp/               mattoni per i synth: oscillatori PolyBLEP, ADSR, filtro SVF, polifonia
+    worklet/           processore AudioWorklet unico, coda delle note al campione, motori per tipo
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
     analysis/          onset, transienti, tempo, beat tracking
@@ -119,6 +131,44 @@ Doppio clic su una clip audio: si apre in basso (Esc per chiudere).
 | Trascina la forma d'onda · clic | scorre la vista · porta lì il cursore della timeline |
 | Pannello | warp, modalità e opzioni, BPM della clip o del segmento, :2 ×2, 1.1.1 qui, Auto-Warp, Segui tempo, Quantizza, Azzera, transpose, detune, gain |
 
+## Piano roll
+
+Doppio clic su una clip MIDI (sulla timeline, doppio clic su una traccia MIDI vuota crea una clip).
+
+| | |
+|---|---|
+| Doppio clic sullo spazio vuoto · su una nota | nuova nota (con l'ultima durata usata) · elimina |
+| Trascina una nota | sposta nel tempo (sulla griglia) e in altezza; con Ctrl copia; con Alt senza griglia |
+| Trascina il bordo di una nota | durata (dall'inizio o dalla fine) |
+| Trascina nel vuoto · Maiusc+clic | selezione a riquadro · aggiunge o toglie dalla selezione |
+| B | modo disegno: premi e trascina crea una nota, un clic su una nota la toglie |
+| Corsia in basso | trascina una barra: velocity (le note selezionate la seguono) |
+| Tastiera a sinistra | suona le note con lo strumento della traccia |
+| ↑ ↓ (Maiusc: ottava) · ← → · Q · Ctrl+D · Ctrl+A · Canc | trasponi · sposta di un passo · quantizza · duplica · seleziona tutto · elimina |
+| Rotella · Maiusc+rotella · Ctrl+rotella · Alt+rotella | scorri le altezze · scorri il tempo · zoom del tempo · altezza delle righe |
+
+## Strumenti
+
+Ogni traccia MIDI ha uno strumento: il pulsante accanto al nome della traccia (o "Strumento"
+nel piano roll) apre le sue manopole. Trascina una manopola in verticale (Maiusc: fine), rotella
+per piccoli passi, doppio clic per il valore predefinito. Ogni modifica si annulla e si sente
+subito, anche mentre suona.
+
+**Analog**: due oscillatori (Saw, Square, Triangle, Sine; il secondo intonabile), filtro
+passa-basso/banda/alto risonante con inviluppo e key track, inviluppo del volume, LFO su
+intonazione e cutoff, 16 voci. Preset: Init, Basso, Acid, Pad, Pluck, Lead.
+
+Per aggiungere un synth:
+
+1. la descrizione (`InstrumentType`: parametri raggruppati in sezioni e preset) in
+   `src/instruments/<nome>/`, registrata in `registry.ts`;
+2. il motore DSP (`InstrumentCore`: `noteOn`, `noteOff`, `setParams`, `render`), registrato con
+   lo stesso nome in `worklet/cores.ts`. `VoicePool`, `Adsr`, `Svf` e gli oscillatori sono pronti.
+
+Interfaccia, salvataggio, preset, annulla e messaggi verso l'audio vengono da soli. Il
+processore AudioWorklet è uno solo: riceve le note con il tempo del contesto audio e
+divide ogni blocco nel campione esatto di ogni nota.
+
 ## Principi
 
 - **Modello immutabile.** Ogni modifica produce un nuovo `Project` che condivide le parti non
@@ -133,8 +183,11 @@ Doppio clic su una clip audio: si apre in basso (Esc per chiudere).
   dei worker, lo store la fabbrica degli id, il salvataggio una `Directory`: si sostituiscono
   (WASM, worker finti, cartella in memoria nei test) senza toccare il resto.
 - **Tipi nuovi senza toccare il vecchio.** Un nuovo tipo di clip è una sottoclasse di `Clip`
-  più un `ClipCodec` registrato; un nuovo tipo di traccia è una sottoclasse di `Track` più una
-  voce in `defaultTrackTypes` e in `addTrack`.
+  più un `ClipCodec` registrato e un editor in `clipEditors`; un nuovo tipo di traccia è una
+  sottoclasse di `Track` più una voce in `defaultTrackTypes` e in `addTrack`; un nuovo strumento
+  è una descrizione più un motore DSP (vedi sopra).
+- **I file vecchi si aprono.** Il formato del progetto ha una versione; ogni cambiamento porta
+  una migrazione (la 1 → 2 ha dato uno strumento alle tracce MIDI).
 - **Il riferimento è WarpMio.** `tests/reference/warpdsp.legacy.js` è il motore originale; i
   test verificano che la versione TypeScript dia lo stesso risultato.
 

@@ -6,6 +6,7 @@ import { placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
 import type { Clip } from '../model/clip';
 import { paletteColor } from '../model/colors';
+import { withParam, type InstrumentSettings, type ParamValues } from '../model/instrument';
 import { MidiClip } from '../model/midi-clip';
 import type { LoopRegion } from '../model/project';
 import type { SampleRef } from '../model/sample';
@@ -47,6 +48,24 @@ export const renameTrack = (id: TrackId, name: string): Edit =>
 
 export const setMixer = (id: TrackId, patch: Partial<MixerSettings>): Edit =>
   edit('Mixer', p => p.updatingTrack(id, t => t.withMixer(patch)));
+
+// ------------------------------------------------------------------ strumenti
+
+const updatingInstrument = (label: string, id: TrackId, fn: (s: InstrumentSettings) => InstrumentSettings): Edit =>
+  edit(label, p => p.updatingTrack(id, t => {
+    if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
+    return t.withInstrument(fn(t.instrument));
+  }));
+
+export const setInstrument = (id: TrackId, settings: InstrumentSettings): Edit =>
+  updatingInstrument('Strumento', id, () => settings);
+
+export const setInstrumentParam = (id: TrackId, param: string, value: number): Edit =>
+  updatingInstrument('Parametro dello strumento', id, s => withParam(s, param, value));
+
+/** Carica un preset: i parametri tornano ai predefiniti del tipo più quelli del preset. */
+export const loadPreset = (id: TrackId, name: string, params: ParamValues): Edit =>
+  updatingInstrument(`Preset ${name}`, id, s => ({ ...s, preset: name, params: { ...params } }));
 
 // ------------------------------------------------------------------ sample e clip
 

@@ -1,13 +1,13 @@
-import type { SampleId } from '../core/id';
+import type { SampleId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import type { AudioData } from '../dsp/types';
 import { ClipAudio } from '../engine/clip-audio';
 import { renderMix } from '../engine/offline-mix';
 import { PlaybackEngine } from '../engine/playback-engine';
-import { SimpleSynth, type InstrumentFactory } from '../engine/players/instrument';
 import { RenderCache } from '../engine/render-cache';
 import { SampleLibrary } from '../engine/sample-library';
 import { liveGraph, offlineGraph } from '../engine/web-audio';
+import { WorkletInstruments } from '../engine/worklet-instruments';
 import type { Project } from '../model/project';
 import type { ProjectStore } from '../store/project-store';
 import { DspService } from '../workers/dsp-service';
@@ -21,13 +21,15 @@ export class AudioSystem {
   readonly context = new AudioContext({ latencyHint: 'interactive' });
   readonly clips: ClipAudio;
   readonly engine: PlaybackEngine;
-  private readonly instrument: InstrumentFactory = g => new SimpleSynth(g);
+  readonly instruments = new WorkletInstruments();
   private readonly unsubscribe: () => void;
 
   constructor(private readonly store: ProjectStore) {
     const graph = liveGraph(this.context);
+    // il modulo degli strumenti si carica subito: al primo play è già pronto
+    this.instruments.prepare(graph).catch(e => console.error('AudioWorklet degli strumenti non caricato', e));
     this.clips = new ClipAudio(graph, this.library, this.renders);
-    this.engine = new PlaybackEngine(graph, { clips: this.clips, instrument: this.instrument });
+    this.engine = new PlaybackEngine(graph, { clips: this.clips, instruments: this.instruments });
     this.clips.on('ready', () => this.engine.refresh());
     this.clips.on('error', (clip, err) => console.error(`render della clip "${clip.name}" fallito`, err));
     const sync = (p: Project) => {
@@ -48,10 +50,16 @@ export class AudioSystem {
     this.engine.play(from);
   }
 
+  /** Fa sentire una nota con lo strumento della traccia. */
+  async audition(track: TrackId, pitch: number, velocity?: number, seconds?: number): Promise<void> {
+    if (this.context.state !== 'running') await this.context.resume();
+    this.engine.audition(track, pitch, velocity, seconds);
+  }
+
   /** Mixdown di [from, to) del progetto corrente. */
   exportMix(from: Beats, to: Beats): Promise<Float32Array[]> {
     return renderMix(this.store.project, from, to, {
-      createGraph: offlineGraph, library: this.library, renders: this.renders, instrument: this.instrument,
+      createGraph: offlineGraph, library: this.library, renders: this.renders, instruments: this.instruments,
     }, this.context.sampleRate);
   }
 

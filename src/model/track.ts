@@ -3,6 +3,7 @@ import type { Beats } from '../core/music-time';
 import * as lane from './arrangement';
 import { AudioClip } from './audio-clip';
 import type { Clip, Color } from './clip';
+import { DEFAULT_INSTRUMENT, type InstrumentSettings } from './instrument';
 import { MidiClip } from './midi-clip';
 
 export interface MixerSettings {
@@ -152,21 +153,31 @@ export class AudioTrack extends Track<AudioClip> {
   }
 }
 
-/** Traccia di note. Lo strumento (il generatore che suona le note) arriverà come primo
- *  dispositivo della catena della traccia. */
-export class MidiTrack extends Track<MidiClip> {
+export interface MidiTrackProps extends TrackProps<MidiClip> {
+  /** Lo strumento che suona le note della traccia. */
+  readonly instrument: InstrumentSettings;
+}
+
+/** Traccia di note, suonate dal suo strumento. */
+export class MidiTrack extends Track<MidiClip, MidiTrackProps> {
   readonly kind = 'midi';
 
-  static create(props: TrackProps<MidiClip>): MidiTrack {
+  static create(props: MidiTrackProps): MidiTrack {
     return new MidiTrack(props);
   }
 
-  static empty(id: TrackId, name: string, color: Color, sceneCount: number): MidiTrack {
-    return new MidiTrack(emptyProps(id, name, color, sceneCount));
+  static empty(id: TrackId, name: string, color: Color, sceneCount: number, instrument = DEFAULT_INSTRUMENT): MidiTrack {
+    return new MidiTrack({ ...emptyProps(id, name, color, sceneCount), instrument });
   }
 
-  protected create(props: TrackProps<MidiClip>): this {
+  protected create(props: MidiTrackProps): this {
     return new MidiTrack(props) as this;
+  }
+
+  get instrument(): InstrumentSettings { return this.props.instrument; }
+
+  withInstrument(instrument: InstrumentSettings): this {
+    return this.with({ instrument });
   }
 
   accepts(clip: Clip): clip is MidiClip {

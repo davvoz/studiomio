@@ -3,7 +3,9 @@ import type { AudioClip } from '../../src/model/audio-clip';
 import type { MidiClip } from '../../src/model/midi-clip';
 import { ProjectFormatError } from '../../src/persistence/json-reader';
 import { PROJECT_VERSION, ProjectCodec } from '../../src/persistence/project-codec';
-import { addMidiClip, placeSample, setSlot, setTempo, updateClip } from '../../src/store/edits';
+import { DEFAULT_INSTRUMENT } from '../../src/model/instrument';
+import type { MidiTrack } from '../../src/model/track';
+import { addMidiClip, loadPreset, placeSample, setInstrumentParam, setSlot, setTempo, updateClip } from '../../src/store/edits';
 import { setup } from '../helpers/fixtures';
 
 /** Un progetto con un po' di tutto. */
@@ -73,5 +75,22 @@ describe('ProjectCodec', () => {
     expect(broken(j => { j.scenes.pop(); })).toMatch(/slot ma le scene sono/);
     expect(broken(j => { j.samples = []; })).toMatch(/non è nel progetto/);
     expect(() => codec.parse('{ rotto')).toThrow(/JSON non valido/);
+  });
+
+  it('lo strumento della traccia MIDI si salva, compreso il preset', () => {
+    const { store, track } = setup({ midi: 1 });
+    store.apply(loadPreset(track(0), 'Basso', { cutoff: 420, oscBSemi: -12 }));
+    store.apply(setInstrumentParam(track(0), 'resonance', 55));
+    const back = codec.parse(codec.stringify(store.project)).tracks[0] as MidiTrack;
+    expect(back.instrument).toEqual({ type: 'analog', preset: 'Basso', params: { cutoff: 420, oscBSemi: -12, resonance: 55 } });
+  });
+
+  it('un file della versione 1 si apre: le tracce MIDI ricevono lo strumento predefinito', () => {
+    const json = JSON.parse(codec.stringify(richProject()));
+    json.version = 1;
+    delete json.tracks[1].instrument;
+    const p = codec.decode(json);
+    expect((p.tracks[1] as MidiTrack).instrument).toEqual(DEFAULT_INSTRUMENT);
+    expect(p.tracks[0]).not.toHaveProperty('instrument');
   });
 });

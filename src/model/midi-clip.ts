@@ -21,7 +21,9 @@ const byStartThenPitch = (a: Note, b: Note) => a.start - b.start || a.pitch - b.
 function validNote(n: Note): Note {
   if (!Number.isInteger(n.pitch) || n.pitch < 0 || n.pitch > 127) throw new RangeError(`altezza non valida: ${n.pitch}`);
   if (!(n.duration > 0)) throw new RangeError(`durata non valida: ${n.duration}`);
-  return { ...n, velocity: Math.max(1, Math.min(127, Math.round(n.velocity))) };
+  const velocity = Math.max(1, Math.min(127, Math.round(n.velocity)));
+  // la stessa nota se è già valida: l'editor riconosce le note selezionate per identità
+  return velocity === n.velocity ? n : { ...n, velocity };
 }
 
 /** Clip di note, da modificare nel piano roll e far suonare allo strumento della traccia. */

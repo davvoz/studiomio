@@ -1,3 +1,5 @@
+import type { Instrument, InstrumentHost } from '../../src/engine/players/instrument';
+import type { InstrumentSettings } from '../../src/model/instrument';
 import type {
   AudioBufferLike, AudioGraph, AudioNodeLike, AudioParamLike, BufferSourceNodeLike, GainNodeLike,
   OscillatorNodeLike, PannerNodeLike,
@@ -82,5 +84,30 @@ export class FakeGraph implements AudioGraph {
   /** Sorgenti avviate e non fermate prima di partire. */
   started() {
     return this.sources.filter(s => s.started && !(s.stoppedAt === -1));
+  }
+}
+
+/** Strumento finto: registra note, parametri e stop. */
+export class FakeInstrument implements Instrument {
+  readonly output = new FakeGain();
+  readonly notes: { pitch: number; velocity: number; when: number; duration: number }[] = [];
+  readonly updates: InstrumentSettings[] = [];
+  stops = 0;
+  disposed = false;
+  constructor(readonly type: string) {}
+  play(pitch: number, velocity: number, when: number, duration: number) { this.notes.push({ pitch, velocity, when, duration }); }
+  update(s: InstrumentSettings) { this.updates.push(s); }
+  stopAll() { this.stops++; }
+  dispose() { this.disposed = true; }
+}
+
+export class FakeInstruments implements InstrumentHost {
+  readonly created: FakeInstrument[] = [];
+  async prepare() {}
+  async settle() {}
+  create(_g: AudioGraph, s: InstrumentSettings) {
+    const i = new FakeInstrument(s.type);
+    this.created.push(i);
+    return i;
   }
 }

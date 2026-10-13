@@ -3,7 +3,7 @@ import type { Project } from '../model/project';
 import type { AudioGraph } from './audio-graph';
 import { ClipAudio } from './clip-audio';
 import { PlaybackEngine } from './playback-engine';
-import type { InstrumentFactory } from './players/instrument';
+import type { InstrumentHost } from './players/instrument';
 import type { RenderCache } from './render-cache';
 import type { SampleLibrary } from './sample-library';
 
@@ -17,7 +17,7 @@ export interface MixDeps {
   readonly createGraph: (frames: number, sampleRate: number) => OfflineGraph;
   readonly library: SampleLibrary;
   readonly renders: RenderCache;
-  readonly instrument: InstrumentFactory;
+  readonly instruments: InstrumentHost;
 }
 
 /** Mixdown di [from, to) del progetto, con lo stesso motore della riproduzione dal vivo.
@@ -29,10 +29,12 @@ export async function renderMix(
   const seconds = project.tempo.secondsAt(to - from) + tailSeconds;
   const graph = deps.createGraph(Math.ceil(seconds * sampleRate), sampleRate);
   const clips = new ClipAudio(graph, deps.library, deps.renders);
-  await clips.prepare(project);
-  const engine = new PlaybackEngine(graph, { clips, instrument: deps.instrument }, { timer: { every: () => () => {} } });
+  await Promise.all([clips.prepare(project), deps.instruments.prepare(graph)]);
+  const engine = new PlaybackEngine(graph, { clips, instruments: deps.instruments }, { timer: { every: () => () => {} } });
   engine.setProject(project);
   engine.scheduleRange(from, to, 0);
+  // gli strumenti ricevono le note per messaggio: devono averle tutte prima di iniziare
+  await deps.instruments.settle(graph);
   const out = await graph.startRendering();
   return Array.from({ length: out.numberOfChannels }, (_, i) => out.getChannelData(i).slice());
 }

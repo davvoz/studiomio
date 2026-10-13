@@ -4,17 +4,21 @@ import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
+import { DEFAULT_INSTRUMENT, type InstrumentSettings } from '../model/instrument';
 import { AudioTrack, MidiTrack, type MixerSettings, type Track, type TrackProps } from '../model/track';
 import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
 
-/** Come costruire un tipo di traccia letto da file. */
+/** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
   readonly kind: string;
-  create(props: TrackProps<Clip>): Track;
+  /** Costruisce la traccia dalle proprietà comuni; `r` dà accesso ai campi propri del tipo. */
+  create(props: TrackProps<Clip>, r: JsonReader): Track;
+  /** Campi propri del tipo, da aggiungere a quelli comuni. */
+  encodeExtra(track: Track): JsonObject;
   /** Prototipo vuoto, usato per sapere quali clip il tipo accetta. */
   readonly accepts: (clip: Clip) => boolean;
 }
@@ -25,18 +29,26 @@ export const defaultTrackTypes: readonly TrackType[] = [
   {
     kind: 'audio',
     create: props => AudioTrack.create(props as TrackProps<never>),
+    encodeExtra: () => ({}),
     accepts: probe(AudioTrack.empty(asId('probe'), '', '', 0)),
   },
   {
     kind: 'midi',
-    create: props => MidiTrack.create(props as TrackProps<never>),
+    create: (props, r) => MidiTrack.create({ ...(props as TrackProps<never>), instrument: decodeInstrument(r.get('instrument')) }),
+    encodeExtra: t => ({ instrument: encodeInstrument((t as MidiTrack).instrument) }),
     accepts: probe(MidiTrack.empty(asId('probe'), '', '', 0)),
   },
 ];
 
 /** Aggiornamenti del formato: la voce N porta un file dalla versione N alla N+1. */
 type Migration = (json: JsonObject) => JsonObject;
-const migrations: Record<number, Migration> = {};
+const migrations: Record<number, Migration> = {
+  // 1 → 2: le tracce MIDI hanno uno strumento
+  1: json => ({
+    ...json,
+    tracks: (json.tracks as JsonObject[]).map(t => (t.kind === 'midi' ? { ...t, instrument: encodeInstrument(DEFAULT_INSTRUMENT) } : t)),
+  }),
+};
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
  *  porta il suo codec senza modificare questa classe. */
@@ -76,6 +88,7 @@ export class ProjectCodec {
           id: pl.id, start: pl.start, length: pl.length, offset: pl.offset, clip: this.encodeClip(pl.clip),
         })),
         slots: t.slots.map(c => (c ? this.encodeClip(c) : null)),
+        ...this.trackType(t.kind).encodeExtra(t),
       })),
     };
   }
@@ -133,7 +146,13 @@ export class ProjectCodec {
       mixer: decodeMixer(r.get('mixer')),
       arrangement: arrangement.sort((a, b) => a.start - b.start),
       slots: r.array('slots').map(s => (s.raw === null ? null : clipFor(s))),
-    });
+    }, r);
+  }
+
+  private trackType(kind: string): TrackType {
+    const type = this.tracks.get(kind);
+    if (!type) throw new Error(`nessun codec per le tracce "${kind}"`);
+    return type;
   }
 
   private static migrate(r: JsonReader): JsonObject {
@@ -167,3 +186,14 @@ const decodeSample = (r: JsonReader): SampleRef => ({
   sampleRate: r.num('sampleRate'), channels: r.int('channels'), frames: r.int('frames'),
   analysis: r.nullable('analysis', a => ({ tempo: a.num('tempo'), sensitivity: a.num('sensitivity'), transients: a.numbers('transients') })),
 });
+
+const encodeInstrument = (i: InstrumentSettings): JsonObject => ({ type: i.type, preset: i.preset, params: { ...i.params } });
+
+const decodeInstrument = (r: JsonReader): InstrumentSettings => {
+  const params = r.get('params');
+  return {
+    type: r.str('type'),
+    preset: r.nullable('preset', p => p.asString()),
+    params: Object.fromEntries(params.keys().map(k => [k, params.num(k)])),
+  };
+};

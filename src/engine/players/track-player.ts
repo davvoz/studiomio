@@ -5,6 +5,8 @@ import type { ScheduledSource } from '../scheduler';
 /** Fa suonare una traccia: riceve le versioni nuove della traccia e programma le sue clip. */
 export interface TrackPlayer extends ScheduledSource {
   update(track: Track): void;
+  /** Suona subito una nota, per chi ha uno strumento. */
+  audition?(pitch: number, velocity: number, seconds: number): void;
   dispose(): void;
 }
 

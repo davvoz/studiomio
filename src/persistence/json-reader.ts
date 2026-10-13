@@ -87,6 +87,16 @@ export class JsonReader {
     return this.expectSelf(isNumber, 'atteso un numero');
   }
 
+  asString(): string {
+    return this.expectSelf((v): v is string => typeof v === 'string', 'attesa una stringa');
+  }
+
+  /** Le chiavi di un oggetto. */
+  keys(): string[] {
+    if (!this.isObject()) this.fail('atteso un oggetto');
+    return Object.keys(this.value as object);
+  }
+
   private expect<T>(key: string, guard: (v: unknown) => v is T, message: string): T {
     return this.get(key).expectSelf(guard, message);
   }

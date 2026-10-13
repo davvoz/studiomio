@@ -4,6 +4,7 @@ import type { Beats, Seconds, TempoMap } from '../../core/music-time';
 import { placementSegments } from '../../engine/segments';
 import type { Placement } from '../../model/arrangement';
 import type { AudioClip } from '../../model/audio-clip';
+import type { Clip } from '../../model/clip';
 import type { WarpMarkers } from '../../model/warp-markers';
 
 /** Asse orizzontale dell'editor: battiti della clip (possono essere negativi, prima di 1.1.1). */
@@ -52,7 +53,7 @@ export function secondsToContent(clip: AudioClip, tempo: TempoMap): (t: Seconds)
 const MIN_LEN = 1 / 16;
 
 /** Regione [start, end) resa valida: ordinata, non vuota, compatibile con il loop attivo. */
-export function withRegionSafe(clip: AudioClip, start: Beats, end: Beats): AudioClip {
+export function withRegionSafe<C extends Clip>(clip: C, start: Beats, end: Beats): C {
   let s = Math.min(start, end - MIN_LEN), e = Math.max(end, s + MIN_LEN);
   if (clip.loop.enabled && s >= clip.loop.end - MIN_LEN) s = clip.loop.end - MIN_LEN;
   e = Math.max(e, s + MIN_LEN);
@@ -60,7 +61,7 @@ export function withRegionSafe(clip: AudioClip, start: Beats, end: Beats): Audio
 }
 
 /** Loop [start, end) acceso; se la clip partirebbe dopo la fine del loop, parte dal loop. */
-export function withLoopSafe(clip: AudioClip, start: Beats, end: Beats, enabled = true): AudioClip {
+export function withLoopSafe<C extends Clip>(clip: C, start: Beats, end: Beats, enabled = true): C {
   const s = Math.min(start, end), e = Math.max(end, s + MIN_LEN);
   let c = clip;
   if (enabled && c.region.start >= e) c = c.withRegion({ start: s, end: Math.max(c.region.end, e) });

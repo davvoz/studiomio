@@ -7,7 +7,7 @@ import type { AudioGraph } from './audio-graph';
 import type { PlayableProvider } from './clip-audio';
 import { MixerGraph } from './mixer-graph';
 import { AudioTrackPlayer } from './players/audio-track-player';
-import type { InstrumentFactory } from './players/instrument';
+import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
@@ -16,7 +16,7 @@ import { Scheduler, type ScheduledSource } from './scheduler';
 /** Servizi di cui i player hanno bisogno. */
 export interface EngineServices {
   readonly clips: PlayableProvider;
-  readonly instrument: InstrumentFactory;
+  readonly instruments: InstrumentHost;
 }
 
 export type PlayerFactory = (track: Track, ctx: PlayerContext, services: EngineServices) => TrackPlayer;
@@ -24,7 +24,7 @@ export type PlayerFactory = (track: Track, ctx: PlayerContext, services: EngineS
 /** Un player per tipo di traccia: un tipo nuovo si aggiunge qui (o passando la propria tabella). */
 export const defaultPlayers: Readonly<Record<string, PlayerFactory>> = {
   audio: (t, ctx, s) => new AudioTrackPlayer(t as AudioTrack, ctx, s.clips),
-  midi: (t, ctx, s) => new MidiTrackPlayer(t as MidiTrack, ctx, s.instrument(ctx.graph)),
+  midi: (t, ctx, s) => new MidiTrackPlayer(t as MidiTrack, ctx, s.instruments),
 };
 
 export interface Timer {
@@ -140,6 +140,11 @@ export class PlaybackEngine {
    *  riprogramma dalla posizione corrente così si sente. */
   refresh(): void {
     if (this.playing && this.missed) this.restart(this.position);
+  }
+
+  /** Fa sentire subito una nota con lo strumento della traccia (piano roll, tastiera). */
+  audition(track: TrackId, pitch: number, velocity = 100, seconds = 0.3): void {
+    this.players.get(track)?.player.audition?.(pitch, velocity, seconds);
   }
 
   /** Programma tutto [from, to) a partire dall'istante `at` (export offline). */

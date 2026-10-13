@@ -2,7 +2,9 @@ import type { ProjectSession } from '../app/project-session';
 import { encodeWav } from '../dsp/codec/wav';
 import type { AudioClip } from '../model/audio-clip';
 import type { MidiClip, Note } from '../model/midi-clip';
-import { addMidiClip, addSample, addTrack, placeSample, renameTrack, resizePlacement, updateClip } from '../store/edits';
+import type { TrackId } from '../core/id';
+import { ANALOG } from '../instruments/analog/analog';
+import { addMidiClip, addSample, addTrack, loadPreset, placeSample, renameTrack, resizePlacement, updateClip } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { drumLoop } from './demo-loop';
 
@@ -12,8 +14,21 @@ const BASS: Note[] = [
   [41, 4, 0.75], [41, 5, 0.5], [53, 5.5, 0.5], [43, 6, 0.75], [47, 7, 0.5],
 ].map(([pitch, start, duration]) => ({ pitch, start, duration, velocity: 100 }));
 
-/** Progetto di prova: un loop di batteria a 120 BPM in quattro modalità di warp e una
- *  linea di basso MIDI in loop. */
+/** Accordi sulla stessa progressione: La minore, poi Fa e Sol. */
+const PAD: Note[] = [
+  ...[57, 60, 64].map(pitch => ({ pitch, start: 0, duration: 4, velocity: 80 })),
+  ...[57, 60, 65].map(pitch => ({ pitch, start: 4, duration: 2, velocity: 80 })),
+  ...[55, 59, 62].map(pitch => ({ pitch, start: 6, duration: 2, velocity: 80 })),
+];
+
+/** Lo strumento della traccia con il preset `name` di Analog. */
+const withPreset = (store: ProjectStore, track: TrackId, name: string) => {
+  const preset = ANALOG.presets.find(p => p.name === name)!;
+  store.apply(loadPreset(track, preset.name, preset.params));
+};
+
+/** Progetto di prova: un loop di batteria a 120 BPM in quattro modalità di warp, una linea
+ *  di basso e degli accordi suonati da Analog. */
 export async function buildDemoProject(store: ProjectStore, session: ProjectSession): Promise<void> {
   const data = { channels: drumLoop(2, 120), sampleRate: 44100 };
   // il loop finisce nella cartella del progetto come un file importato
@@ -22,9 +37,13 @@ export async function buildDemoProject(store: ProjectStore, session: ProjectSess
 
   store.apply(addTrack('audio'));
   store.apply(addTrack('midi'));
-  const [drums, bass] = store.project.tracks.map(t => t.id);
+  store.apply(addTrack('midi'));
+  const [drums, bass, pad] = store.project.tracks.map(t => t.id);
   store.apply(renameTrack(drums, 'Batteria'));
   store.apply(renameTrack(bass, 'Basso'));
+  store.apply(renameTrack(pad, 'Accordi'));
+  withPreset(store, bass, 'Basso');
+  withPreset(store, pad, 'Pad');
   store.apply(addSample(sample));
 
   // quattro clip da 2 battute, ognuna con una modalità diversa
@@ -44,4 +63,10 @@ export async function buildDemoProject(store: ProjectStore, session: ProjectSess
   const bassPl = store.project.tracks[1].arrangement[0];
   store.apply(updateClip<MidiClip>('Demo', bass, bassPl.id, c => c.withName('Basso').addingNotes(...BASS)));
   store.apply(resizePlacement(bass, bassPl.id, { end: 32 }));
+
+  // gli accordi entrano alla battuta 3
+  store.apply(addMidiClip(pad, 8, 8));
+  const padPl = store.project.tracks[2].arrangement[0];
+  store.apply(updateClip<MidiClip>('Demo', pad, padPl.id, c => c.withName('Accordi').addingNotes(...PAD)));
+  store.apply(resizePlacement(pad, padPl.id, { end: 32 }));
 }

@@ -82,5 +82,38 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .editor-canvas-wrap { position: relative; overflow: hidden; }
 .editor-canvas-wrap canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
 
+/* ---------------------------------------------------------------- piano roll */
+.clip-editor.piano-roll { grid-template-columns: 230px 52px 1fr; }
+.roll-keys-wrap { position: relative; overflow: hidden; }
+.roll-keys-wrap canvas { position: absolute; left: 0; top: 0; display: block; cursor: pointer; touch-action: none; }
+.clip-panel .instrument { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header .instrument { max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 5px; color: var(--text); background: var(--panel-2); cursor: pointer; }
+.header .instrument:hover { border-color: var(--accent); }
+.clip-panel .help { line-height: 1.5; margin-top: 4px; }
+
+/* ---------------------------------------------------------------- strumento */
+.bottom { min-width: 0; }
+.device-view { height: 330px; min-width: 0; border-top: 2px solid var(--accent); background: var(--panel); display: flex; flex-direction: column; outline: none; }
+.device-view[hidden] { display: none; }
+.device-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.device-head [hidden] { display: none; }
+.device-title { font-weight: 600; margin-right: auto; padding-left: 9px; border-left: 4px solid var(--color, var(--accent)); }
+.device-head .close { padding: 2px 9px; }
+.device-body { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; padding: 8px 10px; overflow: auto; flex: 1; min-height: 0; }
+.device-section { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px 8px; flex: none; }
+.device-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+.device-controls { display: flex; gap: 6px; align-items: flex-start; }
+.knob { width: 62px; display: flex; flex-direction: column; align-items: center; cursor: ns-resize; user-select: none; outline: none; touch-action: none; }
+.knob-face { width: 40px; height: 40px; }
+.knob-track { fill: none; stroke: #3a3f47; stroke-width: 4; stroke-linecap: round; }
+.knob-value { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; }
+.knob-pointer { stroke: var(--text); stroke-width: 2; stroke-linecap: round; }
+.knob.active .knob-value, .knob:focus-visible .knob-value { stroke: #ffc27a; }
+.knob-readout { font: 11px/1.2 ui-monospace, monospace; color: var(--text); white-space: nowrap; }
+.knob-label { font-size: 11px; color: var(--muted); text-align: center; white-space: nowrap; margin-top: 1px; }
+.choice { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 6px; }
+.choice-buttons { display: flex; flex-direction: column; gap: 2px; }
+.choice-buttons button { padding: 1px 8px; font-size: 11px; border-radius: 3px; min-width: 70px; }
+
 /* ---------------------------------------------------------------- barra di stato */
 .status { padding: 5px 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); min-height: 26px; }

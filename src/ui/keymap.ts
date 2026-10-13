@@ -16,16 +16,16 @@ export interface Commands {
   open(): void;
 }
 
-interface Binding {
+export interface Binding<C = Commands> {
   readonly key: string;
   readonly ctrl?: boolean;
   readonly shift?: boolean;
-  readonly run: (c: Commands) => void;
+  readonly run: (c: C) => void;
 }
 
 /** Scorciatoie: una riga per comando, nessun switch. `key` è KeyboardEvent.key in minuscolo
  *  oppure KeyboardEvent.code (per i tasti come Spazio). */
-export const KEYMAP: readonly Binding[] = [
+export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'Space', run: c => c.togglePlay() },
   { key: 'Enter', run: c => c.stopAndRewind() },
   { key: 'z', ctrl: true, run: c => c.undo() },
@@ -46,9 +46,11 @@ export const KEYMAP: readonly Binding[] = [
   { key: 'o', ctrl: true, run: c => c.open() },
 ];
 
-/** Collega la tastiera ai comandi (ignorando i tasti premuti nei campi di testo). */
-export function bindKeys(target: Document, commands: Commands, keymap = KEYMAP): void {
-  target.addEventListener('keydown', e => {
+/** Collega la tastiera ai comandi (ignorando i tasti premuti nei campi di testo). Con
+ *  `ownKeys` i tasti usati non arrivano più su (un editor ha la precedenza sulla timeline). */
+export function bindKeys<C>(target: Document | HTMLElement, commands: C, keymap: readonly Binding<C>[], ownKeys = false): void {
+  target.addEventListener('keydown', ev => {
+    const e = ev as KeyboardEvent;
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     const ctrl = e.ctrlKey || e.metaKey;
@@ -58,6 +60,7 @@ export function bindKeys(target: Document, commands: Commands, keymap = KEYMAP):
       && (k.shift === undefined ? !(ctrl && e.shiftKey) : k.shift === e.shiftKey));
     if (!b) return;
     e.preventDefault();
+    if (ownKeys) e.stopPropagation();
     b.run(commands);
   });
 }

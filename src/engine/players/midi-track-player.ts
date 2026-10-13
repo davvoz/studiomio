@@ -1,9 +1,10 @@
 import { placementEnd, type Placement } from '../../model/arrangement';
+import type { InstrumentSettings } from '../../model/instrument';
 import type { MidiClip } from '../../model/midi-clip';
 import type { MidiTrack, Track } from '../../model/track';
 import type { ScheduleWindow } from '../scheduler';
 import { placementSegments, type Segment } from '../segments';
-import type { Instrument } from './instrument';
+import type { Instrument, InstrumentHost } from './instrument';
 import type { PlayerContext, TrackPlayer } from './track-player';
 
 /** Suona le clip MIDI della timeline con lo strumento della traccia. Una nota parte se il
@@ -11,15 +12,18 @@ import type { PlayerContext, TrackPlayer } from './track-player';
  *  della clip) e della corsa del trasporto. */
 export class MidiTrackPlayer implements TrackPlayer {
   private track: MidiTrack;
+  private instrument: Instrument;
   private readonly segments = new WeakMap<Placement, Segment[]>();
 
-  constructor(track: MidiTrack, ctx: PlayerContext, private readonly instrument: Instrument) {
+  constructor(track: MidiTrack, private readonly ctx: PlayerContext, private readonly host: InstrumentHost) {
     this.track = track;
-    instrument.output.connect(ctx.output);
+    this.instrument = this.connect(track.instrument);
   }
 
   update(track: Track): void {
-    this.track = track as MidiTrack;
+    const next = track as MidiTrack;
+    if (next.instrument !== this.track.instrument) this.setInstrument(next.instrument);
+    this.track = next;
   }
 
   schedule(w: ScheduleWindow): void {
@@ -30,12 +34,29 @@ export class MidiTrackPlayer implements TrackPlayer {
     }
   }
 
+  audition(pitch: number, velocity: number, duration: number): void {
+    this.instrument.play(pitch, velocity, this.ctx.graph.currentTime + 0.005, duration);
+  }
+
   stopAll(): void {
     this.instrument.stopAll();
   }
 
   dispose(): void {
     this.instrument.dispose();
+  }
+
+  private connect(settings: InstrumentSettings): Instrument {
+    const instrument = this.host.create(this.ctx.graph, settings);
+    instrument.output.connect(this.ctx.output);
+    return instrument;
+  }
+
+  /** Stesso tipo: cambiano solo i parametri, le note continuano. Tipo diverso: strumento nuovo. */
+  private setInstrument(settings: InstrumentSettings): void {
+    if (settings.type === this.instrument.type) return this.instrument.update(settings);
+    this.instrument.dispose();
+    this.instrument = this.connect(settings);
   }
 
   private segmentsOf(p: Placement<MidiClip>): Segment[] {

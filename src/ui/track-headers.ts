@@ -1,5 +1,6 @@
 import type { TrackId } from '../core/id';
-import type { Track } from '../model/track';
+import { instrumentType } from '../instruments/registry';
+import type { MidiTrack, Track } from '../model/track';
 import { addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import type { UiState } from './ui-state';
@@ -10,7 +11,22 @@ function el<T extends HTMLElement = HTMLElement>(tag: string, props: Record<stri
   return e;
 }
 
-const KIND_LABEL: Readonly<Record<string, string>> = { audio: 'Audio', midi: 'MIDI' };
+export interface HeaderActions {
+  openInstrument(track: TrackId): void;
+}
+
+const kindBadge = (text: string) => () => el('span', { className: 'kind', textContent: text });
+
+/** Accanto al nome: il tipo della traccia o, per le tracce MIDI, il loro strumento (un clic lo apre). */
+const BADGES: Readonly<Record<string, (t: Track, actions: HeaderActions) => HTMLElement>> = {
+  audio: kindBadge('Audio'),
+  midi: (t, actions) => {
+    const { instrument } = t as MidiTrack;
+    const label = instrumentType(instrument.type)?.label ?? instrument.type;
+    const text = instrument.preset ? `${label} · ${instrument.preset}` : label;
+    return el('button', { className: 'kind instrument', textContent: text, title: `${text}: apri lo strumento`, onclick: () => actions.openInstrument(t.id) });
+  },
+};
 
 /** Colonna a sinistra della timeline: nome, mute/solo, volume di ogni traccia, allineata
  *  allo scorrimento verticale delle corsie. */
@@ -18,7 +34,7 @@ export class TrackHeaders {
   readonly element = el('div', { className: 'headers' });
   private readonly list = el('div', { className: 'header-list' });
 
-  constructor(private readonly store: ProjectStore, private readonly ui: UiState) {
+  constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly actions: HeaderActions) {
     const add = el('div', { className: 'header-add' },
       el('button', { textContent: '+ Audio', title: 'Nuova traccia audio', onclick: () => store.apply(addTrack('audio')) }),
       el('button', { textContent: '+ MIDI', title: 'Nuova traccia MIDI', onclick: () => store.apply(addTrack('midi')) }));
@@ -51,7 +67,7 @@ export class TrackHeaders {
     vol.ondblclick = () => mixer({ volumeDb: 0 });
     const del = el('button', { className: 'del', textContent: '×', title: 'Elimina traccia', onclick: () => store.apply(removeTrack(t.id)) });
     const row = el('div', { className: 'header' },
-      el('div', { className: 'top' }, name, el('span', { className: 'kind', textContent: KIND_LABEL[t.kind] ?? t.kind }), del),
+      el('div', { className: 'top' }, name, (BADGES[t.kind] ?? kindBadge(t.kind))(t, this.actions), del),
       el('div', { className: 'controls' },
         toggle('M', t.mixer.mute, 'Mute', () => ({ mute: !t.mixer.mute })),
         toggle('S', t.mixer.solo, 'Solo', () => ({ solo: !t.mixer.solo })),

@@ -5,7 +5,6 @@ import type { AudioData } from '../../src/dsp/types';
 import { ClipAudio } from '../../src/engine/clip-audio';
 import { audibleTracks, MixerGraph } from '../../src/engine/mixer-graph';
 import { PlaybackEngine } from '../../src/engine/playback-engine';
-import { midiToHz, SimpleSynth } from '../../src/engine/players/instrument';
 import { RenderCache } from '../../src/engine/render-cache';
 import { SampleLibrary, type DspBackend } from '../../src/engine/sample-library';
 import type { AudioClip } from '../../src/model/audio-clip';
@@ -13,10 +12,10 @@ import type { MidiClip } from '../../src/model/midi-clip';
 import { Project } from '../../src/model/project';
 import type { SampleRef } from '../../src/model/sample';
 import {
-  addMidiClip, addSample, addTrack, placeSample, setLoopRegion, setMixer, setTempo, updateClip,
+  addMidiClip, addSample, addTrack, placeSample, setInstrument, setInstrumentParam, setLoopRegion, setMixer, setTempo, updateClip,
 } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
-import { FakeGraph } from '../helpers/fake-audio';
+import { FakeGraph, FakeInstruments } from '../helpers/fake-audio';
 import { drumLoop } from '../helpers/signals';
 
 /** DSP nello stesso thread, con il renderer vero. */
@@ -51,7 +50,8 @@ async function rig(opts: { prepare?: boolean } = {}) {
   const graph = new FakeGraph();
   const clips = new ClipAudio(graph, library, renders);
   let tick: (() => void) | null = null;
-  const engine = new PlaybackEngine(graph, { clips, instrument: g => new SimpleSynth(g) }, {
+  const instruments = new FakeInstruments();
+  const engine = new PlaybackEngine(graph, { clips, instruments }, {
     timer: { every: (_ms, fn) => { tick = fn; return () => { tick = null; }; } },
     startLatency: 0.05, lookahead: 0.2,
   });
@@ -69,7 +69,7 @@ async function rig(opts: { prepare?: boolean } = {}) {
     }
   };
   const ready = async () => { if (opts.prepare !== false) await clips.prepare(store.project); };
-  return { store, engine, graph, clips, dsp, sample, t, runUntil, ready };
+  return { store, engine, graph, clips, dsp, sample, t, runUntil, ready, instruments };
 }
 
 const starts = (g: FakeGraph) => g.sources.filter(s => s.started).map(s => ({
@@ -183,15 +183,30 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
       .addingNotes({ pitch: 60, start: 0, duration: 0.5, velocity: 100 }, { pitch: 67, start: 1.5, duration: 1, velocity: 50 })));
     r.engine.play(0);
     r.runUntil(2);
-    const notes = r.graph.oscillators.map(o => ({ hz: +o.frequency.value.toFixed(2), when: +o.started!.when.toFixed(6) }));
+    const synth = r.instruments.created[0];
+    const notes = synth.notes.map(n => ({ pitch: n.pitch, when: +n.when.toFixed(6), duration: +n.duration.toFixed(6) }));
     expect(notes).toEqual([
-      { hz: +midiToHz(60).toFixed(2), when: 0.05 },
-      { hz: +midiToHz(67).toFixed(2), when: 0.8 },
-      { hz: +midiToHz(60).toFixed(2), when: 1.05 }, // secondo giro (battito 2)
-      { hz: +midiToHz(67).toFixed(2), when: 1.8 },
+      { pitch: 60, when: 0.05, duration: 0.25 },
+      // la seconda nota (1 battito) viene tagliata alla fine del giro: dura 0.5 battiti
+      { pitch: 67, when: 0.8, duration: 0.25 },
+      { pitch: 60, when: 1.05, duration: 0.25 }, // secondo giro (battito 2)
+      { pitch: 67, when: 1.8, duration: 0.25 },
     ]);
-    // la seconda nota (1 battito) viene tagliata alla fine del giro: dura 0.5 battiti
-    expect(r.graph.oscillators[1].stoppedAt! - 0.8).toBeCloseTo(0.25 + 0.08, 6);
+    expect(synth.notes[1].velocity).toBe(50);
+  });
+
+  it('lo strumento segue la traccia: parametri al volo, tipo nuovo = strumento nuovo', async () => {
+    const r = await rig();
+    const synth = r.instruments.created[0];
+    expect(synth.type).toBe('analog');
+    r.store.apply(setInstrumentParam(r.t(1), 'cutoff', 500));
+    expect(synth.updates.at(-1)?.params.cutoff).toBe(500);
+    expect(r.instruments.created).toHaveLength(1);
+    r.store.apply(setInstrument(r.t(1), { type: 'altro', preset: null, params: {} }));
+    expect(synth.disposed).toBe(true);
+    expect(r.instruments.created[1].type).toBe('altro');
+    r.engine.audition(r.t(1), 64, 90, 0.5);
+    expect(r.instruments.created[1].notes).toEqual([{ pitch: 64, velocity: 90, when: 0.005, duration: 0.5 }]);
   });
 
   it('metronomo: un clic per battito, accento sul primo della battuta', async () => {

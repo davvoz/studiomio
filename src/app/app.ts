@@ -7,8 +7,11 @@ import { Project } from '../model/project';
 import { setLoopRegion } from '../store/edits';
 import { ProjectStore } from '../store/project-store';
 import { addedPlacements, deleteMany, duplicateMany, splitMany } from '../store/selection-edits';
+import { BottomPanel, type BottomView } from '../ui/bottom-panel';
 import { ClipEditor } from '../ui/clip-editor/clip-editor';
-import { bindKeys, type Commands } from '../ui/keymap';
+import { DeviceView } from '../ui/device/device-view';
+import { PianoRoll } from '../ui/piano-roll/piano-roll';
+import { bindKeys, KEYMAP, type Commands } from '../ui/keymap';
 import { ArrangementView } from '../ui/timeline/arrangement-view';
 import { resolveSelection } from '../ui/timeline/planning';
 import { TrackHeaders } from '../ui/track-headers';
@@ -27,6 +30,11 @@ export class App implements Commands, FileCommands {
   readonly peaks = new PeakStore(id => this.audio.library.get(id));
   readonly arrangement: ArrangementView;
   readonly editor: ClipEditor;
+  readonly pianoRoll: PianoRoll;
+  readonly device: DeviceView;
+  private readonly bottom = new BottomPanel();
+  /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
+  private readonly clipEditors: Readonly<Record<string, BottomView & { open(id: PlacementId): boolean }>>;
   private readonly transport: TransportBar;
   private readonly status = Object.assign(document.createElement('footer'), { className: 'status' });
 
@@ -41,12 +49,21 @@ export class App implements Commands, FileCommands {
       trackBeats: (sample, bpm) => this.audio.dsp.trackBeats(sample.id, bpm),
       say: t => this.say(t),
     });
-    const headers = new TrackHeaders(this.store, this.ui);
+    const audition = (track: TrackId, pitch: number, velocity = 100) => this.run(() => this.audio.audition(track, pitch, velocity));
+    this.pianoRoll = new PianoRoll({
+      store: this.store, engine: this.audio.engine, audition,
+      openInstrument: track => this.openInstrument(track, true),
+      say: t => this.say(t),
+    });
+    this.device = new DeviceView({ store: this.store, audition: (track, pitch) => audition(track, pitch) });
+    this.bottom.add(this.editor, this.pianoRoll, this.device);
+    this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
+    const headers = new TrackHeaders(this.store, this.ui, { openInstrument: track => this.openInstrument(track) });
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this, () =>
       `${this.session.name}${this.session.saved ? '' : ' •'}`);
     const main = Object.assign(document.createElement('div'), { className: 'arrangement' });
     main.append(headers.element, this.arrangement.element);
-    root.append(transport.element, main, this.editor.element, this.status);
+    root.append(transport.element, main, this.bottom.element, this.status);
 
     this.session.on('message', t => this.say(t));
     this.session.on('change', () => transport.render());
@@ -55,7 +72,7 @@ export class App implements Commands, FileCommands {
       const alive = new Set(p.tracks.flatMap(t => t.arrangement.map(x => x.id)));
       if ([...this.ui.selection].some(id => !alive.has(id))) this.ui.select([...this.ui.selection].filter(id => alive.has(id)));
     });
-    bindKeys(document, this);
+    bindKeys(document, this, KEYMAP);
     this.say('Trascina dei file audio sulla timeline o premi "Demo". Ctrl+rotella per lo zoom, Alt per trascinare senza griglia.');
   }
 
@@ -154,8 +171,16 @@ export class App implements Commands, FileCommands {
 
   private openClip(track: TrackId, id: PlacementId): void {
     const clip = this.store.project.track(track)?.placement(id)?.clip;
-    if (!clip) return;
-    if (!this.editor.open(id)) this.say(`"${clip.name}": il piano roll per le clip MIDI arriverà con gli strumenti.`);
+    const editor = clip && this.clipEditors[clip.kind];
+    if (!editor) return this.say(clip ? `Nessun editor per le clip "${clip.kind}".` : '');
+    this.bottom.show(editor, () => editor.open(id));
+  }
+
+  /** Apre lo strumento della traccia; da piano roll, con il pulsante per tornare alle note. */
+  private openInstrument(track: TrackId, fromRoll = false): void {
+    const placement = fromRoll ? this.pianoRoll.openPlacement : null;
+    const back = placement ? () => this.openClip(track, placement) : null;
+    this.bottom.show(this.device, () => this.device.open(track, back));
   }
 
   private selection() {
