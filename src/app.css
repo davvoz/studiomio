@@ -1,0 +1,67 @@
+:root {
+  --bg: #121417;
+  --panel: #1b1e23;
+  --panel-2: #22262c;
+  --text: #e8eaee;
+  --muted: #9aa0aa;
+  --accent: #ff9d2e;
+  --line: #2c3138;
+  --header-w: 210px;
+  --ruler-h: 30px;
+  color-scheme: dark;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); overflow: hidden; }
+#app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+
+button, input, select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 5px;
+  padding: 4px 9px; font: inherit;
+}
+button { cursor: pointer; }
+button:disabled { opacity: .4; cursor: default; }
+button:not(:disabled):hover { border-color: var(--accent); }
+button.on { background: var(--accent); color: #141414; border-color: var(--accent); }
+
+/* ---------------------------------------------------------------- barra in alto */
+.transport {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.transport .group { display: flex; align-items: center; gap: 5px; }
+.transport .play { min-width: 40px; }
+.transport input[type=number] { width: 76px; }
+.transport .pos { font: 600 16px/1 ui-monospace, monospace; min-width: 82px; text-align: center; color: var(--accent); }
+.transport .title { margin-left: auto; color: var(--muted); }
+
+/* ---------------------------------------------------------------- arrangement */
+.arrangement { display: grid; grid-template-columns: var(--header-w) 1fr; min-height: 0; }
+.headers { display: grid; grid-template-rows: var(--ruler-h) 1fr; border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
+.header-add { display: flex; gap: 4px; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.header-add button { padding: 1px 8px; font-size: 12px; }
+.header-scroll { overflow: hidden; position: relative; }
+.header {
+  display: flex; flex-direction: column; justify-content: center; gap: 5px;
+  padding: 0 8px 0 12px; border-bottom: 1px solid #0006; position: relative;
+}
+.header::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 3px; width: 5px; background: var(--color); border-radius: 0 3px 3px 0; }
+.header .top { display: flex; align-items: center; gap: 6px; }
+.header .track-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+.header .rename { flex: 1; padding: 1px 4px; }
+.header .kind { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+.header .del { padding: 0 6px; line-height: 1.2; color: var(--muted); }
+.header .controls { display: flex; align-items: center; gap: 4px; }
+.header .controls button { padding: 1px 7px; font-size: 11.5px; }
+.header .controls input[type=range] { flex: 1; min-width: 0; padding: 0; accent-color: var(--accent); }
+
+.arrangement-body { display: grid; grid-template-rows: var(--ruler-h) 1fr; min-width: 0; min-height: 0; }
+.ruler-wrap, .lanes-wrap { position: relative; overflow: hidden; }
+.ruler-wrap canvas, .lanes-wrap canvas { position: absolute; left: 0; top: 0; display: block; }
+.lanes-wrap .overlay { touch-action: none; }
+.ruler-wrap .ruler { touch-action: none; }
+
+/* ---------------------------------------------------------------- barra di stato */
+.status { padding: 5px 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); min-height: 26px; }

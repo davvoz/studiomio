@@ -1,7 +1,7 @@
-import type { AudioSystem } from '../app/audio-system';
+import type { ProjectSession } from '../app/project-session';
+import { encodeWav } from '../dsp/codec/wav';
 import type { AudioClip } from '../model/audio-clip';
 import type { MidiClip, Note } from '../model/midi-clip';
-import type { SampleRef } from '../model/sample';
 import { addMidiClip, addSample, addTrack, placeSample, renameTrack, resizePlacement, updateClip } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { drumLoop } from './demo-loop';
@@ -14,16 +14,11 @@ const BASS: Note[] = [
 
 /** Progetto di prova: un loop di batteria a 120 BPM in quattro modalità di warp e una
  *  linea di basso MIDI in loop. */
-export async function buildDemoProject(store: ProjectStore, audio: AudioSystem): Promise<void> {
+export async function buildDemoProject(store: ProjectStore, session: ProjectSession): Promise<void> {
   const data = { channels: drumLoop(2, 120), sampleRate: 44100 };
-  const id = store.ids.next('sample');
-  await audio.addSample(id, data);
-  const analysis = await audio.dsp.analyze(id, 0.5);
-  const sample: SampleRef = {
-    id, name: 'Loop demo 120', file: 'audio/loop-demo.wav',
-    sampleRate: data.sampleRate, channels: 2, frames: data.channels[0].length,
-    analysis: { tempo: analysis.tempo, sensitivity: 0.5, transients: analysis.transients.map(t => t / data.sampleRate) },
-  };
+  // il loop finisce nella cartella del progetto come un file importato
+  const sample = await session.addAudio('Loop demo 120.wav', data, new Uint8Array(encodeWav(data.channels, data.sampleRate, 16)));
+  const id = sample.id;
 
   store.apply(addTrack('audio'));
   store.apply(addTrack('midi'));

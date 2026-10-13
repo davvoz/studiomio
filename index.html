@@ -4,37 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>studiomio</title>
-  <link rel="stylesheet" href="/src/style.css">
+  <link rel="stylesheet" href="/src/app.css">
 </head>
 <body>
-  <main class="bench">
-    <h1>studiomio <small>motore di riproduzione · progetto demo</small></h1>
-
-    <section>
-      <h2>Trasporto</h2>
-      <div class="row">
-        <button id="play" disabled>▶ Play</button>
-        <span id="pos" class="pos">1.1.1</span>
-        <label>BPM <input id="bpm" type="number" min="40" max="300" step="1" value="120"></label>
-        <label><input id="loop" type="checkbox"> Loop battute 1–4</label>
-        <label><input id="metro" type="checkbox"> Metronomo</label>
-        <button id="undo" disabled>↶</button>
-        <button id="redo" disabled>↷</button>
-        <button id="export" disabled>Esporta mix WAV</button>
-      </div>
-    </section>
-
-    <section>
-      <h2>Tracce</h2>
-      <div id="tracks" class="tracks"></div>
-    </section>
-
-    <section>
-      <h2>Registro</h2>
-      <pre id="log"></pre>
-      <p class="muted">Spazio = play/stop · Ctrl+Z / Ctrl+Y = annulla/ripeti · <a href="/bench.html">banco di prova DSP</a></p>
-    </section>
-  </main>
+  <div id="app"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

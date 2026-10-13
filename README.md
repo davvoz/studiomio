@@ -10,7 +10,7 @@ Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
 ```sh
 npm install
-npm run dev        # http://localhost:5173 – progetto demo con trasporto, mixer ed export
+npm run dev        # http://localhost:5173 – l'app (Chrome o Edge: servono per aprire e salvare le cartelle)
                    # http://localhost:5173/bench.html – banco di prova del DSP
 ```
 
@@ -58,7 +58,15 @@ src/
     offline-mix.ts     export del mix con lo stesso motore (OfflineAudioContext)
     warp-job.ts        dalla clip audio al lavoro di warp per il DSP
   app/
+    app.ts             monta l'app e implementa i comandi
     audio-system.ts    monta insieme worker, sample, cache, AudioContext e motore
+    project-session.ts cartella del progetto: importa, apri, salva, salva con nome
+  ui/
+    timeline/          arrangement: geometria, disegno su canvas, gesti, pianificazione
+    track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume)
+    transport-bar.ts   barra in alto
+    keymap.ts          scorciatoie da tastiera (una riga per comando)
+    waveform.ts        picchi della forma d'onda a più risoluzioni
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
     analysis/          onset, transienti, tempo, beat tracking
@@ -78,6 +86,22 @@ MioBrano/
   progetto.bak.json    il salvataggio precedente
   audio/               i file audio originali, copiati all'importazione
 ```
+
+## Uso della timeline
+
+| | |
+|---|---|
+| Trascina file audio sulla timeline | importa (sulla traccia sotto, o su una nuova) |
+| Trascina una clip | sposta (anche su un'altra traccia dello stesso tipo); con Ctrl copia; con Alt senza griglia |
+| Trascina il bordo di una clip | accorcia o allunga |
+| Trascina nel vuoto | selezione a riquadro; un clic sposta il cursore |
+| Fascia alta del righello | trascina per disegnare il loop, clic per accenderlo/spegnerlo |
+| Doppio clic su una traccia MIDI vuota | nuova clip di una battuta |
+| Spazio · Invio | play/stop · stop e torna all'inizio |
+| Ctrl+Z / Ctrl+Y · Canc · Ctrl+D · Ctrl+E | annulla/ripeti · elimina · duplica · dividi al cursore |
+| Ctrl+L · Ctrl+4 · Ctrl+Maiusc+M | loop · griglia · metronomo |
+| Rotella · Maiusc+rotella · Ctrl+rotella · + / − | scorri · scorri in orizzontale · zoom |
+| Ctrl+S · Ctrl+O | salva · apri |
 
 ## Principi
 
