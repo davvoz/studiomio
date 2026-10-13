@@ -1,0 +1,24 @@
+{
+  "name": "studiomio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bench": "cross-env BENCH=1 vitest run --silent=false --reporter=verbose",
+    "wasm": "wasm-pack build crates/dsp --target web --out-dir ../../src/dsp/wasm/pkg --out-name studiomio_dsp --release",
+    "wasm:test": "wasm-pack build crates/dsp --target nodejs --out-dir ../../tests/wasm-pkg --out-name studiomio_dsp --release"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "cross-env": "^10.1.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}

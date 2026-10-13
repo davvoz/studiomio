@@ -1,0 +1,6 @@
+node_modules/
+dist/
+target/
+src/dsp/wasm/pkg/
+tests/wasm-pkg/
+*.log
