@@ -56,6 +56,9 @@ export interface DrumPad {
   readonly level: number;
   readonly pan: number;
   readonly choke: number;
+  /** Solo per i Sample: da dove parte (frazione del file, 0..1 in percento) e se al contrario. */
+  readonly start: number;
+  readonly reverse: number;
 }
 
 export type PadKey = keyof DrumPad;
@@ -92,6 +95,8 @@ export const padsOf = (values: Readonly<Record<string, number>>): DrumPad[] =>
     level: values[padParam(i, 'level')],
     pan: values[padParam(i, 'pan')],
     choke: values[padParam(i, 'choke')],
+    start: values[padParam(i, 'start')],
+    reverse: values[padParam(i, 'reverse')],
   }));
 
 /** I nomi dei pad: quello del modello, numerato se lo stesso modello è su più pad (Tom 1, Tom 2…);
@@ -118,6 +123,8 @@ interface KitPad {
   readonly level?: number;
   readonly pan?: number;
   readonly choke?: number;
+  readonly start?: number;
+  readonly reverse?: number;
 }
 
 /** Il kit di partenza, sulle note della mappa General MIDI dove si può (36 cassa, 38 rullante,
@@ -146,7 +153,7 @@ const resolveKitPad = (k: KitPad): DrumPad => {
   const m = DRUM_MODELS[MODEL[k.model]];
   return {
     model: MODEL[k.model], tune: k.tune ?? 0, decay: k.decay ?? m.decay, tone: k.tone ?? m.tone, snap: k.snap ?? m.snap,
-    level: k.level ?? 0, pan: k.pan ?? 0, choke: k.choke ?? 0,
+    level: k.level ?? 0, pan: k.pan ?? 0, choke: k.choke ?? 0, start: k.start ?? 0, reverse: k.reverse ?? 0,
   };
 };
 
@@ -163,12 +170,17 @@ function padSection(i: number): ParamSection {
   const d = resolveKitPad(DEFAULT_KIT[i]);
   const id = (key: PadKey) => padParam(i, key);
   const choke: ChoiceParam = { kind: 'choice', id: id('choke'), label: 'Choke', options: CHOKE_GROUPS, default: d.choke };
+  const sampleOnly = { when: { param: id('model'), is: MODEL.sample } };
+  const reverse: ChoiceParam = { kind: 'choice', id: id('reverse'), label: 'Verso', options: ['Avanti', 'Indietro'], default: d.reverse, ...sampleOnly };
   return {
     label: `Pad ${i + 1}`,
     params: [
       { kind: 'choice', id: id('model'), label: 'Suono', options: DRUM_MODELS.map(m => m.label), default: d.model },
       num(id('tune'), 'Intonazione', -24, 24, d.tune, 'st', { step: 1 }),
       num(id('decay'), 'Decay', 0.01, MAX_DECAY, d.decay, 's', { scale: 'log' }),
+      // al centesimo di percento: per affettare un loop di qualche secondo serve il millisecondo
+      num(id('start'), 'Inizio', 0, 100, d.start, '%', { step: 0.01, ...sampleOnly }),
+      reverse,
       percent(id('tone'), 'Tono', d.tone),
       percent(id('snap'), 'Snap', d.snap),
       num(id('level'), 'Livello', -36, 6, d.level, 'dB', { step: 0.5 }),

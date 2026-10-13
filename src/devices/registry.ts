@@ -1,7 +1,10 @@
 import type { DeviceType } from './device-type';
+import { COMPRESSOR } from './effects/compressor/compressor';
 import { DELAY } from './effects/delay/delay';
 import { DRIVE } from './effects/drive/drive';
 import { EQ } from './effects/eq/eq';
+import { LIMITER } from './effects/limiter/limiter';
+import { REVERB } from './effects/reverb/reverb';
 import { ANALOG } from './instruments/analog/analog';
 import { DRUMS } from './instruments/drums/drums';
 
@@ -10,7 +13,7 @@ import { DRUMS } from './instruments/drums/drums';
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, DRUMS];
 
 /** Gli effetti disponibili, come sopra. */
-export const EFFECT_TYPES: readonly DeviceType[] = [EQ, DRIVE, DELAY];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, DRIVE, DELAY, REVERB, LIMITER];
 
 const instruments = new Map(INSTRUMENT_TYPES.map(t => [t.type, t]));
 const effects = new Map(EFFECT_TYPES.map(t => [t.type, t]));

@@ -26,8 +26,10 @@ interface Hit {
   /** Tono e snap in 0..1. */
   readonly tone: number;
   readonly snap: number;
-  /** Il sample del pad (solo il modello Sample lo usa). */
+  /** Il sample del pad (solo il modello Sample lo usa), da dove parte (0..1) e se al contrario. */
   readonly sample: SampleData | null;
+  readonly start: number;
+  readonly reverse: boolean;
 }
 
 /** Saturazione morbida che tiene il picco a 1: `drive` 0 = pulito. */
@@ -407,10 +409,12 @@ const hermite = (x: Float32Array, k: number, f: number): number => {
 /** Gli ultimi campioni di un sample sfumano, se il file finisce di colpo. */
 const END_FADE = 64;
 
-/** Il sample del pad: suonato dall'inizio all'intonazione del pad (interpolazione di Hermite,
+/** Il sample del pad: suonato da Inizio all'intonazione del pad (interpolazione di Hermite,
  *  anche quando il file ha un'altra frequenza di campionamento), con il decay che lo accorcia
  *  (resta pieno e cade verso la fine), Tono come filtro DJ (sotto metà passa-basso, sopra
- *  passa-alto) e Snap come saturazione. È stereo: fa da sé il giro del campione. */
+ *  passa-alto) e Snap come saturazione. Al contrario suona lo stesso pezzo (da Inizio per la
+ *  durata del decay) dalla fine all'inizio, e l'inviluppo si rovescia: sale e finisce secco,
+ *  come un colpo al contrario. È stereo: fa da sé il giro del campione. */
 class SampleVoice extends DrumVoice {
   private data: SampleData | null = null;
   private pos = 0;
@@ -420,6 +424,9 @@ class SampleVoice extends DrumVoice {
   private tStep = 0;
   private drive = 0;
   private filtered = false;
+  private reverse = false;
+  /** Il campione dove la voce si ferma (andando avanti: fine del file; al contrario: Inizio). */
+  private stop = 0;
   private readonly filterL = new Svf(this.sampleRate);
   private readonly filterR = new Svf(this.sampleRate);
 
@@ -428,10 +435,21 @@ class SampleVoice extends DrumVoice {
     this.data = d && d.channels.length && d.channels[0].length > 1 ? d : null;
     this.amp = this.data ? 1 : 0;
     if (!this.data) return;
-    this.pos = 0;
-    this.step = (hit.ratio * this.data.sampleRate) / this.sampleRate;
+    const length = this.data.channels[0].length, from = Math.min(length - 2, Math.floor(hit.start * length));
+    const speed = (hit.ratio * this.data.sampleRate) / this.sampleRate;
+    this.reverse = hit.reverse;
     this.t = 0;
     this.tStep = 1 / (hit.decay * this.sampleRate);
+    if (this.reverse) {
+      // il pezzo che il decay lascerebbe suonare, letto dalla fine
+      this.pos = Math.min(length - 1, from + hit.decay * this.sampleRate * speed);
+      this.step = -speed;
+      this.stop = from;
+    } else {
+      this.pos = from;
+      this.step = speed;
+      this.stop = length - 1;
+    }
     this.drive = hit.snap;
     const tone = hit.tone - 0.5;
     this.filtered = Math.abs(tone) > 0.02;
@@ -452,11 +470,11 @@ class SampleVoice extends DrumVoice {
   override render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const d = this.data;
     if (!d) return;
-    const L = d.channels[0], R = d.channels[1] ?? L, last = L.length - 1, stereo = R !== L;
-    const { gainL, gainR, drive, filtered } = this;
+    const L = d.channels[0], R = d.channels[1] ?? L, stereo = R !== L;
+    const { gainL, gainR, drive, filtered, reverse, stop } = this;
     for (let i = from; i < to; i++) {
       const k = Math.floor(this.pos);
-      if (k >= last || this.t >= 1) {
+      if ((reverse ? k < stop : k >= stop) || this.t >= 1) {
         this.amp = 0;
         break;
       }
@@ -470,11 +488,13 @@ class SampleVoice extends DrumVoice {
         l = saturate(l, drive);
         r = stereo ? saturate(r, drive) : l;
       }
-      // pieno all'inizio, poi cade verso la fine del decay; gli ultimi campioni sfumano
-      const t2 = this.t * this.t, tail = last - k;
-      const g = (1 - t2 * t2) * this.chokeGain() * (tail < END_FADE ? tail / END_FADE : 1);
+      // pieno all'inizio, poi cade verso la fine del decay (al contrario: sale presto e resta
+      // pieno fino in fondo); gli ultimi campioni prima del bordo sfumano
+      const u = reverse ? 1 - this.t : this.t, u2 = u * u, tail = reverse ? k - stop : stop - k;
+      const env = 1 - u2 * u2;
+      const g = env * this.chokeGain() * (tail < END_FADE ? tail / END_FADE : 1);
       // il livello dell'inviluppo dice se la voce è viva (non la sfumatura dei bordi del file)
-      this.amp = Math.max(FLOOR, 1 - t2 * t2);
+      this.amp = Math.max(FLOOR, env);
       left[i] += l * g * gainL;
       right[i] += r * g * gainR;
       this.pos += this.step;
@@ -526,7 +546,10 @@ class Pad {
     this.current ^= 1;
     const gain = dbToGain(s.level) * velocityGain, pan = s.pan / 100;
     pair[this.current].trigger(
-      { ratio: Math.pow(2, s.tune / 12), decay: s.decay, tone: s.tone / 100, snap: s.snap / 100, sample: this.sample },
+      {
+        ratio: Math.pow(2, s.tune / 12), decay: s.decay, tone: s.tone / 100, snap: s.snap / 100,
+        sample: this.sample, start: s.start / 100, reverse: s.reverse === 1,
+      },
       gain * Math.min(1, 1 - pan), gain * Math.min(1, 1 + pan));
   }
 

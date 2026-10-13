@@ -56,3 +56,43 @@ export const bars = (pad: number, bar: string, count: number, last: string = bar
 
 /** Punti di una curva: [battito, valore]. */
 export const curve = (...points: (readonly [Beats, number])[]): EnvelopePoint[] => points.map(([beat, value]) => ({ beat, value }));
+
+/** Un pad suonato in fila da `from`: `count` colpi ogni `every` battiti, la velocity che va da
+ *  `velocity[0]` a `velocity[1]` (un rullo che cresce, uno stutter). */
+export function roll(pad: number, from: Beats, count: number, every: Beats, velocity: readonly [number, number] = [100, 100]): Note[] {
+  return Array.from({ length: count }, (_, k) => ({
+    pitch: padNote(pad), start: from + k * every, duration: every,
+    velocity: velocity[0] + ((velocity[1] - velocity[0]) * k) / Math.max(1, count - 1),
+  }));
+}
+
+/** Un loop affettato sui pad, a sedicesimi: un numero è il pad (la fetta) che parte lì, "."
+ *  lascia suonare quella prima. Con le fette in choke tra loro si ricompone il loop o lo si
+ *  rimonta: "0 . 1 . 2 . 3 ." è l'originale in ottavi. */
+export function chop(line: string, from: Beats = 0, velocity = 110): Note[] {
+  return line.replace(/\|/g, ' ').trim().split(/\s+/).flatMap((word, i) => {
+    if (word === '.') return [];
+    const pad = Number(word);
+    if (!Number.isInteger(pad)) throw new Error(`fetta non valida: "${word}"`);
+    return [{ pitch: padNote(pad), start: from + i * STEP, duration: STEP, velocity }];
+  });
+}
+
+/** Il volume che si abbassa sui colpi (`hits`, in battiti) e risale in `release` battiti: il
+ *  sidechain fatto con le modulazioni. `depth` è quanto resta del volume al colpo (0..1). */
+export function duck(hits: readonly Beats[], depth: number, release: Beats): EnvelopePoint[] {
+  return [...hits].sort((a, b) => a - b).flatMap(h => [
+    { beat: h, value: 1 }, { beat: h, value: depth }, { beat: h + release, value: 1 },
+  ]);
+}
+
+/** Il volume a scatti tra `from` e `to`: acceso per `duty` di ogni passo `every`, poi spento
+ *  (lo stutter dei tagli glitch). Fuori dal tratto resta pieno. */
+export function gate(from: Beats, to: Beats, every: Beats, duty = 0.5): EnvelopePoint[] {
+  const points: EnvelopePoint[] = [];
+  for (let t = from; t < to - 1e-9; t += every) {
+    points.push({ beat: t, value: 1 }, { beat: t + every * duty, value: 1 }, { beat: t + every * duty, value: 0 }, { beat: t + every, value: 0 });
+  }
+  points.push({ beat: to, value: 1 });
+  return points;
+}

@@ -125,6 +125,27 @@ describe('Drum Machine: pad Sample', () => {
     expect(rms(out, 4800 + 0.03 * SR, SR / 2)).toBeLessThan(0.002);
   });
 
+  it('Inizio: suona da metà del file; al contrario: lo stesso pezzo dalla fine all\'inizio', () => {
+    // una rampa: ogni campione dice da dove viene
+    const ramp: SampleData = { sampleRate: SR, channels: [Float32Array.from({ length: SR }, (_, i) => i / SR)] };
+    const fwd = kit(samplePad({ [padParam(0, 'start')]: 50 }), ramp);
+    fwd.queue.add(36, 127, 0, 10);
+    const a = run(fwd.core, fwd.queue, 4800).left;
+    expect(a[0]).toBeCloseTo(0.5, 3);
+    expect(a[2400]).toBeGreaterThan(a[100]);
+    // al contrario con decay 0,1 s: da 0,5 + 0,1 giù fino a 0,5, e finisce lì
+    const rev = kit(samplePad({ [padParam(0, 'start')]: 50, [padParam(0, 'reverse')]: 1, [padParam(0, 'decay')]: 0.1 }), ramp);
+    rev.queue.add(36, 127, 0, 10);
+    const b = run(rev.core, rev.queue, 9600).left;
+    // a metà del pezzo la rampa vale 0,55 (diviso l'inviluppo noto: 1 − 0,5⁴), alla fine 0,5
+    const mid = Math.round(0.05 * SR);
+    expect(b[mid] / (1 - 0.5 ** 4)).toBeCloseTo(0.55, 2);
+    expect(b[Math.round(0.098 * SR)]).toBeCloseTo(0.502, 2);
+    // l'inviluppo al contrario sale: all'inizio è piano
+    expect(b[50] / (0.6 - 50 / SR)).toBeLessThan(0.1);
+    expect(lastSound(b) / SR).toBeLessThan(0.101);
+  });
+
   it('posti dei sample e nomi dei pad', () => {
     expect([padSlot(0), padSlot(15), padOfSlot('p16'), padOfSlot('p17'), padOfSlot('x1')]).toEqual(['p1', 'p16', 15, -1, -1]);
     const values = resolveParams(DRUMS, samplePad());

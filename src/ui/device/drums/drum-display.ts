@@ -30,7 +30,7 @@ const asSamplePad = (pad: DrumPad, index: number): Record<string, number> =>
   pad.model === MODEL.sample ? {} : modelDefaults(index, MODEL.sample);
 
 /** I controlli del pad, nell'ordine in cui compaiono (il suono ha il suo menu). */
-const PAD_CONTROLS: readonly PadKey[] = ['tune', 'decay', 'tone', 'snap', 'level', 'pan', 'choke'];
+const PAD_CONTROLS: readonly PadKey[] = ['tune', 'decay', 'start', 'reverse', 'tone', 'snap', 'level', 'pan', 'choke'];
 
 /** Tutti i valori di un pad, per copiarlo o scambiarlo. */
 const padValues = (pad: DrumPad, index: number): Record<string, number> =>

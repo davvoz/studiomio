@@ -26,8 +26,9 @@ npm run dev        # http://localhost:5173 – l'app (Chrome o Edge: servono per
 Per usare gli algoritmi WebAssembly nell'app: `VITE_DSP_WASM=1 npm run dev`.
 
 Gli script in `scripts/` girano con i moduli dell'app (risolti da Vite):
-`node scripts/run.mjs scripts/<nome>.ts <argomenti…>`. Per ora c'è `build-acid-live.ts`, che
-costruisce il live "Acido crudo" come cartella di progetto (vedi sotto, "Acido crudo").
+`node scripts/run.mjs scripts/<nome>.ts <argomenti…>`. `build-acid-live.ts` e
+`build-pazzi-live.ts` costruiscono i live "Acido crudo" e "Siete pazzi" come cartelle di
+progetto (vedi sotto: I live).
 
 Requisiti: Node 22+, Rust (`rustup target add wasm32-unknown-unknown`) e `wasm-pack`.
 Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una volta
@@ -117,8 +118,11 @@ src/
     wasm/              ponte verso il crate Rust
   workers/             RPC tipizzato, worker pool, worker DSP, DspService
   demo/                loop e progetto demo; patterns.ts (parti scritte come su una drum
-                       machine o una 303) e acid-live.ts (il live "Acido crudo")
-scripts/               script in Node con i moduli dell'app (run.mjs li avvia)
+                       machine o una 303: ritmi, linee, chop, rulli, pompa, gate),
+                       live-builder.ts (un live come dati → progetto) e i live acid-live.ts
+                       e pazzi-live.ts
+scripts/               script in Node con i moduli dell'app (run.mjs li avvia; live-folder.ts
+                       copia i suoni e salva la cartella di un live)
 crates/dsp/            phase vocoder in Rust → WebAssembly (SIMD)
 tests/                 un file per modulo; test di equivalenza con WarpMio
 ```
@@ -288,7 +292,10 @@ accanto al suono. Il file si copia nella cartella del progetto come quelli delle
 pad prende il suo nome. Intonazione in semitoni (anche se il file ha un'altra frequenza di
 campionamento), Decay che accorcia il sample restando pieno fino quasi alla fine, Tono come un
 filtro da DJ (a sinistra passa-basso, a destra passa-alto, a metà aperto), Snap come
-saturazione. Scambiando o copiando i pad il sample va con loro.
+saturazione. **Inizio** sceglie da dove parte nel file (al centesimo di percento: con più pad
+sullo stesso loop lo si affetta, come lo slice mode di Live) e **Verso** lo suona al contrario:
+lo stesso pezzo (da Inizio per la durata del decay) dalla fine all'inizio, con l'inviluppo che
+sale e finisce secco. Scambiando o copiando i pad il sample va con loro.
 
 | Gesto | Azione |
 | --- | --- |
@@ -324,6 +331,26 @@ filtri a pettine), e la curva usa l'antialiasing ADAA con la primitiva esatta di
 4.9 kHz senza sovracampionamento ripiega armoniche udibili a −18 dB, con il Drive a −113 dB.
 Costo misurato: circa il 2.8 % di un core per un'istanza stereo a 4× (in silenzio non calcola).
 Il WASM non è servito: il tempo andava nelle funzioni trascendenti, tolte con le tabelle.
+
+**Compressore**: soglia, rapporto e ginocchio morbido; attacco e rilascio (la riduzione si
+leviga in dB, come nei compressori da studio); rilevatore a picco o RMS con un passa-alto
+(così i bassi non lo fanno pompare); canali legati; guadagno manuale o automatico; dry/wet per
+la compressione parallela. Preset: Colla, Punch batteria, Parallela, Basso, Voce, Schiaccia.
+
+**Limiter**: per il master. Guadagno, Tetto, Rilascio e Anticipo: guarda avanti di qualche
+millisecondo (minimo scorrevole del guadagno richiesto, poi una media mobile lunga quanto
+l'anticipo), quindi il guadagno è già sceso quando arriva il picco e l'attacco non si deforma.
+Con **Tra i campioni** misura i picchi su una copia sovracampionata 4× (true peak): verificato
+in un test, un seno a un quarto della frequenza di campionamento con i campioni a −3 dB e il
+picco vero a 0 dB resta sotto il tetto. Preset: Master, Forte, Trasparente.
+
+**Riverbero**: rete di 8 linee di ritardo con matrice di Hadamard (FDN), diffusione con allpass,
+smorzamento degli alti nella retroazione, due linee appena modulate contro il suono metallico.
+Dimensione e Decadimento separati (il decadimento è esatto: −60 dB nel tempo scelto, misurato
+in un test), Pre-delay, Diffusione, Smorzamento, Low cut sulla coda, Larghezza, Dry/Wet a
+potenza costante. Preset: Stanza, Sala, Piatto, Lancio voce, Coda infinita.
+
+Costo misurato per un'istanza stereo: compressore 0.2 %, limiter 0.8 %, riverbero 0.7 % di un core.
 
 **Delay**: eco a tempo (da 1/32 a 1/1, con puntate e terzine, segue il BPM del progetto) o in
 millisecondi, stereo o ping-pong, feedback con low cut e high cut sulle ripetizioni, dry/wet.
@@ -363,16 +390,24 @@ piano roll. I
 processori AudioWorklet sono due, uno per gli strumenti (riceve le note con il tempo del
 contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli effetti.
 
-## Acido crudo
+## I live
 
-Un piccolo live hard acid a 150 BPM in La, montato per la session con i sample della libreria
-dell'utente (in `src/demo/acid-live.ts`; i file sono elencati in `scripts/build-acid-live.ts`):
+Due live montati per la session con i sample della libreria dell'utente. Ogni live è descritto
+come dati in `src/demo` (tracce, kit, suoni di Analog, effetti, scene, ordine della
+registrazione) e montato da `live-builder.ts`; lo script copia i file (elencati nello script)
+nella cartella del progetto:
 
 ```sh
 node scripts/run.mjs scripts/build-acid-live.ts "C:/Users/<utente>/Music" "C:/…/Acido crudo"
+node scripts/run.mjs scripts/build-pazzi-live.ts "C:/Users/<utente>/Music" "C:/…/Siete pazzi"
 ```
 
-poi **Apri** sulla cartella creata. Otto tracce: Cassa, Clap, Piatti, Percussioni ed FX sono Drum
+poi **Apri** sulla cartella creata. In entrambi la timeline tiene una "registrazione" del live
+(le scene una dopo l'altra), utile anche per l'export.
+
+### Acido crudo
+
+Hard acid a 150 BPM in La. Otto tracce: Cassa, Clap, Piatti, Percussioni ed FX sono Drum
 Machine con pad Sample (casse distorte intonate in La, clap, rullanti e rullo, hi-hat, ride,
 percussioni metalliche, crash, sirena, riser e discese); Rumble è un seno di Analog che rotola
 sui sedicesimi in levare, saturato dal Drive; Acido e Acido 2 sono due Analog in Legato con
@@ -380,8 +415,25 @@ slide e accenti (dente di sega e quadra), distorti (Dura, Fuzz), con eco a tempo
 Intro, Cassa e rumble, Entra l'acido, Acido pieno, Break (rullo che sale anche d'intonazione e
 riser che arriva sul drop), Drop, Acido 2, Martello (casse doppie, Drive dell'acido che sale a
 scalini), Break 2, Outro. Le modulazioni delle clip aprono e chiudono i filtri, alzano l'eco e
-sfumano l'uscita; sul master un Drive a nastro leggero incolla. La timeline ne tiene una
-registrazione di 160 battute (circa 4 minuti), utile anche per l'export.
+sfumano l'uscita; sul master un Drive a nastro leggero incolla. Registrazione: 160 battute,
+circa 4 minuti.
+
+### Siete pazzi
+
+Drum & bass a 175 BPM in Sol# minore, con l'amen affettato e glitchato, stacchi di voce, riser e
+tagli. Dieci tracce: **Amen** (un amen di 4 battute in 16 fette da un ottavo, in choke: in fila
+ricompongono il loop, rimontate fanno i chop), **Glitch** (colpi dell'amen al contrario e
+intonati, la versione "decimated" e quella glitchata, per rulli a trentaduesimi e swell),
+**Cassa** e **Rullante** (due tempi), **Piatti**, **Sub** (un seno pulito) e **Reese** (due denti
+di sega scordati, piegati dal Drive, compressi e allargati con un'eco Haas), **Pad**, **Voci**
+(la frase cantata, le sue sillabe sui pad dove cadono gli attacchi, la frase al contrario, la
+seconda frase, le frasi parlate degli stacchi) ed **FX** (riser di esattamente 8 battute a 175,
+discese, crash, impatti). La pompa del sidechain su reese, sub e pad è fatta con le modulazioni
+di volume sulle casse e sui rullanti; gli stutter con modulazioni di volume a scatti. Undici
+scene: Intro, Salita, Stacco ("siete pazzi" da solo), Drop, Drop B, Glitch, Pausa, Stacco 2,
+Drop 2, Drop 2B, Fine. Master: EQ (taglio a 25 Hz), Compressore "Colla", Limiter con i picchi
+tra i campioni. Misurato sul render (BS.1770): drop tra −8.3 e −8.7 LUFS, −9.7 LUFS integrati,
+true peak −0.42 dBTP; nessuna traccia oltre 0 dB. Registrazione: 130 battute, circa 3 minuti.
 
 ## Principi
 

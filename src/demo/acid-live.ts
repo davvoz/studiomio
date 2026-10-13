@@ -8,25 +8,17 @@
  * le dieci scene sono le sezioni del live e la timeline ne tiene una "registrazione" di circa
  * 4 minuti, le stesse clip una dopo l'altra. I sample arrivano già pronti (SampleRef):
  * chi costruisce il progetto li copia nella cartella (vedi scripts/build-acid-live.ts). */
-import type { TrackId } from '../core/id';
-import type { Beats } from '../core/music-time';
-import { DELAY } from '../devices/effects/delay/delay';
-import { DRIVE, SHAPE } from '../devices/effects/drive/drive';
-import { bandParam, EQ } from '../devices/effects/eq/eq';
-import { ANALOG, VOICE_MODE } from '../devices/instruments/analog/analog';
-import { DRUMS, MODEL, padNote, padParam, padSlot } from '../devices/instruments/drums/drums';
-import { INSTRUMENT_DEVICE, type EnvelopePoint, type ModTarget } from '../model/envelope';
-import { MidiClip, type Note } from '../model/midi-clip';
-import { acid, BAR, bars, curve, repeat, steps } from './patterns';
-import type { EffectSettings, ParamValues } from '../model/device';
-import { MASTER } from '../model/project';
+import { SHAPE } from '../devices/effects/drive/drive';
+import { VOICE_MODE } from '../devices/instruments/analog/analog';
+import { padNote, padParam } from '../devices/instruments/drums/drums';
+import type { ParamValues } from '../model/device';
 import type { SampleRef } from '../model/sample';
+import type { ProjectStore } from '../store/project-store';
 import {
-  addEffect, addScene, addTrack, loadEffectPreset, renameProject, renameTrack, setInstrument, setInstrumentSamples,
-  setMasterMixer, setMixer, setSlot, setTempo,
-} from '../store/edits';
-import { edit, type ProjectStore } from '../store/project-store';
-import { renameScene } from '../store/session-edits';
+  buildLive, clip, delay, drive, effectParam, instrumentParam, lowCut, VOLUME, type LiveSpec, type PadSound,
+  type SceneSpec, type TrackSpec,
+} from './live-builder';
+import { acid, BAR, bars, curve, repeat, steps } from './patterns';
 
 export const ACID_LIVE_BPM = 150;
 
@@ -101,19 +93,7 @@ const ACID = {
 
 // ------------------------------------------------------------------ i suoni
 
-/** I pad di una Drum Machine: suono, intonazione, decay, livello, pan, choke. */
-interface PadSound {
-  readonly sound: AcidLiveSound;
-  readonly tune?: number;
-  readonly decay?: number;
-  readonly tone?: number;
-  readonly snap?: number;
-  readonly level?: number;
-  readonly pan?: number;
-  readonly choke?: number;
-}
-
-const KITS: Readonly<Record<string, readonly PadSound[]>> = {
+const KITS: Readonly<Record<string, readonly PadSound<AcidLiveSound>[]>> = {
   // le casse di partenza sono quasi in Sol#: un semitono su, in La come il rumble
   kick: [
     { sound: 'kick', tune: 1, decay: 0.36, snap: 15 },
@@ -148,14 +128,6 @@ const KITS: Readonly<Record<string, readonly PadSound[]>> = {
   ],
 };
 
-/** I parametri dei pad Sample di un kit. */
-const kitParams = (kit: readonly PadSound[]): Record<string, number> =>
-  Object.fromEntries(kit.flatMap((p, i) => [
-    [padParam(i, 'model'), MODEL.sample], [padParam(i, 'tune'), p.tune ?? 0], [padParam(i, 'decay'), p.decay ?? 12],
-    [padParam(i, 'tone'), p.tone ?? 50], [padParam(i, 'snap'), p.snap ?? 0], [padParam(i, 'level'), p.level ?? 0],
-    [padParam(i, 'pan'), p.pan ?? 0], [padParam(i, 'choke'), p.choke ?? 0],
-  ]));
-
 const ANALOG_SOUNDS = {
   rumble: {
     oscA: 3, mix: 0, voiceMode: VOICE_MODE.poly, cutoff: 260, resonance: 10, filterEnv: 25, keyTrack: 0, fDecay: 0.1, fSustain: 0,
@@ -171,37 +143,11 @@ const ANALOG_SOUNDS = {
   },
 } satisfies Record<string, ParamValues>;
 
-/** Un effetto con i suoi parametri (sopra i predefiniti del tipo). */
-interface EffectSpec {
-  readonly type: string;
-  readonly label: string;
-  readonly name: string;
-  readonly params: ParamValues;
-}
-
-const drive = (name: string, params: ParamValues): EffectSpec => ({ type: DRIVE.type, label: DRIVE.label, name, params });
-const delay = (name: string, params: ParamValues): EffectSpec => ({ type: DELAY.type, label: DELAY.label, name, params });
-/** Un EQ che taglia sotto `freq` (lascia i bassi alla cassa e al rumble). */
-const lowCut = (freq: number): EffectSpec => ({
-  type: EQ.type, label: EQ.label, name: `Taglio ${freq} Hz`, params: { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: freq },
-});
-
 // ------------------------------------------------------------------ tracce e scene
 
 type TrackKey = 'kick' | 'rumble' | 'acid' | 'lead' | 'clap' | 'hats' | 'perc' | 'fx';
 
-interface TrackSpec {
-  readonly key: TrackKey;
-  readonly name: string;
-  readonly volumeDb: number;
-  readonly pan?: number;
-  /** Un kit di Drum Machine o un suono di Analog. */
-  readonly kit?: readonly PadSound[];
-  readonly analog?: ParamValues;
-  readonly effects: readonly EffectSpec[];
-}
-
-const TRACKS: readonly TrackSpec[] = [
+const TRACKS: readonly TrackSpec<AcidLiveSound, TrackKey>[] = [
   { key: 'kick', name: 'Cassa', volumeDb: -2, kit: KITS.kick, effects: [drive('Crudo', { shape: SHAPE.hard, drive: 10, color: 20, low: 70, split: 110, tone: 15000, mix: 45 })] },
   {
     key: 'rumble', name: 'Rumble', volumeDb: -4, analog: ANALOG_SOUNDS.rumble,
@@ -232,32 +178,6 @@ const TRACKS: readonly TrackSpec[] = [
   { key: 'fx', name: 'FX', volumeDb: -4, kit: KITS.fx, effects: [lowCut(120), delay('Dub', { division: 9, pingPong: 1, feedback: 55, lowCut: 300, highCut: 2500, mix: 18 })] },
 ];
 
-/** Cosa muove una modulazione: come nel modello, o un effetto della traccia per posizione
- *  nella catena (l'id lo riceve quando la traccia nasce). */
-type ModSpecTarget = ModTarget | { readonly kind: 'effect'; readonly index: number; readonly param: string };
-
-/** Una clip della session: note, lunghezza del giro e (a scelta) modulazioni. */
-interface ClipSpec {
-  readonly name: string;
-  readonly notes: readonly Note[];
-  readonly length: Beats;
-  readonly mods?: readonly { readonly target: ModSpecTarget; readonly points: readonly EnvelopePoint[] }[];
-}
-
-const clip = (name: string, notes: readonly Note[], length: Beats, mods: ClipSpec['mods'] = []): ClipSpec => ({ name, notes, length, mods });
-
-/** Un parametro dello strumento, o di un effetto della traccia (per posizione nella catena). */
-const instrumentParam = (param: string): ModTarget => ({ kind: 'device', device: INSTRUMENT_DEVICE, param });
-const effectParam = (index: number, param: string): ModSpecTarget => ({ kind: 'effect', index, param });
-const VOLUME: ModTarget = { kind: 'mixer', param: 'volume' };
-
-interface SceneSpec {
-  readonly name: string;
-  /** Quante battute dura la sezione nella "registrazione" sulla timeline. */
-  readonly bars: number;
-  readonly clips: Partial<Record<TrackKey, ClipSpec>>;
-}
-
 const CUTOFF = instrumentParam('cutoff'), RESONANCE = instrumentParam('resonance');
 
 /** Le clip che tornano in più scene. */
@@ -276,7 +196,7 @@ const C = {
   lead: clip('Acido 2', ACID.lead, 32, [{ target: CUTOFF, points: curve([0, -0.05], [16, 0.16], [32, -0.05]) }]),
 };
 
-const SCENES: readonly SceneSpec[] = [
+const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Intro', bars: 16, clips: {
       kick: clip('Cassa fonda', PARTS.kickDeep, 16),
@@ -369,68 +289,18 @@ const SCENES: readonly SceneSpec[] = [
 /** L'ordine delle scene nella "registrazione" sulla timeline: il secondo break riporta al drop. */
 const ARRANGEMENT: readonly number[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 5, 9];
 
-// ------------------------------------------------------------------ montaggio
-
-/** Il bersaglio vero di una modulazione: l'effetto per posizione diventa il suo id. */
-function resolveTarget(target: ModSpecTarget, effects: readonly EffectSettings[]): ModTarget {
-  if (target.kind !== 'effect') return target;
-  const fx = effects[target.index];
-  if (!fx) throw new Error(`la traccia non ha l'effetto ${target.index + 1}`);
-  return { kind: 'device', device: fx.id, param: target.param };
-}
+/** Il live intero; il master ha margine (le tracce sono tante e forti) e un Drive a nastro
+ *  leggero che incolla e tiene i picchi. */
+export const ACID_LIVE: LiveSpec<AcidLiveSound, TrackKey> = {
+  name: 'Acido crudo',
+  bpm: ACID_LIVE_BPM,
+  master: { volumeDb: 0, effects: [drive('Colla', { shape: SHAPE.tape, drive: 3, low: 0, tone: 20000 })] },
+  tracks: TRACKS,
+  scenes: SCENES,
+  arrangement: ARRANGEMENT,
+};
 
 /** Costruisce il live nel progetto (vuoto) dello store. */
 export function buildAcidLive(store: ProjectStore, sounds: Readonly<Record<AcidLiveSound, SampleRef>>): void {
-  store.apply(renameProject('Acido crudo'));
-  store.apply(setTempo(ACID_LIVE_BPM));
-  // il master ha margine (le tracce sono tante e forti) e un Drive a nastro leggero che
-  // incolla e tiene i picchi
-  store.apply(setMasterMixer({ volumeDb: 0 }));
-  store.apply(addEffect(MASTER, DRIVE.type, DRIVE.label));
-  const glue = store.project.masterEffects.at(-1)!.id;
-  store.apply(loadEffectPreset(MASTER, glue, 'Colla', { shape: SHAPE.tape, drive: 3, low: 0, tone: 20000 }));
-  while (store.project.scenes.length < SCENES.length) store.apply(addScene());
-  SCENES.forEach((s, i) => store.apply(renameScene(store.project.scenes[i].id, s.name)));
-
-  const ids = new Map<TrackKey, TrackId>();
-  for (const spec of TRACKS) {
-    store.apply(addTrack('midi'));
-    const track = store.project.tracks.at(-1)!.id;
-    ids.set(spec.key, track);
-    store.apply(renameTrack(track, spec.name));
-    store.apply(setMixer(track, { volumeDb: spec.volumeDb, ...(spec.pan ? { pan: spec.pan } : {}) }));
-    if (spec.kit) {
-      store.apply(setInstrument(track, { type: DRUMS.type, preset: null, params: { volume: 0, velocity: 60, ...kitParams(spec.kit) } }));
-      const kit = spec.kit;
-      store.apply(setInstrumentSamples(track, Object.fromEntries(kit.map((p, i) => [padSlot(i), sounds[p.sound]]))));
-    } else {
-      store.apply(setInstrument(track, { type: ANALOG.type, preset: null, params: { ...spec.analog } }));
-    }
-    for (const fx of spec.effects) {
-      store.apply(addEffect(track, fx.type, fx.label));
-      const id = store.project.track(track)!.effects.at(-1)!.id;
-      store.apply(loadEffectPreset(track, id, fx.name, fx.params));
-    }
-  }
-
-  // le clip della session, e la stessa clip riusata nella "registrazione"
-  const clipOf = (key: TrackKey, spec: ClipSpec): MidiClip => {
-    const track = store.project.track(ids.get(key)!)!;
-    let c = MidiClip.empty(store.ids.next('clip'), spec.name, track.color, spec.length).withNotes(spec.notes);
-    for (const m of spec.mods ?? []) c = c.withEnvelope(resolveTarget(m.target, track.effects), m.points);
-    return c;
-  };
-  SCENES.forEach((scene, i) => {
-    for (const [key, spec] of Object.entries(scene.clips) as [TrackKey, ClipSpec][]) store.apply(setSlot(ids.get(key)!, i, clipOf(key, spec)));
-  });
-
-  let at = 0;
-  for (const index of ARRANGEMENT) {
-    const scene = SCENES[index], length = scene.bars * BAR, start = at;
-    store.apply(edit(`Sezione ${scene.name}`, (p, { ids: idf }) => Object.entries(scene.clips).reduce((next, [key, spec]) => {
-      const c = clipOf(key as TrackKey, spec);
-      return next.updatingTrack(ids.get(key as TrackKey)!, t => t.placing({ id: idf.next('placement'), clip: c, start, length, offset: 0 }, idf));
-    }, p)));
-    at += length;
-  }
+  buildLive(store, ACID_LIVE, sounds);
 }
