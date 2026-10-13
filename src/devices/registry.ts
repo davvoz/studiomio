@@ -1,5 +1,6 @@
 import type { DeviceType } from './device-type';
 import { DELAY } from './effects/delay/delay';
+import { EQ } from './effects/eq/eq';
 import { ANALOG } from './instruments/analog/analog';
 
 /** Gli strumenti disponibili (lato interfaccia). Il motore DSP di ciascuno è registrato con
@@ -7,7 +8,7 @@ import { ANALOG } from './instruments/analog/analog';
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG];
 
 /** Gli effetti disponibili, come sopra. */
-export const EFFECT_TYPES: readonly DeviceType[] = [DELAY];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, DELAY];
 
 const instruments = new Map(INSTRUMENT_TYPES.map(t => [t.type, t]));
 const effects = new Map(EFFECT_TYPES.map(t => [t.type, t]));

@@ -31,5 +31,9 @@ export const newEffect = (id: DeviceId, type: string): EffectSettings => ({ id, 
 export const withParam = <S extends DeviceSettings>(s: S, id: string, value: number): S =>
   ({ ...s, params: { ...s.params, [id]: value } });
 
+/** Più parametri insieme (es. frequenza e guadagno di un punto dell'EQ trascinato). */
+export const withParams = <S extends DeviceSettings>(s: S, values: ParamValues): S =>
+  ({ ...s, params: { ...s.params, ...values } });
+
 export const withPreset = <S extends DeviceSettings>(s: S, name: string, params: ParamValues): S =>
   ({ ...s, preset: name, params: { ...params } });

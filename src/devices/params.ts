@@ -2,10 +2,10 @@
  * dell'interfaccia, i valori predefiniti e la validazione: un dispositivo nuovo dichiara i suoi
  * parametri e non scrive codice d'interfaccia. Dati puri, usati anche nell'AudioWorklet. */
 
-/** Il parametro conta solo quando un altro (una scelta) ha un certo valore. */
+/** Il parametro conta solo quando un altro (una scelta) ha un certo valore, o uno di più valori. */
 export interface ParamCondition {
   readonly param: string;
-  readonly is: number;
+  readonly is: number | readonly number[];
 }
 
 interface ParamBase {

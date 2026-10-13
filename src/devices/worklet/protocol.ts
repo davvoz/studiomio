@@ -33,3 +33,18 @@ export type EffectMessage =
   | { readonly type: 'enabled'; readonly enabled: boolean }
   | { readonly type: 'tempo'; readonly bpm: number }
   | { readonly type: 'dispose' };
+
+export const METER_PROCESSOR = 'studiomio-meter';
+
+export interface MeterProcessorOptions {
+  /** I valori di tutti i misuratori, condivisi con il thread principale; null se il browser non
+   *  permette la memoria condivisa (allora il processore manda i valori per messaggio). */
+  readonly buffer: SharedArrayBuffer | null;
+  /** Posizione del primo valore di questo misuratore nel buffer. */
+  readonly offset: number;
+}
+
+export type MeterMessage = { readonly type: 'dispose' };
+
+/** Senza memoria condivisa: i valori (come METER_VALUES) circa 30 volte al secondo. */
+export type MeterReply = { readonly type: 'levels'; readonly values: Float32Array };

@@ -19,6 +19,7 @@ import { bindKeys, KEYMAP, type Commands } from '../ui/keymap';
 import { ArrangementView } from '../ui/timeline/arrangement-view';
 import { resolveSelection } from '../ui/timeline/planning';
 import { MasterStrip } from '../ui/master-strip';
+import { MeterBoard } from '../ui/meters/meter-board';
 import { TrackHeaders } from '../ui/track-headers';
 import { TransportBar, type FileCommands } from '../ui/transport-bar';
 import { UiState } from '../ui/ui-state';
@@ -63,12 +64,16 @@ export class App implements Commands, FileCommands, TimelineActions {
       openInstrument: track => this.openDevices(track, true),
       say: t => this.say(t),
     });
-    this.device = new DeviceView({ store: this.store, audition: (track, pitch) => audition(track, pitch) });
+    this.device = new DeviceView({
+      store: this.store, audition: (track, pitch) => audition(track, pitch),
+      sampleRate: this.audio.context.sampleRate, spectrum: (owner, id) => this.audio.spectrum(owner, id),
+    });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
     const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner) };
-    const headers = new TrackHeaders(this.store, this.ui, headerActions);
-    const master = new MasterStrip(this.store, headerActions);
+    const meters = new MeterBoard(owner => this.audio.engine.levels(owner));
+    const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
+    const master = new MasterStrip(this.store, headerActions, meters);
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this, () =>
       `${this.session.name}${this.session.saved ? '' : ' •'}`);
     const main = Object.assign(document.createElement('div'), { className: 'arrangement' });

@@ -2,11 +2,19 @@ import type { DeviceId } from '../core/id';
 import type { EffectSettings } from '../model/device';
 import type { AudioGraph, AudioNodeLike } from './audio-graph';
 
+/** Punti da cui ascoltare un effetto (per lo spettro): il suono prima e dopo. Le loro uscite
+ *  non le tocca nessuno, quindi un collegamento fatto lì resta anche se la catena si ricollega. */
+export interface EffectMonitor {
+  readonly pre: AudioNodeLike;
+  readonly post: AudioNodeLike;
+}
+
 /** Un effetto nel grafo audio: il suono entra da `input` ed esce da `output`. */
 export interface Effect {
   readonly type: string;
   readonly input: AudioNodeLike;
   readonly output: AudioNodeLike;
+  readonly monitor?: EffectMonitor;
   /** Nuove impostazioni dello stesso tipo (parametri, acceso/spento). */
   update(settings: EffectSettings): void;
   setTempo(bpm: number): void;
@@ -41,6 +49,10 @@ export class EffectChain {
 
   get size(): number {
     return this.order.length;
+  }
+
+  effect(id: DeviceId): Effect | undefined {
+    return this.slots.get(id)?.effect;
   }
 
   sync(effects: readonly EffectSettings[], bpm: number): void {

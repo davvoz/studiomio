@@ -1,7 +1,8 @@
-import type { TrackId } from '../core/id';
-import type { Project } from '../model/project';
+import type { DeviceId, TrackId } from '../core/id';
+import { MASTER, type ChainOwner, type Project } from '../model/project';
 import type { MixerSettings, Track } from '../model/track';
-import { EffectChain, type EffectHost } from './effect-chain';
+import { EffectChain, type Effect, type EffectHost } from './effect-chain';
+import type { Meter, MeterHost, MeterReading } from './meters';
 import { dbToGain, type AudioGraph, type AudioNodeLike, type AudioParamLike, type GainNodeLike, type PannerNodeLike } from './audio-graph';
 
 /** Tracce che si sentono: con almeno un solo attivo solo quelle in solo, mai quelle in mute. */
@@ -19,7 +20,16 @@ function setParam(param: AudioParamLike, value: number, time: number, first: boo
   else param.setTargetAtTime(value, time, SMOOTH);
 }
 
-/** Canale del mixer di una traccia: effetti → volume → pan → mute/solo → master. */
+/** Mette il misuratore (se c'è) tra `from` e `to`: misura ciò che arriva a `to`. */
+function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): void {
+  if (!meter) from.connect(to);
+  else {
+    from.connect(meter.input);
+    meter.output.connect(to);
+  }
+}
+
+/** Canale del mixer di una traccia: effetti → volume → pan → mute/solo → misuratore → master. */
 class ChannelStrip {
   readonly input: GainNodeLike;
   readonly chain: EffectChain;
@@ -28,16 +38,16 @@ class ChannelStrip {
   private readonly gate: GainNodeLike;
   private applied: { mixer: MixerSettings; audible: boolean } | null = null;
 
-  constructor(private readonly graph: AudioGraph, effects: EffectHost, output: AudioNodeLike) {
+  constructor(private readonly graph: AudioGraph, effects: EffectHost, output: AudioNodeLike, readonly meter: Meter | null) {
     this.input = graph.createGain();
     this.fader = graph.createGain();
     this.panner = graph.createStereoPanner();
     this.gate = graph.createGain();
-    // gli effetti stanno prima del volume, come in Live
+    // gli effetti stanno prima del volume, come in Live; il misuratore dopo: si vede ciò che si sente
     this.chain = new EffectChain(graph, effects, this.input, this.fader);
     this.fader.connect(this.panner);
     this.panner.connect(this.gate);
-    this.gate.connect(output);
+    metered(this.gate, output, meter);
   }
 
   apply(mixer: MixerSettings, audible: boolean): void {
@@ -52,25 +62,46 @@ class ChannelStrip {
   dispose(): void {
     this.chain.dispose();
     for (const n of [this.fader, this.panner, this.gate]) n.disconnect();
+    this.meter?.dispose();
   }
 }
 
 /** Il mixer nel grafo audio: un canale per traccia e il master, allineati al progetto.
  *  Le tracce si sommano nel bus del master, che passa per i suoi effetti e poi per il suo
- *  volume: bus → effetti del master → `master` → uscita. */
+ *  volume: bus → effetti del master → `master` → misuratore → uscita. Con `meters` ogni
+ *  canale ha il suo misuratore di livello (nell'export non servono). */
 export class MixerGraph {
   /** Dopo gli effetti del master: il metronomo entra qui, così gli effetti non lo toccano. */
   readonly master: GainNodeLike;
   private readonly bus: GainNodeLike;
   private readonly masterChain: EffectChain;
+  private readonly masterMeter: Meter | null;
   private readonly strips = new Map<TrackId, ChannelStrip>();
   private masterSettings: MixerSettings | null = null;
 
-  constructor(private readonly graph: AudioGraph, private readonly effects: EffectHost, destination: AudioNodeLike = graph.destination) {
+  constructor(
+    private readonly graph: AudioGraph,
+    private readonly effects: EffectHost,
+    destination: AudioNodeLike = graph.destination,
+    private readonly meters: MeterHost | null = null,
+  ) {
     this.bus = graph.createGain();
     this.master = graph.createGain();
     this.masterChain = new EffectChain(graph, effects, this.bus, this.master);
-    this.master.connect(destination);
+    this.masterMeter = meters?.create(graph) ?? null;
+    metered(this.master, destination, this.masterMeter);
+  }
+
+  /** I livelli di una traccia o del master dall'ultima lettura; null senza misuratori. */
+  levels(owner: ChainOwner): MeterReading | null {
+    const meter = owner === MASTER ? this.masterMeter : this.strips.get(owner)?.meter;
+    return meter?.read() ?? null;
+  }
+
+  /** Un effetto che suona, nella catena di una traccia o del master. */
+  effect(owner: ChainOwner, id: DeviceId): Effect | undefined {
+    const chain = owner === MASTER ? this.masterChain : this.strips.get(owner)?.chain;
+    return chain?.effect(id);
   }
 
   /** Ingresso del canale della traccia (creato se non c'è). */
@@ -104,7 +135,7 @@ export class MixerGraph {
   private strip(id: TrackId): ChannelStrip {
     let s = this.strips.get(id);
     if (!s) {
-      s = new ChannelStrip(this.graph, this.effects, this.bus);
+      s = new ChannelStrip(this.graph, this.effects, this.bus, this.meters?.create(this.graph) ?? null);
       this.strips.set(id, s);
     }
     return s;

@@ -1,4 +1,4 @@
-import type { TrackId } from '../../core/id';
+import type { DeviceId, TrackId } from '../../core/id';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, type EffectSettings } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
@@ -6,17 +6,21 @@ import { MASTER, type ChainOwner } from '../../model/project';
 import { MidiTrack, type Track } from '../../model/track';
 import {
   addEffect, loadEffectPreset, loadPreset, moveEffect, removeEffect, setEffectEnabled, setEffectParam,
-  setInstrument, setInstrumentParam,
+  setEffectParams, setInstrument, setInstrumentParam,
 } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { showContextMenu } from '../context-menu';
 import { el } from '../dom';
 import { DevicePanel } from './device-panel';
+import { DEVICE_DISPLAYS, type SpectrumTap } from './displays';
 
 export interface DeviceViewDeps {
   readonly store: ProjectStore;
   /** Suona una nota di prova con lo strumento della traccia. */
   readonly audition: (track: TrackId, pitch: number) => void;
+  readonly sampleRate: number;
+  /** Lo spettro di un effetto che suona (per i pannelli grafici). */
+  readonly spectrum: (owner: ChainOwner, id: DeviceId) => SpectrumTap;
 }
 
 /** La chiave del pannello dello strumento (gli effetti usano il loro id). */
@@ -173,8 +177,13 @@ export class DeviceView {
       el<HTMLButtonElement>('button', { className: 'mini', textContent: text, title, disabled, onclick: run });
     const power = button('⏻', 'Accendi/spegni', () => store.apply(setEffectEnabled(owner, id, !current()?.enabled)));
     power.classList.add('power');
+    const display = DEVICE_DISPLAYS[e.type]?.({
+      type, settings: e, sampleRate: this.deps.sampleRate,
+      setParams: (values, final) => this.param(setEffectParams(owner, id, values), `fx-${id}-${Object.keys(values).sort().join(',')}`, final),
+      openSpectrum: () => this.deps.spectrum(owner, id),
+    });
     const panel = new DevicePanel({
-      type, settings: e, before: [power],
+      type, settings: e, before: [power], display,
       after: [
         button('◂', 'Sposta prima', () => store.apply(moveEffect(owner, id, index - 1)), index === 0),
         button('▸', 'Sposta dopo', () => store.apply(moveEffect(owner, id, index + 1)), index === count - 1),

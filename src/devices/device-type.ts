@@ -27,5 +27,8 @@ export function resolveParams(t: DeviceType, values: ParamValues): Record<string
 }
 
 /** Vero se il parametro conta con questi valori (es. il tempo in ms solo senza sincronia). */
-export const paramActive = (p: ParamSpec, values: Readonly<Record<string, number>>): boolean =>
-  !p.when || values[p.when.param] === p.when.is;
+export function paramActive(p: ParamSpec, values: Readonly<Record<string, number>>): boolean {
+  if (!p.when) return true;
+  const { param, is } = p.when;
+  return typeof is === 'number' ? values[param] === is : is.includes(values[param]);
+}

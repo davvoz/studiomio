@@ -3,6 +3,7 @@ import type { ParamSpec } from '../../devices/params';
 import type { DeviceSettings } from '../../model/device';
 import { el } from '../dom';
 import { controlFor, setActive, type ParamControl } from './controls';
+import type { DeviceDisplay } from './displays';
 
 export interface DevicePanelOptions {
   readonly type: DeviceType;
@@ -13,10 +14,13 @@ export interface DevicePanelOptions {
   /** `final` alla fine di un gesto: chiude il passo di annullamento. */
   readonly onParam: (id: string, value: number, final: boolean) => void;
   readonly onPreset: (preset: Preset) => void;
+  /** Un pannello grafico (es. l'EQ) al posto delle manopole generate. */
+  readonly display?: DeviceDisplay;
 }
 
 /** Un dispositivo (strumento o effetto) nella catena: intestazione con nome e preset, poi una
- *  scheda per sezione e un controllo per parametro, tutto dalla descrizione del tipo. */
+ *  scheda per sezione e un controllo per parametro, tutto dalla descrizione del tipo; oppure
+ *  il pannello grafico del tipo, se ne ha uno. */
 export class DevicePanel {
   readonly element = el('div', { className: 'device-panel' });
   private readonly controls = new Map<string, { spec: ParamSpec; control: ParamControl }>();
@@ -29,7 +33,7 @@ export class DevicePanel {
       if (preset) options.onPreset(preset);
     };
     const values = resolveParams(type, settings.params);
-    const sections = type.sections.map(section => el('div', { className: 'device-section' },
+    const sections = options.display ? [options.display.element] : type.sections.map(section => el('div', { className: 'device-section' },
       el('div', { className: 'device-section-title', textContent: section.label }),
       el('div', { className: 'device-controls' }, ...section.params.map(spec => {
         const control = controlFor(spec, values[spec.id], (v, final) => options.onParam(spec.id, v, final));
@@ -56,5 +60,6 @@ export class DevicePanel {
       ...type.presets.map(p => el('option', { value: p.name, textContent: p.name })));
     this.presets.value = type.presets.some(p => p.name === settings.preset) ? settings.preset! : '';
     this.element.classList.toggle('off', !enabled);
+    this.options.display?.update(settings, enabled);
   }
 }

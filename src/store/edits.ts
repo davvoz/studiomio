@@ -6,7 +6,7 @@ import { placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
 import type { Clip } from '../model/clip';
 import { paletteColor } from '../model/colors';
-import { newEffect, withParam, withPreset, type EffectSettings, type InstrumentSettings, type ParamValues } from '../model/device';
+import { newEffect, withParam, withParams, withPreset, type EffectSettings, type InstrumentSettings, type ParamValues } from '../model/device';
 import * as chain from '../model/effect-list';
 import { MidiClip } from '../model/midi-clip';
 import type { ChainOwner, LoopRegion } from '../model/project';
@@ -93,6 +93,9 @@ export const setEffectEnabled = (owner: ChainOwner, id: DeviceId, enabled: boole
 
 export const setEffectParam = (owner: ChainOwner, id: DeviceId, param: string, value: number): Edit =>
   updatingEffect("Parametro dell'effetto", owner, id, e => withParam(e, param, value));
+
+export const setEffectParams = (owner: ChainOwner, id: DeviceId, values: ParamValues): Edit =>
+  updatingEffect("Parametri dell'effetto", owner, id, e => withParams(e, values));
 
 export const loadEffectPreset = (owner: ChainOwner, id: DeviceId, name: string, params: ParamValues): Edit =>
   updatingEffect(`Preset ${name}`, owner, id, e => withPreset(e, name, params));

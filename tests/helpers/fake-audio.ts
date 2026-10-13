@@ -1,5 +1,6 @@
 import type { Instrument, InstrumentHost } from '../../src/engine/players/instrument';
 import type { Effect, EffectHost } from '../../src/engine/effect-chain';
+import type { Meter, MeterHost, MeterReading } from '../../src/engine/meters';
 import type { EffectSettings, InstrumentSettings } from '../../src/model/device';
 import type {
   AudioBufferLike, AudioGraph, AudioNodeLike, AudioParamLike, BufferSourceNodeLike, GainNodeLike,
@@ -132,5 +133,24 @@ export class FakeEffects implements EffectHost {
     const e = new FakeEffect(s.type, s, bpm);
     this.created.push(e);
     return e;
+  }
+}
+
+/** Misuratore finto: legge i livelli che il test gli dà. */
+export class FakeMeter implements Meter {
+  readonly input = new FakeGain();
+  readonly output = new FakeGain();
+  next: MeterReading = { peak: [0, 0], rms: [0, 0] };
+  disposed = false;
+  read() { return this.next; }
+  dispose() { this.disposed = true; this.input.disconnect(); this.output.disconnect(); }
+}
+
+export class FakeMeters implements MeterHost {
+  readonly created: FakeMeter[] = [];
+  create() {
+    const m = new FakeMeter();
+    this.created.push(m);
+    return m;
   }
 }

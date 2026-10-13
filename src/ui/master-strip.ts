@@ -4,6 +4,7 @@ import { setMasterMixer } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { showContextMenu } from './context-menu';
 import { el } from './dom';
+import { LevelMeter, PeakReadout, type MeterBoard } from './meters/meter-board';
 import { addEffectItems, fxButton, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 import type { HeaderActions } from './track-headers';
 
@@ -17,16 +18,21 @@ export class MasterStrip {
   private readonly volume: HTMLInputElement;
   private readonly fx: HTMLButtonElement;
 
-  constructor(store: ProjectStore, actions: HeaderActions) {
+  constructor(store: ProjectStore, actions: HeaderActions, meters: MeterBoard) {
     const open = () => actions.openDevices(MASTER);
     const toggleMute = () => store.apply(setMasterMixer({ mute: !store.project.master.mute }));
     this.mute = el<HTMLButtonElement>('button', { textContent: 'M', title: 'Mute del master', onclick: toggleMute });
     this.volume = volumeSlider(store, store.project.master.volumeDb, 'vol-master',
       (volumeDb, mergeKey) => store.apply(setMasterMixer({ volumeDb }), mergeKey ? { mergeKey } : {}));
     this.fx = fxButton(0, 'Effetti del master', open);
+    const reset = () => meters.resetClip(MASTER);
+    const meter = new LevelMeter('master-meter', reset), peak = new PeakReadout(reset);
+    meters.attach(MASTER, meter);
+    meters.attach(MASTER, peak);
     this.header.append(
-      el('div', { className: 'top' }, el('span', { className: 'track-name', textContent: 'Master' })),
-      el('div', { className: 'controls' }, this.mute, this.volume, this.fx));
+      el('div', { className: 'top' }, el('span', { className: 'track-name', textContent: 'Master' }), peak.element),
+      el('div', { className: 'controls' }, this.mute, this.volume, this.fx),
+      meter.element);
     this.lane.onclick = open;
     const menu = (e: MouseEvent) => {
       e.preventDefault();

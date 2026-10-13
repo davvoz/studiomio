@@ -1,4 +1,4 @@
-import type { SampleId, TrackId } from '../core/id';
+import type { DeviceId, SampleId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import type { AudioData } from '../dsp/types';
 import { ClipAudio } from '../engine/clip-audio';
@@ -7,8 +7,9 @@ import { PlaybackEngine } from '../engine/playback-engine';
 import { RenderCache } from '../engine/render-cache';
 import { SampleLibrary } from '../engine/sample-library';
 import { liveGraph, offlineGraph } from '../engine/web-audio';
-import { DeviceWorklet, WorkletEffects, WorkletInstruments } from '../engine/worklet-devices';
-import type { Project } from '../model/project';
+import { DeviceWorklet, WorkletEffects, WorkletInstruments, WorkletMeters } from '../engine/worklet-devices';
+import type { ChainOwner, Project } from '../model/project';
+import { EffectSpectrum } from './effect-spectrum';
 import type { ProjectStore } from '../store/project-store';
 import { DspService } from '../workers/dsp-service';
 
@@ -24,6 +25,8 @@ export class AudioSystem {
   private readonly worklet = new DeviceWorklet();
   readonly instruments = new WorkletInstruments(this.worklet);
   readonly effects = new WorkletEffects(this.worklet);
+  /** Misuratori di livello, solo dal vivo (nell'export non servono). */
+  private readonly meters = new WorkletMeters(this.worklet);
   private readonly unsubscribe: () => void;
 
   constructor(private readonly store: ProjectStore) {
@@ -31,7 +34,7 @@ export class AudioSystem {
     // il modulo di strumenti ed effetti si carica subito: al primo play è già pronto
     this.instruments.prepare(graph).catch(e => console.error('AudioWorklet dei dispositivi non caricato', e));
     this.clips = new ClipAudio(graph, this.library, this.renders);
-    this.engine = new PlaybackEngine(graph, { clips: this.clips, instruments: this.instruments, effects: this.effects });
+    this.engine = new PlaybackEngine(graph, { clips: this.clips, instruments: this.instruments, effects: this.effects, meters: this.meters });
     this.clips.on('ready', () => this.engine.refresh());
     this.clips.on('error', (clip, err) => console.error(`render della clip "${clip.name}" fallito`, err));
     const sync = (p: Project) => {
@@ -56,6 +59,11 @@ export class AudioSystem {
   async audition(track: TrackId, pitch: number, velocity?: number, seconds?: number): Promise<void> {
     if (this.context.state !== 'running') await this.context.resume();
     this.engine.audition(track, pitch, velocity, seconds);
+  }
+
+  /** Lo spettro prima e dopo un effetto che suona. */
+  spectrum(owner: ChainOwner, id: DeviceId): EffectSpectrum {
+    return new EffectSpectrum(this.context, () => this.engine.effectMonitor(owner, id));
   }
 
   /** Mixdown di [from, to) del progetto corrente. */

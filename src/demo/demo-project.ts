@@ -5,7 +5,7 @@ import type { MidiClip, Note } from '../model/midi-clip';
 import type { TrackId } from '../core/id';
 import { ANALOG } from '../devices/instruments/analog/analog';
 import { DELAY } from '../devices/effects/delay/delay';
-import { addEffect, addMidiClip, addSample, addTrack, loadEffectPreset, loadPreset, placeSample, renameTrack, resizePlacement, updateClip } from '../store/edits';
+import { addEffect, addMidiClip, addSample, addTrack, loadEffectPreset, loadPreset, placeSample, renameTrack, resizePlacement, setMixer, updateClip } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { drumLoop } from './demo-loop';
 
@@ -43,6 +43,10 @@ export async function buildDemoProject(store: ProjectStore, session: ProjectSess
   store.apply(renameTrack(drums, 'Batteria'));
   store.apply(renameTrack(bass, 'Basso'));
   store.apply(renameTrack(pad, 'Accordi'));
+  // un mix con margine: il master resta sotto 0 dB
+  store.apply(setMixer(drums, { volumeDb: -8 }));
+  store.apply(setMixer(bass, { volumeDb: -3 }));
+  store.apply(setMixer(pad, { volumeDb: -2 }));
   withPreset(store, bass, 'Basso');
   withPreset(store, pad, 'Pad');
   store.apply(addSample(sample));

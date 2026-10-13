@@ -4,13 +4,16 @@
 import { resolveParams } from '../devices/device-type';
 import { effectType, instrumentType } from '../devices/registry';
 import workletUrl from '../devices/worklet/devices.worklet.ts?worker&url';
+import { METER_VALUES } from '../devices/worklet/meter-core';
 import {
-  EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
-  type InstrumentMessage, type InstrumentProcessorOptions, type InstrumentReply,
+  EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
+  type InstrumentMessage, type InstrumentProcessorOptions, type InstrumentReply, type MeterMessage,
+  type MeterProcessorOptions, type MeterReply,
 } from '../devices/worklet/protocol';
 import type { EffectSettings, InstrumentSettings } from '../model/device';
 import type { AudioGraph } from './audio-graph';
-import type { Effect, EffectHost } from './effect-chain';
+import type { Effect, EffectHost, EffectMonitor } from './effect-chain';
+import type { Meter, MeterHost, MeterReading } from './meters';
 import type { Instrument, InstrumentHost } from './players/instrument';
 
 const contextOf = (graph: AudioGraph) => graph as unknown as BaseAudioContext;
@@ -144,11 +147,15 @@ const fullEffectParams = (s: EffectSettings) => {
 };
 
 /** Un effetto: un AudioWorkletNode del processore degli effetti tra due nodi fissi, così si
- *  può collegare subito (passa il suono diretto finché il modulo non è pronto). */
+ *  può collegare subito (passa il suono diretto finché il modulo non è pronto). In mezzo c'è
+ *  `post`, il punto da cui ascoltare il suono elaborato:
+ *  input → processore → post → output. */
 class WorkletEffect implements Effect {
   readonly type: string;
   readonly input: GainNode;
   readonly output: GainNode;
+  private readonly post: GainNode;
+  readonly monitor: EffectMonitor;
   private node: AudioWorkletNode | null = null;
   private settings: EffectSettings;
   private bpm: number;
@@ -159,12 +166,14 @@ class WorkletEffect implements Effect {
     this.settings = settings;
     this.bpm = bpm;
     this.input = ctx.createGain();
+    this.post = ctx.createGain();
     this.output = ctx.createGain();
+    this.post.connect(this.output);
+    this.monitor = { pre: this.input, post: this.post };
+    // suono diretto finché il processore non c'è
+    this.input.connect(this.post);
     if (!ready) this.build();
-    else {
-      this.input.connect(this.output);
-      ready.then(() => this.build(), e => console.error('effetto non disponibile', e));
-    }
+    else ready.then(() => this.build(), e => console.error('effetto non disponibile', e));
   }
 
   update(settings: EffectSettings): void {
@@ -183,8 +192,7 @@ class WorkletEffect implements Effect {
     this.disposed = true;
     this.send({ type: 'dispose' });
     this.node?.disconnect();
-    this.input.disconnect();
-    this.output.disconnect();
+    for (const n of [this.input, this.post, this.output]) n.disconnect();
   }
 
   private build(): void {
@@ -195,9 +203,10 @@ class WorkletEffect implements Effect {
       numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2],
       channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions,
     });
-    this.input.disconnect();
+    // solo il collegamento diretto: quelli verso lo spettro restano
+    this.input.disconnect(this.post);
     this.input.connect(this.node);
-    this.node.connect(this.output);
+    this.node.connect(this.post);
   }
 
   private send(m: EffectMessage): void {
@@ -211,5 +220,106 @@ export class WorkletEffects implements EffectHost {
 
   create(graph: AudioGraph, settings: EffectSettings, bpm: number): Effect {
     return new WorkletEffect(contextOf(graph), settings, bpm, this.worklet.pending(graph));
+  }
+}
+
+// ------------------------------------------------------------------ misuratori
+
+/** Quanti misuratori stanno nella memoria condivisa (oltre, vanno per messaggio). */
+const METER_CAPACITY = 512;
+
+/** I valori di tutti i misuratori di un contesto: in memoria condivisa con l'AudioWorklet se
+ *  il browser lo permette (pagina isolata, COOP/COEP), così leggerli non costa nulla. */
+class MeterBank {
+  readonly buffer = typeof SharedArrayBuffer !== 'undefined' && globalThis.crossOriginIsolated
+    ? new SharedArrayBuffer(METER_CAPACITY * METER_VALUES * 4) : null;
+  private readonly values = this.buffer ? new Float32Array(this.buffer) : null;
+  private readonly free = Array.from({ length: this.buffer ? METER_CAPACITY : 0 }, (_, i) => METER_CAPACITY - 1 - i);
+
+  /** Un posto nella memoria condivisa, o null (allora i valori arrivano per messaggio). */
+  take(): { offset: number; values: Float32Array } | null {
+    const slot = this.free.pop();
+    if (slot === undefined || !this.values) return null;
+    const offset = slot * METER_VALUES;
+    const values = this.values.subarray(offset, offset + METER_VALUES);
+    values.fill(0);
+    return { offset, values };
+  }
+
+  give(offset: number): void {
+    this.free.push(offset / METER_VALUES);
+  }
+}
+
+/** Un misuratore: il processore dei misuratori tra due nodi fissi (come gli effetti). */
+class WorkletMeter implements Meter {
+  readonly input: GainNode;
+  readonly output: GainNode;
+  private node: AudioWorkletNode | null = null;
+  private readonly slot: { offset: number; values: Float32Array } | null;
+  private readonly values: Float32Array;
+  private disposed = false;
+
+  constructor(private readonly ctx: BaseAudioContext, private readonly bank: MeterBank, ready: Promise<void> | null) {
+    this.input = ctx.createGain();
+    this.output = ctx.createGain();
+    this.slot = bank.take();
+    this.values = this.slot?.values ?? new Float32Array(METER_VALUES);
+    if (!ready) this.build();
+    else {
+      this.input.connect(this.output);
+      ready.then(() => this.build(), e => console.error('misuratore non disponibile', e));
+    }
+  }
+
+  read(): MeterReading {
+    const v = this.values;
+    const reading: MeterReading = { peak: [v[0], v[1]], rms: [Math.sqrt(v[2]), Math.sqrt(v[3])] };
+    v[0] = v[1] = 0;
+    return reading;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.node?.port.postMessage({ type: 'dispose' } satisfies MeterMessage);
+    this.node?.disconnect();
+    this.input.disconnect();
+    this.output.disconnect();
+    if (this.slot) this.bank.give(this.slot.offset);
+  }
+
+  private build(): void {
+    if (this.disposed) return;
+    const processorOptions: MeterProcessorOptions = { buffer: this.slot ? this.bank.buffer : null, offset: this.slot?.offset ?? 0 };
+    this.node = new AudioWorkletNode(this.ctx, METER_PROCESSOR, {
+      numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2],
+      channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions,
+    });
+    if (!this.slot) {
+      this.node.port.onmessage = (e: MessageEvent<MeterReply>) => {
+        const [pl, pr, ml, mr] = e.data.values, v = this.values;
+        v[0] = Math.max(v[0], pl);
+        v[1] = Math.max(v[1], pr);
+        v[2] = ml;
+        v[3] = mr;
+      };
+    }
+    this.input.disconnect();
+    this.input.connect(this.node);
+    this.node.connect(this.output);
+  }
+}
+
+/** Misuratori AudioWorklet per il contesto dal vivo. */
+export class WorkletMeters implements MeterHost {
+  private readonly banks = new WeakMap<BaseAudioContext, MeterBank>();
+
+  constructor(private readonly worklet: DeviceWorklet) {}
+
+  create(graph: AudioGraph): Meter {
+    const ctx = contextOf(graph);
+    let bank = this.banks.get(ctx);
+    if (!bank) this.banks.set(ctx, (bank = new MeterBank()));
+    return new WorkletMeter(ctx, bank, this.worklet.pending(graph));
   }
 }

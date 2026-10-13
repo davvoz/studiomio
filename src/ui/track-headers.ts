@@ -7,6 +7,7 @@ import type { ProjectStore } from '../store/project-store';
 import { SEPARATOR, showContextMenu, type MenuItem } from './context-menu';
 import type { UiState } from './ui-state';
 import { el } from './dom';
+import { LevelMeter, type MeterBoard } from './meters/meter-board';
 import { addEffectItems, fxButton, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 
 export interface HeaderActions {
@@ -37,7 +38,12 @@ export class TrackHeaders {
   private readonly list = el('div', { className: 'header-list' });
   private rows = new Map<TrackId, HeaderRow>();
 
-  constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly actions: HeaderActions) {
+  constructor(
+    private readonly store: ProjectStore,
+    private readonly ui: UiState,
+    private readonly actions: HeaderActions,
+    private readonly meters: MeterBoard,
+  ) {
     const add = el('div', { className: 'header-add' },
       el('button', { textContent: '+ Audio', title: 'Nuova traccia audio', onclick: () => store.apply(addTrack('audio')) }),
       el('button', { textContent: '+ MIDI', title: 'Nuova traccia MIDI', onclick: () => store.apply(addTrack('midi')) }));
@@ -62,10 +68,11 @@ export class TrackHeaders {
     const tracks = this.store.project.tracks;
     const rows = new Map<TrackId, HeaderRow>();
     for (const t of tracks) {
-      const row = this.rows.get(t.id) ?? new HeaderRow(t.id, this.store, this.actions);
+      const row = this.rows.get(t.id) ?? new HeaderRow(t.id, this.store, this.actions, this.meters);
       row.update(t, h);
       rows.set(t.id, row);
     }
+    for (const [id, row] of this.rows) if (!rows.has(id)) row.dispose();
     this.rows = rows;
     // la lista si rifà solo se tracce aggiunte, tolte o spostate
     const elements = tracks.map(t => rows.get(t.id)!.element);
@@ -86,8 +93,9 @@ class HeaderRow {
   private readonly fx: HTMLButtonElement;
   /** La traccia mostrata l'ultima volta (per non rifare ciò che non è cambiato). */
   private shown: Track | null = null;
+  private readonly detachMeter: () => void;
 
-  constructor(private readonly id: TrackId, private readonly store: ProjectStore, private readonly actions: HeaderActions) {
+  constructor(private readonly id: TrackId, private readonly store: ProjectStore, private readonly actions: HeaderActions, meters: MeterBoard) {
     const open = () => actions.openDevices(id);
     const toggle = (label: string, title: string, flag: 'mute' | 'solo') =>
       el<HTMLButtonElement>('button', { textContent: label, title, onclick: () => this.mixer({ [flag]: !this.track().mixer[flag] }) });
@@ -97,9 +105,12 @@ class HeaderRow {
     this.fx = fxButton(0, 'Effetti della traccia', open);
     this.name.ondblclick = () => this.rename();
     const del = el('button', { className: 'del', textContent: '×', title: 'Elimina traccia', onclick: () => store.apply(removeTrack(id)) });
+    const meter = new LevelMeter('track-meter', () => meters.resetClip(id));
+    this.detachMeter = meters.attach(id, meter);
     this.element.append(
       el('div', { className: 'top' }, this.name, this.badge, del),
-      el('div', { className: 'controls' }, this.mute, this.solo, this.volume, this.fx));
+      el('div', { className: 'controls' }, this.mute, this.solo, this.volume, this.fx),
+      meter.element);
     this.element.oncontextmenu = e => {
       e.preventDefault();
       e.stopPropagation();
@@ -131,6 +142,10 @@ class HeaderRow {
     this.solo.classList.toggle('on', t.mixer.solo);
     setVolume(this.volume, t.mixer.volumeDb);
     setFxCount(this.fx, t.effects.length);
+  }
+
+  dispose(): void {
+    this.detachMeter();
   }
 
   private track(): Track {

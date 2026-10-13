@@ -3,10 +3,11 @@
 import type { EffectCore, InstrumentCore } from '../dsp/core';
 import { EFFECT_CORES, INSTRUMENT_CORES } from './cores';
 import { EffectRunner } from './effect-runner';
+import { METER_VALUES, MeterCore } from './meter-core';
 import { NoteQueue } from './note-queue';
 import {
-  EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
-  type InstrumentMessage, type InstrumentProcessorOptions,
+  EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
+  type InstrumentMessage, type InstrumentProcessorOptions, type MeterMessage, type MeterProcessorOptions, type MeterReply,
 } from './protocol';
 
 // globali dell'AudioWorkletGlobalScope (non sono nelle librerie DOM di TypeScript)
@@ -98,5 +99,48 @@ class EffectProcessor extends AudioWorkletProcessor {
   }
 }
 
+// ------------------------------------------------------------------ misuratori
+
+/** Ogni quanti secondi, senza memoria condivisa, si mandano i livelli. */
+const METER_POST = 1 / 30;
+
+/** Misuratore di livello: il suono passa invariato, picco e RMS vanno nella memoria condivisa
+ *  (o, se manca, in un messaggio ogni METER_POST secondi). */
+class MeterProcessor extends AudioWorkletProcessor {
+  private readonly core: MeterCore;
+  private readonly values: Float32Array;
+  private readonly shared: boolean;
+  private silence = new Float32Array(128);
+  private untilPost = 0;
+  private alive = true;
+
+  constructor(options: AudioWorkletNodeOptions) {
+    super(options);
+    const o = options.processorOptions as MeterProcessorOptions;
+    this.shared = o.buffer !== null;
+    this.values = o.buffer ? new Float32Array(o.buffer, o.offset * 4, METER_VALUES) : new Float32Array(METER_VALUES);
+    this.core = new MeterCore(sampleRate, this.values);
+    listen<MeterMessage>(this.port, { dispose: () => { this.alive = false; } });
+  }
+
+  process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    const [outL, outR = outL] = outputs[0];
+    if (this.silence.length < outL.length) this.silence = new Float32Array(outL.length);
+    // quando non suona niente l'ingresso non ha canali: è silenzio, e l'RMS deve scendere
+    const [inL = this.silence, inR = inL] = inputs[0] ?? [];
+    outL.set(inL);
+    if (outR !== outL) outR.set(inR);
+    this.core.process(inL, inR, outL.length);
+    if (!this.shared && (this.untilPost -= outL.length / sampleRate) <= 0) {
+      this.untilPost = METER_POST;
+      const reply: MeterReply = { type: 'levels', values: this.values.slice() };
+      this.port.postMessage(reply);
+      this.values[0] = this.values[1] = 0;
+    }
+    return this.alive;
+  }
+}
+
 registerProcessor(INSTRUMENT_PROCESSOR, InstrumentProcessor);
+registerProcessor(METER_PROCESSOR, MeterProcessor);
 registerProcessor(EFFECT_PROCESSOR, EffectProcessor);

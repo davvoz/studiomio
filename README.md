@@ -57,7 +57,8 @@ src/
     segments.ts        clip posata → tratti continui di contenuto
     players/           un player per tipo di traccia (audio, MIDI), interfaccia degli strumenti, metronomo
     effect-chain.ts    catena degli effetti di un canale: crea, aggiorna e ricollega solo ciò che cambia
-    worklet-devices.ts strumenti ed effetti nel browser: nodi AudioWorklet
+    worklet-devices.ts strumenti, effetti e misuratori nel browser: nodi AudioWorklet
+    meters.ts          misuratori di livello (picco e RMS) di tracce e master
     clip-audio.ts      clip audio → buffer pronto (render di warp o sample originale)
     render-cache.ts    render di warp per contenuto, LRU con budget di memoria
     mixer-graph.ts     canali con volume, pan, mute/solo; master con i suoi effetti
@@ -66,16 +67,20 @@ src/
   app/
     app.ts             monta l'app e implementa i comandi
     audio-system.ts    monta insieme worker, sample, cache, AudioContext e motore
+    effect-spectrum.ts lo spettro prima e dopo un effetto (AnalyserNode)
     project-session.ts cartella del progetto: importa, apri, salva, salva con nome
   ui/
     timeline/          arrangement: geometria, disegno su canvas, gesti, pianificazione
-    track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume)
+    track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume, livello)
+    master-strip.ts    la riga del master
+    meters/            misuratori: scala dei dB, balistica, un ciclo di disegno per tutti
     transport-bar.ts   barra in alto
     keymap.ts          scorciatoie da tastiera (una riga per comando)
     context-menu.ts    menu contestuale: le voci sono dati (etichetta, scorciatoia, azione)
     clip-editor/       editor delle clip audio; clip-frame.ts è la cornice comune (righello, loop, bandierine)
     piano-roll/        editor delle note: tastiera, griglia, velocity, gesti, pannello
-    device/            catena dei dispositivi: un pannello per dispositivo, controlli generati dai parametri
+    device/            catena dei dispositivi: un pannello per dispositivo, controlli generati dai parametri;
+                       displays.ts registra i pannelli grafici (eq/: grafico con spettro e curva)
     dom.ts             creazione degli elementi
     bottom-panel.ts    l'area in basso, una vista alla volta
     waveform.ts        picchi della forma d'onda a più risoluzioni
@@ -85,8 +90,9 @@ src/
     registry.ts        gli strumenti e gli effetti disponibili
     instruments/analog/  il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
+    effects/eq/        l'EQ: descrizione (eq.ts), matematica dei filtri comune a suono e disegno (eq-math.ts), suono (eq-core.ts)
     dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, polifonia; interfacce dei motori
-    worklet/           i due processori AudioWorklet (strumenti, effetti), coda delle note, bypass, motori per tipo
+    worklet/           i processori AudioWorklet (strumenti, effetti, misuratori), coda delle note, bypass, motori per tipo
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
     analysis/          onset, transienti, tempo, beat tracking
@@ -180,6 +186,13 @@ catena in breve (un clic la apre, il tasto destro ha "Aggiungi Delay"). Tutte le
 sommano nel master, passano per i suoi effetti e poi per il suo volume; il metronomo entra
 dopo gli effetti, così non li attraversa. Anche gli effetti del master finiscono nell'export.
 
+**I livelli**: ogni traccia e il master hanno un misuratore stereo accanto all'intestazione,
+dopo volume, pan e mute (mostra ciò che si sente): barra piena per l'RMS, più chiara per il
+picco, un segno che resta fermo un attimo sul valore più alto, la spia rossa in cima quando
+il segnale tocca 0 dB (un clic la spegne). Sul master c'è anche il picco massimo in numero.
+I misuratori sono nell'AudioWorklet e scrivono in memoria condivisa (SharedArrayBuffer): non
+perdono nessun picco e leggerli non costa nulla.
+
 **Analog**: due oscillatori (Saw, Square, Triangle, Sine; il secondo intonabile), filtro
 passa-basso/banda/alto risonante con inviluppo e key track, inviluppo del volume, LFO su
 intonazione e cutoff, 16 voci. Preset: Init, Basso, Acid, Pad, Pluck, Lead.
@@ -187,6 +200,25 @@ intonazione e cutoff, 16 voci. Preset: Init, Basso, Acid, Pad, Pluck, Lead.
 **Delay**: eco a tempo (da 1/32 a 1/1, con puntate e terzine, segue il BPM del progetto) o in
 millisecondi, stereo o ping-pong, feedback con low cut e high cut sulle ripetizioni, dry/wet.
 Preset: Init, Ping-pong 1/8., Slapback, Eco lungo, Dub.
+
+**EQ**: equalizzatore parametrico a 8 bande, come EQ Eight. Ogni banda è Low cut, Low shelf,
+Bell, Notch, High shelf o High cut (i tagli a 12, 24 o 48 dB/ottava), con frequenza, guadagno
+e Q. Il grafico mostra la curva e, mentre suona, lo spettro: linea tenue prima dell'EQ, pieno
+dopo (inclinato di 4.5 dB/ottava, come negli analizzatori delle DAW). Sul grafico:
+
+| Gesto | Azione |
+| --- | --- |
+| trascina un punto | frequenza (orizzontale) e guadagno (verticale); Maiusc per la regolazione fine |
+| rotella su un punto | Q |
+| doppio clic su un punto | accende o spegne la banda |
+| doppio clic sul vuoto | accende lì la prima banda spenta |
+| tasto destro su un punto | tipo, pendenza, accendi/spegni, riporta com'era |
+
+Sotto il grafico, i pulsanti 1–8 scelgono la banda e le manopole la regolano; "Uscita" è il
+guadagno finale. La curva disegnata è esattamente ciò che si sente: suono e disegno usano
+la stessa matematica (filtri TPT, equivalenti alla trasformata bilineare dei prototipi
+analogici), e un test lo verifica confrontando la risposta all'impulso con la curva.
+Preset: Init, Pulizia bassi, Voce, Basso presente, Telefono, Aria.
 
 Per aggiungere un dispositivo (synth o effetto) servono due parti:
 
@@ -196,7 +228,8 @@ Per aggiungere un dispositivo (synth o effetto) servono due parti:
    `InstrumentCore` (`noteOn`, `noteOff`, `setParams`, `render`; `VoicePool`, `Adsr`, `Svf` e gli
    oscillatori sono pronti), per un effetto un `EffectCore` (`setParams`, `setTempo`, `process`).
 
-Interfaccia, salvataggio, preset, annulla, bypass e messaggi verso l'audio vengono da soli. I
+Interfaccia, salvataggio, preset, annulla, bypass e messaggi verso l'audio vengono da soli.
+Un dispositivo che vuole un'interfaccia sua (come l'EQ) la registra in `ui/device/displays.ts`. I
 processori AudioWorklet sono due, uno per gli strumenti (riceve le note con il tempo del
 contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli effetti.
 
