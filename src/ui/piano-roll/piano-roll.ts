@@ -1,6 +1,7 @@
 import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
+import { resolveParams } from '../../devices/device-type';
 import { instrumentType } from '../../devices/registry';
 import { MidiClip, type Note } from '../../model/midi-clip';
 import {
@@ -40,7 +41,9 @@ interface Target {
   readonly found: FoundClip;
 }
 
-const KEYS_WIDTH = 52;
+/** Altezza delle righe quando le note hanno un nome (i pad): la più alta che fa stare tutti i
+ *  pad, tra queste due (sotto la minima i nomi non si leggono). */
+const NAMED_ROW = { min: 10, max: 16 } as const;
 
 /** Comandi da tastiera del piano roll: hanno la precedenza su quelli della timeline. */
 const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
@@ -78,6 +81,8 @@ export class PianoRoll implements RollHost {
   private insert: Beats | null = null;
   private dirty = true;
   private fitPending = false;
+  /** I nomi delle note dati dallo strumento (la drum machine), o null. */
+  private names: ReadonlyMap<number, string> | null = null;
   noteLength: Beats = 0.25;
   drawMode = false;
 
@@ -98,7 +103,7 @@ export class PianoRoll implements RollHost {
     this.element.append(this.panel.element, keys, wrap);
     new ResizeObserver(() => {
       this.surface.resize(wrap.clientWidth, wrap.clientHeight);
-      this.keyboard.resize(KEYS_WIDTH, wrap.clientHeight);
+      this.keyboard.resize(keys.clientWidth, wrap.clientHeight);
       if (this.fitPending) this.fit();
       this.setPitches(this._pitches.scrolled(this._pitches.scrollY, this.notesHeight));
     }).observe(wrap);
@@ -128,6 +133,7 @@ export class PianoRoll implements RollHost {
     this._selection = new Set();
     this.insert = null;
     this.element.hidden = false;
+    this.names = this.noteNames();
     this.fitPending = true;
     this.fit();
     this.sync();
@@ -321,18 +327,36 @@ export class PianoRoll implements RollHost {
     if ([...this._selection].some(n => !notes.has(n))) this._selection = new Set([...this._selection].filter(n => notes.has(n)));
     const instrument = t.track.instrument;
     const label = `${instrumentType(instrument.type)?.label ?? instrument.type}${instrument.preset ? ` · ${instrument.preset}` : ''}`;
+    const names = this.noteNames();
+    if (!sameNames(names, this.names)) {
+      const hadNames = this.names !== null;
+      this.names = names;
+      if (hadNames !== (names !== null)) this.fit();
+    }
+    this.keyboard.setNames(this.names);
+    this.element.classList.toggle('named-keys', this.names !== null);
     this.panel.update(t.clip, label, this.drawMode, this._selection.size, this.deps.store.project.signature.beatsPerBar);
     this.invalidate();
   }
 
-  /** Inquadra la clip e le sue note. */
+  /** I nomi che lo strumento della traccia dà alle note (i pad della drum machine), o null. */
+  private noteNames(): ReadonlyMap<number, string> | null {
+    const instrument = this.target()?.track.instrument;
+    const type = instrument && instrumentType(instrument.type);
+    const names = type && instrument ? type.noteNames?.(resolveParams(type, instrument.params)) : undefined;
+    return names?.size ? names : null;
+  }
+
+  /** Inquadra la clip e le sue note (con i pad, tutti i pad). */
   private fit(): void {
     const c = this.clip();
     if (!c || this.surface.width < 10) return;
     this._axis = BeatAxis.fit(c.region.start, Math.max(c.region.end, c.loop.enabled ? c.loop.end : 0), this.surface.width);
-    const pitches = c.notes.map(n => n.pitch);
+    const pitches = [...c.notes.map(n => n.pitch), ...(this.names?.keys() ?? [])];
     const [lo, hi] = pitches.length ? [Math.min(...pitches), Math.max(...pitches)] : [60, 72];
-    this.setPitches(this._pitches.centeredOn(lo, hi, this.notesHeight));
+    const fitting = Math.floor(this.notesHeight / (hi - lo + 2));
+    const rows = new PitchAxis(this.names ? Math.max(NAMED_ROW.min, Math.min(NAMED_ROW.max, fitting)) : 12, 0, ROLL.ruler);
+    this.setPitches(rows.centeredOn(lo, hi, this.notesHeight));
     this.fitPending = false;
   }
 
@@ -356,7 +380,7 @@ export class PianoRoll implements RollHost {
           g, width, height, axis: this._axis, pitches: this._pitches, clip,
           selection: this.gesture?.previewSelection?.() ?? this._selection,
           signature: this.deps.store.project.signature, grid: this.grid,
-          playhead: playheadIn(t.found, engine), insert: this.insert,
+          playhead: playheadIn(t.found, engine), insert: this.insert, named: this.names,
         });
         this.gesture?.paint?.(g);
       }
@@ -440,3 +464,6 @@ export class PianoRoll implements RollHost {
     else this.setPitches(pa.scrolled(pa.scrollY + e.deltaY, this.notesHeight));
   }
 }
+
+const sameNames = (a: ReadonlyMap<number, string> | null, b: ReadonlyMap<number, string> | null): boolean =>
+  a === b || (!!a && !!b && a.size === b.size && [...a].every(([k, v]) => b.get(k) === v));

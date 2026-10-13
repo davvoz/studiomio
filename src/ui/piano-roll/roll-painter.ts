@@ -15,7 +15,7 @@ export const ROLL = {
 export const notesBottom = (height: number): number => height - ROLL.velocity;
 
 const C = {
-  white: '#1d2025', black: '#17191d', octave: 'rgba(255,255,255,0.10)', outside: 'rgba(0,0,0,0.42)',
+  white: '#1d2025', black: '#17191d', named: '#20242a', unnamed: '#141619', octave: 'rgba(255,255,255,0.10)', outside: 'rgba(0,0,0,0.42)',
   laneBg: '#15171a', selected: '#ffffff', box: 'rgba(255,157,46,0.9)', boxFill: 'rgba(255,157,46,0.12)',
 };
 
@@ -33,6 +33,8 @@ export interface RollPaint {
   readonly playhead: Beats | null;
   /** Punto d'inserimento (dove si incolla). */
   readonly insert: Beats | null;
+  /** Le note con un nome (i pad della drum machine): le loro righe sono più chiare. */
+  readonly named: ReadonlyMap<number, string> | null;
 }
 
 export function paintRoll(p: RollPaint): void {
@@ -65,11 +67,11 @@ export function paintRoll(p: RollPaint): void {
   g.fillRect(0, ROLL.ruler - 0.5, width, 1);
 }
 
-function paintRows({ g, width, pitches }: RollPaint, bottom: number): void {
+function paintRows({ g, width, pitches, named }: RollPaint, bottom: number): void {
   const hi = pitches.yToPitch(ROLL.ruler), lo = pitches.yToPitch(bottom);
   for (let pitch = lo; pitch <= hi; pitch++) {
     const y = pitches.pitchToY(pitch);
-    g.fillStyle = isBlackKey(pitch) ? C.black : C.white;
+    g.fillStyle = named ? (named.has(pitch) ? C.named : C.unnamed) : isBlackKey(pitch) ? C.black : C.white;
     g.fillRect(0, y, width, pitches.rowHeight);
     // una linea sotto ogni Do separa le ottave
     g.fillStyle = pitch % 12 === 0 ? C.octave : 'rgba(0,0,0,0.25)';

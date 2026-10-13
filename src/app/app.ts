@@ -72,6 +72,15 @@ export class App implements Commands, FileCommands, TimelineActions {
     this.device = new DeviceView({
       store: this.store, audition: (track, pitch) => audition(track, pitch),
       sampleRate: this.audio.context.sampleRate, spectrum: (owner, id) => this.audio.spectrum(owner, id),
+      playedNotes: track => {
+        const engine = this.audio.engine;
+        let last = engine.audioTime;
+        return () => {
+          const now = engine.audioTime, notes = engine.notesStarted(track, last, now);
+          last = now;
+          return notes;
+        };
+      },
     });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };

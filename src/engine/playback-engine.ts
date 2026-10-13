@@ -13,6 +13,7 @@ import { AudioTrackPlayer } from './players/audio-track-player';
 import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
+import { NoteActivity } from './note-activity';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
 import { Scheduler, type ScheduledSource } from './scheduler';
 import { Session, slotClip, type TrackSessionState } from './session';
@@ -84,6 +85,8 @@ export class PlaybackEngine {
   /** Qualche tratto non è partito perché il suo audio non era pronto. */
   private missed = false;
   private readonly session = new Session();
+  /** Le note programmate di ogni traccia, per l'interfaccia. */
+  private readonly activity = new Map<TrackId, NoteActivity>();
 
   constructor(private readonly graph: AudioGraph, private readonly services: EngineServices, opts: EngineOptions = {}) {
     this.timer = opts.timer ?? intervalTimer;
@@ -266,6 +269,17 @@ export class PlaybackEngine {
     if (this.playing && this.missed) this.resume();
   }
 
+  /** L'ora del contesto audio, in secondi. */
+  get audioTime(): number {
+    return this.graph.currentTime;
+  }
+
+  /** Le altezze delle note della traccia partite in [from, to) (secondi del contesto audio):
+   *  per accendere i pad mentre suona. Le note prima di `from` si dimenticano. */
+  notesStarted(track: TrackId, from: number, to: number): number[] {
+    return this.activity.get(track)?.between(from, to) ?? [];
+  }
+
   /** Fa sentire subito una nota con lo strumento della traccia (piano roll, tastiera). */
   audition(track: TrackId, pitch: number, velocity = 100, seconds = 0.3): void {
     this.players.get(track)?.player.audition?.(pitch, velocity, seconds);
@@ -331,9 +345,11 @@ export class PlaybackEngine {
         continue;
       }
       const id = t.id;
+      const notes = new NoteActivity();
+      this.activity.set(id, notes);
       const ctx: PlayerContext = {
         graph: this.graph, output: this.mixer.input(id), missing: () => { this.missed = true; },
-        programs: () => this.session.programs(id),
+        programs: () => this.session.programs(id), notes,
       };
       this.players.set(t.id, { kind: t.kind, player: factory(t, ctx, this.services) });
       changed = true;
@@ -342,6 +358,7 @@ export class PlaybackEngine {
       if (!present.has(id)) {
         player.dispose();
         this.players.delete(id);
+        this.activity.delete(id);
         this.session.remove(id);
         changed = true;
       }

@@ -1,4 +1,5 @@
 import type { DeviceId, TrackId } from '../../core/id';
+import { resolveParams } from '../../devices/device-type';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, type EffectSettings } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
@@ -6,21 +7,24 @@ import { MASTER, type ChainOwner } from '../../model/project';
 import { MidiTrack, type Track } from '../../model/track';
 import {
   addEffect, loadEffectPreset, loadPreset, moveEffect, removeEffect, setEffectEnabled, setEffectParam,
-  setEffectParams, setInstrument, setInstrumentParam,
+  setEffectParams, setInstrument, setInstrumentParam, setInstrumentParams,
 } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { showContextMenu } from '../context-menu';
 import { el } from '../dom';
 import { DevicePanel } from './device-panel';
-import { DEVICE_DISPLAYS, type SpectrumTap } from './displays';
+import { DEVICE_DISPLAYS, NO_SPECTRUM, type SpectrumTap } from './displays';
 
 export interface DeviceViewDeps {
   readonly store: ProjectStore;
   /** Suona una nota di prova con lo strumento della traccia. */
-  readonly audition: (track: TrackId, pitch: number) => void;
+  readonly audition: (track: TrackId, pitch: number, velocity?: number) => void;
   readonly sampleRate: number;
   /** Lo spettro di un effetto che suona (per i pannelli grafici). */
   readonly spectrum: (owner: ChainOwner, id: DeviceId) => SpectrumTap;
+  /** Per seguire le note che la traccia suona: ogni chiamata della funzione data restituisce
+   *  quelle partite dalla chiamata prima. */
+  readonly playedNotes: (track: TrackId) => () => readonly number[];
 }
 
 /** La chiave del pannello dello strumento (gli effetti usano il loro id). */
@@ -153,13 +157,26 @@ export class DeviceView {
       ...INSTRUMENT_TYPES.map(t => el('option', { value: t.type, textContent: t.label })));
     select.value = type.type;
     select.onchange = () => store.apply(setInstrument(track.id, { ...DEFAULT_INSTRUMENT, type: select.value, preset: null }));
-    const test = el<HTMLButtonElement>('button', { className: 'mini', textContent: '♪', title: 'Suona un Do3', onclick: () => audition(track.id, 60) });
+    // la nota di prova: il Do3, o il primo nome che lo strumento dà alle note (la cassa della drum machine)
+    const testPitch = () => {
+      const t = store.project.track(track.id);
+      const names = t instanceof MidiTrack ? type.noteNames?.(resolveParams(type, t.instrument.params)) : undefined;
+      return names?.size ? Math.min(...names.keys()) : 60;
+    };
+    const test = el<HTMLButtonElement>('button', { className: 'mini', textContent: '♪', title: 'Suona una nota di prova', onclick: () => audition(track.id, testPitch()) });
+    const display = DEVICE_DISPLAYS[type.type]?.({
+      type, settings: track.instrument, sampleRate: this.deps.sampleRate,
+      setParams: (values, final) => this.param(setInstrumentParams(track.id, values), `param-${track.id}-${Object.keys(values).sort().join(',')}`, final),
+      openSpectrum: () => NO_SPECTRUM,
+      audition: (pitch, velocity) => audition(track.id, pitch, velocity),
+      playedNotes: this.deps.playedNotes(track.id),
+    });
     const panel = new DevicePanel({
-      type, settings: track.instrument, before: [select], after: [test],
+      type, settings: track.instrument, before: [select], after: [test], display,
       onParam: (id, v, final) => this.param(setInstrumentParam(track.id, id, v), `param-${track.id}-${id}`, final),
       onPreset: p => {
         store.apply(loadPreset(track.id, p.name, p.params));
-        audition(track.id, 60);
+        audition(track.id, testPitch());
       },
     });
     panel.element.classList.add('instrument-panel');
@@ -181,6 +198,8 @@ export class DeviceView {
       type, settings: e, sampleRate: this.deps.sampleRate,
       setParams: (values, final) => this.param(setEffectParams(owner, id, values), `fx-${id}-${Object.keys(values).sort().join(',')}`, final),
       openSpectrum: () => this.deps.spectrum(owner, id),
+      audition: () => {},
+      playedNotes: () => [],
     });
     const panel = new DevicePanel({
       type, settings: e, before: [power], display,

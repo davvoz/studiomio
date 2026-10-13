@@ -3,11 +3,13 @@ import { isBlackKey, pitchName, type PitchAxis } from './pitch-axis';
 import { notesBottom, ROLL } from './roll-painter';
 
 /** Tastiera verticale a sinistra del piano roll, allineata alle righe delle note. Premere
- *  (e trascinare) suona le note con lo strumento della traccia. */
+ *  (e trascinare) suona le note con lo strumento della traccia. Se lo strumento dà un nome alle
+ *  note (i pad della drum machine) al posto dei tasti ci sono i nomi. */
 export class RollKeyboard {
   private readonly surface = new Surface('roll-keys');
   private pressed: number | null = null;
   private axis: PitchAxis | null = null;
+  private names: ReadonlyMap<number, string> | null = null;
 
   constructor(private readonly audition: (pitch: number) => void) {
     const el = this.surface.canvas;
@@ -42,6 +44,12 @@ export class RollKeyboard {
     this.paint();
   }
 
+  setNames(names: ReadonlyMap<number, string> | null): void {
+    if (names === this.names) return;
+    this.names = names;
+    this.paint();
+  }
+
   private pitchAt(e: PointerEvent): number | null {
     const y = e.clientY - this.element.getBoundingClientRect().top;
     if (!this.axis || y < ROLL.ruler || y >= notesBottom(this.surface.height)) return null;
@@ -68,7 +76,8 @@ export class RollKeyboard {
     g.clip();
     g.font = '9.5px system-ui, sans-serif';
     const hi = axis.yToPitch(ROLL.ruler), lo = axis.yToPitch(bottom);
-    for (let p = lo; p <= hi; p++) {
+    if (this.names) this.paintNames(this.names, lo, hi);
+    else for (let p = lo; p <= hi; p++) {
       const y = axis.pitchToY(p), h = axis.rowHeight, black = isBlackKey(p);
       // la riga di un tasto nero: il tasto a sinistra, il bianco accanto a destra
       g.fillStyle = '#d9dce2';
@@ -85,5 +94,29 @@ export class RollKeyboard {
     g.restore();
     g.fillStyle = '#2b2f36';
     g.fillRect(width - 1, 0, 1, height);
+  }
+
+  /** Righe con nome (i pad): il nome a sinistra, la nota a destra; le altre restano scure. */
+  private paintNames(names: ReadonlyMap<number, string>, lo: number, hi: number): void {
+    const { g, width } = this.surface;
+    const axis = this.axis!;
+    const h = axis.rowHeight, text = h >= 9;
+    for (let p = lo; p <= hi; p++) {
+      const y = axis.pitchToY(p), name = names.get(p);
+      g.fillStyle = p === this.pressed ? '#ff9d2e' : name ? '#2a2e35' : '#17191d';
+      g.fillRect(0, y, width, h);
+      g.fillStyle = 'rgba(0,0,0,0.45)';
+      g.fillRect(0, Math.round(y + h) - 1, width, 1);
+      if (!text) continue;
+      const baseline = y + h / 2 + 3.5;
+      if (name) {
+        g.fillStyle = p === this.pressed ? '#141414' : '#e8eaee';
+        g.fillText(name, 5, baseline, width - 34);
+      }
+      if (name || p % 12 === 0) {
+        g.fillStyle = p === this.pressed ? '#141414' : '#6b717c';
+        g.fillText(pitchName(p), width - 26, baseline);
+      }
+    }
   }
 }

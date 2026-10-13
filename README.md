@@ -1,8 +1,8 @@
 # studiomio
 
 DAW nel browser con warp in stile Ableton Live: arrangement (timeline) e session view con il
-lancio delle clip, clip audio con warp, clip MIDI con piano roll, strumenti ed effetti in
-AudioWorklet, mixer con misuratori di livello.
+lancio delle clip, clip audio con warp, clip MIDI con piano roll, strumenti (un synth e una
+drum machine) ed effetti in AudioWorklet, mixer con misuratori di livello.
 
 Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
@@ -86,7 +86,8 @@ src/
     clip-editor/       editor delle clip audio; clip-frame.ts è la cornice comune (righello, loop, bandierine)
     piano-roll/        editor delle note: tastiera, griglia, velocity, gesti, pannello
     device/            catena dei dispositivi: un pannello per dispositivo, controlli generati dai parametri;
-                       displays.ts registra i pannelli grafici (eq/: grafico con spettro e curva)
+                       displays.ts registra i pannelli grafici (eq/: grafico con spettro e curva;
+                       drums/: griglia dei pad)
     dom.ts             creazione degli elementi
     bottom-panel.ts    l'area in basso, una vista alla volta
     waveform.ts        picchi della forma d'onda a più risoluzioni
@@ -95,9 +96,10 @@ src/
     device-type.ts     un tipo di dispositivo: sezioni di parametri e preset
     registry.ts        gli strumenti e gli effetti disponibili
     instruments/analog/  il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
+    instruments/drums/   la Drum Machine: pad, modelli e kit (drums.ts), suono (drums-core.ts)
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
     effects/eq/        l'EQ: descrizione (eq.ts), matematica dei filtri comune a suono e disegno (eq-math.ts), suono (eq-core.ts)
-    dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, polifonia; interfacce dei motori
+    dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, rumore, polifonia; interfacce dei motori
     worklet/           i processori AudioWorklet (strumenti, effetti, misuratori), coda delle note, bypass, motori per tipo
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
@@ -194,7 +196,7 @@ Doppio clic su una clip MIDI (sulla timeline, doppio clic su una traccia MIDI vu
 | Trascina nel vuoto · Maiusc+clic | selezione a riquadro · aggiunge o toglie dalla selezione |
 | B | modo disegno: premi e trascina crea una nota, un clic su una nota la toglie |
 | Corsia in basso | trascina una barra: velocity (le note selezionate la seguono) |
-| Tastiera a sinistra | suona le note con lo strumento della traccia |
+| Tastiera a sinistra | suona le note con lo strumento della traccia; con la Drum Machine ci sono i nomi dei pad al posto dei tasti |
 | ↑ ↓ (Maiusc: ottava) · ← → · Q · Ctrl+D · Ctrl+A · Canc | trasponi · sposta di un passo · quantizza · duplica · seleziona tutto · elimina |
 | Clic nel vuoto · Ctrl+X / C / V | punto d'inserimento (linea bianca) · taglia, copia, incolla lì (poi il punto va alla fine delle note incollate) |
 | Tasto destro | menu: su una nota (taglia, copia, incolla, duplica, quantizza, ottava, elimina), nel vuoto (incolla qui, seleziona tutto, modo disegno) |
@@ -229,6 +231,25 @@ perdono nessun picco e leggerli non costa nulla.
 passa-basso/banda/alto risonante con inviluppo e key track, inviluppo del volume, LFO su
 intonazione e cutoff, 16 voci. Preset: Init, Basso, Acid, Pad, Pluck, Lead.
 
+**Drum Machine**: 16 pad sulle note da C1 (36) a D#2 (51), come il Drum Rack di Live, con il
+kit di partenza sulla mappa General MIDI (36 cassa, 38 rullante, 42 hi-hat chiuso, 46 aperto…),
+così le parti di batteria scritte altrove suonano giuste. Ogni pad ha un suono sintetizzato
+(niente sample): Cassa, Cassa 808, Rullante, Clap, Rimshot, Hi-hat chiuso e aperto, Piatto, Tom,
+Campanaccio, Shaker; e i suoi controlli: intonazione, decay, tono, snap (il significato di tono
+e snap dipende dal suono ed è scritto accanto al menu), livello, pan e gruppo di choke (un pad
+ferma gli altri del suo gruppo: l'hi-hat chiuso ferma l'aperto). Un colpo nuovo sullo stesso pad
+fa sfumare quello prima in 4 ms, senza click; la durata delle note non conta.
+
+| Gesto | Azione |
+| --- | --- |
+| clic su un pad | lo sceglie (a destra i suoi controlli) e lo suona |
+| trascina un pad su un altro · con Ctrl | li scambia · lo copia |
+| tasto destro su un pad | il suono; "Riporta il pad com'era nel kit di partenza" |
+| menu del suono | il pad prende il suono con i suoi valori di decay, tono e snap |
+
+Mentre suona, i pad delle note che partono si accendono. Nel piano roll la tastiera mostra i
+nomi dei pad e le righe si adattano per farli stare tutti. Preset: Init, 808, Secco.
+
 **Delay**: eco a tempo (da 1/32 a 1/1, con puntate e terzine, segue il BPM del progetto) o in
 millisecondi, stereo o ping-pong, feedback con low cut e high cut sulle ripetizioni, dry/wet.
 Preset: Init, Ping-pong 1/8., Slapback, Eco lungo, Dub.
@@ -261,7 +282,9 @@ Per aggiungere un dispositivo (synth o effetto) servono due parti:
    oscillatori sono pronti), per un effetto un `EffectCore` (`setParams`, `setTempo`, `process`).
 
 Interfaccia, salvataggio, preset, annulla, bypass e messaggi verso l'audio vengono da soli.
-Un dispositivo che vuole un'interfaccia sua (come l'EQ) la registra in `ui/device/displays.ts`. I
+Un dispositivo che vuole un'interfaccia sua (come l'EQ o la Drum Machine) la registra in
+`ui/device/displays.ts`; uno strumento che dà un nome alle note (`noteNames`) li fa vedere nel
+piano roll. I
 processori AudioWorklet sono due, uno per gli strumenti (riceve le note con il tempo del
 contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli effetti.
 

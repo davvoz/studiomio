@@ -8,8 +8,8 @@ export interface AdsrTimes {
 
 /** Livello sotto cui l'inviluppo si considera finito (−100 dB). */
 const FLOOR = 1e-5;
-/** Le curve esponenziali coprono 60 dB nel tempo indicato. */
-const decayCoef = (seconds: number, sampleRate: number) => Math.exp(Math.log(1e-3) / Math.max(1, seconds * sampleRate));
+/** Coefficiente per campione di una curva esponenziale che scende di 60 dB in `seconds`. */
+export const decayCoef = (seconds: number, sampleRate: number) => Math.exp(Math.log(1e-3) / Math.max(1, seconds * sampleRate));
 
 /** Inviluppo ADSR: attacco lineare, decadimento e rilascio esponenziali. Ogni fase è una
  *  funzione che fa un passo e decide la fase seguente (nessuno switch per campione).

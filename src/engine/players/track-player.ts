@@ -1,5 +1,6 @@
 import type { Track } from '../../model/track';
 import type { AudioGraph, AudioNodeLike, ScheduledNodeLike } from '../audio-graph';
+import type { NoteActivity } from '../note-activity';
 import type { ScheduledSource } from '../scheduler';
 import type { Program } from '../session';
 
@@ -22,6 +23,8 @@ export interface PlayerContext {
   readonly missing: () => void;
   /** Cosa suona la traccia e quando (timeline o clip della session), sull'orologio continuo. */
   readonly programs: () => readonly Program[];
+  /** Dove annotare le note programmate, per l'interfaccia. */
+  readonly notes: NoteActivity;
 }
 
 /** Nodi programmati e non ancora finiti, per poterli fermare tutti insieme. */

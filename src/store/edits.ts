@@ -71,6 +71,10 @@ export const setInstrument = (id: TrackId, settings: InstrumentSettings): Edit =
 export const setInstrumentParam = (id: TrackId, param: string, value: number): Edit =>
   updatingInstrument('Parametro dello strumento', id, s => withParam(s, param, value));
 
+/** Più parametri dello strumento insieme (es. il suono di un pad con i suoi valori). */
+export const setInstrumentParams = (id: TrackId, values: ParamValues): Edit =>
+  updatingInstrument('Parametri dello strumento', id, s => withParams(s, values));
+
 /** Carica un preset: i parametri tornano ai predefiniti del tipo più quelli del preset. */
 export const loadPreset = (id: TrackId, name: string, params: ParamValues): Edit =>
   updatingInstrument(`Preset ${name}`, id, s => withPreset(s, name, params));

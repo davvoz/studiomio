@@ -196,6 +196,11 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
       { pitch: 67, when: 1.8, duration: 0.25 },
     ]);
     expect(synth.notes[1].velocity).toBe(50);
+    // le stesse note, per l'interfaccia: chiedendo per intervalli di tempo
+    expect(r.engine.notesStarted(r.t(1), 0, 1)).toEqual([60, 67]);
+    expect(r.engine.notesStarted(r.t(1), 1, 1.5)).toEqual([60]);
+    r.engine.stop();
+    expect(r.engine.notesStarted(r.t(1), 1.5, 3)).toEqual([]);
   });
 
   it('lo strumento segue la traccia: parametri al volo, tipo nuovo = strumento nuovo', async () => {

@@ -33,6 +33,7 @@ export class MidiTrackPlayer implements TrackPlayer {
 
   cut(at: number): void {
     this.instrument.cut(at);
+    this.ctx.notes.cutFrom(at);
   }
 
   audition(pitch: number, velocity: number, duration: number): void {
@@ -41,6 +42,7 @@ export class MidiTrackPlayer implements TrackPlayer {
 
   stopAll(): void {
     this.instrument.stopAll();
+    this.ctx.notes.clear();
   }
 
   dispose(): void {
@@ -78,6 +80,7 @@ export class MidiTrackPlayer implements TrackPlayer {
       const at = start + (n.start - contentStart);
       const when = timeAtClock(w, at);
       this.instrument.play(n.pitch, n.velocity, when, timeAtClock(w, Math.min(at + n.duration, end)) - when);
+      this.ctx.notes.add(n.pitch, when);
     }
   }
 }

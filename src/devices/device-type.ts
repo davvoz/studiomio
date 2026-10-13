@@ -15,6 +15,9 @@ export interface DeviceType {
   readonly label: string;
   readonly sections: readonly ParamSection[];
   readonly presets: readonly Preset[];
+  /** Per gli strumenti che danno un nome alle note (la drum machine: un pad per nota): con
+   *  questi valori dei parametri, il nome di ogni nota che suona qualcosa. */
+  readonly noteNames?: (values: Readonly<Record<string, number>>) => ReadonlyMap<number, string>;
 }
 
 export const paramsOf = (t: DeviceType): ParamSpec[] => t.sections.flatMap(s => s.params);
