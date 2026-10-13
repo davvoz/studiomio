@@ -91,18 +91,32 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .header .instrument:hover { border-color: var(--accent); }
 .clip-panel .help { line-height: 1.5; margin-top: 4px; }
 
-/* ---------------------------------------------------------------- strumento */
+/* ---------------------------------------------------------------- dispositivi (strumento ed effetti) */
 .bottom { min-width: 0; }
-.device-view { height: 330px; min-width: 0; border-top: 2px solid var(--accent); background: var(--panel); display: flex; flex-direction: column; outline: none; }
+.device-view { height: 372px; min-width: 0; border-top: 2px solid var(--accent); background: var(--panel); display: flex; flex-direction: column; outline: none; }
 .device-view[hidden] { display: none; }
 .device-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .device-head [hidden] { display: none; }
 .device-title { font-weight: 600; margin-right: auto; padding-left: 9px; border-left: 4px solid var(--color, var(--accent)); }
 .device-head .close { padding: 2px 9px; }
-.device-body { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; padding: 8px 10px; overflow: auto; flex: 1; min-height: 0; }
-.device-section { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px 8px; flex: none; }
-.device-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+.device-chain { display: flex; gap: 10px; padding: 8px 10px; overflow: auto hidden; flex: 1; min-height: 0; align-items: stretch; }
+.device-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #1f2328; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 8px; }
+.device-panel.instrument-panel .device-sections { max-width: 1100px; }
+.device-panel.off .device-sections, .device-panel.off .device-name { opacity: .35; }
+.device-panel-head { display: flex; align-items: center; gap: 5px; }
+.device-panel-head select { padding: 1px 4px; font-size: 12px; }
+.device-name { font-weight: 600; margin-right: auto; padding: 0 4px; }
+.device-panel-head .mini { padding: 0 7px; font-size: 12px; line-height: 1.6; }
+.device-panel-head .power { color: var(--muted); }
+.device-panel:not(.off) .power { background: var(--accent); color: #141414; border-color: var(--accent); }
+.device-sections { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; }
+.device-section { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 4px 9px 5px; flex: none; }
+.device-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 3px; }
 .device-controls { display: flex; gap: 6px; align-items: flex-start; }
+.device-empty { align-self: center; padding: 0 12px; }
+.inactive { opacity: .3; }
+.choice select { font-size: 12px; padding: 2px 4px; margin-top: 8px; }
+.header .controls .fx { padding: 1px 6px; font-size: 11px; }
 .knob { width: 62px; display: flex; flex-direction: column; align-items: center; cursor: ns-resize; user-select: none; outline: none; touch-action: none; }
 .knob-face { width: 40px; height: 40px; }
 .knob-track { fill: none; stroke: #3a3f47; stroke-width: 4; stroke-linecap: round; }

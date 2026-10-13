@@ -1,5 +1,6 @@
 import type { Instrument, InstrumentHost } from '../../src/engine/players/instrument';
-import type { InstrumentSettings } from '../../src/model/instrument';
+import type { Effect, EffectHost } from '../../src/engine/effect-chain';
+import type { EffectSettings, InstrumentSettings } from '../../src/model/device';
 import type {
   AudioBufferLike, AudioGraph, AudioNodeLike, AudioParamLike, BufferSourceNodeLike, GainNodeLike,
   OscillatorNodeLike, PannerNodeLike,
@@ -21,7 +22,7 @@ export class FakeNode implements AudioNodeLike {
   connected = true;
   constructor(readonly kind: string) {}
   connect(d: AudioNodeLike) { this.outputs.push(d); return d; }
-  disconnect() { this.connected = false; }
+  disconnect() { this.connected = false; this.outputs.length = 0; }
 }
 
 export class FakeGain extends FakeNode implements GainNodeLike {
@@ -109,5 +110,27 @@ export class FakeInstruments implements InstrumentHost {
     const i = new FakeInstrument(s.type);
     this.created.push(i);
     return i;
+  }
+}
+
+/** Effetto finto: registra aggiornamenti e tempo; ingresso e uscita sono nodi finti. */
+export class FakeEffect implements Effect {
+  readonly input = new FakeGain();
+  readonly output = new FakeGain();
+  readonly updates: EffectSettings[] = [];
+  readonly tempos: number[] = [];
+  disposed = false;
+  constructor(readonly type: string, readonly settings: EffectSettings, readonly bpm: number) {}
+  update(s: EffectSettings) { this.updates.push(s); }
+  setTempo(bpm: number) { this.tempos.push(bpm); }
+  dispose() { this.disposed = true; this.input.disconnect(); this.output.disconnect(); }
+}
+
+export class FakeEffects implements EffectHost {
+  readonly created: FakeEffect[] = [];
+  create(_g: AudioGraph, s: EffectSettings, bpm: number) {
+    const e = new FakeEffect(s.type, s, bpm);
+    this.created.push(e);
+    return e;
   }
 }

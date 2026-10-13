@@ -59,13 +59,13 @@ export class App implements Commands, FileCommands, TimelineActions {
     const audition = (track: TrackId, pitch: number, velocity = 100) => this.run(() => this.audio.audition(track, pitch, velocity));
     this.pianoRoll = new PianoRoll({
       store: this.store, engine: this.audio.engine, audition, clipboard: this.clipboard,
-      openInstrument: track => this.openInstrument(track, true),
+      openInstrument: track => this.openDevices(track, true),
       say: t => this.say(t),
     });
     this.device = new DeviceView({ store: this.store, audition: (track, pitch) => audition(track, pitch) });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
-    const headers = new TrackHeaders(this.store, this.ui, { openInstrument: track => this.openInstrument(track) });
+    const headers = new TrackHeaders(this.store, this.ui, { openDevices: track => this.openDevices(track) });
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this, () =>
       `${this.session.name}${this.session.saved ? '' : ' •'}`);
     const main = Object.assign(document.createElement('div'), { className: 'arrangement' });
@@ -246,8 +246,8 @@ export class App implements Commands, FileCommands, TimelineActions {
     this.bottom.show(editor, () => editor.open(id));
   }
 
-  /** Apre lo strumento della traccia; da piano roll, con il pulsante per tornare alle note. */
-  private openInstrument(track: TrackId, fromRoll = false): void {
+  /** Apre strumento ed effetti della traccia; da piano roll, con il pulsante per tornare alle note. */
+  openDevices(track: TrackId, fromRoll = false): void {
     const placement = fromRoll ? this.pianoRoll.openPlacement : null;
     const back = placement ? () => this.openClip(track, placement) : null;
     this.bottom.show(this.device, () => this.device.open(track, back));

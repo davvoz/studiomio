@@ -15,6 +15,18 @@ export interface InstrumentCore {
 
 export type CoreFactory = (sampleRate: number) => InstrumentCore;
 
+/** Il motore di un effetto, eseguito nell'AudioWorklet: trasforma l'ingresso nell'uscita un
+ *  blocco alla volta. Lo spegnimento (bypass) lo gestisce il processore, non l'effetto. */
+export interface EffectCore {
+  setParams(params: Readonly<Record<string, number>>): void;
+  /** Il tempo del progetto, per gli effetti a tempo. */
+  setTempo(bpm: number): void;
+  /** Elabora `n` campioni: legge gli ingressi e scrive (sovrascrive) le uscite. */
+  process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void;
+}
+
+export type EffectFactory = (sampleRate: number) => EffectCore;
+
 export const midiToHz = (pitch: number): number => 440 * Math.pow(2, (pitch - 69) / 12);
 
 export const dbToGain = (db: number): number => Math.pow(10, db / 20);

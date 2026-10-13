@@ -1,19 +1,15 @@
 import type { TrackId } from '../core/id';
-import { instrumentType } from '../instruments/registry';
+import { EFFECT_TYPES, instrumentType } from '../devices/registry';
 import type { MidiTrack, Track } from '../model/track';
-import { addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
+import { addEffect, addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { SEPARATOR, showContextMenu, type MenuItem } from './context-menu';
 import type { UiState } from './ui-state';
-
-function el<T extends HTMLElement = HTMLElement>(tag: string, props: Record<string, unknown> = {}, ...children: (Node | string)[]): T {
-  const e = Object.assign(document.createElement(tag), props) as T;
-  e.append(...children);
-  return e;
-}
+import { el } from './dom';
 
 export interface HeaderActions {
-  openInstrument(track: TrackId): void;
+  /** Apre la catena dei dispositivi (strumento ed effetti) della traccia. */
+  openDevices(track: TrackId): void;
 }
 
 const kindBadge = (text: string) => () => el('span', { className: 'kind', textContent: text });
@@ -25,7 +21,7 @@ const BADGES: Readonly<Record<string, (t: Track, actions: HeaderActions) => HTML
     const { instrument } = t as MidiTrack;
     const label = instrumentType(instrument.type)?.label ?? instrument.type;
     const text = instrument.preset ? `${label} · ${instrument.preset}` : label;
-    return el('button', { className: 'kind instrument', textContent: text, title: `${text}: apri lo strumento`, onclick: () => actions.openInstrument(t.id) });
+    return el('button', { className: 'kind instrument', textContent: text, title: `${text}: apri lo strumento`, onclick: () => actions.openDevices(t.id) });
   },
 };
 
@@ -78,13 +74,24 @@ export class TrackHeaders {
       el('div', { className: 'controls' },
         toggle('M', t.mixer.mute, 'Mute', () => ({ mute: !t.mixer.mute })),
         toggle('S', t.mixer.solo, 'Solo', () => ({ solo: !t.mixer.solo })),
-        vol));
+        vol,
+        el('button', {
+          className: t.effects.length ? 'fx on' : 'fx', textContent: t.effects.length ? `FX ${t.effects.length}` : 'FX',
+          title: 'Effetti della traccia', onclick: () => this.actions.openDevices(t.id),
+        })));
     row.oncontextmenu = e => {
       e.preventDefault();
       e.stopPropagation();
       showContextMenu(e.clientX, e.clientY, [
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => this.rename(t.id, name) },
-        ...(t.kind === 'midi' ? [{ label: 'Apri lo strumento', run: () => this.actions.openInstrument(t.id) }] : []),
+        { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: () => this.actions.openDevices(t.id) },
+        ...EFFECT_TYPES.map(type => ({
+          label: `Aggiungi ${type.label}`,
+          run: () => {
+            store.apply(addEffect(t.id, type.type, type.label));
+            this.actions.openDevices(t.id);
+          },
+        })),
         { label: t.mixer.mute ? 'Togli il mute' : 'Mute', run: () => mixer({ mute: !t.mixer.mute }) },
         { label: t.mixer.solo ? 'Togli il solo' : 'Solo', run: () => mixer({ solo: !t.mixer.solo }) },
         SEPARATOR,

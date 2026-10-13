@@ -1,11 +1,11 @@
 /* Il suono di Analog: 16 voci, ognuna con due oscillatori PolyBLEP, filtro SVF con il suo
  * inviluppo, inviluppo del volume e LFO. Gira nell'AudioWorklet; qui niente Web Audio, così
  * si prova anche in Node. */
-import { dbToGain, midiToHz, type InstrumentCore } from '../dsp/core';
-import { Adsr } from '../dsp/envelope';
-import { LFO_TABLE, WAVE_TABLE, type Wave } from '../dsp/oscillators';
-import { Svf } from '../dsp/svf';
-import { VoicePool, type PolyVoice } from '../dsp/voice-pool';
+import { dbToGain, midiToHz, type InstrumentCore } from '../../dsp/core';
+import { Adsr } from '../../dsp/envelope';
+import { LFO_TABLE, WAVE_TABLE, type Wave } from '../../dsp/oscillators';
+import { Svf } from '../../dsp/svf';
+import { VoicePool, type PolyVoice } from '../../dsp/voice-pool';
 
 export const ANALOG_VOICES = 16;
 /** Ogni quanti campioni si ricalcolano LFO, intonazione e cutoff. */

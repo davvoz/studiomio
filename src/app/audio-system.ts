@@ -7,7 +7,7 @@ import { PlaybackEngine } from '../engine/playback-engine';
 import { RenderCache } from '../engine/render-cache';
 import { SampleLibrary } from '../engine/sample-library';
 import { liveGraph, offlineGraph } from '../engine/web-audio';
-import { WorkletInstruments } from '../engine/worklet-instruments';
+import { DeviceWorklet, WorkletEffects, WorkletInstruments } from '../engine/worklet-devices';
 import type { Project } from '../model/project';
 import type { ProjectStore } from '../store/project-store';
 import { DspService } from '../workers/dsp-service';
@@ -21,15 +21,17 @@ export class AudioSystem {
   readonly context = new AudioContext({ latencyHint: 'interactive' });
   readonly clips: ClipAudio;
   readonly engine: PlaybackEngine;
-  readonly instruments = new WorkletInstruments();
+  private readonly worklet = new DeviceWorklet();
+  readonly instruments = new WorkletInstruments(this.worklet);
+  readonly effects = new WorkletEffects(this.worklet);
   private readonly unsubscribe: () => void;
 
   constructor(private readonly store: ProjectStore) {
     const graph = liveGraph(this.context);
-    // il modulo degli strumenti si carica subito: al primo play è già pronto
-    this.instruments.prepare(graph).catch(e => console.error('AudioWorklet degli strumenti non caricato', e));
+    // il modulo di strumenti ed effetti si carica subito: al primo play è già pronto
+    this.instruments.prepare(graph).catch(e => console.error('AudioWorklet dei dispositivi non caricato', e));
     this.clips = new ClipAudio(graph, this.library, this.renders);
-    this.engine = new PlaybackEngine(graph, { clips: this.clips, instruments: this.instruments });
+    this.engine = new PlaybackEngine(graph, { clips: this.clips, instruments: this.instruments, effects: this.effects });
     this.clips.on('ready', () => this.engine.refresh());
     this.clips.on('error', (clip, err) => console.error(`render della clip "${clip.name}" fallito`, err));
     const sync = (p: Project) => {
@@ -59,7 +61,7 @@ export class AudioSystem {
   /** Mixdown di [from, to) del progetto corrente. */
   exportMix(from: Beats, to: Beats): Promise<Float32Array[]> {
     return renderMix(this.store.project, from, to, {
-      createGraph: offlineGraph, library: this.library, renders: this.renders, instruments: this.instruments,
+      createGraph: offlineGraph, library: this.library, renders: this.renders, instruments: this.instruments, effects: this.effects,
     }, this.context.sampleRate);
   }
 

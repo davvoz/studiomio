@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ANALOG } from '../../src/instruments/analog/analog';
-import { AnalogCore } from '../../src/instruments/analog/analog-core';
-import { paramsOf, paramSpec, resolveParams } from '../../src/instruments/instrument-type';
-import { clampParam, formatParam, paramFromUnit, paramToUnit } from '../../src/instruments/params';
-import { NoteQueue } from '../../src/instruments/worklet/note-queue';
+import { ANALOG } from '../../src/devices/instruments/analog/analog';
+import { AnalogCore } from '../../src/devices/instruments/analog/analog-core';
+import { paramsOf, paramSpec, resolveParams } from '../../src/devices/device-type';
+import { clampParam, formatParam, paramFromUnit, paramToUnit } from '../../src/devices/params';
+import { NoteQueue } from '../../src/devices/worklet/note-queue';
 
 const SR = 48000, BLOCK = 128;
 

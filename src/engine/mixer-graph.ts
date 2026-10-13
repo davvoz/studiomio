@@ -1,6 +1,7 @@
 import type { TrackId } from '../core/id';
 import type { Project } from '../model/project';
 import type { MixerSettings, Track } from '../model/track';
+import { EffectChain, type EffectHost } from './effect-chain';
 import { dbToGain, type AudioGraph, type AudioNodeLike, type AudioParamLike, type GainNodeLike, type PannerNodeLike } from './audio-graph';
 
 /** Tracce che si sentono: con almeno un solo attivo solo quelle in solo, mai quelle in mute. */
@@ -18,18 +19,23 @@ function setParam(param: AudioParamLike, value: number, time: number, first: boo
   else param.setTargetAtTime(value, time, SMOOTH);
 }
 
-/** Canale del mixer di una traccia: volume → pan → mute/solo → master. */
+/** Canale del mixer di una traccia: effetti → volume → pan → mute/solo → master. */
 class ChannelStrip {
   readonly input: GainNodeLike;
+  readonly chain: EffectChain;
+  private readonly fader: GainNodeLike;
   private readonly panner: PannerNodeLike;
   private readonly gate: GainNodeLike;
   private applied: { mixer: MixerSettings; audible: boolean } | null = null;
 
-  constructor(private readonly graph: AudioGraph, output: AudioNodeLike) {
+  constructor(private readonly graph: AudioGraph, effects: EffectHost, output: AudioNodeLike) {
     this.input = graph.createGain();
+    this.fader = graph.createGain();
     this.panner = graph.createStereoPanner();
     this.gate = graph.createGain();
-    this.input.connect(this.panner);
+    // gli effetti stanno prima del volume, come in Live
+    this.chain = new EffectChain(graph, effects, this.input, this.fader);
+    this.fader.connect(this.panner);
     this.panner.connect(this.gate);
     this.gate.connect(output);
   }
@@ -37,14 +43,15 @@ class ChannelStrip {
   apply(mixer: MixerSettings, audible: boolean): void {
     if (this.applied?.mixer === mixer && this.applied.audible === audible) return;
     const t = this.graph.currentTime, first = this.applied === null;
-    setParam(this.input.gain, dbToGain(mixer.volumeDb), t, first);
+    setParam(this.fader.gain, dbToGain(mixer.volumeDb), t, first);
     setParam(this.panner.pan, Math.max(-1, Math.min(1, mixer.pan)), t, first);
     setParam(this.gate.gain, audible ? 1 : 0, t, first);
     this.applied = { mixer, audible };
   }
 
   dispose(): void {
-    for (const n of [this.input, this.panner, this.gate]) n.disconnect();
+    this.chain.dispose();
+    for (const n of [this.fader, this.panner, this.gate]) n.disconnect();
   }
 }
 
@@ -54,7 +61,7 @@ export class MixerGraph {
   private readonly strips = new Map<TrackId, ChannelStrip>();
   private masterSettings: MixerSettings | null = null;
 
-  constructor(private readonly graph: AudioGraph, destination: AudioNodeLike = graph.destination) {
+  constructor(private readonly graph: AudioGraph, private readonly effects: EffectHost, destination: AudioNodeLike = graph.destination) {
     this.master = graph.createGain();
     this.master.connect(destination);
   }
@@ -73,7 +80,11 @@ export class MixerGraph {
         this.strips.delete(id);
       }
     }
-    for (const t of project.tracks) this.strip(t.id).apply(t.mixer, audible.has(t.id));
+    for (const t of project.tracks) {
+      const strip = this.strip(t.id);
+      strip.apply(t.mixer, audible.has(t.id));
+      strip.chain.sync(t.effects, project.tempo.bpm);
+    }
     if (this.masterSettings !== project.master) {
       // il master non ha pan né solo: solo volume e mute
       const m = project.master;
@@ -85,7 +96,7 @@ export class MixerGraph {
   private strip(id: TrackId): ChannelStrip {
     let s = this.strips.get(id);
     if (!s) {
-      s = new ChannelStrip(this.graph, this.master);
+      s = new ChannelStrip(this.graph, this.effects, this.master);
       this.strips.set(id, s);
     }
     return s;

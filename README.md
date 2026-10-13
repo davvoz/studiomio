@@ -1,7 +1,7 @@
 # studiomio
 
 DAW nel browser con warp in stile Ableton Live: arrangement (timeline), clip audio con
-warp, clip MIDI con piano roll e strumenti in AudioWorklet. Il modello è pensato per
+warp, clip MIDI con piano roll, strumenti ed effetti in AudioWorklet. Il modello è pensato per
 aggiungere la session view.
 
 Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
@@ -39,7 +39,7 @@ src/
     track.ts           Track → AudioTrack, MidiTrack (mixer, timeline, slot della session, strumento)
     clip.ts            Clip → AudioClip (sample + warp), MidiClip (note)
     note-edits.ts      operazioni del piano roll sulle note (funzioni pure)
-    instrument.ts      impostazioni dello strumento di una traccia (tipo, preset, parametri)
+    device.ts          dispositivi di una traccia: strumento e catena degli effetti (tipo, preset, parametri)
     arrangement.ts     clip posate sulla timeline (sovrapposizioni come in Live)
     warp-markers.ts    mappa di warp di una clip audio
   store/
@@ -55,7 +55,8 @@ src/
     scheduler.ts       programmazione in anticipo, loop della timeline a corse
     segments.ts        clip posata → tratti continui di contenuto
     players/           un player per tipo di traccia (audio, MIDI), interfaccia degli strumenti, metronomo
-    worklet-instruments.ts  gli strumenti nel browser: nodi AudioWorklet
+    effect-chain.ts    catena degli effetti di un canale: crea, aggiorna e ricollega solo ciò che cambia
+    worklet-devices.ts strumenti ed effetti nel browser: nodi AudioWorklet
     clip-audio.ts      clip audio → buffer pronto (render di warp o sample originale)
     render-cache.ts    render di warp per contenuto, LRU con budget di memoria
     mixer-graph.ts     canali con volume, pan, mute/solo e master
@@ -73,15 +74,18 @@ src/
     context-menu.ts    menu contestuale: le voci sono dati (etichetta, scorciatoia, azione)
     clip-editor/       editor delle clip audio; clip-frame.ts è la cornice comune (righello, loop, bandierine)
     piano-roll/        editor delle note: tastiera, griglia, velocity, gesti, pannello
-    device/            vista dello strumento: manopole e scelte generate dai parametri
+    device/            catena dei dispositivi: un pannello per dispositivo, controlli generati dai parametri
+    dom.ts             creazione degli elementi
     bottom-panel.ts    l'area in basso, una vista alla volta
     waveform.ts        picchi della forma d'onda a più risoluzioni
-  instruments/         gli strumenti
+  devices/             strumenti ed effetti
     params.ts          descrizione dei parametri (da cui nascono controlli, default, validazione)
-    registry.ts        i tipi di strumento disponibili
-    analog/            il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
-    dsp/               mattoni per i synth: oscillatori PolyBLEP, ADSR, filtro SVF, polifonia
-    worklet/           processore AudioWorklet unico, coda delle note al campione, motori per tipo
+    device-type.ts     un tipo di dispositivo: sezioni di parametri e preset
+    registry.ts        gli strumenti e gli effetti disponibili
+    instruments/analog/  il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
+    effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
+    dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, polifonia; interfacce dei motori
+    worklet/           i due processori AudioWorklet (strumenti, effetti), coda delle note, bypass, motori per tipo
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
     analysis/          onset, transienti, tempo, beat tracking
@@ -157,10 +161,16 @@ Doppio clic su una clip MIDI (sulla timeline, doppio clic su una traccia MIDI vu
 | Tasto destro | menu: su una nota (taglia, copia, incolla, duplica, quantizza, ottava, elimina), nel vuoto (incolla qui, seleziona tutto, modo disegno) |
 | Rotella · Maiusc+rotella · Ctrl+rotella · Alt+rotella | scorri le altezze · scorri il tempo · zoom del tempo · altezza delle righe |
 
-## Strumenti
+## Strumenti ed effetti
 
-Ogni traccia MIDI ha uno strumento: il pulsante accanto al nome della traccia (o "Strumento"
-nel piano roll) apre le sue manopole. Trascina una manopola in verticale (Maiusc: fine), rotella
+Ogni traccia ha una catena di dispositivi, in fila come in Live: lo strumento (solo tracce MIDI)
+e poi gli effetti, nell'ordine in cui il suono li attraversa, prima del volume della traccia.
+Si apre con **FX** nell'intestazione della traccia (il numero dice quanti effetti ci sono), con
+il pulsante dello strumento accanto al nome o con "Strumento" nel piano roll; dal tasto destro
+sull'intestazione c'è anche "Aggiungi Delay". **+ Effetto** aggiunge un effetto in fondo; ogni
+effetto ha ⏻ (acceso/spento, con una dissolvenza senza click), ◂ ▸ per spostarlo, × per
+toglierlo e il suo menu dei preset. I controlli che non contano con le impostazioni attuali
+si attenuano (es. i millisecondi con il delay a tempo). Trascina una manopola in verticale (Maiusc: fine), rotella
 per piccoli passi, doppio clic per il valore predefinito. Ogni modifica si annulla e si sente
 subito, anche mentre suona.
 
@@ -168,16 +178,21 @@ subito, anche mentre suona.
 passa-basso/banda/alto risonante con inviluppo e key track, inviluppo del volume, LFO su
 intonazione e cutoff, 16 voci. Preset: Init, Basso, Acid, Pad, Pluck, Lead.
 
-Per aggiungere un synth:
+**Delay**: eco a tempo (da 1/32 a 1/1, con puntate e terzine, segue il BPM del progetto) o in
+millisecondi, stereo o ping-pong, feedback con low cut e high cut sulle ripetizioni, dry/wet.
+Preset: Init, Ping-pong 1/8., Slapback, Eco lungo, Dub.
 
-1. la descrizione (`InstrumentType`: parametri raggruppati in sezioni e preset) in
-   `src/instruments/<nome>/`, registrata in `registry.ts`;
-2. il motore DSP (`InstrumentCore`: `noteOn`, `noteOff`, `setParams`, `render`), registrato con
-   lo stesso nome in `worklet/cores.ts`. `VoicePool`, `Adsr`, `Svf` e gli oscillatori sono pronti.
+Per aggiungere un dispositivo (synth o effetto) servono due parti:
 
-Interfaccia, salvataggio, preset, annulla e messaggi verso l'audio vengono da soli. Il
-processore AudioWorklet è uno solo: riceve le note con il tempo del contesto audio e
-divide ogni blocco nel campione esatto di ogni nota.
+1. la descrizione (`DeviceType`: parametri raggruppati in sezioni e preset) in
+   `src/devices/instruments/<nome>/` o `src/devices/effects/<nome>/`, registrata in `registry.ts`;
+2. il motore DSP, registrato con lo stesso nome in `worklet/cores.ts`: per uno strumento un
+   `InstrumentCore` (`noteOn`, `noteOff`, `setParams`, `render`; `VoicePool`, `Adsr`, `Svf` e gli
+   oscillatori sono pronti), per un effetto un `EffectCore` (`setParams`, `setTempo`, `process`).
+
+Interfaccia, salvataggio, preset, annulla, bypass e messaggi verso l'audio vengono da soli. I
+processori AudioWorklet sono due, uno per gli strumenti (riceve le note con il tempo del
+contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli effetti.
 
 ## Principi
 
@@ -197,7 +212,8 @@ divide ogni blocco nel campione esatto di ogni nota.
   sottoclasse di `Track` più una voce in `defaultTrackTypes` e in `addTrack`; un nuovo strumento
   è una descrizione più un motore DSP (vedi sopra).
 - **I file vecchi si aprono.** Il formato del progetto ha una versione; ogni cambiamento porta
-  una migrazione (la 1 → 2 ha dato uno strumento alle tracce MIDI).
+  una migrazione (la 1 → 2 ha dato uno strumento alle tracce MIDI, la 2 → 3 una catena di
+  effetti a tutte le tracce).
 - **Il riferimento è WarpMio.** `tests/reference/warpdsp.legacy.js` è il motore originale; i
   test verificano che la versione TypeScript dia lo stesso risultato.
 

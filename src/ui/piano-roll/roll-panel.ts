@@ -1,4 +1,5 @@
 import type { MidiClip } from '../../model/midi-clip';
+import { el } from '../dom';
 
 export interface RollPanelActions {
   rename(name: string): void;
@@ -7,12 +8,6 @@ export interface RollPanelActions {
   transpose(semitones: number): void;
   openInstrument(): void;
   close(): void;
-}
-
-function el<T extends HTMLElement = HTMLElement>(tag: string, props: Record<string, unknown> = {}, ...children: (Node | string)[]): T {
-  const e = Object.assign(document.createElement(tag), props) as T;
-  e.append(...children);
-  return e;
 }
 
 /** Pannello a sinistra del piano roll: nome, strumento della traccia, modo disegno e comandi. */

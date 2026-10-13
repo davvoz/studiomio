@@ -1,7 +1,7 @@
 import type { PlacementId, TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
-import { instrumentType } from '../../instruments/registry';
+import { instrumentType } from '../../devices/registry';
 import type { Placement } from '../../model/arrangement';
 import { MidiClip, type Note } from '../../model/midi-clip';
 import {

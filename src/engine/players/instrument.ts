@@ -1,4 +1,4 @@
-import type { InstrumentSettings } from '../../model/instrument';
+import type { InstrumentSettings } from '../../model/device';
 import type { AudioGraph, AudioNodeLike } from '../audio-graph';
 
 /** Uno strumento che suona nel grafo audio: riceve note a orari precisi del contesto audio

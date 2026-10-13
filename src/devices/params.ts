@@ -1,11 +1,21 @@
-/* Descrizione dei parametri di uno strumento. Da questa descrizione nascono i controlli
- * dell'interfaccia, i valori predefiniti e la validazione: uno strumento nuovo dichiara i suoi
+/* Descrizione dei parametri di un dispositivo (strumento o effetto). Da questa descrizione nascono i controlli
+ * dell'interfaccia, i valori predefiniti e la validazione: un dispositivo nuovo dichiara i suoi
  * parametri e non scrive codice d'interfaccia. Dati puri, usati anche nell'AudioWorklet. */
 
-export interface NumberParam {
-  readonly kind: 'number';
+/** Il parametro conta solo quando un altro (una scelta) ha un certo valore. */
+export interface ParamCondition {
+  readonly param: string;
+  readonly is: number;
+}
+
+interface ParamBase {
   readonly id: string;
   readonly label: string;
+  readonly when?: ParamCondition;
+}
+
+export interface NumberParam extends ParamBase {
+  readonly kind: 'number';
   readonly min: number;
   readonly max: number;
   readonly default: number;
@@ -16,10 +26,8 @@ export interface NumberParam {
   readonly step?: number;
 }
 
-export interface ChoiceParam {
+export interface ChoiceParam extends ParamBase {
   readonly kind: 'choice';
-  readonly id: string;
-  readonly label: string;
   readonly options: readonly string[];
   /** Indice dell'opzione predefinita. */
   readonly default: number;

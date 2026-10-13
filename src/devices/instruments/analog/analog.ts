@@ -1,8 +1,8 @@
 /* "Analog": il primo synth di studiomio. Sottrattivo classico: due oscillatori, filtro
  * risonante con il suo inviluppo, inviluppo del volume e un LFO. Qui c'è solo la descrizione
  * (parametri e preset); il suono è in analog-core.ts. */
-import type { InstrumentType } from '../instrument-type';
-import type { ChoiceParam, NumberParam } from '../params';
+import type { DeviceType } from '../../device-type';
+import type { ChoiceParam, NumberParam } from '../../params';
 
 export const WAVES = ['Saw', 'Square', 'Triangle', 'Sine'] as const;
 export const FILTER_TYPES = ['Low-pass', 'Band-pass', 'High-pass'] as const;
@@ -15,7 +15,7 @@ const choice = (id: string, label: string, options: readonly string[], def = 0):
 const time = (id: string, label: string, def: number) => num(id, label, 0.001, 10, def, 's', { scale: 'log' });
 const percent = (id: string, label: string, def: number, min = 0) => num(id, label, min, 100, def, '%', { step: 1 });
 
-export const ANALOG: InstrumentType = {
+export const ANALOG: DeviceType = {
   type: 'analog',
   label: 'Analog',
   sections: [

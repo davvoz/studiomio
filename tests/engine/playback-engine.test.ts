@@ -15,7 +15,7 @@ import {
   addMidiClip, addSample, addTrack, placeSample, setInstrument, setInstrumentParam, setLoopRegion, setMixer, setTempo, updateClip,
 } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
-import { FakeGraph, FakeInstruments } from '../helpers/fake-audio';
+import { FakeEffects, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
 import { drumLoop } from '../helpers/signals';
 
 /** DSP nello stesso thread, con il renderer vero. */
@@ -51,7 +51,8 @@ async function rig(opts: { prepare?: boolean } = {}) {
   const clips = new ClipAudio(graph, library, renders);
   let tick: (() => void) | null = null;
   const instruments = new FakeInstruments();
-  const engine = new PlaybackEngine(graph, { clips, instruments }, {
+  const effects = new FakeEffects();
+  const engine = new PlaybackEngine(graph, { clips, instruments, effects }, {
     timer: { every: (_ms, fn) => { tick = fn; return () => { tick = null; }; } },
     startLatency: 0.05, lookahead: 0.2,
   });
@@ -69,7 +70,7 @@ async function rig(opts: { prepare?: boolean } = {}) {
     }
   };
   const ready = async () => { if (opts.prepare !== false) await clips.prepare(store.project); };
-  return { store, engine, graph, clips, dsp, sample, t, runUntil, ready, instruments };
+  return { store, engine, graph, clips, dsp, sample, t, runUntil, ready, instruments, effects };
 }
 
 const starts = (g: FakeGraph) => g.sources.filter(s => s.started).map(s => ({
@@ -233,12 +234,12 @@ describe('mixer', () => {
   it('volume e pan nei nodi, canali tolti con le tracce', async () => {
     const r = await rig();
     const g = new FakeGraph();
-    const mixer = new MixerGraph(g);
+    const mixer = new MixerGraph(g, new FakeEffects());
     r.store.apply(setMixer(r.t(0), { volumeDb: -6, pan: 0.5 }));
     mixer.sync(r.store.project);
-    expect(g.gains[1].gain.value).toBeCloseTo(0.501, 3); // [0] è il master
+    expect(g.gains[2].gain.value).toBeCloseTo(0.501, 3); // [0] master, [1] ingresso, [2] volume
     expect(g.panners[0].pan.value).toBe(0.5);
     mixer.sync(r.store.project.removingTrack(r.t(0)));
-    expect(g.gains[1].connected).toBe(false);
+    expect(g.gains[2].connected).toBe(false);
   });
 });

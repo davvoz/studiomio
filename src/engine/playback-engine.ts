@@ -4,6 +4,7 @@ import type { Beats } from '../core/music-time';
 import type { Project } from '../model/project';
 import type { AudioTrack, MidiTrack, Track } from '../model/track';
 import type { AudioGraph } from './audio-graph';
+import type { EffectHost } from './effect-chain';
 import type { PlayableProvider } from './clip-audio';
 import { MixerGraph } from './mixer-graph';
 import { AudioTrackPlayer } from './players/audio-track-player';
@@ -17,6 +18,7 @@ import { Scheduler, type ScheduledSource } from './scheduler';
 export interface EngineServices {
   readonly clips: PlayableProvider;
   readonly instruments: InstrumentHost;
+  readonly effects: EffectHost;
 }
 
 export type PlayerFactory = (track: Track, ctx: PlayerContext, services: EngineServices) => TrackPlayer;
@@ -79,7 +81,7 @@ export class PlaybackEngine {
     this.factories = opts.players ?? defaultPlayers;
     this.startLatency = opts.startLatency ?? 0.05;
     this.tickMs = opts.tickMs ?? 25;
-    this.mixer = new MixerGraph(graph);
+    this.mixer = new MixerGraph(graph, services.effects);
     this.metronome = new Metronome(graph, this.mixer.master, () => this.project!.signature);
     this.scheduler = new Scheduler(() => this.sources(), opts.lookahead ?? 0.2);
   }

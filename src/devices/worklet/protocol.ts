@@ -1,5 +1,5 @@
-/* Messaggi dal thread principale al processore degli strumenti. I tempi sono secondi del
- * contesto audio: il processore li trasforma nel campione esatto. */
+/* Messaggi dal thread principale ai processori di strumenti ed effetti. I tempi sono secondi
+ * del contesto audio: il processore li trasforma nel campione esatto. */
 
 export const INSTRUMENT_PROCESSOR = 'studiomio-instrument';
 
@@ -18,3 +18,18 @@ export type InstrumentMessage =
   | { readonly type: 'dispose' };
 
 export type InstrumentReply = { readonly type: 'pong'; readonly id: number };
+
+export const EFFECT_PROCESSOR = 'studiomio-effect';
+
+export interface EffectProcessorOptions {
+  readonly type: string;
+  readonly params: Readonly<Record<string, number>>;
+  readonly enabled: boolean;
+  readonly bpm: number;
+}
+
+export type EffectMessage =
+  | { readonly type: 'params'; readonly params: Readonly<Record<string, number>> }
+  | { readonly type: 'enabled'; readonly enabled: boolean }
+  | { readonly type: 'tempo'; readonly bpm: number }
+  | { readonly type: 'dispose' };

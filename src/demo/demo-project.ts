@@ -3,8 +3,9 @@ import { encodeWav } from '../dsp/codec/wav';
 import type { AudioClip } from '../model/audio-clip';
 import type { MidiClip, Note } from '../model/midi-clip';
 import type { TrackId } from '../core/id';
-import { ANALOG } from '../instruments/analog/analog';
-import { addMidiClip, addSample, addTrack, loadPreset, placeSample, renameTrack, resizePlacement, updateClip } from '../store/edits';
+import { ANALOG } from '../devices/instruments/analog/analog';
+import { DELAY } from '../devices/effects/delay/delay';
+import { addEffect, addMidiClip, addSample, addTrack, loadEffectPreset, loadPreset, placeSample, renameTrack, resizePlacement, updateClip } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { drumLoop } from './demo-loop';
 
@@ -28,7 +29,7 @@ const withPreset = (store: ProjectStore, track: TrackId, name: string) => {
 };
 
 /** Progetto di prova: un loop di batteria a 120 BPM in quattro modalità di warp, una linea
- *  di basso e degli accordi suonati da Analog. */
+ *  di basso e degli accordi suonati da Analog, gli accordi con un delay ping-pong. */
 export async function buildDemoProject(store: ProjectStore, session: ProjectSession): Promise<void> {
   const data = { channels: drumLoop(2, 120), sampleRate: 44100 };
   // il loop finisce nella cartella del progetto come un file importato
@@ -69,4 +70,10 @@ export async function buildDemoProject(store: ProjectStore, session: ProjectSess
   const padPl = store.project.tracks[2].arrangement[0];
   store.apply(updateClip<MidiClip>('Demo', pad, padPl.id, c => c.withName('Accordi').addingNotes(...PAD)));
   store.apply(resizePlacement(pad, padPl.id, { end: 32 }));
+
+  // un delay ping-pong sugli accordi
+  const pingPong = DELAY.presets.find(p => p.name === 'Ping-pong 1/8.')!;
+  store.apply(addEffect(pad, DELAY.type, DELAY.label));
+  const fx = store.project.track(pad)!.effects[0].id;
+  store.apply(loadEffectPreset(pad, fx, pingPong.name, pingPong.params));
 }

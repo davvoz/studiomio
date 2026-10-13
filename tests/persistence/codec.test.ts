@@ -3,7 +3,7 @@ import type { AudioClip } from '../../src/model/audio-clip';
 import type { MidiClip } from '../../src/model/midi-clip';
 import { ProjectFormatError } from '../../src/persistence/json-reader';
 import { PROJECT_VERSION, ProjectCodec } from '../../src/persistence/project-codec';
-import { DEFAULT_INSTRUMENT } from '../../src/model/instrument';
+import { DEFAULT_INSTRUMENT } from '../../src/model/device';
 import type { MidiTrack } from '../../src/model/track';
 import { addMidiClip, loadPreset, placeSample, setInstrumentParam, setSlot, setTempo, updateClip } from '../../src/store/edits';
 import { setup } from '../helpers/fixtures';

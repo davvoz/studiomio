@@ -4,13 +4,13 @@ import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
-import { DEFAULT_INSTRUMENT, type InstrumentSettings } from '../model/instrument';
+import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
 import { AudioTrack, MidiTrack, type MixerSettings, type Track, type TrackProps } from '../model/track';
 import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 2;
+export const PROJECT_VERSION = 3;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -48,6 +48,8 @@ const migrations: Record<number, Migration> = {
     ...json,
     tracks: (json.tracks as JsonObject[]).map(t => (t.kind === 'midi' ? { ...t, instrument: encodeInstrument(DEFAULT_INSTRUMENT) } : t)),
   }),
+  // 2 → 3: ogni traccia ha una catena di effetti
+  2: json => ({ ...json, tracks: (json.tracks as JsonObject[]).map(t => ({ ...t, effects: [] })) }),
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
@@ -88,6 +90,7 @@ export class ProjectCodec {
           id: pl.id, start: pl.start, length: pl.length, offset: pl.offset, clip: this.encodeClip(pl.clip),
         })),
         slots: t.slots.map(c => (c ? this.encodeClip(c) : null)),
+        effects: t.effects.map(encodeEffect),
         ...this.trackType(t.kind).encodeExtra(t),
       })),
     };
@@ -146,6 +149,7 @@ export class ProjectCodec {
       mixer: decodeMixer(r.get('mixer')),
       arrangement: arrangement.sort((a, b) => a.start - b.start),
       slots: r.array('slots').map(s => (s.raw === null ? null : clipFor(s))),
+      effects: r.array('effects').map(decodeEffect),
     }, r);
   }
 
@@ -187,9 +191,9 @@ const decodeSample = (r: JsonReader): SampleRef => ({
   analysis: r.nullable('analysis', a => ({ tempo: a.num('tempo'), sensitivity: a.num('sensitivity'), transients: a.numbers('transients') })),
 });
 
-const encodeInstrument = (i: InstrumentSettings): JsonObject => ({ type: i.type, preset: i.preset, params: { ...i.params } });
+const encodeInstrument = (i: DeviceSettings): JsonObject => ({ type: i.type, preset: i.preset, params: { ...i.params } });
 
-const decodeInstrument = (r: JsonReader): InstrumentSettings => {
+const decodeInstrument = (r: JsonReader): DeviceSettings => {
   const params = r.get('params');
   return {
     type: r.str('type'),
@@ -197,3 +201,7 @@ const decodeInstrument = (r: JsonReader): InstrumentSettings => {
     params: Object.fromEntries(params.keys().map(k => [k, params.num(k)])),
   };
 };
+
+const encodeEffect = (e: EffectSettings): JsonObject => ({ id: e.id, enabled: e.enabled, ...encodeInstrument(e) });
+
+const decodeEffect = (r: JsonReader): EffectSettings => ({ id: asId(r.str('id')), enabled: r.bool('enabled'), ...decodeInstrument(r) });

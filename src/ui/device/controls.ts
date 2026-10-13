@@ -1,6 +1,7 @@
-/* Controlli dei parametri: una manopola per i numeri, dei pulsanti per le scelte. Nascono
- * dalla descrizione del parametro, così ogni strumento ha la sua interfaccia senza scriverla. */
-import { clampParam, formatParam, paramFromUnit, paramToUnit, type ChoiceParam, type NumberParam, type ParamSpec } from '../../instruments/params';
+/* Controlli dei parametri: una manopola per i numeri, pulsanti o un menu per le scelte.
+ * Nascono dalla descrizione del parametro, così ogni dispositivo ha la sua interfaccia senza
+ * scriverla. */
+import { clampParam, formatParam, paramFromUnit, paramToUnit, type ChoiceParam, type NumberParam, type ParamSpec } from '../../devices/params';
 
 /** `final` è vero alla fine di un gesto (rilascio, clic): chiude il passo di annullamento. */
 export type ParamChange = (value: number, final: boolean) => void;
@@ -124,11 +125,36 @@ class Choice implements ParamControl {
   }
 }
 
+/** Scelta tra molte opzioni (es. le divisioni del delay): un menu a tendina. */
+class ChoiceMenu implements ParamControl {
+  readonly element = Object.assign(document.createElement('div'), { className: 'choice' });
+  private readonly select = document.createElement('select');
+
+  constructor(spec: ChoiceParam, value: number, onChange: ParamChange) {
+    this.select.append(...spec.options.map((o, i) => Object.assign(document.createElement('option'), { value: String(i), textContent: o })));
+    this.select.onchange = () => onChange(Number(this.select.value), true);
+    this.element.append(this.select, Object.assign(document.createElement('div'), { className: 'knob-label', textContent: spec.label }));
+    this.set(clampParam(spec, value));
+  }
+
+  set(value: number): void {
+    this.select.value = String(value);
+  }
+}
+
+/** Oltre questo numero di opzioni una scelta diventa un menu. */
+const MAX_BUTTONS = 4;
+
 /** Il controllo per ogni tipo di parametro: un tipo nuovo è una riga nuova. */
 const MAKERS: { readonly [K in ParamSpec['kind']]: (spec: Extract<ParamSpec, { kind: K }>, value: number, onChange: ParamChange) => ParamControl } = {
   number: (s, v, c) => new Knob(s, v, c),
-  choice: (s, v, c) => new Choice(s, v, c),
+  choice: (s, v, c) => (s.options.length > MAX_BUTTONS ? new ChoiceMenu(s, v, c) : new Choice(s, v, c)),
 };
 
 export const controlFor = (spec: ParamSpec, value: number, onChange: ParamChange): ParamControl =>
   (MAKERS[spec.kind] as (s: ParamSpec, v: number, c: ParamChange) => ParamControl)(spec, value, onChange);
+
+/** Attenua un controllo che con i valori attuali non conta (es. i ms con il delay a tempo). */
+export const setActive = (control: ParamControl, active: boolean): void => {
+  control.element.classList.toggle('inactive', !active);
+};

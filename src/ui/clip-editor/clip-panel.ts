@@ -2,6 +2,7 @@ import type { WarpMode } from '../../dsp/stretch/stretcher';
 import type { AudioClip, WarpOptions } from '../../model/audio-clip';
 import { sampleDuration, type SampleRef } from '../../model/sample';
 import { scaleTempo } from '../../model/warp-tools';
+import { el } from '../dom';
 
 /** Un campo delle opzioni di una modalità di warp. */
 type Field =
@@ -48,12 +49,6 @@ export interface PanelActions {
   followTempo(): void;
   quantize(): void;
   close(): void;
-}
-
-function el<T extends HTMLElement = HTMLElement>(tag: string, props: Record<string, unknown> = {}, ...children: (Node | string)[]): T {
-  const e = Object.assign(document.createElement(tag), props) as T;
-  e.append(...children);
-  return e;
 }
 
 const row = (label: string, ...controls: Node[]) => el('label', { className: 'row' }, el('span', { textContent: label }), ...controls);

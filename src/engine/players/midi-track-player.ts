@@ -1,5 +1,5 @@
 import { placementEnd, type Placement } from '../../model/arrangement';
-import type { InstrumentSettings } from '../../model/instrument';
+import type { InstrumentSettings } from '../../model/device';
 import type { MidiClip } from '../../model/midi-clip';
 import type { MidiTrack, Track } from '../../model/track';
 import type { ScheduleWindow } from '../scheduler';

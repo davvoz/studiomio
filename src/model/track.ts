@@ -1,9 +1,9 @@
-import type { IdFactory, PlacementId, TrackId } from '../core/id';
+import type { DeviceId, IdFactory, PlacementId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import * as lane from './arrangement';
 import { AudioClip } from './audio-clip';
 import type { Clip, Color } from './clip';
-import { DEFAULT_INSTRUMENT, type InstrumentSettings } from './instrument';
+import { DEFAULT_INSTRUMENT, type EffectSettings, type InstrumentSettings } from './device';
 import { MidiClip } from './midi-clip';
 
 export interface MixerSettings {
@@ -25,6 +25,8 @@ export interface TrackProps<C extends Clip> {
   readonly arrangement: lane.Lane<C>;
   /** Slot della session view, uno per scena (null = vuoto). */
   readonly slots: readonly (C | null)[];
+  /** Catena degli effetti, nell'ordine in cui il suono li attraversa. */
+  readonly effects: readonly EffectSettings[];
 }
 
 /** Una traccia: mixer, clip sulla timeline e slot della session. Ogni tipo di traccia
@@ -52,6 +54,7 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
   get mixer(): MixerSettings { return this.props.mixer; }
   get arrangement(): lane.Lane<C> { return this.props.arrangement; }
   get slots(): readonly (C | null)[] { return this.props.slots; }
+  get effects(): readonly EffectSettings[] { return this.props.effects; }
 
   /** Tutte le clip della traccia, timeline e session. */
   get clips(): C[] {
@@ -89,6 +92,31 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.withLane(lane.split(this.arrangement, id, at, ids));
   }
 
+  /** Aggiunge un effetto in posizione `index` (in fondo se manca). */
+  addingEffect(effect: EffectSettings, index = this.effects.length): this {
+    const e = [...this.effects];
+    e.splice(Math.max(0, Math.min(index, e.length)), 0, effect);
+    return this.withEffects(e);
+  }
+
+  removingEffect(id: DeviceId): this {
+    this.effectIndex(id);
+    return this.withEffects(this.effects.filter(e => e.id !== id));
+  }
+
+  updatingEffect(id: DeviceId, fn: (e: EffectSettings) => EffectSettings): this {
+    this.effectIndex(id);
+    return this.withEffects(this.effects.map(e => (e.id === id ? { ...fn(e), id } : e)));
+  }
+
+  /** Sposta un effetto nella posizione `index` della catena. */
+  movingEffect(id: DeviceId, index: number): this {
+    const e = [...this.effects];
+    const [moved] = e.splice(this.effectIndex(id), 1);
+    e.splice(Math.max(0, Math.min(index, e.length)), 0, moved);
+    return this.withEffects(e);
+  }
+
   withSlot(index: number, clip: Clip | null): this {
     this.checkSlot(index);
     if (clip && !this.accepts(clip)) throw this.wrongKind(clip);
@@ -105,6 +133,16 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
   removingSlot(index: number): this {
     this.checkSlot(index);
     return this.withSlots(this.slots.filter((_, i) => i !== index));
+  }
+
+  private withEffects(effects: readonly EffectSettings[]): this {
+    return this.with({ effects } as Partial<P>);
+  }
+
+  private effectIndex(id: DeviceId): number {
+    const i = this.effects.findIndex(e => e.id === id);
+    if (i < 0) throw new RangeError(`effetto ${id} non trovato`);
+    return i;
   }
 
   private withLane(arrangement: lane.Lane<C>): this {
@@ -130,7 +168,7 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
 }
 
 const emptyProps = (id: TrackId, name: string, color: Color, sceneCount: number) => ({
-  id, name, color, mixer: DEFAULT_MIXER, arrangement: [], slots: Array<null>(sceneCount).fill(null),
+  id, name, color, mixer: DEFAULT_MIXER, arrangement: [], slots: Array<null>(sceneCount).fill(null), effects: [],
 });
 
 export class AudioTrack extends Track<AudioClip> {

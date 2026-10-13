@@ -9,6 +9,7 @@ export type ClipId = Id<'clip'>;
 export type PlacementId = Id<'placement'>;
 export type SampleId = Id<'sample'>;
 export type SceneId = Id<'scene'>;
+export type DeviceId = Id<'device'>;
 
 /** Chi crea gli identificatori: iniettato, così i test usano id prevedibili. */
 export interface IdFactory {

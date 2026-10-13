@@ -1,12 +1,12 @@
 /* Modifiche del progetto, una per azione dell'utente. Sono funzioni pure: ricevono i
  * parametri e restituiscono un Edit che lo store applica e può annullare. */
-import type { PlacementId, SampleId, SceneId, TrackId } from '../core/id';
+import type { DeviceId, PlacementId, SampleId, SceneId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
 import type { Clip } from '../model/clip';
 import { paletteColor } from '../model/colors';
-import { withParam, type InstrumentSettings, type ParamValues } from '../model/instrument';
+import { newEffect, withParam, withPreset, type InstrumentSettings, type ParamValues } from '../model/device';
 import { MidiClip } from '../model/midi-clip';
 import type { LoopRegion } from '../model/project';
 import type { SampleRef } from '../model/sample';
@@ -65,7 +65,28 @@ export const setInstrumentParam = (id: TrackId, param: string, value: number): E
 
 /** Carica un preset: i parametri tornano ai predefiniti del tipo più quelli del preset. */
 export const loadPreset = (id: TrackId, name: string, params: ParamValues): Edit =>
-  updatingInstrument(`Preset ${name}`, id, s => ({ ...s, preset: name, params: { ...params } }));
+  updatingInstrument(`Preset ${name}`, id, s => withPreset(s, name, params));
+
+// ------------------------------------------------------------------ effetti
+
+/** Aggiunge un effetto di tipo `type` alla catena (in fondo, o in posizione `index`). */
+export const addEffect = (track: TrackId, type: string, label: string, index?: number): Edit =>
+  edit(`Aggiungi ${label}`, (p, { ids }) => p.updatingTrack(track, t => t.addingEffect(newEffect(ids.next('device'), type), index)));
+
+export const removeEffect = (track: TrackId, id: DeviceId): Edit =>
+  edit('Elimina effetto', p => p.updatingTrack(track, t => t.removingEffect(id)));
+
+export const moveEffect = (track: TrackId, id: DeviceId, index: number): Edit =>
+  edit('Sposta effetto', p => p.updatingTrack(track, t => t.movingEffect(id, index)));
+
+export const setEffectEnabled = (track: TrackId, id: DeviceId, enabled: boolean): Edit =>
+  edit(enabled ? 'Accendi effetto' : 'Spegni effetto', p => p.updatingTrack(track, t => t.updatingEffect(id, e => ({ ...e, enabled }))));
+
+export const setEffectParam = (track: TrackId, id: DeviceId, param: string, value: number): Edit =>
+  edit("Parametro dell'effetto", p => p.updatingTrack(track, t => t.updatingEffect(id, e => withParam(e, param, value))));
+
+export const loadEffectPreset = (track: TrackId, id: DeviceId, name: string, params: ParamValues): Edit =>
+  edit(`Preset ${name}`, p => p.updatingTrack(track, t => t.updatingEffect(id, e => withPreset(e, name, params))));
 
 // ------------------------------------------------------------------ sample e clip
 
