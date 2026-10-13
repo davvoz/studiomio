@@ -1,11 +1,14 @@
 import type { InstrumentSettings } from '../../model/device';
 import type { AudioGraph, AudioNodeLike } from '../audio-graph';
+import type { DeviceModulation } from '../modulation';
 
 /** Uno strumento che suona nel grafo audio: riceve note a orari precisi del contesto audio
  *  e le impostazioni della traccia quando cambiano. */
 export interface Instrument {
   readonly type: string;
   readonly output: AudioNodeLike;
+  /** I parametri che le clip possono modulare. */
+  readonly modulation?: DeviceModulation;
   /** `velocity` 1..127, tempi in secondi del contesto audio. */
   play(pitch: number, velocity: number, when: number, duration: number): void;
   /** Nuovi valori dei parametri (stesso tipo di strumento). */

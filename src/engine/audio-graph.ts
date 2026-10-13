@@ -8,6 +8,8 @@ export interface AudioParamLike {
   linearRampToValueAtTime(value: number, time: number): unknown;
   setTargetAtTime(target: number, startTime: number, timeConstant: number): unknown;
   cancelScheduledValues(time: number): unknown;
+  /** Toglie gli eventi da `time` in poi tenendo il valore che c'è lì (non in tutti i browser). */
+  cancelAndHoldAtTime?(time: number): unknown;
 }
 
 export interface AudioNodeLike {
@@ -21,6 +23,13 @@ export interface GainNodeLike extends AudioNodeLike {
 
 export interface PannerNodeLike extends AudioNodeLike {
   readonly pan: AudioParamLike;
+}
+
+/** Una sorgente di valore costante: collegata a un AudioParam, gli somma `offset`. */
+export interface ConstantSourceNodeLike extends AudioNodeLike {
+  readonly offset: AudioParamLike;
+  connect(destination: AudioNodeLike | AudioParamLike): unknown;
+  start(when?: number): void;
 }
 
 export interface AudioBufferLike {
@@ -55,6 +64,7 @@ export interface AudioGraph {
   createStereoPanner(): PannerNodeLike;
   createBufferSource(): BufferSourceNodeLike;
   createOscillator(): OscillatorNodeLike;
+  createConstantSource(): ConstantSourceNodeLike;
   createBuffer(channels: number, length: number, sampleRate: number): AudioBufferLike;
 }
 

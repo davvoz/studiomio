@@ -1,6 +1,16 @@
 /* Messaggi dal thread principale ai processori di strumenti ed effetti. I tempi sono secondi
  * del contesto audio: il processore li trasforma nel campione esatto. */
 
+/** Un evento di modulazione di un parametro (vedi mod-timeline.ts): scalino, rampa, o "tieni
+ *  il valore che c'è e dimentica il resto" da `time`. */
+export interface ModMessage {
+  readonly type: 'mod';
+  readonly param: string;
+  readonly kind: 'set' | 'ramp' | 'hold';
+  readonly value: number;
+  readonly time: number;
+}
+
 export const INSTRUMENT_PROCESSOR = 'studiomio-instrument';
 
 export interface InstrumentProcessorOptions {
@@ -11,6 +21,7 @@ export interface InstrumentProcessorOptions {
 export type InstrumentMessage =
   | { readonly type: 'note'; readonly pitch: number; readonly velocity: number; readonly on: number; readonly off: number }
   | { readonly type: 'params'; readonly params: Readonly<Record<string, number>> }
+  | ModMessage
   /** Toglie le note programmate e spegne quelle che suonano. */
   | { readonly type: 'stop' }
   /** Taglia all'istante `at`: le note dopo spariscono, quelle a cavallo finiscono lì. */
@@ -32,6 +43,7 @@ export interface EffectProcessorOptions {
 
 export type EffectMessage =
   | { readonly type: 'params'; readonly params: Readonly<Record<string, number>> }
+  | ModMessage
   | { readonly type: 'enabled'; readonly enabled: boolean }
   | { readonly type: 'tempo'; readonly bpm: number }
   | { readonly type: 'dispose' };

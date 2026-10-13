@@ -1,5 +1,6 @@
 import type { ClipId } from '../core/id';
 import type { Beats } from '../core/music-time';
+import { sameTarget, withEnvelope, type ClipEnvelope, type EnvelopePoint, type ModTarget } from './envelope';
 
 /** Colore in esadecimale, "#rrggbb". */
 export type Color = string;
@@ -23,7 +24,11 @@ export interface ClipProps {
   readonly color: Color;
   readonly region: ClipRegion;
   readonly loop: ClipLoop;
+  /** Le modulazioni (inviluppi di clip); se manca, nessuna. */
+  readonly envelopes?: readonly ClipEnvelope[];
 }
+
+const NO_ENVELOPES: readonly ClipEnvelope[] = [];
 
 /** Proprietà comuni di una clip, qualunque sia il contenuto (audio, note MIDI, …).
  *  Immutabile: i metodi `with…` restituiscono una copia. Ogni tipo di clip estende questa
@@ -49,12 +54,23 @@ export abstract class Clip<P extends ClipProps = ClipProps> {
   get color(): Color { return this.props.color; }
   get region(): ClipRegion { return this.props.region; }
   get loop(): ClipLoop { return this.props.loop; }
+  get envelopes(): readonly ClipEnvelope[] { return this.props.envelopes ?? NO_ENVELOPES; }
+
+  /** La modulazione di un bersaglio, se la clip ce l'ha. */
+  envelope(target: ModTarget): ClipEnvelope | undefined {
+    return this.envelopes.find(e => sameTarget(e.target, target));
+  }
 
   withId(id: ClipId): this { return this.with({ id } as Partial<P>); }
   withName(name: string): this { return this.with({ name } as Partial<P>); }
   withColor(color: Color): this { return this.with({ color } as Partial<P>); }
   withRegion(region: ClipRegion): this { return this.with({ region } as Partial<P>); }
   withLoop(loop: ClipLoop): this { return this.with({ loop } as Partial<P>); }
+  withEnvelopes(envelopes: readonly ClipEnvelope[]): this { return this.with({ envelopes } as Partial<P>); }
+  /** La modulazione del bersaglio con questi punti (senza punti la modulazione sparisce). */
+  withEnvelope(target: ModTarget, points: readonly EnvelopePoint[]): this {
+    return this.withEnvelopes(withEnvelope(this.envelopes, target, points));
+  }
 
   /** Durata di una riproduzione dall'inizio; Infinity se la clip è in loop. */
   get playLength(): Beats {

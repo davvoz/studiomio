@@ -3,7 +3,7 @@ import { MASTER, type ChainOwner, type Project } from '../model/project';
 import type { MixerSettings, Track } from '../model/track';
 import { EffectChain, type Effect, type EffectHost } from './effect-chain';
 import type { Meter, MeterHost, MeterReading } from './meters';
-import { dbToGain, type AudioGraph, type AudioNodeLike, type AudioParamLike, type GainNodeLike, type PannerNodeLike } from './audio-graph';
+import { dbToGain, type AudioGraph, type AudioNodeLike, type AudioParamLike, type ConstantSourceNodeLike, type GainNodeLike, type PannerNodeLike } from './audio-graph';
 
 /** Tracce che si sentono: con almeno un solo attivo solo quelle in solo, mai quelle in mute. */
 export function audibleTracks(tracks: readonly Track[]): Set<TrackId> {
@@ -29,23 +29,35 @@ function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): v
   }
 }
 
-/** Canale del mixer di una traccia: effetti → volume → pan → mute/solo → misuratore → master. */
+/** Le modulazioni del canale: volume (un guadagno dopo il fader) e pan (un valore sommato al pan). */
+export type MixerModulation = 'volume' | 'pan';
+
+/** Canale del mixer di una traccia: effetti → volume → modulazione del volume → pan → mute/solo
+ *  → misuratore → master. La modulazione del pan è una sorgente costante sommata al pan. */
 class ChannelStrip {
   readonly input: GainNodeLike;
   readonly chain: EffectChain;
   private readonly fader: GainNodeLike;
+  private readonly modGain: GainNodeLike;
   private readonly panner: PannerNodeLike;
+  private readonly panOffset: ConstantSourceNodeLike;
   private readonly gate: GainNodeLike;
   private applied: { mixer: MixerSettings; audible: boolean } | null = null;
 
   constructor(private readonly graph: AudioGraph, effects: EffectHost, output: AudioNodeLike, readonly meter: Meter | null) {
     this.input = graph.createGain();
     this.fader = graph.createGain();
+    this.modGain = graph.createGain();
     this.panner = graph.createStereoPanner();
+    this.panOffset = graph.createConstantSource();
+    this.panOffset.offset.setValueAtTime(0, 0);
+    this.panOffset.connect(this.panner.pan);
+    this.panOffset.start();
     this.gate = graph.createGain();
     // gli effetti stanno prima del volume, come in Live; il misuratore dopo: si vede ciò che si sente
     this.chain = new EffectChain(graph, effects, this.input, this.fader);
-    this.fader.connect(this.panner);
+    this.fader.connect(this.modGain);
+    this.modGain.connect(this.panner);
     this.panner.connect(this.gate);
     metered(this.gate, output, meter);
   }
@@ -59,9 +71,14 @@ class ChannelStrip {
     this.applied = { mixer, audible };
   }
 
+  /** Il parametro su cui va la modulazione: guadagno (1 = neutro) o spostamento del pan (0). */
+  modulation(param: MixerModulation): AudioParamLike {
+    return param === 'volume' ? this.modGain.gain : this.panOffset.offset;
+  }
+
   dispose(): void {
     this.chain.dispose();
-    for (const n of [this.fader, this.panner, this.gate]) n.disconnect();
+    for (const n of [this.fader, this.modGain, this.panner, this.panOffset, this.gate]) n.disconnect();
     this.meter?.dispose();
   }
 }
@@ -102,6 +119,11 @@ export class MixerGraph {
   effect(owner: ChainOwner, id: DeviceId): Effect | undefined {
     const chain = owner === MASTER ? this.masterChain : this.strips.get(owner)?.chain;
     return chain?.effect(id);
+  }
+
+  /** Dove va la modulazione del volume o del pan di una traccia. */
+  modulation(id: TrackId, param: MixerModulation): AudioParamLike {
+    return this.strip(id).modulation(param);
   }
 
   /** Ingresso del canale della traccia (creato se non c'è). */

@@ -1,6 +1,7 @@
 import type { DeviceId } from '../core/id';
 import type { EffectSettings } from '../model/device';
 import type { AudioGraph, AudioNodeLike } from './audio-graph';
+import type { DeviceModulation } from './modulation';
 
 /** Punti da cui ascoltare un effetto (per lo spettro): il suono prima e dopo. Le loro uscite
  *  non le tocca nessuno, quindi un collegamento fatto lì resta anche se la catena si ricollega. */
@@ -15,6 +16,8 @@ export interface Effect {
   readonly input: AudioNodeLike;
   readonly output: AudioNodeLike;
   readonly monitor?: EffectMonitor;
+  /** I parametri che le clip possono modulare. */
+  readonly modulation?: DeviceModulation;
   /** Nuove impostazioni dello stesso tipo (parametri, acceso/spento). */
   update(settings: EffectSettings): void;
   setTempo(bpm: number): void;

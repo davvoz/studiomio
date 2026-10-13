@@ -8,15 +8,26 @@ import { METER_VALUES } from '../devices/worklet/meter-core';
 import {
   EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
   type InstrumentMessage, type InstrumentProcessorOptions, type InstrumentReply, type MeterMessage,
-  type MeterProcessorOptions, type MeterReply,
+  type MeterProcessorOptions, type MeterReply, type ModMessage,
 } from '../devices/worklet/protocol';
 import type { EffectSettings, InstrumentSettings } from '../model/device';
 import type { AudioGraph } from './audio-graph';
 import type { Effect, EffectHost, EffectMonitor } from './effect-chain';
 import type { Meter, MeterHost, MeterReading } from './meters';
+import type { DeviceModulation } from './modulation';
 import type { Instrument, InstrumentHost } from './players/instrument';
 
 const contextOf = (graph: AudioGraph) => graph as unknown as BaseAudioContext;
+
+/** Le modulazioni di un dispositivo nell'AudioWorklet: ogni evento è un messaggio al processore,
+ *  che lo applica al momento giusto (vedi devices/worklet/mod-timeline.ts). */
+const workletModulation = (send: (m: ModMessage) => void): DeviceModulation => ({
+  sink: param => ({
+    set: (value, time) => send({ type: 'mod', param, kind: 'set', value, time }),
+    ramp: (value, time) => send({ type: 'mod', param, kind: 'ramp', value, time }),
+    hold: time => send({ type: 'mod', param, kind: 'hold', value: 0, time }),
+  }),
+});
 
 /** I parametri completi da mandare al motore (i tipi sconosciuti suonano muti). */
 const fullParams = (s: InstrumentSettings) => {
@@ -27,6 +38,7 @@ const fullParams = (s: InstrumentSettings) => {
 class WorkletInstrument implements Instrument {
   readonly type: string;
   readonly output: GainNode;
+  readonly modulation = workletModulation(m => this.send(m));
   private node: AudioWorkletNode | null = null;
   private settings: InstrumentSettings;
   private pings = 0;
@@ -160,6 +172,7 @@ class WorkletEffect implements Effect {
   readonly output: GainNode;
   private readonly post: GainNode;
   readonly monitor: EffectMonitor;
+  readonly modulation = workletModulation(m => this.send(m));
   private node: AudioWorkletNode | null = null;
   private settings: EffectSettings;
   private bpm: number;

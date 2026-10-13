@@ -1,6 +1,7 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { DeviceId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
+import { INSTRUMENT_DEVICE, type ModTarget } from '../model/envelope';
 import { launchQuantumBeats } from '../model/launch';
 import type { ChainOwner, Project } from '../model/project';
 import type { AudioTrack, MidiTrack, Track } from '../model/track';
@@ -13,6 +14,7 @@ import { AudioTrackPlayer } from './players/audio-track-player';
 import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
+import { audioParamSink, TrackModulator, type ModSink } from './modulation';
 import { NoteActivity } from './note-activity';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
 import { Scheduler, type ScheduledSource } from './scheduler';
@@ -87,6 +89,8 @@ export class PlaybackEngine {
   private readonly session = new Session();
   /** Le note programmate di ogni traccia, per l'interfaccia. */
   private readonly activity = new Map<TrackId, NoteActivity>();
+  /** Le modulazioni delle clip, una sorgente per traccia. */
+  private readonly modulators = new Map<TrackId, TrackModulator>();
 
   constructor(private readonly graph: AudioGraph, private readonly services: EngineServices, opts: EngineOptions = {}) {
     this.timer = opts.timer ?? intervalTimer;
@@ -166,7 +170,7 @@ export class PlaybackEngine {
   /** Le tracce prese dalla session tornano subito alla loro timeline. */
   backToArrangement(): void {
     const at = this.playing ? this.scheduler.scheduledClock : -Infinity;
-    for (const id of this.session.backToArrangement(at)) if (this.playing) this.players.get(id)?.player.cut(this.scheduler.timeAtClock(at));
+    for (const id of this.session.backToArrangement(at)) if (this.playing) this.cutTrack(id, this.scheduler.timeAtClock(at));
     this.events.emit('session');
   }
 
@@ -225,7 +229,7 @@ export class PlaybackEngine {
     this.session.prune(this.clock);
     for (const id of tracks) {
       change(at, id);
-      this.players.get(id)?.player.cut(this.scheduler.timeAtClock(at));
+      this.cutTrack(id, this.scheduler.timeAtClock(at));
     }
     this.events.emit('session');
   }
@@ -251,6 +255,7 @@ export class PlaybackEngine {
     if (!this.playing) return;
     this.session.reset(this.clock);
     this.scheduler.stop();
+    for (const m of this.modulators.values()) m.reset();
     this.cancelTimer?.();
     this.cancelTimer = null;
     this.events.emit('state', false);
@@ -318,8 +323,24 @@ export class PlaybackEngine {
     this.scheduler.advance(this.graph.currentTime);
   }
 
+  /** Taglia all'istante `time` ciò che la traccia aveva programmato (suono e modulazioni). */
+  private cutTrack(id: TrackId, time: number): void {
+    this.players.get(id)?.player.cut(time);
+    this.modulators.get(id)?.cut(time);
+  }
+
+  /** Dove va una modulazione della traccia: il canale del mixer, lo strumento o un effetto. */
+  private modSink(track: TrackId, target: ModTarget): ModSink | null {
+    if (target.kind === 'mixer') return audioParamSink(this.mixer.modulation(track, target.param));
+    const device = target.device === INSTRUMENT_DEVICE
+      ? this.players.get(track)?.player.instrumentModulation?.()
+      : this.mixer.effect(track, target.device)?.modulation;
+    return device?.sink(target.param) ?? null;
+  }
+
   private *sources(): Iterable<ScheduledSource> {
     for (const { player } of this.players.values()) yield player;
+    yield* this.modulators.values();
     yield this.metronome;
   }
 
@@ -331,6 +352,9 @@ export class PlaybackEngine {
     for (const t of project.tracks) {
       present.add(t.id);
       const entry = this.players.get(t.id);
+      const mod = this.modulators.get(t.id);
+      if (mod) mod.update(t);
+      else this.modulators.set(t.id, new TrackModulator(t, () => this.session.programs(t.id), target => this.modSink(t.id, target), () => this.graph.currentTime));
       if (entry && entry.kind === t.kind) {
         const prev = prevTracks.get(t.id);
         if (prev?.arrangement !== t.arrangement || (prev && this.playingClipChanged(prev, t))) changed = true;
@@ -359,6 +383,8 @@ export class PlaybackEngine {
         player.dispose();
         this.players.delete(id);
         this.activity.delete(id);
+        this.modulators.get(id)?.reset();
+        this.modulators.delete(id);
         this.session.remove(id);
         changed = true;
       }

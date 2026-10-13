@@ -5,6 +5,7 @@ import type { MidiTrack, Track } from '../../model/track';
 import { timeAtClock, type ScheduleWindow } from '../scheduler';
 import { placementSegments, type Segment } from '../segments';
 import { piecesInWindow, type Piece } from '../track-content';
+import type { DeviceModulation } from '../modulation';
 import type { Instrument, InstrumentHost } from './instrument';
 import type { PlayerContext, TrackPlayer } from './track-player';
 
@@ -34,6 +35,10 @@ export class MidiTrackPlayer implements TrackPlayer {
   cut(at: number): void {
     this.instrument.cut(at);
     this.ctx.notes.cutFrom(at);
+  }
+
+  instrumentModulation(): DeviceModulation | null {
+    return this.instrument.modulation ?? null;
   }
 
   audition(pitch: number, velocity: number, duration: number): void {

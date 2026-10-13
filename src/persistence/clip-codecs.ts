@@ -1,6 +1,7 @@
 import { asId } from '../core/id';
 import { AudioClip, type WarpOptions } from '../model/audio-clip';
 import type { Clip, ClipProps } from '../model/clip';
+import { parseTargetKey, targetKey, type ClipEnvelope } from '../model/envelope';
 import { MidiClip } from '../model/midi-clip';
 import { WarpMarkers } from '../model/warp-markers';
 import type { JsonObject, JsonReader } from './json-reader';
@@ -20,7 +21,18 @@ const encodeBase = (c: Clip): JsonObject => ({
   kind: c.kind, id: c.id, name: c.name, color: c.color,
   region: { start: c.region.start, end: c.region.end },
   loop: { enabled: c.loop.enabled, start: c.loop.start, end: c.loop.end },
+  // le modulazioni solo se ci sono: { "mixer:volume": [[battito, valore], …] }
+  ...(c.envelopes.length ? { envelopes: Object.fromEntries(c.envelopes.map(e => [targetKey(e.target), e.points.map(p => [p.beat, p.value])])) } : {}),
 });
+
+const decodeEnvelopes = (r: JsonReader): ClipEnvelope[] =>
+  r.keys().map(key => ({
+    target: parseTargetKey(key) ?? r.get(key).fail(`modulazione sconosciuta: ${key}`),
+    points: r.array(key).map(p => {
+      const [beat, value] = p.tuple(2);
+      return { beat, value };
+    }),
+  }));
 
 const decodeBase = (r: JsonReader): ClipProps => {
   const region = r.get('region'), loop = r.get('loop');
@@ -28,6 +40,7 @@ const decodeBase = (r: JsonReader): ClipProps => {
     id: asId(r.str('id')), name: r.str('name'), color: r.str('color'),
     region: { start: region.num('start'), end: region.num('end') },
     loop: { enabled: loop.bool('enabled'), start: loop.num('start'), end: loop.num('end') },
+    envelopes: r.has('envelopes') ? decodeEnvelopes(r.get('envelopes')) : [],
   };
 };
 

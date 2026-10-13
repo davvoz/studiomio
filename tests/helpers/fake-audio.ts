@@ -1,9 +1,10 @@
 import type { Instrument, InstrumentHost } from '../../src/engine/players/instrument';
 import type { Effect, EffectHost } from '../../src/engine/effect-chain';
 import type { Meter, MeterHost, MeterReading } from '../../src/engine/meters';
+import type { DeviceModulation, ModSink } from '../../src/engine/modulation';
 import type { EffectSettings, InstrumentSettings } from '../../src/model/device';
 import type {
-  AudioBufferLike, AudioGraph, AudioNodeLike, AudioParamLike, BufferSourceNodeLike, GainNodeLike,
+  AudioBufferLike, AudioGraph, AudioNodeLike, AudioParamLike, BufferSourceNodeLike, ConstantSourceNodeLike, GainNodeLike,
   OscillatorNodeLike, PannerNodeLike,
 } from '../../src/engine/audio-graph';
 
@@ -15,7 +16,20 @@ export class FakeParam implements AudioParamLike {
   setValueAtTime(value: number, time: number) { this.events.push({ type: 'set', value, time }); this.value = value; }
   linearRampToValueAtTime(value: number, time: number) { this.events.push({ type: 'ramp', value, time }); this.value = value; }
   setTargetAtTime(value: number, time: number) { this.events.push({ type: 'target', value, time }); this.value = value; }
-  cancelScheduledValues() { /* niente */ }
+  cancelScheduledValues(time: number) { this.events.push({ type: 'cancel', value: NaN, time }); }
+  cancelAndHoldAtTime(time: number) { this.events.push({ type: 'hold', value: NaN, time }); }
+}
+
+/** Modulazioni finte di un dispositivo: registrano gli eventi per parametro. */
+export class FakeModulation implements DeviceModulation {
+  readonly events: { param: string; type: string; value: number; time: number }[] = [];
+  sink(param: string): ModSink {
+    return {
+      set: (value, time) => { this.events.push({ param, type: 'set', value, time }); },
+      ramp: (value, time) => { this.events.push({ param, type: 'ramp', value, time }); },
+      hold: time => { this.events.push({ param, type: 'hold', value: NaN, time }); },
+    };
+  }
 }
 
 export class FakeNode implements AudioNodeLike {
@@ -34,6 +48,15 @@ export class FakeGain extends FakeNode implements GainNodeLike {
 export class FakePanner extends FakeNode implements PannerNodeLike {
   readonly pan = new FakeParam(0);
   constructor() { super('panner'); }
+}
+
+export class FakeConstantSource implements ConstantSourceNodeLike {
+  readonly offset = new FakeParam(1);
+  readonly outputs: (AudioNodeLike | AudioParamLike)[] = [];
+  started = false;
+  connect(d: AudioNodeLike | AudioParamLike) { this.outputs.push(d); return d; }
+  disconnect() { this.outputs.length = 0; }
+  start() { this.started = true; }
 }
 
 export class FakeBuffer implements AudioBufferLike {
@@ -74,6 +97,7 @@ export class FakeGraph implements AudioGraph {
   readonly oscillators: FakeOscillator[] = [];
   readonly gains: FakeGain[] = [];
   readonly panners: FakePanner[] = [];
+  readonly constants: FakeConstantSource[] = [];
 
   constructor(readonly sampleRate = 44100) {}
 
@@ -81,6 +105,7 @@ export class FakeGraph implements AudioGraph {
   createStereoPanner() { const p = new FakePanner(); this.panners.push(p); return p; }
   createBufferSource() { const s = new FakeSource(); this.sources.push(s); return s; }
   createOscillator() { const o = new FakeOscillator(); this.oscillators.push(o); return o; }
+  createConstantSource() { const c = new FakeConstantSource(); this.constants.push(c); return c; }
   createBuffer(c: number, l: number, sr: number) { return new FakeBuffer(c, l, sr); }
 
   /** Sorgenti avviate e non fermate prima di partire. */
@@ -96,6 +121,7 @@ export class FakeInstrument implements Instrument {
   readonly updates: InstrumentSettings[] = [];
   stops = 0;
   readonly cuts: number[] = [];
+  readonly modulation = new FakeModulation();
   disposed = false;
   constructor(readonly type: string) {}
   cut(at: number) { this.cuts.push(at); }
@@ -122,6 +148,7 @@ export class FakeEffect implements Effect {
   readonly output = new FakeGain();
   readonly updates: EffectSettings[] = [];
   readonly tempos: number[] = [];
+  readonly modulation = new FakeModulation();
   disposed = false;
   constructor(readonly type: string, readonly settings: EffectSettings, readonly bpm: number) {}
   update(s: EffectSettings) { this.updates.push(s); }

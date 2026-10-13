@@ -11,7 +11,7 @@ import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 5;
+export const PROJECT_VERSION = 6;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -55,6 +55,8 @@ const migrations: Record<number, Migration> = {
   3: json => ({ ...json, masterEffects: [] }),
   // 4 → 5: la session ha una quantizzazione del lancio
   4: json => ({ ...json, launchQuantization: DEFAULT_LAUNCH_QUANTUM }),
+  // 5 → 6: le clip possono avere modulazioni (campo facoltativo: non cambia nulla)
+  5: json => json,
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo

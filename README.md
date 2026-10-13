@@ -1,8 +1,8 @@
 # studiomio
 
 DAW nel browser con warp in stile Ableton Live: arrangement (timeline) e session view con il
-lancio delle clip, clip audio con warp, clip MIDI con piano roll, strumenti (un synth e una
-drum machine) ed effetti in AudioWorklet, mixer con misuratori di livello.
+lancio delle clip, clip audio con warp, clip MIDI con piano roll, modulazioni delle clip,
+strumenti (un synth e una drum machine) ed effetti in AudioWorklet, mixer con misuratori di livello.
 
 Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
@@ -39,7 +39,8 @@ src/
     launch.ts          i passi della quantizzazione del lancio (1/16 … 4 battute)
     effect-list.ts     operazioni su una catena di effetti, per tracce e master (funzioni pure)
     track.ts           Track → AudioTrack, MidiTrack (mixer, timeline, slot della session, strumento)
-    clip.ts            Clip → AudioClip (sample + warp), MidiClip (note)
+    clip.ts            Clip → AudioClip (sample + warp), MidiClip (note); ogni clip ha le sue modulazioni
+    envelope.ts        modulazioni delle clip: bersagli, scale, punti, valore nel tempo della clip
     note-edits.ts      operazioni del piano roll sulle note (funzioni pure)
     device.ts          dispositivi di una traccia: strumento e catena degli effetti (tipo, preset, parametri)
     arrangement.ts     clip posate sulla timeline (sovrapposizioni come in Live)
@@ -58,6 +59,7 @@ src/
     playback-engine.ts trasporto: play/stop/seek, aggiornamento a ogni versione del progetto
     scheduler.ts       programmazione in anticipo, loop della timeline a corse, orologio continuo
     session.ts         la session nel motore: per ogni traccia cosa suona e da quando (timeline, clip lanciata)
+    modulation.ts      le modulazioni delle clip programmate in anticipo (AudioParam del canale, dispositivi)
     track-content.ts   i tratti che una traccia suona in una finestra, dalla timeline o dalla session
     segments.ts        clip posata → tratti continui di contenuto
     players/           un player per tipo di traccia (audio, MIDI), interfaccia degli strumenti, metronomo
@@ -85,6 +87,7 @@ src/
     context-menu.ts    menu contestuale: le voci sono dati (etichetta, scorciatoia, azione)
     clip-editor/       editor delle clip audio; clip-frame.ts è la cornice comune (righello, loop, bandierine)
     piano-roll/        editor delle note: tastiera, griglia, velocity, gesti, pannello
+    envelopes/         l'editor delle modulazioni: menu dei bersagli e corsia con la curva (piano roll ed editor audio)
     device/            catena dei dispositivi: un pannello per dispositivo, controlli generati dai parametri;
                        displays.ts registra i pannelli grafici (eq/: grafico con spettro e curva;
                        drums/: griglia dei pad)
@@ -100,7 +103,8 @@ src/
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
     effects/eq/        l'EQ: descrizione (eq.ts), matematica dei filtri comune a suono e disegno (eq-math.ts), suono (eq-core.ts)
     dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, rumore, polifonia; interfacce dei motori
-    worklet/           i processori AudioWorklet (strumenti, effetti, misuratori), coda delle note, bypass, motori per tipo
+    worklet/           i processori AudioWorklet (strumenti, effetti, misuratori), coda delle note, bypass, motori per tipo;
+                       mod-timeline.ts applica le modulazioni ai parametri
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
     analysis/          onset, transienti, tempo, beat tracking
@@ -201,6 +205,32 @@ Doppio clic su una clip MIDI (sulla timeline, doppio clic su una traccia MIDI vu
 | Clic nel vuoto · Ctrl+X / C / V | punto d'inserimento (linea bianca) · taglia, copia, incolla lì (poi il punto va alla fine delle note incollate) |
 | Tasto destro | menu: su una nota (taglia, copia, incolla, duplica, quantizza, ottava, elimina), nel vuoto (incolla qui, seleziona tutto, modo disegno) |
 | Rotella · Maiusc+rotella · Ctrl+rotella · Alt+rotella | scorri le altezze · scorri il tempo · zoom del tempo · altezza delle righe |
+
+## Modulazioni delle clip
+
+Come gli inviluppi di clip di Live: ogni clip può muovere i parametri della sua traccia mentre
+suona. Nel pannello della clip (piano roll o editor audio) il riquadro **Modulazioni** ha due
+menu: il dispositivo (Mixer, lo strumento, gli effetti della traccia) e il parametro (volume,
+pan, o un parametro numerico del dispositivo); il segno ● indica cosa è già modulato. Scelto il
+parametro, sotto l'editor compare la corsia con la curva, allineata alle note o alla forma d'onda.
+
+| Gesto | Azione |
+| --- | --- |
+| clic nel vuoto | un punto (sulla griglia; Alt: libero), già da trascinare |
+| trascina un punto | battito e valore; Maiusc per la regolazione fine |
+| doppio clic su un punto | lo elimina |
+| ✎ (o tasto destro → "Disegno a scalini") | trascinando si dipingono scalini sulla griglia |
+| × · tasto destro | cancella la modulazione del parametro · elimina il punto, cancella, disegno |
+| rotella · Ctrl+rotella | scorre · zooma il tempo, come l'editor |
+
+Le modulazioni sono **relative**: la manopola resta dov'è e la curva la sposta. Il volume va da 0
+a 100 % del volume della traccia (metà curva ≈ −12 dB), il pan si somma al pan, un parametro si
+sposta fino a una corsa intera della manopola in su o in giù, nella sua scala (il cutoff in
+ottave). La curva è nel tempo della clip: gira con il suo loop e vale sulla timeline e nella
+session; dove la clip non suona, o non ha quella curva, il parametro torna com'è. Volume e pan
+sono automazioni degli AudioParam del canale (precise al campione); i parametri dei dispositivi
+arrivano all'AudioWorklet come scalini e rampe con il loro istante e si applicano a ogni blocco
+di 128 campioni. Anche l'export le suona.
 
 ## Strumenti ed effetti
 
@@ -307,7 +337,8 @@ contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli ef
   è una descrizione più un motore DSP (vedi sopra).
 - **I file vecchi si aprono.** Il formato del progetto ha una versione; ogni cambiamento porta
   una migrazione (la 1 → 2 ha dato uno strumento alle tracce MIDI, la 2 → 3 una catena di
-  effetti a tutte le tracce, la 3 → 4 una al master, la 4 → 5 la quantizzazione del lancio).
+  effetti a tutte le tracce, la 3 → 4 una al master, la 4 → 5 la quantizzazione del lancio, la 5 → 6
+  le modulazioni delle clip, un campo facoltativo).
 - **Il riferimento è WarpMio.** `tests/reference/warpdsp.legacy.js` è il motore originale; i
   test verificano che la versione TypeScript dia lo stesso risultato.
 

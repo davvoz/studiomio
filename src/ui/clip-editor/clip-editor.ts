@@ -14,6 +14,8 @@ import { BeatAxis, playheadIn, seekBeatOf } from './clip-geometry';
 import { ClipPanel } from './clip-panel';
 import { editorCursor, editorGestureFor, editorHit, type EditorGesture, type EditorHit, type EditorHost } from './editor-gestures';
 import { LAYOUT, paintEditor } from './editor-painter';
+import { wheelTime } from '../envelopes/envelope-lane';
+import { ModulationEditor } from '../envelopes/modulation-editor';
 
 export interface ClipEditorDeps {
   readonly store: ProjectStore;
@@ -37,6 +39,7 @@ export class ClipEditor implements EditorHost {
   readonly element = Object.assign(document.createElement('section'), { className: 'clip-editor', hidden: true, tabIndex: -1 });
   private readonly surface = new Surface('editor-canvas');
   private readonly panel: ClipPanel;
+  private readonly mods: ModulationEditor;
   private ref: ClipRef | null = null;
   private _axis = new BeatAxis();
   private selected = -1;
@@ -53,9 +56,23 @@ export class ClipEditor implements EditorHost {
       quantize: () => this.quantize(),
       close: () => this.close(),
     });
+    const editor = this;
+    this.mods = new ModulationEditor({
+      get axis() { return editor._axis; },
+      clip: () => editor.clip(),
+      grid: () => gridStep(editor._axis.pxPerBeat, deps.store.project.signature, 10),
+      signature: () => deps.store.project.signature,
+      playhead: () => { const t = editor.target(); return t ? playheadIn(t.found, deps.engine) : null; },
+      commit: (label, fn) => editor.commit(label, c => fn(c) as AudioClip),
+      wheel: (e, x) => editor.setAxis(wheelTime(e, x, editor._axis)),
+      track: () => editor.target()?.found.track ?? null,
+      layout: visible => editor.element.classList.toggle('with-lane', visible),
+    });
+    // subito sotto nome e informazioni: le opzioni del warp sono lunghe e lo nasconderebbero
+    this.panel.element.children[1].after(this.mods.controls);
     const wrap = Object.assign(document.createElement('div'), { className: 'editor-canvas-wrap' });
     wrap.append(this.surface.canvas);
-    this.element.append(this.panel.element, wrap);
+    this.element.append(this.panel.element, wrap, this.mods.lane.element);
     new ResizeObserver(() => {
       this.surface.resize(wrap.clientWidth, wrap.clientHeight);
       if (this.fitPending) this.fit();
@@ -82,6 +99,7 @@ export class ClipEditor implements EditorHost {
     this.fitPending = true;
     this.fit();
     this.sync();
+    this.mods.opened();
     this.element.focus();
     return true;
   }
@@ -189,6 +207,7 @@ export class ClipEditor implements EditorHost {
     if (!t) return this.close();
     if (this.selected >= t.clip.warp.markers.length) this.selected = -1;
     this.panel.update(t.clip, t.sample, this.selected);
+    this.mods.sync();
     this.invalidate();
   }
 
@@ -222,6 +241,7 @@ export class ClipEditor implements EditorHost {
         });
       }
     }
+    if (this.isOpen) this.mods.frame();
     requestAnimationFrame(this.frame);
   };
 

@@ -1,9 +1,13 @@
 /* I processori AudioWorklet dei dispositivi: uno per tutti gli strumenti, uno per tutti gli
  * effetti. Ognuno crea il motore del tipo richiesto e riceve parametri (e note) dalla porta. */
+import { paramsOf, type DeviceType } from '../device-type';
 import type { EffectCore, InstrumentCore } from '../dsp/core';
+import type { NumberParam } from '../params';
+import { effectType, instrumentType } from '../registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from './cores';
 import { EffectRunner } from './effect-runner';
 import { METER_VALUES, MeterCore } from './meter-core';
+import { ParamModulation } from './mod-timeline';
 import { NoteQueue } from './note-queue';
 import {
   EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
@@ -21,6 +25,10 @@ declare function registerProcessor(name: string, ctor: new (options: AudioWorkle
 
 type Handlers<M extends { type: string }> = { readonly [K in M['type']]: (m: Extract<M, { type: K }>) => void };
 
+/** I parametri numerici del tipo (quelli che si possono modulare). */
+const numberSpecs = (type: DeviceType | undefined): Map<string, NumberParam> =>
+  new Map((type ? paramsOf(type) : []).flatMap(p => (p.kind === 'number' ? [[p.id, p] as const] : [])));
+
 /** Collega la porta alla tabella dei messaggi. */
 function listen<M extends { type: string }>(port: MessagePort, handlers: Handlers<M>): void {
   port.onmessage = (e: MessageEvent<M>) => (handlers[e.data.type as M['type']] as (m: M) => void)(e.data);
@@ -34,16 +42,18 @@ const silentInstrument: InstrumentCore = { setParams() {}, noteOn() {}, noteOff(
 class InstrumentProcessor extends AudioWorkletProcessor {
   private readonly core: InstrumentCore;
   private readonly queue = new NoteQueue();
+  private readonly mod: ParamModulation;
   private alive = true;
 
   constructor(options: AudioWorkletNodeOptions) {
     super(options);
     const o = options.processorOptions as InstrumentProcessorOptions;
     this.core = INSTRUMENT_CORES[o.type]?.(sampleRate) ?? silentInstrument;
-    this.core.setParams(o.params);
+    this.mod = new ParamModulation(numberSpecs(instrumentType(o.type)), o.params);
     listen<InstrumentMessage>(this.port, {
       note: m => this.queue.add(m.pitch, m.velocity, Math.round(m.on * sampleRate), Math.round(m.off * sampleRate)),
-      params: m => this.core.setParams(m.params),
+      params: m => this.mod.setBase(m.params),
+      mod: m => this.mod.event(m.param, m.kind, m.value, m.time),
       stop: () => {
         this.queue.clear();
         this.core.silence();
@@ -56,6 +66,9 @@ class InstrumentProcessor extends AudioWorkletProcessor {
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const [left, right = left] = outputs[0];
+    // le manopole e le modulazioni valgono dall'inizio del blocco
+    const params = this.mod.paramsAt(currentFrame / sampleRate);
+    if (params) this.core.setParams(params);
     this.queue.renderBlock(this.core, left, right, currentFrame);
     return this.alive;
   }
@@ -72,6 +85,7 @@ const passThrough: EffectCore = {
 class EffectProcessor extends AudioWorkletProcessor {
   private readonly core: EffectCore;
   private readonly runner: EffectRunner;
+  private readonly mod: ParamModulation;
   private silence = new Float32Array(128);
   private alive = true;
 
@@ -81,9 +95,11 @@ class EffectProcessor extends AudioWorkletProcessor {
     this.core = EFFECT_CORES[o.type]?.(sampleRate) ?? passThrough;
     this.core.setTempo(o.bpm);
     this.core.setParams(o.params);
+    this.mod = new ParamModulation(numberSpecs(effectType(o.type)), o.params);
     this.runner = new EffectRunner(this.core, sampleRate, o.enabled);
     listen<EffectMessage>(this.port, {
-      params: m => this.core.setParams(m.params),
+      params: m => this.mod.setBase(m.params),
+      mod: m => this.mod.event(m.param, m.kind, m.value, m.time),
       enabled: m => this.runner.setEnabled(m.enabled),
       tempo: m => this.core.setTempo(m.bpm),
       dispose: () => { this.alive = false; },
@@ -95,6 +111,8 @@ class EffectProcessor extends AudioWorkletProcessor {
     if (this.silence.length < outL.length) this.silence = new Float32Array(outL.length);
     // senza nulla collegato l'ingresso è vuoto: le code (eco, riverbero) continuano sul silenzio
     const [inL = this.silence, inR = inL] = inputs[0] ?? [];
+    const params = this.mod.paramsAt(currentFrame / sampleRate);
+    if (params) this.core.setParams(params);
     this.runner.process(inL, inR, outL, outR);
     return this.alive;
   }

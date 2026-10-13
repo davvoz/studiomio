@@ -1,5 +1,6 @@
 import type { Track } from '../../model/track';
 import type { AudioGraph, AudioNodeLike, ScheduledNodeLike } from '../audio-graph';
+import type { DeviceModulation } from '../modulation';
 import type { NoteActivity } from '../note-activity';
 import type { ScheduledSource } from '../scheduler';
 import type { Program } from '../session';
@@ -9,6 +10,8 @@ export interface TrackPlayer extends ScheduledSource {
   update(track: Track): void;
   /** Suona subito una nota, per chi ha uno strumento. */
   audition?(pitch: number, velocity: number, seconds: number): void;
+  /** I parametri modulabili dello strumento, per chi ne ha uno. */
+  instrumentModulation?(): DeviceModulation | null;
   /** Taglia all'istante `at` tutto ciò che ha già programmato oltre (una clip lanciata
    *  prende il posto di quella che suonava). */
   cut(at: number): void;

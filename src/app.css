@@ -64,7 +64,18 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .ruler-wrap .ruler { touch-action: none; }
 
 /* ---------------------------------------------------------------- editor della clip */
-.clip-editor { display: grid; grid-template-columns: 250px 1fr; height: 300px; border-top: 2px solid var(--accent); background: var(--panel); outline: none; }
+.clip-editor { display: grid; grid-template-columns: 250px 1fr; grid-template-rows: minmax(0, 1fr) auto; height: 300px; border-top: 2px solid var(--accent); background: var(--panel); outline: none; }
+.clip-editor.with-lane { height: 400px; }
+.clip-editor > .clip-panel { grid-row: 1 / -1; }
+/* modulazioni: menu nel pannello, corsia sotto l'editor (nel piano roll accanto c'è il nome) */
+.mod-controls { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
+.mod-head { display: flex; align-items: center; gap: 4px; }
+.mod-head span { margin-right: auto; font-weight: 600; font-size: 12px; }
+.mod-head .mini { padding: 0 7px; font-size: 12px; line-height: 1.6; }
+.mod-controls select { width: 100%; font-size: 12px; padding: 2px 4px; }
+.mod-lane { grid-row: 2; grid-column: -2 / -1; position: relative; height: 104px; border-top: 1px solid var(--line); overflow: hidden; }
+.mod-lane canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
+.mod-side { grid-row: 2; grid-column: 2; border-top: 1px solid var(--line); border-right: 1px solid #2b2f36; background: #1b1e23; font-size: 10.5px; line-height: 1.3; color: var(--muted); padding: 6px 5px; overflow: hidden; word-break: break-word; }
 .clip-editor[hidden] { display: none; }
 .clip-panel { padding: 8px 10px; overflow-y: auto; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
 .clip-panel .panel-head { display: flex; gap: 6px; }

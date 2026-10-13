@@ -23,6 +23,8 @@ import { PitchAxis } from './pitch-axis';
 import { rollCursor, rollGestureFor, rollHit, type RollGesture, type RollHit, type RollHost } from './roll-gestures';
 import { notesBottom, paintRoll, ROLL } from './roll-painter';
 import { RollPanel } from './roll-panel';
+import { wheelTime } from '../envelopes/envelope-lane';
+import { ModulationEditor } from '../envelopes/modulation-editor';
 
 export interface PianoRollDeps {
   readonly store: ProjectStore;
@@ -73,6 +75,7 @@ export class PianoRoll implements RollHost {
   private readonly surface = new Surface('roll-canvas');
   private readonly keyboard: RollKeyboard;
   private readonly panel: RollPanel;
+  private readonly mods: ModulationEditor;
   private ref: ClipRef | null = null;
   private _axis = new BeatAxis();
   private _pitches = new PitchAxis(12, 0, ROLL.ruler);
@@ -96,11 +99,24 @@ export class PianoRoll implements RollHost {
       openInstrument: () => { const t = this.target(); if (t) deps.openInstrument(t.track.id); },
       close: () => this.close(),
     });
+    const roll = this;
+    this.mods = new ModulationEditor({
+      get axis() { return roll._axis; },
+      clip: () => roll.clip(),
+      grid: () => roll.grid,
+      signature: () => deps.store.project.signature,
+      playhead: () => { const t = roll.target(); return t ? playheadIn(t.found, deps.engine) : null; },
+      commit: (label, fn) => roll.commit(label, c => fn(c) as MidiClip),
+      wheel: (e, x) => roll.setAxis(wheelTime(e, x, roll._axis)),
+      track: () => roll.target()?.track ?? null,
+      layout: visible => roll.element.classList.toggle('with-lane', visible),
+    });
+    this.panel.element.append(this.mods.controls);
     const wrap = Object.assign(document.createElement('div'), { className: 'editor-canvas-wrap' });
     wrap.append(this.surface.canvas);
     const keys = Object.assign(document.createElement('div'), { className: 'roll-keys-wrap' });
     keys.append(this.keyboard.element);
-    this.element.append(this.panel.element, keys, wrap);
+    this.element.append(this.panel.element, keys, wrap, this.mods.side, this.mods.lane.element);
     new ResizeObserver(() => {
       this.surface.resize(wrap.clientWidth, wrap.clientHeight);
       this.keyboard.resize(keys.clientWidth, wrap.clientHeight);
@@ -123,6 +139,11 @@ export class PianoRoll implements RollHost {
     return this.ref;
   }
 
+  /** L'editor delle modulazioni (per i test automatici). */
+  get modulation(): ModulationEditor {
+    return this.mods;
+  }
+
   /** Apre la clip; restituisce false se non è una clip MIDI. */
   open(ref: ClipRef): boolean {
     this.ref = ref;
@@ -137,6 +158,7 @@ export class PianoRoll implements RollHost {
     this.fitPending = true;
     this.fit();
     this.sync();
+    this.mods.opened();
     this.element.focus();
     return true;
   }
@@ -335,6 +357,7 @@ export class PianoRoll implements RollHost {
     }
     this.keyboard.setNames(this.names);
     this.element.classList.toggle('named-keys', this.names !== null);
+    this.mods.sync();
     this.panel.update(t.clip, label, this.drawMode, this._selection.size, this.deps.store.project.signature.beatsPerBar);
     this.invalidate();
   }
@@ -385,6 +408,7 @@ export class PianoRoll implements RollHost {
         this.gesture?.paint?.(g);
       }
     }
+    if (this.isOpen) this.mods.frame();
     requestAnimationFrame(this.frame);
   };
 
