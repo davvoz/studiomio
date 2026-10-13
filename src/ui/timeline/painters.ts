@@ -1,13 +1,14 @@
 /* Disegno della timeline su canvas: corsie, griglia, clip (con forma d'onda o note),
  * righello, loop, testina e anteprime dei gesti. */
 import type { PlacementId } from '../../core/id';
-import type { Beats, TempoMap, TimeSignature } from '../../core/music-time';
+import type { Beats, TimeSignature } from '../../core/music-time';
 import { placementSegments } from '../../engine/segments';
 import { placementEnd, type Placement } from '../../model/arrangement';
 import { AudioClip } from '../../model/audio-clip';
 import type { Clip } from '../../model/clip';
 import { MidiClip } from '../../model/midi-clip';
 import type { LoopRegion, Project } from '../../model/project';
+import { contentToSeconds } from '../clip-editor/clip-geometry';
 import type { Peaks } from '../waveform';
 import type { TimelineGeometry } from './geometry';
 
@@ -148,14 +149,6 @@ function paintWaveform(g: CanvasRenderingContext2D, pl: Placement<AudioClip>, bo
       g.fillRect(x, y0, 1, Math.max(1, y1 - y0));
     }
   }
-}
-
-/** Battito della clip → secondo del sample: con il warp passa per i marker, senza warp
- *  il sample scorre al tempo del progetto alla velocità data dal transpose. */
-function contentToSeconds(clip: AudioClip, tempo: TempoMap): (b: Beats) => number {
-  if (clip.warp.enabled) return b => clip.warp.markers.timeOf(b);
-  const rate = Math.pow(2, clip.pitch / 12);
-  return b => tempo.secondsAt(b) * rate;
 }
 
 function paintNotes(g: CanvasRenderingContext2D, pl: Placement<MidiClip>, body: Box, lp: LanePaint): void {

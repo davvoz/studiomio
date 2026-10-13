@@ -15,7 +15,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); overflow: hidden; }
-#app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+#app { display: grid; grid-template-rows: auto minmax(120px, 1fr) auto auto; height: 100%; }
 
 button, input, select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 5px;
@@ -62,6 +62,25 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .ruler-wrap canvas, .lanes-wrap canvas { position: absolute; left: 0; top: 0; display: block; }
 .lanes-wrap .overlay { touch-action: none; }
 .ruler-wrap .ruler { touch-action: none; }
+
+/* ---------------------------------------------------------------- editor della clip */
+.clip-editor { display: grid; grid-template-columns: 250px 1fr; height: 300px; border-top: 2px solid var(--accent); background: var(--panel); outline: none; }
+.clip-editor[hidden] { display: none; }
+.clip-panel { padding: 8px 10px; overflow-y: auto; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+.clip-panel .panel-head { display: flex; gap: 6px; }
+.clip-panel .clip-name { flex: 1; min-width: 0; font-weight: 600; }
+.clip-panel .close { padding: 0 8px; }
+.clip-panel .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.clip-panel .row > span { color: var(--muted); }
+.clip-panel .row input[type=number], .clip-panel .row select { width: 118px; }
+.clip-panel .mode-options { display: flex; flex-direction: column; gap: 5px; padding-left: 8px; border-left: 2px solid var(--line); }
+.clip-panel .buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+.clip-panel .buttons button { padding: 2px 7px; font-size: 12px; }
+.clip-panel [hidden] { display: none !important; }
+.small { font-size: 11.5px; }
+.muted { color: var(--muted); }
+.editor-canvas-wrap { position: relative; overflow: hidden; }
+.editor-canvas-wrap canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
 
 /* ---------------------------------------------------------------- barra di stato */
 .status { padding: 5px 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); min-height: 26px; }

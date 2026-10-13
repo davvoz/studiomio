@@ -1,4 +1,7 @@
 import { analyzeAudio, type AudioAnalysis } from './analysis/analyze';
+import { trackBeats } from './analysis/beat-tracker';
+import { onsetEnvelope } from './analysis/onset';
+import { mixMono } from './signal';
 import type { StretcherTable } from './stretch/stretcher';
 import { WarpRenderer, defaultStretchers, type WarpJob } from './stretch/warp-renderer';
 import type { AudioData } from './types';
@@ -43,6 +46,12 @@ export class DspEngine {
 
   analyze(sourceId: string, sensitivity: number): AudioAnalysis {
     return analyzeAudio(this.source(sourceId), sensitivity);
+  }
+
+  /** Posizioni dei battiti (in campioni) seguendo il tempo `bpm` (beat tracking). */
+  trackBeats(sourceId: string, bpm: number): number[] {
+    const { channels, sampleRate } = this.source(sourceId);
+    return trackBeats(onsetEnvelope(mixMono(channels), sampleRate), bpm);
   }
 
   private source(id: string): AudioData {

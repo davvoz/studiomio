@@ -7,6 +7,7 @@ import { Project } from '../model/project';
 import { setLoopRegion } from '../store/edits';
 import { ProjectStore } from '../store/project-store';
 import { addedPlacements, deleteMany, duplicateMany, splitMany } from '../store/selection-edits';
+import { ClipEditor } from '../ui/clip-editor/clip-editor';
 import { bindKeys, type Commands } from '../ui/keymap';
 import { ArrangementView } from '../ui/timeline/arrangement-view';
 import { resolveSelection } from '../ui/timeline/planning';
@@ -25,6 +26,7 @@ export class App implements Commands, FileCommands {
   readonly ui = new UiState();
   readonly peaks = new PeakStore(id => this.audio.library.get(id));
   readonly arrangement: ArrangementView;
+  readonly editor: ClipEditor;
   private readonly transport: TransportBar;
   private readonly status = Object.assign(document.createElement('footer'), { className: 'status' });
 
@@ -34,12 +36,17 @@ export class App implements Commands, FileCommands {
       openClip: (track, id) => this.openClip(track, id),
       dropFiles: (files, track, beat) => this.run(() => this.session.importFiles(files, track, beat)),
     });
+    this.editor = new ClipEditor({
+      store: this.store, engine: this.audio.engine, peaks: this.peaks,
+      trackBeats: (sample, bpm) => this.audio.dsp.trackBeats(sample.id, bpm),
+      say: t => this.say(t),
+    });
     const headers = new TrackHeaders(this.store, this.ui);
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this, () =>
       `${this.session.name}${this.session.saved ? '' : ' •'}`);
     const main = Object.assign(document.createElement('div'), { className: 'arrangement' });
     main.append(headers.element, this.arrangement.element);
-    root.append(transport.element, main, this.status);
+    root.append(transport.element, main, this.editor.element, this.status);
 
     this.session.on('message', t => this.say(t));
     this.session.on('change', () => transport.render());
@@ -147,7 +154,8 @@ export class App implements Commands, FileCommands {
 
   private openClip(track: TrackId, id: PlacementId): void {
     const clip = this.store.project.track(track)?.placement(id)?.clip;
-    if (clip) this.say(`"${clip.name}": l'editor delle clip arriva nella prossima fase.`);
+    if (!clip) return;
+    if (!this.editor.open(id)) this.say(`"${clip.name}": il piano roll per le clip MIDI arriverà con gli strumenti.`);
   }
 
   private selection() {

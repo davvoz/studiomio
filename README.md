@@ -66,6 +66,7 @@ src/
     track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume)
     transport-bar.ts   barra in alto
     keymap.ts          scorciatoie da tastiera (una riga per comando)
+    clip-editor/       editor delle clip audio: asse, disegno, gesti, pannello
     waveform.ts        picchi della forma d'onda a più risoluzioni
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
@@ -102,6 +103,21 @@ MioBrano/
 | Ctrl+L · Ctrl+4 · Ctrl+Maiusc+M | loop · griglia · metronomo |
 | Rotella · Maiusc+rotella · Ctrl+rotella · + / − | scorri · scorri in orizzontale · zoom |
 | Ctrl+S · Ctrl+O | salva · apri |
+
+## Editor delle clip audio
+
+Doppio clic su una clip audio: si apre in basso (Esc per chiudere).
+
+| | |
+|---|---|
+| Trascina un warp marker (striscia gialla) | cambia il battito su cui cade; con Maiusc sposta l'audio sotto il marker |
+| Trascina da un transiente (segni grigi) | crea un marker lì e lo trascina |
+| Doppio clic sulla striscia o sulla forma d'onda | aggiunge un warp marker |
+| Canc | elimina il marker selezionato |
+| Fascia arancione in alto | trascina per il loop della clip, clic per accenderlo/spegnerlo |
+| Bandierine bianche | inizio e fine della clip |
+| Trascina la forma d'onda · clic | scorre la vista · porta lì il cursore della timeline |
+| Pannello | warp, modalità e opzioni, BPM della clip o del segmento, :2 ×2, 1.1.1 qui, Auto-Warp, Segui tempo, Quantizza, Azzera, transpose, detune, gain |
 
 ## Principi
 

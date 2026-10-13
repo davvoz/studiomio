@@ -18,5 +18,6 @@ serveRpc<DspProtocol>(self as unknown as MessagePortLike, {
   dropSource: ({ sourceId }) => (engine.dropSource(sourceId), null),
   renderWarp: ({ sourceId, job }) => engine.renderWarp(sourceId, job),
   analyze: ({ sourceId, sensitivity }) => engine.analyze(sourceId, sensitivity),
+  trackBeats: ({ sourceId, bpm }) => engine.trackBeats(sourceId, bpm),
   info: () => engine.info,
 }, ready);

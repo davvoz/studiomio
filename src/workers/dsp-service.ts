@@ -54,6 +54,11 @@ export class DspService {
     return this.pool.call('analyze', { sourceId, sensitivity });
   }
 
+  /** Battiti (in campioni) trovati seguendo il tempo `bpm`. */
+  trackBeats(sourceId: string, bpm: number): Promise<number[]> {
+    return this.pool.call('trackBeats', { sourceId, bpm });
+  }
+
   info(): Promise<DspProtocol['info']['res']> {
     return this.pool.call('info', null);
   }

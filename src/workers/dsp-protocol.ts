@@ -14,5 +14,6 @@ export type DspProtocol = {
   dropSource: { req: { readonly sourceId: string }; res: null };
   renderWarp: { req: { readonly sourceId: string; readonly job: WarpJob }; res: Float32Array[] };
   analyze: { req: { readonly sourceId: string; readonly sensitivity: number }; res: AudioAnalysis };
+  trackBeats: { req: { readonly sourceId: string; readonly bpm: number }; res: number[] };
   info: { req: null; res: Record<WarpMode, string> };
 };

@@ -11,6 +11,7 @@ import {
   LoopRegionGesture, MarqueeGesture, MoveClipsGesture, ResizeClipGesture, ScrubGesture,
   type Gesture, type GestureHost, type Pointer,
 } from './gestures';
+import { Surface } from '../surface';
 import { paintLanes, paintPlayhead, paintRuler, RULER_LOOP_BAND } from './painters';
 
 export interface ArrangementDeps {
@@ -39,29 +40,6 @@ const gestureFor: Readonly<Record<HitKey, (host: GestureHost, hit: Hit, p: Point
 const hoverCursor: Readonly<Record<HitKey, string>> = {
   'clip:body': 'grab', 'clip:start': 'ew-resize', 'clip:end': 'ew-resize', lane: 'default', empty: 'default',
 };
-
-/** Un canvas nitido anche su schermi ad alta densità. */
-class Surface {
-  readonly canvas = document.createElement('canvas');
-  readonly g = this.canvas.getContext('2d')!;
-  width = 0;
-  height = 0;
-
-  constructor(className: string) {
-    this.canvas.className = className;
-  }
-
-  resize(w: number, h: number): void {
-    const dpr = window.devicePixelRatio || 1;
-    this.width = w;
-    this.height = h;
-    this.canvas.width = Math.max(1, Math.round(w * dpr));
-    this.canvas.height = Math.max(1, Math.round(h * dpr));
-    this.canvas.style.width = `${w}px`;
-    this.canvas.style.height = `${h}px`;
-    this.g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-}
 
 /** La timeline: righello con loop e testina, corsie con le clip, gesti del mouse. */
 export class ArrangementView implements GestureHost {
