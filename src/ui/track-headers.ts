@@ -7,6 +7,7 @@ import type { ProjectStore } from '../store/project-store';
 import { SEPARATOR, showContextMenu, type MenuItem } from './context-menu';
 import type { UiState } from './ui-state';
 import { el } from './dom';
+import { renameInline } from './inline-rename';
 import { LevelMeter, type MeterBoard } from './meters/meter-board';
 import { addEffectItems, fxButton, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 
@@ -157,25 +158,9 @@ class HeaderRow {
   }
 
   private rename(): void {
-    const label = this.name;
-    const input = el<HTMLInputElement>('input', { className: 'rename', value: label.textContent ?? '' });
-    let finished = false;
-    const done = (save: boolean) => {
-      if (finished) return;
-      finished = true;
-      const name = input.value.trim();
-      input.replaceWith(label);
-      if (save && name && name !== label.textContent) this.store.apply(renameTrack(this.id, name));
-    };
-    input.onkeydown = e => {
-      e.stopPropagation();
-      if (e.key === 'Enter') done(true);
-      if (e.key === 'Escape') done(false);
-    };
-    input.onblur = () => done(true);
-    label.replaceWith(input);
-    input.select();
+    renameInline(this.name, name => this.store.apply(renameTrack(this.id, name)));
   }
+
 }
 
 const newTrackItems = (store: ProjectStore): MenuItem[] => [

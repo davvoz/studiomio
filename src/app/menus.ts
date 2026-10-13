@@ -1,6 +1,7 @@
 /* I menu contestuali della timeline: per ogni cosa sotto il puntatore, le sue voci. */
-import type { PlacementId, TrackId } from '../core/id';
+import type { TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
+import { placementRef, type ClipRef } from '../store/clip-ref';
 import type { TrackKind } from '../store/edits';
 import { KEY, SEPARATOR, type MenuItem } from '../ui/context-menu';
 import type { Hit } from '../ui/timeline/geometry';
@@ -8,7 +9,7 @@ import type { Hit } from '../ui/timeline/geometry';
 /** I comandi che i menu della timeline usano. */
 export interface TimelineActions {
   readonly canPaste: boolean;
-  openClip(track: TrackId, id: PlacementId): void;
+  openClip(ref: ClipRef): void;
   cutSelection(): void;
   copySelection(): void;
   deleteSelection(): void;
@@ -31,7 +32,7 @@ const newTracks = (a: TimelineActions): MenuItem[] => [
 
 const MENUS: { readonly [K in Hit['kind']]: (a: TimelineActions, hit: Extract<Hit, { kind: K }>) => MenuItem[] } = {
   clip: (a, hit) => [
-    { label: 'Apri nell\'editor', shortcut: 'doppio clic', run: () => a.openClip(hit.track, hit.placement.id) },
+    { label: 'Apri nell\'editor', shortcut: 'doppio clic', run: () => a.openClip(placementRef(hit.track, hit.placement.id)) },
     SEPARATOR,
     { label: 'Taglia', shortcut: KEY.cut, run: () => a.cutSelection() },
     { label: 'Copia', shortcut: KEY.copy, run: () => a.copySelection() },

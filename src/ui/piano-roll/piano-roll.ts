@@ -1,17 +1,16 @@
-import type { PlacementId, TrackId } from '../../core/id';
+import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
 import { instrumentType } from '../../devices/registry';
-import type { Placement } from '../../model/arrangement';
 import { MidiClip, type Note } from '../../model/midi-clip';
 import {
   addNote, deleteNotes, duplicateNotes, moveNotes, quantizeNotes, type NoteChange, type Selection,
 } from '../../model/note-edits';
 import { MidiTrack } from '../../model/track';
 import { copyNotes, pasteNotes, type Clipboard } from '../../store/clipboard';
-import { updateClip } from '../../store/edits';
+import { findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
-import { BeatAxis, contentBeatAt, timelineBeatOf } from '../clip-editor/clip-geometry';
+import { BeatAxis, playheadIn, seekBeatOf } from '../clip-editor/clip-geometry';
 import { bindKeys, type Binding } from '../keymap';
 import { showContextMenu } from '../context-menu';
 import { Surface } from '../surface';
@@ -37,7 +36,8 @@ export interface PianoRollDeps {
 
 interface Target {
   readonly track: MidiTrack;
-  readonly placement: Placement<MidiClip>;
+  readonly clip: MidiClip;
+  readonly found: FoundClip;
 }
 
 const KEYS_WIDTH = 52;
@@ -70,7 +70,7 @@ export class PianoRoll implements RollHost {
   private readonly surface = new Surface('roll-canvas');
   private readonly keyboard: RollKeyboard;
   private readonly panel: RollPanel;
-  private placementId: PlacementId | null = null;
+  private ref: ClipRef | null = null;
   private _axis = new BeatAxis();
   private _pitches = new PitchAxis(12, 0, ROLL.ruler);
   private _selection = new Set<Note>();
@@ -110,19 +110,19 @@ export class PianoRoll implements RollHost {
   }
 
   get isOpen(): boolean {
-    return this.placementId !== null;
+    return this.ref !== null;
   }
 
-  /** La clip posata aperta, se c'è. */
-  get openPlacement(): PlacementId | null {
-    return this.placementId;
+  /** La clip aperta (sulla timeline o in uno slot), se c'è. */
+  get openClip(): ClipRef | null {
+    return this.ref;
   }
 
-  /** Apre la clip posata `id`; restituisce false se non è una clip MIDI. */
-  open(id: PlacementId): boolean {
-    this.placementId = id;
+  /** Apre la clip; restituisce false se non è una clip MIDI. */
+  open(ref: ClipRef): boolean {
+    this.ref = ref;
     if (!this.target()) {
-      this.placementId = null;
+      this.ref = null;
       return false;
     }
     this._selection = new Set();
@@ -136,7 +136,7 @@ export class PianoRoll implements RollHost {
   }
 
   close(): void {
-    this.placementId = null;
+    this.ref = null;
     this.gesture = null;
     this.element.hidden = true;
   }
@@ -164,10 +164,10 @@ export class PianoRoll implements RollHost {
   }
 
   commit(label: string, fn: (c: MidiClip) => MidiClip): void {
-    const t = this.target();
-    if (!t) return;
+    const ref = this.ref;
+    if (!ref || !this.target()) return;
     try {
-      this.deps.store.apply(updateClip<MidiClip>(label, t.track.id, t.placement.id, fn));
+      this.deps.store.apply(updateClipAt<MidiClip>(label, ref, fn));
     } catch (e) {
       this.deps.say(`${label}: ${e instanceof Error ? e.message : e}`);
     }
@@ -195,7 +195,7 @@ export class PianoRoll implements RollHost {
 
   seekContent(content: Beats): void {
     const t = this.target();
-    const beat = t && timelineBeatOf(t.placement, content);
+    const beat = t && seekBeatOf(t.found, content);
     if (beat !== null && beat !== undefined) this.deps.engine.seek(beat);
   }
 
@@ -303,16 +303,13 @@ export class PianoRoll implements RollHost {
   }
 
   private clip(): MidiClip | null {
-    return this.target()?.placement.clip ?? null;
+    return this.target()?.clip ?? null;
   }
 
   private target(): Target | null {
-    if (!this.placementId) return null;
-    for (const t of this.deps.store.project.tracks) {
-      const pl = t.placement(this.placementId);
-      if (pl && pl.clip instanceof MidiClip && t instanceof MidiTrack) return { track: t, placement: pl as Placement<MidiClip> };
-    }
-    return null;
+    const found = this.ref && findClip(this.deps.store.project, this.ref);
+    if (!found || !(found.clip instanceof MidiClip) || !(found.track instanceof MidiTrack)) return null;
+    return { track: found.track, clip: found.clip, found };
   }
 
   /** Allinea selezione, pannello e disegno al progetto; chiude se la clip non esiste più. */
@@ -320,11 +317,11 @@ export class PianoRoll implements RollHost {
     if (!this.isOpen) return;
     const t = this.target();
     if (!t) return this.close();
-    const notes = new Set(t.placement.clip.notes);
+    const notes = new Set(t.clip.notes);
     if ([...this._selection].some(n => !notes.has(n))) this._selection = new Set([...this._selection].filter(n => notes.has(n)));
     const instrument = t.track.instrument;
     const label = `${instrumentType(instrument.type)?.label ?? instrument.type}${instrument.preset ? ` · ${instrument.preset}` : ''}`;
-    this.panel.update(t.placement.clip, label, this.drawMode, this._selection.size, this.deps.store.project.signature.beatsPerBar);
+    this.panel.update(t.clip, label, this.drawMode, this._selection.size, this.deps.store.project.signature.beatsPerBar);
     this.invalidate();
   }
 
@@ -353,13 +350,13 @@ export class PianoRoll implements RollHost {
       this.dirty = false;
       const t = this.target();
       if (t) {
-        const clip = this.gesture ? this.gesture.preview(t.placement.clip) : t.placement.clip;
+        const clip = this.gesture ? this.gesture.preview(t.clip) : t.clip;
         const { g, width, height } = this.surface;
         paintRoll({
           g, width, height, axis: this._axis, pitches: this._pitches, clip,
           selection: this.gesture?.previewSelection?.() ?? this._selection,
           signature: this.deps.store.project.signature, grid: this.grid,
-          playhead: engine.playing ? contentBeatAt(t.placement, engine.position) : null, insert: this.insert,
+          playhead: playheadIn(t.found, engine), insert: this.insert,
         });
         this.gesture?.paint?.(g);
       }

@@ -173,7 +173,12 @@ export class PlaybackEngine {
 
   /** Vero se qualche traccia non segue la timeline (si accende "Torna all'arrangement"). */
   get arrangementOverridden(): boolean {
-    return this.session.overridden;
+    return this.session.taken.size > 0;
+  }
+
+  /** Le tracce prese dalla session (nell'arrangement si mostrano spente). */
+  get takenTracks(): ReadonlySet<TrackId> {
+    return this.session.taken;
   }
 
   /** L'orologio continuo adesso. */

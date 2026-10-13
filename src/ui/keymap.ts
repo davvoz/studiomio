@@ -17,6 +17,8 @@ export interface Commands {
   zoom(factor: number): void;
   save(): void;
   open(): void;
+  /** Passa da arrangement a session e viceversa. */
+  toggleView(): void;
 }
 
 export interface Binding<C = Commands> {
@@ -30,6 +32,7 @@ export interface Binding<C = Commands> {
  *  oppure KeyboardEvent.code (per i tasti come Spazio). */
 export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'Space', run: c => c.togglePlay() },
+  { key: 'tab', run: c => c.toggleView() },
   { key: 'Enter', run: c => c.stopAndRewind() },
   { key: 'z', ctrl: true, run: c => c.undo() },
   { key: 'z', ctrl: true, shift: true, run: c => c.redo() },

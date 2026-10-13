@@ -6,6 +6,9 @@ import type { Placement } from '../../model/arrangement';
 import type { AudioClip } from '../../model/audio-clip';
 import type { Clip } from '../../model/clip';
 import type { WarpMarkers } from '../../model/warp-markers';
+import type { TrackSessionState } from '../../engine/session';
+import type { Track } from '../../model/track';
+import type { FoundClip } from '../../store/clip-ref';
 
 /** Asse orizzontale dell'editor: battiti della clip (possono essere negativi, prima di 1.1.1). */
 export class BeatAxis {
@@ -92,3 +95,25 @@ export function timelineBeatOf(pl: Placement, content: Beats): Beats | null {
   }
   return null;
 }
+
+/** Ciò che serve sapere del trasporto per mettere la testina in una clip. */
+export interface TransportView {
+  readonly playing: boolean;
+  readonly position: Beats;
+  sessionState(track: Track): TrackSessionState;
+}
+
+/** Dove suona la testina dentro la clip, o null. Sulla timeline segue il trasporto (se la
+ *  traccia segue la timeline); in uno slot, il punto della clip lanciata. */
+export function playheadIn(found: FoundClip, transport: TransportView): Beats | null {
+  if (!transport.playing) return null;
+  const state = transport.sessionState(found.track);
+  if (found.placement) return state.followsArrangement ? contentBeatAt(found.placement, transport.position) : null;
+  const playing = state.playing;
+  return playing && found.track.slots[playing.slot]?.id === found.clip.id ? found.clip.contentBeatAt(playing.elapsed) : null;
+}
+
+/** Battito della timeline da cui far suonare il battito `content` della clip (solo per le
+ *  clip posate: una clip della session non ha un posto sulla timeline). */
+export const seekBeatOf = (found: FoundClip, content: Beats): Beats | null =>
+  found.placement ? timelineBeatOf(found.placement, content) : null;

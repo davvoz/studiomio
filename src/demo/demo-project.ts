@@ -1,12 +1,14 @@
 import type { ProjectSession } from '../app/project-session';
 import { encodeWav } from '../dsp/codec/wav';
 import type { AudioClip } from '../model/audio-clip';
+import type { Clip } from '../model/clip';
 import type { MidiClip, Note } from '../model/midi-clip';
 import type { TrackId } from '../core/id';
 import { ANALOG } from '../devices/instruments/analog/analog';
 import { DELAY } from '../devices/effects/delay/delay';
-import { addEffect, addMidiClip, addSample, addTrack, loadEffectPreset, loadPreset, placeSample, renameTrack, resizePlacement, setMixer, updateClip } from '../store/edits';
+import { addEffect, addMidiClip, addSample, addTrack, loadEffectPreset, loadPreset, placeSample, renameTrack, resizePlacement, setMixer, setSlot, updateClip } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
+import { renameScene } from '../store/session-edits';
 import { drumLoop } from './demo-loop';
 
 /** Linea di basso di 2 battute (8 battiti), in La minore. */
@@ -80,4 +82,37 @@ export async function buildDemoProject(store: ProjectStore, session: ProjectSess
   store.apply(addEffect(pad, DELAY.type, DELAY.label));
   const fx = store.project.track(pad)!.effects[0].id;
   store.apply(loadEffectPreset(pad, fx, pingPong.name, pingPong.params));
+
+  buildDemoSession(store, drums, bass, pad);
+}
+
+/** La session del demo: quattro scene da lanciare, con le stesse clip della timeline e
+ *  qualche variazione (basso all'ottava, accordi spezzati). */
+function buildDemoSession(store: ProjectStore, drums: TrackId, bass: TrackId, pad: TrackId): void {
+  const p = store.project;
+  const [drumClips, bassClip, padClip] = [p.track(drums)!, p.track(bass)!, p.track(pad)!].map(t => t.arrangement.map(x => x.clip));
+  const copy = <C extends Clip>(c: C, name: string, change: (c: C) => C = x => x) =>
+    change(c.withId(store.ids.next('clip')).withName(name)).withLoop({ ...c.loop, enabled: true });
+  const scenes: { name: string; drums: number; bass: ((c: MidiClip) => MidiClip) | null; pad: ((c: MidiClip) => MidiClip) | null }[] = [
+    { name: 'Intro', drums: 3, bass: null, pad: c => c },
+    { name: 'Groove', drums: 0, bass: c => c, pad: null },
+    { name: 'Pieno', drums: 1, bass: c => c, pad: c => c },
+    { name: 'Ottava sopra', drums: 2, bass: c => c.withNotes(c.notes.map(n => ({ ...n, pitch: n.pitch + 12 }))), pad: c => c.withNotes(arpeggiate(c.notes)) },
+  ];
+  scenes.forEach((scene, i) => {
+    store.apply(renameScene(store.project.scenes[i].id, scene.name));
+    store.apply(setSlot(drums, i, copy(drumClips[scene.drums], drumClips[scene.drums].name)));
+    if (scene.bass) store.apply(setSlot(bass, i, copy(bassClip[0] as MidiClip, i === 3 ? 'Basso alto' : 'Basso', scene.bass)));
+    if (scene.pad) store.apply(setSlot(pad, i, copy(padClip[0] as MidiClip, i === 3 ? 'Arpeggio' : 'Accordi', scene.pad)));
+  });
+}
+
+/** Gli accordi spezzati in ottavi: una nota per volta, dal basso all'alto. */
+function arpeggiate(notes: readonly Note[]): Note[] {
+  const out: Note[] = [];
+  for (let beat = 0; beat < 8; beat += 0.5) {
+    const chord = notes.filter(n => n.start <= beat && beat < n.start + n.duration).map(n => n.pitch).sort((a, b) => a - b);
+    if (chord.length) out.push({ pitch: chord[(beat * 2) % chord.length] + 12, start: beat, duration: 0.45, velocity: 90 });
+  }
+  return out;
 }

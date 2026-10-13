@@ -1,18 +1,16 @@
-import type { PlacementId, TrackId } from '../../core/id';
 import type { Seconds } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
-import type { Placement } from '../../model/arrangement';
 import { AudioClip } from '../../model/audio-clip';
 import { sampleDuration, type SampleRef } from '../../model/sample';
 import { autoWarp, followTempo } from '../../model/warp-tools';
-import { updateClip } from '../../store/edits';
+import { findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
 import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
 import { Surface } from '../surface';
 import type { Pointer } from '../timeline/gestures';
 import { gridStep } from '../timeline/geometry';
 import type { PeakStore } from '../waveform';
-import { BeatAxis, contentBeatAt, timelineBeatOf } from './clip-geometry';
+import { BeatAxis, playheadIn, seekBeatOf } from './clip-geometry';
 import { ClipPanel } from './clip-panel';
 import { editorCursor, editorGestureFor, editorHit, type EditorGesture, type EditorHit, type EditorHost } from './editor-gestures';
 import { LAYOUT, paintEditor } from './editor-painter';
@@ -27,8 +25,8 @@ export interface ClipEditorDeps {
 }
 
 interface Target {
-  readonly track: TrackId;
-  readonly placement: Placement<AudioClip>;
+  readonly clip: AudioClip;
+  readonly found: FoundClip;
   readonly sample: SampleRef;
 }
 
@@ -39,7 +37,7 @@ export class ClipEditor implements EditorHost {
   readonly element = Object.assign(document.createElement('section'), { className: 'clip-editor', hidden: true, tabIndex: -1 });
   private readonly surface = new Surface('editor-canvas');
   private readonly panel: ClipPanel;
-  private placementId: PlacementId | null = null;
+  private ref: ClipRef | null = null;
   private _axis = new BeatAxis();
   private selected = -1;
   private hover: Seconds | null = null;
@@ -69,14 +67,14 @@ export class ClipEditor implements EditorHost {
   }
 
   get isOpen(): boolean {
-    return this.placementId !== null;
+    return this.ref !== null;
   }
 
-  /** Apre la clip posata `id`; restituisce false se non è una clip audio. */
-  open(id: PlacementId): boolean {
-    this.placementId = id;
+  /** Apre la clip (sulla timeline o in uno slot); restituisce false se non è una clip audio. */
+  open(ref: ClipRef): boolean {
+    this.ref = ref;
     if (!this.target()) {
-      this.placementId = null;
+      this.ref = null;
       return false;
     }
     this.selected = -1;
@@ -89,7 +87,7 @@ export class ClipEditor implements EditorHost {
   }
 
   close(): void {
-    this.placementId = null;
+    this.ref = null;
     this.gesture = null;
     this.element.hidden = true;
   }
@@ -101,7 +99,7 @@ export class ClipEditor implements EditorHost {
   }
 
   clip(): AudioClip | null {
-    return this.target()?.placement.clip ?? null;
+    return this.target()?.clip ?? null;
   }
 
   duration(): Seconds {
@@ -118,10 +116,10 @@ export class ClipEditor implements EditorHost {
   }
 
   commit(label: string, fn: (c: AudioClip) => AudioClip): void {
-    const t = this.target();
-    if (!t) return;
+    const ref = this.ref;
+    if (!ref || !this.target()) return;
     try {
-      this.deps.store.apply(updateClip<AudioClip>(label, t.track, t.placement.id, fn));
+      this.deps.store.apply(updateClipAt<AudioClip>(label, ref, fn));
     } catch (e) {
       this.deps.say(`${label}: ${e instanceof Error ? e.message : e}`);
     }
@@ -134,7 +132,7 @@ export class ClipEditor implements EditorHost {
 
   seekContent(content: number): void {
     const t = this.target();
-    const beat = t && timelineBeatOf(t.placement, content);
+    const beat = t && seekBeatOf(t.found, content);
     if (beat !== null && beat !== undefined) this.deps.engine.seek(beat);
   }
 
@@ -177,16 +175,11 @@ export class ClipEditor implements EditorHost {
   // ---------------------------------------------------------------- stato
 
   private target(): Target | null {
-    if (!this.placementId) return null;
     const p = this.deps.store.project;
-    for (const t of p.tracks) {
-      const pl = t.placement(this.placementId);
-      if (pl && pl.clip instanceof AudioClip) {
-        const sample = p.sample(pl.clip.sample);
-        return sample ? { track: t.id, placement: pl as Placement<AudioClip>, sample } : null;
-      }
-    }
-    return null;
+    const found = this.ref && findClip(p, this.ref);
+    if (!found || !(found.clip instanceof AudioClip)) return null;
+    const sample = p.sample(found.clip.sample);
+    return sample ? { clip: found.clip, found, sample } : null;
   }
 
   /** Allinea pannello e disegno al progetto; chiude se la clip non esiste più. */
@@ -194,8 +187,8 @@ export class ClipEditor implements EditorHost {
     if (!this.isOpen) return;
     const t = this.target();
     if (!t) return this.close();
-    if (this.selected >= t.placement.clip.warp.markers.length) this.selected = -1;
-    this.panel.update(t.placement.clip, t.sample, this.selected);
+    if (this.selected >= t.clip.warp.markers.length) this.selected = -1;
+    this.panel.update(t.clip, t.sample, this.selected);
     this.invalidate();
   }
 
@@ -203,7 +196,7 @@ export class ClipEditor implements EditorHost {
   private fit(): void {
     const t = this.target();
     if (!t || this.surface.width < 10) return;
-    const c = t.placement.clip, m = c.warp.markers, d = sampleDuration(t.sample);
+    const c = t.clip, m = c.warp.markers, d = sampleDuration(t.sample);
     const b0 = Math.min(c.region.start, c.warp.enabled ? m.beatOf(0) : 0);
     const b1 = Math.max(c.region.end, c.warp.enabled ? m.beatOf(d) : this.deps.store.project.tempo.beatAt(d));
     this._axis = BeatAxis.fit(b0, b1, this.surface.width);
@@ -218,14 +211,14 @@ export class ClipEditor implements EditorHost {
       this.dirty = false;
       const t = this.target();
       if (t) {
-        const clip = this.gesture ? this.gesture.preview(t.placement.clip) : t.placement.clip;
+        const clip = this.gesture ? this.gesture.preview(t.clip) : t.clip;
         const { project } = this.deps.store;
         paintEditor({
           g: this.surface.g, width: this.surface.width, height: this.surface.height, axis: this._axis,
           clip, duration: sampleDuration(t.sample), transients: this.transients(),
           peaks: this.deps.peaks.get(t.sample.id), tempo: project.tempo, signature: project.signature,
           grid: gridStep(this._axis.pxPerBeat, project.signature, 10), selectedMarker: this.selected, hoverTransient: this.hover,
-          playhead: engine.playing ? contentBeatAt(t.placement, engine.position) : null,
+          playhead: playheadIn(t.found, engine),
         });
       }
     }

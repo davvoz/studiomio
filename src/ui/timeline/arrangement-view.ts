@@ -80,6 +80,7 @@ export class ArrangementView implements GestureHost {
     this.bindWheel(this.element);
     this.bindDrop(lanesWrap);
     deps.store.onChange(() => this.invalidate());
+    deps.engine.onSessionChange(() => this.invalidate());
     deps.ui.onChange(() => this.invalidate());
     requestAnimationFrame(this.frame);
   }
@@ -122,7 +123,7 @@ export class ArrangementView implements GestureHost {
       paintRuler(this.ruler.g, project, this.geo, this.ruler.width, this.ruler.height, grid);
       paintLanes(this.lanes.g, {
         project, geo: this.geo, width: this.lanes.width, height: this.lanes.height, grid,
-        selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(),
+        selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks,
         peaks: (c: AudioClip) => this.deps.peaks.get(c.sample),
       });
     }

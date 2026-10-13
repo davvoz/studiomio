@@ -104,9 +104,9 @@ export class Session {
     return moved;
   }
 
-  /** Vero se almeno una traccia, finiti i cambi in coda, non seguirà l'arrangement. */
-  get overridden(): boolean {
-    return [...this.tracks.values()].some(s => s.programs.at(-1)?.source.kind !== 'arrangement');
+  /** Le tracce che, finiti i cambi in coda, non seguiranno la loro timeline. */
+  get taken(): ReadonlySet<TrackId> {
+    return new Set([...this.tracks].filter(([, s]) => s.programs.at(-1)?.source.kind !== 'arrangement').map(([id]) => id));
   }
 
   state(track: Track, clock: number): TrackSessionState {

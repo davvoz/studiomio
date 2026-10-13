@@ -1,4 +1,4 @@
-import type { PlacementId, TrackId } from '../core/id';
+import type { TrackId } from '../core/id';
 import { randomIds } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { buildDemoProject } from '../demo/demo-project';
@@ -6,6 +6,7 @@ import { encodeWav } from '../dsp/codec/wav';
 import { MASTER, Project, type ChainOwner } from '../model/project';
 import { addMidiClip, addTrack, setLoopRegion, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
+import { findClip, placementRef, type ClipRef } from '../store/clip-ref';
 import { showContextMenu } from '../ui/context-menu';
 import { gridStep } from '../ui/timeline/geometry';
 import { timelineMenu, type TimelineActions } from './menus';
@@ -19,6 +20,7 @@ import { bindKeys, KEYMAP, type Commands } from '../ui/keymap';
 import { ArrangementView } from '../ui/timeline/arrangement-view';
 import { resolveSelection } from '../ui/timeline/planning';
 import { MasterStrip } from '../ui/master-strip';
+import { SessionView } from '../ui/session/session-view';
 import { MeterBoard } from '../ui/meters/meter-board';
 import { TrackHeaders } from '../ui/track-headers';
 import { TransportBar, type FileCommands } from '../ui/transport-bar';
@@ -38,18 +40,21 @@ export class App implements Commands, FileCommands, TimelineActions {
   readonly editor: ClipEditor;
   readonly pianoRoll: PianoRoll;
   readonly device: DeviceView;
+  readonly sessionView: SessionView;
+  private readonly arrangementArea = Object.assign(document.createElement('div'), { className: 'arrangement' });
+  private readonly viewButtons: { arrangement: HTMLButtonElement; session: HTMLButtonElement; back: HTMLButtonElement };
   private readonly bottom = new BottomPanel();
   /** Appunti condivisi da timeline e piano roll. */
   readonly clipboard = new Clipboard();
   /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
-  private readonly clipEditors: Readonly<Record<string, BottomView & { open(id: PlacementId): boolean }>>;
+  private readonly clipEditors: Readonly<Record<string, BottomView & { open(ref: ClipRef): boolean }>>;
   private readonly transport: TransportBar;
   private readonly status = Object.assign(document.createElement('footer'), { className: 'status' });
 
   constructor(root: HTMLElement) {
     this.arrangement = new ArrangementView({
       store: this.store, ui: this.ui, engine: this.audio.engine, peaks: this.peaks,
-      openClip: (track, id) => this.openClip(track, id),
+      openClip: (track, id) => this.openClip(placementRef(track, id)),
       dropFiles: (files, track, beat) => this.run(() => this.session.importFiles(files, track, beat)),
       contextMenu: (hit, x, y) => showContextMenu(x, y, timelineMenu(this, hit)),
     });
@@ -72,13 +77,33 @@ export class App implements Commands, FileCommands, TimelineActions {
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
     const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner) };
     const meters = new MeterBoard(owner => this.audio.engine.levels(owner));
+    this.sessionView = new SessionView({
+      store: this.store, engine: this.audio.engine, meters, clipboard: this.clipboard,
+      openClip: ref => this.openClip(ref),
+      openDevices: owner => this.openDevices(owner),
+      importToSlot: (files, track, slot) => this.run(() => this.session.importFilesToSlots(files, track, slot)),
+      addTrack: kind => this.addTrack(kind),
+      say: t => this.say(t),
+    });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
     const master = new MasterStrip(this.store, headerActions, meters);
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this, () =>
       `${this.session.name}${this.session.saved ? '' : ' •'}`);
-    const main = Object.assign(document.createElement('div'), { className: 'arrangement' });
+    const main = this.arrangementArea;
     main.append(headers.element, this.arrangement.element, master.header, master.lane);
-    root.append(transport.element, main, this.bottom.element, this.status);
+    const views = Object.assign(document.createElement('div'), { className: 'views' });
+    views.append(main, this.sessionView.element);
+    root.append(transport.element, views, this.bottom.element, this.status);
+    const viewButton = (text: string, title: string, run: () => void) => Object.assign(document.createElement('button'), { textContent: text, title, onclick: run });
+    this.viewButtons = {
+      arrangement: viewButton('☰ Arr.', 'Arrangement: la timeline (Tab)', () => this.showView('arrangement')),
+      session: viewButton('▦ Session', 'Session: le clip da lanciare, scena per scena, e il mixer (Tab)', () => this.showView('session')),
+      back: viewButton('↩', 'Torna all\'arrangement: le tracce prese dalla session tornano a suonare la loro timeline', () => this.audio.engine.backToArrangement()),
+    };
+    this.viewButtons.back.className = 'back-to-arrangement';
+    transport.addGroup(this.viewButtons.arrangement, this.viewButtons.session, this.viewButtons.back);
+    this.audio.engine.onSessionChange(() => this.renderViews());
+    this.renderViews();
 
     this.session.on('message', t => this.say(t));
     this.session.on('change', () => transport.render());
@@ -203,6 +228,26 @@ export class App implements Commands, FileCommands, TimelineActions {
     this.transport.render();
   }
 
+  toggleView(): void {
+    this.showView(this.sessionView.isVisible ? 'arrangement' : 'session');
+  }
+
+  /** Mostra la timeline o la session (al posto l'una dell'altra, come in Live). */
+  showView(view: 'arrangement' | 'session'): void {
+    this.arrangementArea.hidden = view !== 'arrangement';
+    this.sessionView.show(view === 'session');
+    this.renderViews();
+  }
+
+  private renderViews(): void {
+    const session = this.sessionView.isVisible;
+    this.viewButtons.arrangement.classList.toggle('on', !session);
+    this.viewButtons.session.classList.toggle('on', session);
+    const taken = this.audio.engine.arrangementOverridden;
+    this.viewButtons.back.disabled = !taken;
+    this.viewButtons.back.classList.toggle('lit', taken);
+  }
+
   toggleSnap(): void {
     this.ui.setSnap(!this.ui.snap);
   }
@@ -247,18 +292,19 @@ export class App implements Commands, FileCommands, TimelineActions {
 
   // ---------------------------------------------------------------- aiuti
 
-  openClip(track: TrackId, id: PlacementId): void {
-    const clip = this.store.project.track(track)?.placement(id)?.clip;
+  /** Apre la clip (sulla timeline o in uno slot) nel suo editor. */
+  openClip(ref: ClipRef): void {
+    const clip = findClip(this.store.project, ref)?.clip;
     const editor = clip && this.clipEditors[clip.kind];
     if (!editor) return this.say(clip ? `Nessun editor per le clip "${clip.kind}".` : '');
-    this.bottom.show(editor, () => editor.open(id));
+    this.bottom.show(editor, () => editor.open(ref));
   }
 
   /** Apre strumento ed effetti di una traccia, o gli effetti del master; dal piano roll, con il
    *  pulsante per tornare alle note. */
   openDevices(owner: ChainOwner, fromRoll = false): void {
-    const placement = fromRoll ? this.pianoRoll.openPlacement : null;
-    const back = placement && owner !== MASTER ? () => this.openClip(owner, placement) : null;
+    const clip = fromRoll ? this.pianoRoll.openClip : null;
+    const back = clip && owner !== MASTER ? () => this.openClip(clip) : null;
     this.bottom.show(this.device, () => this.device.open(owner, back));
   }
 

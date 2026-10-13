@@ -9,6 +9,7 @@ import { FsAccessDirectory } from '../persistence/fs-access-directory';
 import { ProjectFolder } from '../persistence/project-folder';
 import type { ProjectStore } from '../store/project-store';
 import { importSample } from '../store/selection-edits';
+import { importSampleToSlot } from '../store/session-edits';
 import type { SampleId } from '../core/id';
 import type { AudioAnalysis } from '../dsp/analysis/analyze';
 
@@ -61,6 +62,25 @@ export class ProjectSession {
         const sample = await this.loadFile(file);
         this.store.apply(importSample(sample, i === 0 ? target : null, start));
         this.say(`Importato "${file.name}": ${sample.analysis?.tempo.toFixed(2)} BPM.`);
+      } catch (e) {
+        this.say(`Impossibile importare "${file.name}": ${e instanceof Error ? e.message : e}`);
+      }
+    }
+  }
+
+  /** Importa file audio negli slot della session, da `slot` in giù nella stessa colonna (su
+   *  una traccia audio nuova se `target` non lo è). I file oltre l'ultima scena si saltano. */
+  async importFilesToSlots(files: readonly File[], target: TrackId | null, slot: number): Promise<void> {
+    let track = target;
+    for (const [i, file] of files.entries()) {
+      if (slot + i >= this.store.project.scenes.length) break;
+      try {
+        const sample = await this.loadFile(file);
+        const before = this.store.project.tracks.length;
+        this.store.apply(importSampleToSlot(sample, track, slot + i));
+        // la prima clip può aver creato una traccia nuova: le altre vanno lì sotto
+        if (this.store.project.tracks.length > before) track = this.store.project.tracks.at(-1)!.id;
+        this.say(`Importato "${file.name}" nella session.`);
       } catch (e) {
         this.say(`Impossibile importare "${file.name}": ${e instanceof Error ? e.message : e}`);
       }

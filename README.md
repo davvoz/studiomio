@@ -1,8 +1,8 @@
 # studiomio
 
-DAW nel browser con warp in stile Ableton Live: arrangement (timeline), clip audio con
-warp, clip MIDI con piano roll, strumenti ed effetti in AudioWorklet. Il modello è pensato per
-aggiungere la session view.
+DAW nel browser con warp in stile Ableton Live: arrangement (timeline) e session view con il
+lancio delle clip, clip audio con warp, clip MIDI con piano roll, strumenti ed effetti in
+AudioWorklet, mixer con misuratori di livello.
 
 Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
@@ -35,7 +35,8 @@ Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una vo
 src/
   core/                id tipizzati, eventi, tempo musicale (battiti, tempo, metro)
   model/               il progetto, immutabile
-    project.ts         radice: tracce, scene, sample, tempo, loop, master (volume ed effetti)
+    project.ts         radice: tracce, scene, sample, tempo, loop, master (volume ed effetti), quantizzazione del lancio
+    launch.ts          i passi della quantizzazione del lancio (1/16 … 4 battute)
     effect-list.ts     operazioni su una catena di effetti, per tracce e master (funzioni pure)
     track.ts           Track → AudioTrack, MidiTrack (mixer, timeline, slot della session, strumento)
     clip.ts            Clip → AudioClip (sample + warp), MidiClip (note)
@@ -46,14 +47,18 @@ src/
   store/
     project-store.ts   progetto corrente, annulla/ripeti, modifiche continue unite
     edits.ts           una modifica per azione dell'utente (funzioni pure)
-    clipboard.ts       appunti: copia e incolla di clip e di note
+    clipboard.ts       appunti: copia e incolla di clip (timeline e slot) e di note
+    session-edits.ts   modifiche della session: clip negli slot, scene
+    clip-ref.ts        una clip sulla timeline o in uno slot: gli editor lavorano su entrambe
   persistence/
     project-codec.ts   progetto ⇄ JSON, con registri per tipi di clip e traccia
     project-folder.ts  cartella del progetto: progetto.json, backup, audio/
     directory.ts       interfaccia Directory (+ in memoria); fs-access-directory.ts per il disco
   engine/              riproduzione, sulle interfacce di audio-graph.ts (Web Audio o finto nei test)
     playback-engine.ts trasporto: play/stop/seek, aggiornamento a ogni versione del progetto
-    scheduler.ts       programmazione in anticipo, loop della timeline a corse
+    scheduler.ts       programmazione in anticipo, loop della timeline a corse, orologio continuo
+    session.ts         la session nel motore: per ogni traccia cosa suona e da quando (timeline, clip lanciata)
+    track-content.ts   i tratti che una traccia suona in una finestra, dalla timeline o dalla session
     segments.ts        clip posata → tratti continui di contenuto
     players/           un player per tipo di traccia (audio, MIDI), interfaccia degli strumenti, metronomo
     effect-chain.ts    catena degli effetti di un canale: crea, aggiorna e ricollega solo ciò che cambia
@@ -72,6 +77,7 @@ src/
   ui/
     timeline/          arrangement: geometria, disegno su canvas, gesti, pianificazione
     track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume, livello)
+    session/           la session view: griglia di slot e scene, mixer in fondo alle colonne
     master-strip.ts    la riga del master
     meters/            misuratori: scala dei dB, balistica, un ciclo di disegno per tutti
     transport-bar.ts   barra in alto
@@ -132,6 +138,32 @@ MioBrano/
 | Ctrl+L · Ctrl+4 · Ctrl+Maiusc+M | loop · griglia · metronomo |
 | Rotella · Maiusc+rotella · Ctrl+rotella · + / − | scorri · scorri in orizzontale · zoom |
 | Ctrl+S · Ctrl+O | salva · apri |
+
+## Session view
+
+**Tab** (o i pulsanti in alto **☰ Arr.** / **▦ Session**) passa dalla timeline alla session e
+viceversa. Nella session ogni traccia è una colonna di slot, una riga per scena; a destra il
+master con il lancio delle scene; in fondo a ogni colonna il mixer (pan, volume, livello,
+mute/solo, FX), che il pulsante **Mixer** nasconde quando serve spazio.
+
+| | |
+|---|---|
+| ▶ su una clip | la lancia al prossimo confine della quantizzazione ("Lancio": da nessuna a 4 battute; 1 battuta di partenza). A trasporto fermo parte subito, con il trasporto |
+| ▶ su una scena | lancia tutta la riga; le tracce con lo slot vuoto si fermano |
+| ■ in uno slot vuoto o sotto la colonna | ferma la traccia · **Ferma tutte** ferma tutte le clip |
+| Clic su una clip | la sceglie e la apre nell'editor (piano roll o editor audio): le modifiche si sentono mentre suona |
+| Doppio clic su uno slot MIDI vuoto | nuova clip di una battuta |
+| Trascina una clip | in un altro slot (anche di un'altra traccia dello stesso tipo); con Ctrl la copia |
+| Trascina file audio su uno slot | importa lì (sulla traccia, o su una nuova se non è audio) |
+| Invio · Canc · Ctrl+D · frecce | lancia · elimina · duplica nello slot sotto · sposta la scelta |
+| Ctrl+C · Ctrl+X · Ctrl+V | copia e incolla tra slot; una clip copiata dalla session si incolla anche nella timeline, al cursore (e viceversa) |
+| Doppio clic sul nome di una scena o di una traccia | rinomina · tasto destro: duplica, inserisci, elimina |
+
+Come in Live, una traccia a cui si lancia una clip smette di seguire la sua timeline (che
+nell'arrangement si vede spenta) finché non si preme **↩** (Torna all'arrangement), acceso
+quando serve. Le clip della session girano su un orologio che non salta: con il loop della
+timeline acceso o spostando il cursore restano in fase. Le clip della session non finiscono
+nell'export, che è il mix della timeline.
 
 ## Editor delle clip audio
 
@@ -252,7 +284,7 @@ contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli ef
   è una descrizione più un motore DSP (vedi sopra).
 - **I file vecchi si aprono.** Il formato del progetto ha una versione; ogni cambiamento porta
   una migrazione (la 1 → 2 ha dato uno strumento alle tracce MIDI, la 2 → 3 una catena di
-  effetti a tutte le tracce, la 3 → 4 una al master).
+  effetti a tutte le tracce, la 3 → 4 una al master, la 4 → 5 la quantizzazione del lancio).
 - **Il riferimento è WarpMio.** `tests/reference/warpdsp.legacy.js` è il motore originale; i
   test verificano che la versione TypeScript dia lo stesso risultato.
 

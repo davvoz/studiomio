@@ -1,6 +1,6 @@
 /* Disegno della timeline su canvas: corsie, griglia, clip (con forma d'onda o note),
  * righello, loop, testina e anteprime dei gesti. */
-import type { PlacementId } from '../../core/id';
+import type { PlacementId, TrackId } from '../../core/id';
 import type { Beats, TimeSignature } from '../../core/music-time';
 import { placementSegments } from '../../engine/segments';
 import { placementEnd, type Placement } from '../../model/arrangement';
@@ -31,6 +31,8 @@ export interface LanePaint {
   readonly peaks: (clip: AudioClip) => Peaks | null;
   /** Clip da non disegnare (sono in anteprima altrove durante un trascinamento). */
   readonly hidden: ReadonlySet<PlacementId>;
+  /** Tracce prese dalla session: la loro timeline non suona e si mostra spenta. */
+  readonly taken: ReadonlySet<TrackId>;
 }
 
 /** Contenuto di un tipo di clip dentro il suo rettangolo: un pittore per tipo. */
@@ -64,6 +66,10 @@ export function paintLanes(g: CanvasRenderingContext2D, lp: LanePaint): void {
     for (const pl of t.arrangement) {
       if (lp.hidden.has(pl.id)) continue;
       paintClip(g, pl, i, lp, lp.selection.has(pl.id));
+    }
+    if (lp.taken.has(t.id)) {
+      g.fillStyle = 'rgba(18, 20, 23, 0.62)';
+      g.fillRect(0, y, width, geo.trackHeight - 1);
     }
   });
 }

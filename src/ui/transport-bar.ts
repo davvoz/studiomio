@@ -60,8 +60,8 @@ export class TransportBar {
         button('Apri…', 'Apri la cartella di un progetto (Ctrl+O)', () => files.open()),
         button('Salva', 'Salva (Ctrl+S)', () => files.save()),
         button('Salva come…', 'Salva in un\'altra cartella', () => files.saveAs()),
-        button('Importa audio…', 'Importa file audio (o trascinali sulla timeline)', () => picker.click()),
-        button('Esporta mix', 'Esporta il mix in WAV', () => files.exportMix()),
+        button('Importa…', 'Importa file audio (o trascinali sulla timeline o in uno slot)', () => picker.click()),
+        button('Esporta', 'Esporta il mix in WAV', () => files.exportMix()),
         button('Demo', 'Carica il progetto demo', () => files.loadDemo()),
         picker),
       group(this.play, button('■', 'Stop e torna all\'inizio (Invio)', () => commands.stopAndRewind()), this.pos),
@@ -78,6 +78,13 @@ export class TransportBar {
       requestAnimationFrame(tick);
     };
     tick();
+  }
+
+  /** Aggiunge un gruppo di controlli prima del titolo. */
+  addGroup(...nodes: Node[]): void {
+    const d = Object.assign(document.createElement('div'), { className: 'group' });
+    d.append(...nodes);
+    this.title.before(d);
   }
 
   render(): void {

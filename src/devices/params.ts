@@ -84,6 +84,7 @@ export const formatParam = (p: ParamSpec, v: number): string => kindOf(p).format
 const UNIT_SCALES: Readonly<Record<string, (v: number) => readonly [number, string]>> = {
   Hz: v => (Math.abs(v) >= 1000 ? [v / 1000, 'kHz'] : [v, 'Hz']),
   s: v => (Math.abs(v) < 1 ? [v * 1000, 'ms'] : [v, 's']),
+  pan: v => [Math.abs(v), v < 0 ? 'L' : v > 0 ? 'R' : 'C'],
 };
 
 function formatNumber(v: number, unit: string): string {

@@ -1,6 +1,6 @@
 /* Appunti dell'app (interni, non quelli del sistema): clip della timeline oppure note del
  * piano roll. Si copia una fotografia immutabile; incollare crea copie con id nuovi. */
-import type { TrackId } from '../core/id';
+import { asId, type TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { placementEnd, type Placement } from '../model/arrangement';
 import type { Note } from '../model/midi-clip';
@@ -98,3 +98,27 @@ export function pasteNotes(notes: readonly Note[], content: CopiedNotes, at: Bea
   const pasted = content.notes.map(n => ({ ...n, start: Math.max(0, at) + n.start }));
   return { notes: [...notes, ...pasted], selected: pasted };
 }
+
+// ------------------------------------------------------------------ session
+
+/** La clip di uno slot negli appunti, come una clip copiata dalla timeline: si incolla in un
+ *  altro slot o, al cursore, sulla timeline. */
+export function copySlotClip(project: Project, track: TrackId, slot: number): CopiedClips | null {
+  const clip = project.track(track)?.slots[slot];
+  if (!clip) return null;
+  const length = (clip.loop.enabled ? clip.loop.end : clip.region.end) - clip.region.start;
+  return {
+    kind: 'clips', span: length, sourceTrack: track,
+    items: [{ trackOffset: 0, placement: { id: asId('copiata'), clip, start: 0, length, offset: 0 } }],
+  };
+}
+
+/** Incolla nello slot la prima clip degli appunti che la traccia accetta (in loop, come le
+ *  clip della session); false se nessuna va bene. */
+export const pasteToSlot = (content: CopiedClips, track: TrackId, slot: number): Edit =>
+  edit('Incolla', (p, { ids }) => {
+    const t = p.track(track);
+    const clip = content.items.map(i => i.placement.clip).find(c => t?.accepts(c));
+    if (!clip) throw new TypeError('negli appunti non ci sono clip per questa traccia');
+    return p.updatingTrack(track, x => x.withSlot(slot, clip.withId(ids.next('clip')).withLoop({ ...clip.loop, enabled: true })));
+  });
