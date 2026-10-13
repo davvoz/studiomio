@@ -32,32 +32,58 @@ Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una vo
 
 ```
 src/
+  core/                id tipizzati, eventi, tempo musicale (battiti, tempo, metro)
+  model/               il progetto, immutabile
+    project.ts         radice: tracce, scene, sample, tempo, loop
+    track.ts           Track → AudioTrack, MidiTrack (mixer, timeline, slot della session)
+    clip.ts            Clip → AudioClip (sample + warp), MidiClip (note)
+    arrangement.ts     clip posate sulla timeline (sovrapposizioni come in Live)
+    warp-markers.ts    mappa di warp di una clip audio
+  store/
+    project-store.ts   progetto corrente, annulla/ripeti, modifiche continue unite
+    edits.ts           una modifica per azione dell'utente (funzioni pure)
+  persistence/
+    project-codec.ts   progetto ⇄ JSON, con registri per tipi di clip e traccia
+    project-folder.ts  cartella del progetto: progetto.json, backup, audio/
+    directory.ts       interfaccia Directory (+ in memoria); fs-access-directory.ts per il disco
+  engine/
+    warp-job.ts        dalla clip audio al lavoro di warp per il DSP
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
-    fft.ts, signal.ts, time-map.ts
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
     analysis/          onset, transienti, tempo, beat tracking
     codec/             WAV e ZIP
-    engine.ts          DspEngine: sample caricati + render + analisi
     wasm/              ponte verso il crate Rust
-  workers/
-    rpc.ts             RPC tipizzato tra thread
-    worker-pool.ts     gruppo di worker con coda e sostituzione dei compiti
-    dsp.worker.ts      il DspEngine dentro un worker
-    dsp-service.ts     facciata usata dall'app
+  workers/             RPC tipizzato, worker pool, worker DSP, DspService
   demo/                loop demo
 crates/dsp/            phase vocoder in Rust → WebAssembly (SIMD)
-tests/                 test di equivalenza con WarpMio, pool, WASM; benchmark
+tests/                 un file per modulo; test di equivalenza con WarpMio
+```
+
+La cartella di un progetto:
+
+```
+MioBrano/
+  progetto.json        tracce, clip, marker, mixer (testo leggibile, versionato)
+  progetto.bak.json    il salvataggio precedente
+  audio/               i file audio originali, copiati all'importazione
 ```
 
 ## Principi
 
+- **Modello immutabile.** Ogni modifica produce un nuovo `Project` che condivide le parti non
+  toccate: annulla/ripeti è una pila di versioni, e chi osserva capisce cosa è cambiato
+  confrontando i riferimenti. Le posizioni sono in battiti; i secondi servono solo per suonare.
 - **Funzionale per i calcoli, oggetti per lo stato.** Il DSP è fatto di funzioni pure; le
   classi incapsulano stato e ciclo di vita (FFT con tabelle, phase vocoder, pool).
 - **Tabelle invece di switch.** Le modalità di warp sono un'unione discriminata e
   `StretcherTable` associa a ognuna il suo algoritmo: aggiungere una modalità significa
   aggiungere un tipo e una classe, e il compilatore segnala ciò che manca.
-- **Dipendenze iniettate.** Il renderer riceve la tabella degli algoritmi, il pool riceve
-  la fabbrica dei worker: si sostituiscono (WASM, worker finti nei test) senza toccare il resto.
+- **Dipendenze iniettate.** Il renderer riceve la tabella degli algoritmi, il pool la fabbrica
+  dei worker, lo store la fabbrica degli id, il salvataggio una `Directory`: si sostituiscono
+  (WASM, worker finti, cartella in memoria nei test) senza toccare il resto.
+- **Tipi nuovi senza toccare il vecchio.** Un nuovo tipo di clip è una sottoclasse di `Clip`
+  più un `ClipCodec` registrato; un nuovo tipo di traccia è una sottoclasse di `Track` più una
+  voce in `defaultTrackTypes` e in `addTrack`.
 - **Il riferimento è WarpMio.** `tests/reference/warpdsp.legacy.js` è il motore originale; i
   test verificano che la versione TypeScript dia lo stesso risultato.
 
