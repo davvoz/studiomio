@@ -85,12 +85,10 @@ export class MoveClipsGesture implements Gesture {
     host.invalidate();
   }
 
-  end(p: Pointer): void {
+  end(): void {
     const { host } = this;
-    if (!this.moved) {
-      host.seek(snapped(host, p, host.geo.xToBeat(p.x)));
-      return;
-    }
+    // un clic seleziona e basta: il cursore si sposta solo dal righello, la riproduzione non si interrompe
+    if (!this.moved) return;
     const changed = this.plan.some(m => m.copy || m.to !== m.track || m.start !== host.store.project.track(m.track)?.placement(m.id)?.start);
     if (!changed) return host.invalidate();
     const before = host.store.project;
@@ -153,7 +151,7 @@ export class ResizeClipGesture implements Gesture {
 }
 
 /** Trascinare nel vuoto: selezione a riquadro. Un clic senza trascinare toglie la selezione
- *  e sposta il cursore. */
+ *  (il cursore si sposta solo dal righello). */
 export class MarqueeGesture implements Gesture {
   readonly cursor = 'crosshair';
   readonly hidden = NONE;
@@ -174,10 +172,7 @@ export class MarqueeGesture implements Gesture {
   end(p: Pointer): void {
     this.current = p;
     const { host } = this;
-    if (!this.dragged) {
-      if (!p.shift) host.ui.select([]);
-      host.seek(snapped(host, p, host.geo.xToBeat(p.x)));
-    }
+    if (!this.dragged && !p.shift) host.ui.select([]);
     host.invalidate();
   }
 

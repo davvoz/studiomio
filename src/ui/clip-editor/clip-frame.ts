@@ -126,13 +126,14 @@ export class LoopBandGesture<C extends Clip> implements ClipGesture<C> {
   }
 }
 
-/** Trascinare sposta la vista, un clic porta lì il cursore della timeline. */
+/** Trascinare sposta la vista. Sul righello (`seekOnClick`) un clic porta lì il cursore
+ *  della timeline; altrove un clic non fa nulla, per non interrompere la riproduzione. */
 export class PanGesture<C extends Clip> implements ClipGesture<C> {
   readonly cursor = 'grabbing';
   private dragged = false;
   private readonly start: BeatAxis;
 
-  constructor(private readonly host: ClipHost<C>, private readonly origin: Pointer) {
+  constructor(private readonly host: ClipHost<C>, private readonly origin: Pointer, private readonly seekOnClick = false) {
     this.start = host.axis;
   }
 
@@ -143,7 +144,7 @@ export class PanGesture<C extends Clip> implements ClipGesture<C> {
   }
 
   end(p: Pointer): void {
-    if (!this.dragged) this.host.seekContent(this.host.axis.xToBeat(p.x));
+    if (!this.dragged && this.seekOnClick) this.host.seekContent(this.host.axis.xToBeat(p.x));
   }
 
   cancel(): void { /* niente */ }
@@ -168,7 +169,7 @@ export class IdleGesture<C extends Clip> implements ClipGesture<C> {
 export const frameGestureFor: { readonly [K in FrameHit['kind']]: <C extends Clip>(host: ClipHost<C>, clip: C, hit: Extract<FrameHit, { kind: K }>, p: Pointer) => ClipGesture<C> } = {
   loop: (h, c, hit, p) => new LoopBandGesture(h, c.loop, hit.part, p),
   flag: (h, _c, hit) => new FlagGesture(h, hit.edge),
-  ruler: (h, _c, _hit, p) => new PanGesture(h, p),
+  ruler: (h, _c, _hit, p) => new PanGesture(h, p, true),
 };
 
 export const frameCursor: { readonly [K in FrameHit['kind']]: (hit: Extract<FrameHit, { kind: K }>) => string } = {

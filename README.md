@@ -109,7 +109,9 @@ MioBrano/
 | Trascina file audio sulla timeline | importa (sulla traccia sotto, o su una nuova) |
 | Trascina una clip | sposta (anche su un'altra traccia dello stesso tipo); con Ctrl copia; con Alt senza griglia |
 | Trascina il bordo di una clip | accorcia o allunga |
-| Trascina nel vuoto | selezione a riquadro; un clic sposta il cursore |
+| Trascina nel vuoto | selezione a riquadro; un clic toglie la selezione |
+| Clic su una clip | la seleziona e basta (la riproduzione continua) |
+| Parte bassa del righello | clic o trascina: sposta il cursore (l'unico punto che lo fa) |
 | Fascia alta del righello | bordi del loop: sposta quell'estremo tenendo fermo l'altro · corpo: sposta il loop · fuori: disegna un loop nuovo · clic: accende/spegne |
 | Doppio clic su una traccia MIDI vuota | nuova clip di una battuta |
 | Spazio · Invio | play/stop · stop e torna all'inizio |
@@ -132,7 +134,8 @@ Doppio clic su una clip audio: si apre in basso (Esc per chiudere).
 | Canc | elimina il marker selezionato |
 | Fascia arancione in alto | come la fascia del loop sul righello, per il loop della clip |
 | Bandierine bianche | inizio e fine della clip |
-| Trascina la forma d'onda · clic | scorre la vista · porta lì il cursore della timeline |
+| Trascina la forma d'onda | scorre la vista |
+| Clic sul righello | porta lì il cursore della timeline |
 | Tasto destro | menu: 1.1.1 qui, elimina marker, aggiungi marker qui, Auto-Warp, Segui tempo, quantizza, azzera, warp acceso/spento |
 | Pannello | warp, modalità e opzioni, BPM della clip o del segmento, :2 ×2, 1.1.1 qui, Auto-Warp, Segui tempo, Quantizza, Azzera, transpose, detune, gain |
 
