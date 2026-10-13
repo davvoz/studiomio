@@ -35,7 +35,8 @@ Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una vo
 src/
   core/                id tipizzati, eventi, tempo musicale (battiti, tempo, metro)
   model/               il progetto, immutabile
-    project.ts         radice: tracce, scene, sample, tempo, loop
+    project.ts         radice: tracce, scene, sample, tempo, loop, master (volume ed effetti)
+    effect-list.ts     operazioni su una catena di effetti, per tracce e master (funzioni pure)
     track.ts           Track → AudioTrack, MidiTrack (mixer, timeline, slot della session, strumento)
     clip.ts            Clip → AudioClip (sample + warp), MidiClip (note)
     note-edits.ts      operazioni del piano roll sulle note (funzioni pure)
@@ -59,7 +60,7 @@ src/
     worklet-devices.ts strumenti ed effetti nel browser: nodi AudioWorklet
     clip-audio.ts      clip audio → buffer pronto (render di warp o sample originale)
     render-cache.ts    render di warp per contenuto, LRU con budget di memoria
-    mixer-graph.ts     canali con volume, pan, mute/solo e master
+    mixer-graph.ts     canali con volume, pan, mute/solo; master con i suoi effetti
     offline-mix.ts     export del mix con lo stesso motore (OfflineAudioContext)
     warp-job.ts        dalla clip audio al lavoro di warp per il DSP
   app/
@@ -174,6 +175,11 @@ si attenuano (es. i millisecondi con il delay a tempo). Trascina una manopola in
 per piccoli passi, doppio clic per il valore predefinito. Ogni modifica si annulla e si sente
 subito, anche mentre suona.
 
+**Il master** è la riga in fondo all'arrangement: mute, volume ed **FX**, e a destra la sua
+catena in breve (un clic la apre, il tasto destro ha "Aggiungi Delay"). Tutte le tracce si
+sommano nel master, passano per i suoi effetti e poi per il suo volume; il metronomo entra
+dopo gli effetti, così non li attraversa. Anche gli effetti del master finiscono nell'export.
+
 **Analog**: due oscillatori (Saw, Square, Triangle, Sine; il secondo intonabile), filtro
 passa-basso/banda/alto risonante con inviluppo e key track, inviluppo del volume, LFO su
 intonazione e cutoff, 16 voci. Preset: Init, Basso, Acid, Pad, Pluck, Lead.
@@ -213,7 +219,7 @@ contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli ef
   è una descrizione più un motore DSP (vedi sopra).
 - **I file vecchi si aprono.** Il formato del progetto ha una versione; ogni cambiamento porta
   una migrazione (la 1 → 2 ha dato uno strumento alle tracce MIDI, la 2 → 3 una catena di
-  effetti a tutte le tracce).
+  effetti a tutte le tracce, la 3 → 4 una al master).
 - **Il riferimento è WarpMio.** `tests/reference/warpdsp.legacy.js` è il motore originale; i
   test verificano che la versione TypeScript dia lo stesso risultato.
 

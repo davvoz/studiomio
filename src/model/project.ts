@@ -1,6 +1,7 @@
 import type { IdFactory, ProjectId, SampleId, SceneId, TrackId } from '../core/id';
 import { Tempo, TimeSignature, type Beats } from '../core/music-time';
 import { AudioClip } from './audio-clip';
+import type { EffectList } from './effect-list';
 import type { SampleRef } from './sample';
 import { DEFAULT_MIXER, type MixerSettings, type Track } from './track';
 
@@ -8,6 +9,12 @@ export interface Scene {
   readonly id: SceneId;
   readonly name: string;
 }
+
+/** Il master, come proprietario di una catena di effetti accanto alle tracce. */
+export const MASTER = 'master' as const;
+
+/** Chi ha una catena di effetti: una traccia o il master. */
+export type ChainOwner = TrackId | typeof MASTER;
 
 /** Regione di loop della timeline. */
 export interface LoopRegion {
@@ -25,7 +32,10 @@ export interface ProjectProps {
   readonly scenes: readonly Scene[];
   readonly samples: readonly SampleRef[];
   readonly loop: LoopRegion;
+  /** Volume e mute del master (pan e solo non si usano). */
   readonly master: MixerSettings;
+  /** Effetti sul mix di tutte le tracce, prima del volume del master. */
+  readonly masterEffects: EffectList;
 }
 
 /** Radice del modello. Immutabile: ogni modifica restituisce un nuovo progetto che
@@ -54,6 +64,7 @@ export class Project {
       samples: [],
       loop: { enabled: false, start: 0, end: 16 },
       master: DEFAULT_MIXER,
+      masterEffects: [],
     });
   }
 
@@ -70,6 +81,7 @@ export class Project {
   get samples(): readonly SampleRef[] { return this.props.samples; }
   get loop(): LoopRegion { return this.props.loop; }
   get master(): MixerSettings { return this.props.master; }
+  get masterEffects(): EffectList { return this.props.masterEffects; }
 
   track(id: TrackId): Track | undefined {
     return this.tracks.find(t => t.id === id);
@@ -98,6 +110,20 @@ export class Project {
     const loop = { ...this.loop, ...patch };
     if (!(loop.end > loop.start)) throw new RangeError('regione di loop vuota');
     return this.with({ loop });
+  }
+
+  // ---------------------------------------------------------------- effetti
+
+  /** La catena di una traccia o del master. */
+  effectsOf(owner: ChainOwner): EffectList {
+    return owner === MASTER ? this.masterEffects : this.requireTrack(owner).effects;
+  }
+
+  /** Modifica la catena di una traccia o del master (le operazioni sono in `effect-list`). */
+  updatingEffects(owner: ChainOwner, fn: (list: EffectList) => EffectList): Project {
+    if (owner !== MASTER) return this.updatingTrack(owner, t => t.withEffects(fn(t.effects)));
+    const masterEffects = fn(this.masterEffects);
+    return masterEffects === this.masterEffects ? this : this.with({ masterEffects });
   }
 
   // ---------------------------------------------------------------- tracce

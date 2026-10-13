@@ -38,7 +38,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .transport .title { margin-left: auto; color: var(--muted); }
 
 /* ---------------------------------------------------------------- arrangement */
-.arrangement { display: grid; grid-template-columns: var(--header-w) 1fr; min-height: 0; }
+.arrangement { display: grid; grid-template-columns: var(--header-w) 1fr; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
 .headers { display: grid; grid-template-rows: var(--ruler-h) 1fr; border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
 .header-add { display: flex; gap: 4px; padding: 3px 6px; border-bottom: 1px solid var(--line); }
 .header-add button { padding: 1px 8px; font-size: 12px; }
@@ -148,3 +148,15 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 
 /* ---------------------------------------------------------------- barra di stato */
 .status { padding: 5px 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); min-height: 26px; }
+
+/* ---------------------------------------------------------------- master */
+.master-header { height: 52px; border-top: 2px solid var(--line); border-right: 1px solid var(--line); --color: var(--text); }
+.master-header .track-name { cursor: default; }
+.master-lane {
+  display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 52px; overflow: hidden; white-space: nowrap;
+  border-top: 2px solid var(--line); background: var(--panel); cursor: pointer;
+}
+.master-lane:hover { background: var(--panel-2); }
+.master-lane .chip { border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; background: var(--panel-2); font-size: 12px; }
+.master-lane .chip.off { opacity: .45; text-decoration: line-through; }
+.master-lane .arrow { color: var(--muted); }

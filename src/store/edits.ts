@@ -6,9 +6,10 @@ import { placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
 import type { Clip } from '../model/clip';
 import { paletteColor } from '../model/colors';
-import { newEffect, withParam, withPreset, type InstrumentSettings, type ParamValues } from '../model/device';
+import { newEffect, withParam, withPreset, type EffectSettings, type InstrumentSettings, type ParamValues } from '../model/device';
+import * as chain from '../model/effect-list';
 import { MidiClip } from '../model/midi-clip';
-import type { LoopRegion } from '../model/project';
+import type { ChainOwner, LoopRegion } from '../model/project';
 import type { SampleRef } from '../model/sample';
 import { AudioTrack, MidiTrack, type MixerSettings, type Track } from '../model/track';
 import { edit, type Edit } from './project-store';
@@ -49,6 +50,10 @@ export const renameTrack = (id: TrackId, name: string): Edit =>
 export const setMixer = (id: TrackId, patch: Partial<MixerSettings>): Edit =>
   edit('Mixer', p => p.updatingTrack(id, t => t.withMixer(patch)));
 
+/** Volume e mute del master. */
+export const setMasterMixer = (patch: Partial<Pick<MixerSettings, 'volumeDb' | 'mute'>>): Edit =>
+  edit('Master', p => p.withMaster(patch));
+
 // ------------------------------------------------------------------ strumenti
 
 const updatingInstrument = (label: string, id: TrackId, fn: (s: InstrumentSettings) => InstrumentSettings): Edit =>
@@ -68,25 +73,29 @@ export const loadPreset = (id: TrackId, name: string, params: ParamValues): Edit
   updatingInstrument(`Preset ${name}`, id, s => withPreset(s, name, params));
 
 // ------------------------------------------------------------------ effetti
+// Valgono per la catena di una traccia e per quella del master (`owner`).
+
+const updatingEffect = (label: string, owner: ChainOwner, id: DeviceId, fn: (e: EffectSettings) => EffectSettings): Edit =>
+  edit(label, p => p.updatingEffects(owner, list => chain.update(list, id, fn)));
 
 /** Aggiunge un effetto di tipo `type` alla catena (in fondo, o in posizione `index`). */
-export const addEffect = (track: TrackId, type: string, label: string, index?: number): Edit =>
-  edit(`Aggiungi ${label}`, (p, { ids }) => p.updatingTrack(track, t => t.addingEffect(newEffect(ids.next('device'), type), index)));
+export const addEffect = (owner: ChainOwner, type: string, label: string, index?: number): Edit =>
+  edit(`Aggiungi ${label}`, (p, { ids }) => p.updatingEffects(owner, list => chain.add(list, newEffect(ids.next('device'), type), index)));
 
-export const removeEffect = (track: TrackId, id: DeviceId): Edit =>
-  edit('Elimina effetto', p => p.updatingTrack(track, t => t.removingEffect(id)));
+export const removeEffect = (owner: ChainOwner, id: DeviceId): Edit =>
+  edit('Elimina effetto', p => p.updatingEffects(owner, list => chain.remove(list, id)));
 
-export const moveEffect = (track: TrackId, id: DeviceId, index: number): Edit =>
-  edit('Sposta effetto', p => p.updatingTrack(track, t => t.movingEffect(id, index)));
+export const moveEffect = (owner: ChainOwner, id: DeviceId, index: number): Edit =>
+  edit('Sposta effetto', p => p.updatingEffects(owner, list => chain.move(list, id, index)));
 
-export const setEffectEnabled = (track: TrackId, id: DeviceId, enabled: boolean): Edit =>
-  edit(enabled ? 'Accendi effetto' : 'Spegni effetto', p => p.updatingTrack(track, t => t.updatingEffect(id, e => ({ ...e, enabled }))));
+export const setEffectEnabled = (owner: ChainOwner, id: DeviceId, enabled: boolean): Edit =>
+  updatingEffect(enabled ? 'Accendi effetto' : 'Spegni effetto', owner, id, e => ({ ...e, enabled }));
 
-export const setEffectParam = (track: TrackId, id: DeviceId, param: string, value: number): Edit =>
-  edit("Parametro dell'effetto", p => p.updatingTrack(track, t => t.updatingEffect(id, e => withParam(e, param, value))));
+export const setEffectParam = (owner: ChainOwner, id: DeviceId, param: string, value: number): Edit =>
+  updatingEffect("Parametro dell'effetto", owner, id, e => withParam(e, param, value));
 
-export const loadEffectPreset = (track: TrackId, id: DeviceId, name: string, params: ParamValues): Edit =>
-  edit(`Preset ${name}`, p => p.updatingTrack(track, t => t.updatingEffect(id, e => withPreset(e, name, params))));
+export const loadEffectPreset = (owner: ChainOwner, id: DeviceId, name: string, params: ParamValues): Edit =>
+  updatingEffect(`Preset ${name}`, owner, id, e => withPreset(e, name, params));
 
 // ------------------------------------------------------------------ sample e clip
 

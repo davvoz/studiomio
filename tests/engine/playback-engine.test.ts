@@ -237,9 +237,9 @@ describe('mixer', () => {
     const mixer = new MixerGraph(g, new FakeEffects());
     r.store.apply(setMixer(r.t(0), { volumeDb: -6, pan: 0.5 }));
     mixer.sync(r.store.project);
-    expect(g.gains[2].gain.value).toBeCloseTo(0.501, 3); // [0] master, [1] ingresso, [2] volume
+    expect(g.gains[3].gain.value).toBeCloseTo(0.501, 3); // [0] bus, [1] master, [2] ingresso, [3] volume
     expect(g.panners[0].pan.value).toBe(0.5);
     mixer.sync(r.store.project.removingTrack(r.t(0)));
-    expect(g.gains[2].connected).toBe(false);
+    expect(g.gains[3].connected).toBe(false);
   });
 });

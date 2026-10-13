@@ -1,15 +1,17 @@
 import type { TrackId } from '../core/id';
-import { EFFECT_TYPES, instrumentType } from '../devices/registry';
+import { instrumentType } from '../devices/registry';
+import type { ChainOwner } from '../model/project';
 import type { MidiTrack, Track } from '../model/track';
-import { addEffect, addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
+import { addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { SEPARATOR, showContextMenu, type MenuItem } from './context-menu';
 import type { UiState } from './ui-state';
 import { el } from './dom';
+import { addEffectItems, fxButton, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 
 export interface HeaderActions {
-  /** Apre la catena dei dispositivi (strumento ed effetti) della traccia. */
-  openDevices(track: TrackId): void;
+  /** Apre la catena dei dispositivi (strumento ed effetti) di una traccia o del master. */
+  openDevices(owner: ChainOwner): void;
 }
 
 const kindBadge = (text: string) => () => el('span', { className: 'kind', textContent: text });
@@ -25,11 +27,15 @@ const BADGES: Readonly<Record<string, (t: Track, actions: HeaderActions) => HTML
   },
 };
 
+const badgeFor = (t: Track, actions: HeaderActions) => (BADGES[t.kind] ?? kindBadge(t.kind))(t, actions);
+
 /** Colonna a sinistra della timeline: nome, mute/solo, volume di ogni traccia, allineata
- *  allo scorrimento verticale delle corsie. */
+ *  allo scorrimento verticale delle corsie. Ogni riga si aggiorna al suo posto, così un
+ *  volume trascinato continua anche se il progetto cambia a ogni passo. */
 export class TrackHeaders {
   readonly element = el('div', { className: 'headers' });
   private readonly list = el('div', { className: 'header-list' });
+  private rows = new Map<TrackId, HeaderRow>();
 
   constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly actions: HeaderActions) {
     const add = el('div', { className: 'header-add' },
@@ -39,7 +45,7 @@ export class TrackHeaders {
     // tasto destro sotto le tracce: solo le tracce nuove
     scroll.oncontextmenu = e => {
       e.preventDefault();
-      showContextMenu(e.clientX, e.clientY, this.newTrackItems());
+      showContextMenu(e.clientX, e.clientY, newTrackItems(store));
     };
     this.element.append(add, scroll);
     store.onChange(() => this.render());
@@ -53,74 +59,98 @@ export class TrackHeaders {
 
   private render(): void {
     const h = this.ui.geometry.trackHeight;
-    this.list.replaceChildren(...this.store.project.tracks.map(t => this.row(t, h)));
+    const tracks = this.store.project.tracks;
+    const rows = new Map<TrackId, HeaderRow>();
+    for (const t of tracks) {
+      const row = this.rows.get(t.id) ?? new HeaderRow(t.id, this.store, this.actions);
+      row.update(t, h);
+      rows.set(t.id, row);
+    }
+    this.rows = rows;
+    // la lista si rifà solo se tracce aggiunte, tolte o spostate
+    const elements = tracks.map(t => rows.get(t.id)!.element);
+    const children = this.list.children;
+    if (children.length !== elements.length || elements.some((e, i) => children[i] !== e)) this.list.replaceChildren(...elements);
     this.position();
   }
+}
 
-  private row(t: Track, height: number): HTMLElement {
-    const { store } = this;
-    const mixer = (patch: Parameters<typeof setMixer>[1], merge?: string) => store.apply(setMixer(t.id, patch), merge ? { mergeKey: merge } : {});
-    const name = el('span', { className: 'track-name', textContent: t.name, title: 'Doppio clic per rinominare' });
-    name.ondblclick = () => this.rename(t.id, name);
-    const toggle = (label: string, on: boolean, title: string, patch: () => Parameters<typeof setMixer>[1]) =>
-      el('button', { className: on ? 'on' : '', textContent: label, title, onclick: () => mixer(patch()) });
-    const vol = el<HTMLInputElement>('input', { type: 'range', min: '-40', max: '6', step: '0.5', value: String(t.mixer.volumeDb), title: `${t.mixer.volumeDb.toFixed(1)} dB` });
-    vol.oninput = () => mixer({ volumeDb: Number(vol.value) }, `vol-${t.id}`);
-    vol.onchange = () => store.endMerge();
-    vol.ondblclick = () => mixer({ volumeDb: 0 });
-    const del = el('button', { className: 'del', textContent: '×', title: 'Elimina traccia', onclick: () => store.apply(removeTrack(t.id)) });
-    const row = el('div', { className: 'header' },
-      el('div', { className: 'top' }, name, (BADGES[t.kind] ?? kindBadge(t.kind))(t, this.actions), del),
-      el('div', { className: 'controls' },
-        toggle('M', t.mixer.mute, 'Mute', () => ({ mute: !t.mixer.mute })),
-        toggle('S', t.mixer.solo, 'Solo', () => ({ solo: !t.mixer.solo })),
-        vol,
-        el('button', {
-          className: t.effects.length ? 'fx on' : 'fx', textContent: t.effects.length ? `FX ${t.effects.length}` : 'FX',
-          title: 'Effetti della traccia', onclick: () => this.actions.openDevices(t.id),
-        })));
-    row.oncontextmenu = e => {
+/** L'intestazione di una traccia: costruita una volta, poi aggiornata da `update`. */
+class HeaderRow {
+  readonly element = el('div', { className: 'header' });
+  private readonly name = el('span', { className: 'track-name', title: 'Doppio clic per rinominare' });
+  private badge: HTMLElement = el('span');
+  private readonly mute: HTMLButtonElement;
+  private readonly solo: HTMLButtonElement;
+  private readonly volume: HTMLInputElement;
+  private readonly fx: HTMLButtonElement;
+  /** La traccia mostrata l'ultima volta (per non rifare ciò che non è cambiato). */
+  private shown: Track | null = null;
+
+  constructor(private readonly id: TrackId, private readonly store: ProjectStore, private readonly actions: HeaderActions) {
+    const open = () => actions.openDevices(id);
+    const toggle = (label: string, title: string, flag: 'mute' | 'solo') =>
+      el<HTMLButtonElement>('button', { textContent: label, title, onclick: () => this.mixer({ [flag]: !this.track().mixer[flag] }) });
+    this.mute = toggle('M', 'Mute', 'mute');
+    this.solo = toggle('S', 'Solo', 'solo');
+    this.volume = volumeSlider(store, 0, `vol-${id}`, (volumeDb, merge) => this.mixer({ volumeDb }, merge));
+    this.fx = fxButton(0, 'Effetti della traccia', open);
+    this.name.ondblclick = () => this.rename();
+    const del = el('button', { className: 'del', textContent: '×', title: 'Elimina traccia', onclick: () => store.apply(removeTrack(id)) });
+    this.element.append(
+      el('div', { className: 'top' }, this.name, this.badge, del),
+      el('div', { className: 'controls' }, this.mute, this.solo, this.volume, this.fx));
+    this.element.oncontextmenu = e => {
       e.preventDefault();
       e.stopPropagation();
+      const t = this.track();
       showContextMenu(e.clientX, e.clientY, [
-        { label: 'Rinomina', shortcut: 'doppio clic', run: () => this.rename(t.id, name) },
-        { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: () => this.actions.openDevices(t.id) },
-        ...EFFECT_TYPES.map(type => ({
-          label: `Aggiungi ${type.label}`,
-          run: () => {
-            store.apply(addEffect(t.id, type.type, type.label));
-            this.actions.openDevices(t.id);
-          },
-        })),
-        { label: t.mixer.mute ? 'Togli il mute' : 'Mute', run: () => mixer({ mute: !t.mixer.mute }) },
-        { label: t.mixer.solo ? 'Togli il solo' : 'Solo', run: () => mixer({ solo: !t.mixer.solo }) },
+        { label: 'Rinomina', shortcut: 'doppio clic', run: () => this.rename() },
+        { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: open },
+        ...addEffectItems(store, id, open),
+        { label: t.mixer.mute ? 'Togli il mute' : 'Mute', run: () => this.mixer({ mute: !t.mixer.mute }) },
+        { label: t.mixer.solo ? 'Togli il solo' : 'Solo', run: () => this.mixer({ solo: !t.mixer.solo }) },
         SEPARATOR,
-        { label: 'Elimina traccia', run: () => store.apply(removeTrack(t.id)) },
+        { label: 'Elimina traccia', run: () => store.apply(removeTrack(id)) },
         SEPARATOR,
-        ...this.newTrackItems(),
+        ...newTrackItems(store),
       ]);
     };
-    row.style.height = `${height}px`;
-    row.style.setProperty('--color', t.color);
-    return row;
   }
 
-  private newTrackItems(): MenuItem[] {
-    return [
-      { label: 'Nuova traccia audio', run: () => this.store.apply(addTrack('audio')) },
-      { label: 'Nuova traccia MIDI', run: () => this.store.apply(addTrack('midi')) },
-    ];
+  update(t: Track, height: number): void {
+    this.element.style.height = `${height}px`;
+    if (t === this.shown) return;
+    this.shown = t;
+    this.name.textContent = t.name;
+    this.element.style.setProperty('--color', t.color);
+    const badge = badgeFor(t, this.actions);
+    this.badge.replaceWith(badge);
+    this.badge = badge;
+    this.mute.classList.toggle('on', t.mixer.mute);
+    this.solo.classList.toggle('on', t.mixer.solo);
+    setVolume(this.volume, t.mixer.volumeDb);
+    setFxCount(this.fx, t.effects.length);
   }
 
-  private rename(id: TrackId, label: HTMLElement): void {
+  private track(): Track {
+    return this.store.project.track(this.id)!;
+  }
+
+  private mixer(patch: Parameters<typeof setMixer>[1], mergeKey?: string): void {
+    this.store.apply(setMixer(this.id, patch), mergeKey ? { mergeKey } : {});
+  }
+
+  private rename(): void {
+    const label = this.name;
     const input = el<HTMLInputElement>('input', { className: 'rename', value: label.textContent ?? '' });
     let finished = false;
     const done = (save: boolean) => {
       if (finished) return;
       finished = true;
       const name = input.value.trim();
-      if (save && name && name !== label.textContent) this.store.apply(renameTrack(id, name));
-      else this.render();
+      input.replaceWith(label);
+      if (save && name && name !== label.textContent) this.store.apply(renameTrack(this.id, name));
     };
     input.onkeydown = e => {
       e.stopPropagation();
@@ -132,3 +162,8 @@ export class TrackHeaders {
     input.select();
   }
 }
+
+const newTrackItems = (store: ProjectStore): MenuItem[] => [
+  { label: 'Nuova traccia audio', run: () => store.apply(addTrack('audio')) },
+  { label: 'Nuova traccia MIDI', run: () => store.apply(addTrack('midi')) },
+];

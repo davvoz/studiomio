@@ -55,14 +55,21 @@ class ChannelStrip {
   }
 }
 
-/** Il mixer nel grafo audio: un canale per traccia e il master, allineati al progetto. */
+/** Il mixer nel grafo audio: un canale per traccia e il master, allineati al progetto.
+ *  Le tracce si sommano nel bus del master, che passa per i suoi effetti e poi per il suo
+ *  volume: bus → effetti del master → `master` → uscita. */
 export class MixerGraph {
+  /** Dopo gli effetti del master: il metronomo entra qui, così gli effetti non lo toccano. */
   readonly master: GainNodeLike;
+  private readonly bus: GainNodeLike;
+  private readonly masterChain: EffectChain;
   private readonly strips = new Map<TrackId, ChannelStrip>();
   private masterSettings: MixerSettings | null = null;
 
   constructor(private readonly graph: AudioGraph, private readonly effects: EffectHost, destination: AudioNodeLike = graph.destination) {
+    this.bus = graph.createGain();
     this.master = graph.createGain();
+    this.masterChain = new EffectChain(graph, effects, this.bus, this.master);
     this.master.connect(destination);
   }
 
@@ -85,6 +92,7 @@ export class MixerGraph {
       strip.apply(t.mixer, audible.has(t.id));
       strip.chain.sync(t.effects, project.tempo.bpm);
     }
+    this.masterChain.sync(project.masterEffects, project.tempo.bpm);
     if (this.masterSettings !== project.master) {
       // il master non ha pan né solo: solo volume e mute
       const m = project.master;
@@ -96,7 +104,7 @@ export class MixerGraph {
   private strip(id: TrackId): ChannelStrip {
     let s = this.strips.get(id);
     if (!s) {
-      s = new ChannelStrip(this.graph, this.effects, this.master);
+      s = new ChannelStrip(this.graph, this.effects, this.bus);
       this.strips.set(id, s);
     }
     return s;

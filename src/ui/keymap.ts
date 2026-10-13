@@ -52,13 +52,23 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'o', ctrl: true, run: c => c.open() },
 ];
 
-/** Collega la tastiera ai comandi (ignorando i tasti premuti nei campi di testo). Con
+/** Campi in cui si scrive: lì tutti i tasti sono loro. */
+const TEXT_INPUTS = new Set(['text', 'number', 'search', 'email', 'url', 'password', 'tel']);
+/** Tasti che un cursore (volume) usa per sé; gli altri, come Ctrl+Z, restano scorciatoie. */
+const SLIDER_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+
+function ownedByField(t: HTMLElement | null, e: KeyboardEvent): boolean {
+  if (!t) return false;
+  if (t.isContentEditable || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') return true;
+  return t instanceof HTMLInputElement && (TEXT_INPUTS.has(t.type) || SLIDER_KEYS.has(e.key));
+}
+
+/** Collega la tastiera ai comandi (ignorando i tasti che spettano ai campi di testo). Con
  *  `ownKeys` i tasti usati non arrivano più su (un editor ha la precedenza sulla timeline). */
 export function bindKeys<C>(target: Document | HTMLElement, commands: C, keymap: readonly Binding<C>[], ownKeys = false): void {
   target.addEventListener('keydown', ev => {
     const e = ev as KeyboardEvent;
-    const t = e.target as HTMLElement | null;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (ownedByField(e.target as HTMLElement | null, e)) return;
     const ctrl = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
     // Maiusc conta solo se la scorciatoia lo nomina o usa Ctrl: "+" richiede Maiusc su molte tastiere

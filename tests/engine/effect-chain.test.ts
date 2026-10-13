@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { asId } from '../../src/core/id';
 import { EffectChain } from '../../src/engine/effect-chain';
+import { MixerGraph } from '../../src/engine/mixer-graph';
 import { newEffect, withParam, type EffectSettings } from '../../src/model/device';
+import { MASTER } from '../../src/model/project';
+import { addEffect, setMasterMixer } from '../../src/store/edits';
 import { FakeEffects, FakeGain, FakeGraph } from '../helpers/fake-audio';
+import { setup } from '../helpers/fixtures';
 
 function rig() {
   const graph = new FakeGraph(), host = new FakeEffects();
@@ -72,5 +76,34 @@ describe('EffectChain', () => {
     chain.sync([fx(1, 'reverb')], 120);
     expect(host.created[0].disposed).toBe(true);
     expect(host.created[1].type).toBe('reverb');
+  });
+});
+
+describe('MixerGraph: il master', () => {
+  it('le tracce si sommano nel bus, che passa per gli effetti del master e poi per il suo volume', () => {
+    const { store, track } = setup({ audio: 1, midi: 0 });
+    const graph = new FakeGraph(), host = new FakeEffects();
+    const mixer = new MixerGraph(graph, host);
+    mixer.sync(store.project);
+    const [bus, master] = graph.gains;
+    expect(bus.outputs).toEqual([master]);
+    expect(master.outputs).toEqual([graph.destination]);
+
+    store.apply(addEffect(MASTER, 'delay', 'Delay'));
+    store.apply(setMasterMixer({ volumeDb: -6 }));
+    mixer.sync(store.project);
+    const [effect] = host.created;
+    expect(bus.outputs).toEqual([effect.input]);
+    expect(effect.output.outputs).toEqual([master]);
+    expect(master.gain.value).toBeCloseTo(0.501, 3);
+
+    // il canale della traccia finisce nel bus, non dopo gli effetti del master
+    const gate = graph.gains.at(-1)!;
+    expect(mixer.input(track(0))).toBe(graph.gains[2]);
+    expect(gate.outputs).toEqual([bus]);
+
+    store.apply(setMasterMixer({ mute: true }));
+    mixer.sync(store.project);
+    expect(master.gain.value).toBe(0);
   });
 });

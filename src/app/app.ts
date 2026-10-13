@@ -3,7 +3,7 @@ import { randomIds } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
-import { Project } from '../model/project';
+import { MASTER, Project, type ChainOwner } from '../model/project';
 import { addMidiClip, addTrack, setLoopRegion, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
 import { showContextMenu } from '../ui/context-menu';
@@ -18,6 +18,7 @@ import { PianoRoll } from '../ui/piano-roll/piano-roll';
 import { bindKeys, KEYMAP, type Commands } from '../ui/keymap';
 import { ArrangementView } from '../ui/timeline/arrangement-view';
 import { resolveSelection } from '../ui/timeline/planning';
+import { MasterStrip } from '../ui/master-strip';
 import { TrackHeaders } from '../ui/track-headers';
 import { TransportBar, type FileCommands } from '../ui/transport-bar';
 import { UiState } from '../ui/ui-state';
@@ -65,11 +66,13 @@ export class App implements Commands, FileCommands, TimelineActions {
     this.device = new DeviceView({ store: this.store, audition: (track, pitch) => audition(track, pitch) });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
-    const headers = new TrackHeaders(this.store, this.ui, { openDevices: track => this.openDevices(track) });
+    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner) };
+    const headers = new TrackHeaders(this.store, this.ui, headerActions);
+    const master = new MasterStrip(this.store, headerActions);
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this, () =>
       `${this.session.name}${this.session.saved ? '' : ' •'}`);
     const main = Object.assign(document.createElement('div'), { className: 'arrangement' });
-    main.append(headers.element, this.arrangement.element);
+    main.append(headers.element, this.arrangement.element, master.header, master.lane);
     root.append(transport.element, main, this.bottom.element, this.status);
 
     this.session.on('message', t => this.say(t));
@@ -246,11 +249,12 @@ export class App implements Commands, FileCommands, TimelineActions {
     this.bottom.show(editor, () => editor.open(id));
   }
 
-  /** Apre strumento ed effetti della traccia; da piano roll, con il pulsante per tornare alle note. */
-  openDevices(track: TrackId, fromRoll = false): void {
+  /** Apre strumento ed effetti di una traccia, o gli effetti del master; dal piano roll, con il
+   *  pulsante per tornare alle note. */
+  openDevices(owner: ChainOwner, fromRoll = false): void {
     const placement = fromRoll ? this.pianoRoll.openPlacement : null;
-    const back = placement ? () => this.openClip(track, placement) : null;
-    this.bottom.show(this.device, () => this.device.open(track, back));
+    const back = placement && owner !== MASTER ? () => this.openClip(owner, placement) : null;
+    this.bottom.show(this.device, () => this.device.open(owner, back));
   }
 
   private selection() {
