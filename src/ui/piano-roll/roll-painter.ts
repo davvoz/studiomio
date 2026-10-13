@@ -31,6 +31,8 @@ export interface RollPaint {
   readonly grid: Beats;
   /** Battito della clip sotto la testina, se la clip sta suonando. */
   readonly playhead: Beats | null;
+  /** Punto d'inserimento (dove si incolla). */
+  readonly insert: Beats | null;
 }
 
 export function paintRoll(p: RollPaint): void {
@@ -48,6 +50,10 @@ export function paintRoll(p: RollPaint): void {
   g.fillRect(0, ROLL.ruler, Math.max(0, rx0), bottom - ROLL.ruler);
   g.fillRect(rx1, ROLL.ruler, width - rx1, bottom - ROLL.ruler);
   paintNotes(p);
+  if (p.insert !== null) {
+    g.fillStyle = 'rgba(232,234,238,0.75)';
+    g.fillRect(Math.round(axis.beatToX(p.insert)), ROLL.ruler, 1, bottom - ROLL.ruler);
+  }
   g.restore();
   paintVelocity(p, bottom);
   paintClipRuler(g, axis, width, clip, p.signature);

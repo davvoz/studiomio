@@ -3,6 +3,7 @@ import { instrumentType } from '../instruments/registry';
 import type { MidiTrack, Track } from '../model/track';
 import { addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
+import { SEPARATOR, showContextMenu, type MenuItem } from './context-menu';
 import type { UiState } from './ui-state';
 
 function el<T extends HTMLElement = HTMLElement>(tag: string, props: Record<string, unknown> = {}, ...children: (Node | string)[]): T {
@@ -38,7 +39,13 @@ export class TrackHeaders {
     const add = el('div', { className: 'header-add' },
       el('button', { textContent: '+ Audio', title: 'Nuova traccia audio', onclick: () => store.apply(addTrack('audio')) }),
       el('button', { textContent: '+ MIDI', title: 'Nuova traccia MIDI', onclick: () => store.apply(addTrack('midi')) }));
-    this.element.append(add, el('div', { className: 'header-scroll' }, this.list));
+    const scroll = el('div', { className: 'header-scroll' }, this.list);
+    // tasto destro sotto le tracce: solo le tracce nuove
+    scroll.oncontextmenu = e => {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, this.newTrackItems());
+    };
+    this.element.append(add, scroll);
     store.onChange(() => this.render());
     ui.onChange(() => this.position());
     this.render();
@@ -72,9 +79,30 @@ export class TrackHeaders {
         toggle('M', t.mixer.mute, 'Mute', () => ({ mute: !t.mixer.mute })),
         toggle('S', t.mixer.solo, 'Solo', () => ({ solo: !t.mixer.solo })),
         vol));
+    row.oncontextmenu = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e.clientX, e.clientY, [
+        { label: 'Rinomina', shortcut: 'doppio clic', run: () => this.rename(t.id, name) },
+        ...(t.kind === 'midi' ? [{ label: 'Apri lo strumento', run: () => this.actions.openInstrument(t.id) }] : []),
+        { label: t.mixer.mute ? 'Togli il mute' : 'Mute', run: () => mixer({ mute: !t.mixer.mute }) },
+        { label: t.mixer.solo ? 'Togli il solo' : 'Solo', run: () => mixer({ solo: !t.mixer.solo }) },
+        SEPARATOR,
+        { label: 'Elimina traccia', run: () => store.apply(removeTrack(t.id)) },
+        SEPARATOR,
+        ...this.newTrackItems(),
+      ]);
+    };
     row.style.height = `${height}px`;
     row.style.setProperty('--color', t.color);
     return row;
+  }
+
+  private newTrackItems(): MenuItem[] {
+    return [
+      { label: 'Nuova traccia audio', run: () => this.store.apply(addTrack('audio')) },
+      { label: 'Nuova traccia MIDI', run: () => this.store.apply(addTrack('midi')) },
+    ];
   }
 
   private rename(id: TrackId, label: HTMLElement): void {

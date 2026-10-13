@@ -45,6 +45,7 @@ src/
   store/
     project-store.ts   progetto corrente, annulla/ripeti, modifiche continue unite
     edits.ts           una modifica per azione dell'utente (funzioni pure)
+    clipboard.ts       appunti: copia e incolla di clip e di note
   persistence/
     project-codec.ts   progetto ⇄ JSON, con registri per tipi di clip e traccia
     project-folder.ts  cartella del progetto: progetto.json, backup, audio/
@@ -69,6 +70,7 @@ src/
     track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume)
     transport-bar.ts   barra in alto
     keymap.ts          scorciatoie da tastiera (una riga per comando)
+    context-menu.ts    menu contestuale: le voci sono dati (etichetta, scorciatoia, azione)
     clip-editor/       editor delle clip audio; clip-frame.ts è la cornice comune (righello, loop, bandierine)
     piano-roll/        editor delle note: tastiera, griglia, velocity, gesti, pannello
     device/            vista dello strumento: manopole e scelte generate dai parametri
@@ -112,6 +114,8 @@ MioBrano/
 | Doppio clic su una traccia MIDI vuota | nuova clip di una battuta |
 | Spazio · Invio | play/stop · stop e torna all'inizio |
 | Ctrl+Z / Ctrl+Y · Canc · Ctrl+D · Ctrl+E | annulla/ripeti · elimina · duplica · dividi al cursore |
+| Ctrl+X · Ctrl+C · Ctrl+V | taglia · copia · incolla al cursore, sulle tracce di partenza (il cursore va alla fine: Ctrl+V di nuovo continua in fila) |
+| Tasto destro | menu: su una clip (apri, taglia, copia, incolla, duplica, dividi, elimina), su una corsia (incolla qui, nuova clip MIDI), sull'intestazione di una traccia (rinomina, strumento, mute/solo, elimina, nuove tracce) |
 | Ctrl+L · Ctrl+4 · Ctrl+Maiusc+M | loop · griglia · metronomo |
 | Rotella · Maiusc+rotella · Ctrl+rotella · + / − | scorri · scorri in orizzontale · zoom |
 | Ctrl+S · Ctrl+O | salva · apri |
@@ -129,6 +133,7 @@ Doppio clic su una clip audio: si apre in basso (Esc per chiudere).
 | Fascia arancione in alto | come la fascia del loop sul righello, per il loop della clip |
 | Bandierine bianche | inizio e fine della clip |
 | Trascina la forma d'onda · clic | scorre la vista · porta lì il cursore della timeline |
+| Tasto destro | menu: 1.1.1 qui, elimina marker, aggiungi marker qui, Auto-Warp, Segui tempo, quantizza, azzera, warp acceso/spento |
 | Pannello | warp, modalità e opzioni, BPM della clip o del segmento, :2 ×2, 1.1.1 qui, Auto-Warp, Segui tempo, Quantizza, Azzera, transpose, detune, gain |
 
 ## Piano roll
@@ -145,6 +150,8 @@ Doppio clic su una clip MIDI (sulla timeline, doppio clic su una traccia MIDI vu
 | Corsia in basso | trascina una barra: velocity (le note selezionate la seguono) |
 | Tastiera a sinistra | suona le note con lo strumento della traccia |
 | ↑ ↓ (Maiusc: ottava) · ← → · Q · Ctrl+D · Ctrl+A · Canc | trasponi · sposta di un passo · quantizza · duplica · seleziona tutto · elimina |
+| Clic nel vuoto · Ctrl+X / C / V | punto d'inserimento (linea bianca) · taglia, copia, incolla lì (poi il punto va alla fine delle note incollate) |
+| Tasto destro | menu: su una nota (taglia, copia, incolla, duplica, quantizza, ottava, elimina), nel vuoto (incolla qui, seleziona tutto, modo disegno) |
 | Rotella · Maiusc+rotella · Ctrl+rotella · Alt+rotella | scorri le altezze · scorri il tempo · zoom del tempo · altezza delle righe |
 
 ## Strumenti

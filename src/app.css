@@ -115,5 +115,22 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .choice-buttons { display: flex; flex-direction: column; gap: 2px; }
 .choice-buttons button { padding: 1px 8px; font-size: 11px; border-radius: 3px; min-width: 70px; }
 
+/* ---------------------------------------------------------------- menu contestuale */
+.context-menu {
+  position: fixed; z-index: 100; min-width: 210px; padding: 4px; outline: none;
+  background: #23272e; border: 1px solid #3a3f47; border-radius: 7px; box-shadow: 0 8px 28px #000a;
+  display: flex; flex-direction: column;
+}
+.context-menu .item {
+  display: grid; grid-template-columns: 16px 1fr auto; gap: 6px; align-items: center; text-align: left;
+  background: none; border: 0; border-radius: 4px; padding: 5px 8px; font-size: 12.5px;
+}
+.context-menu .item:not(:disabled):hover, .context-menu .item:focus { background: var(--accent); color: #141414; outline: none; }
+.context-menu .item:not(:disabled):hover .shortcut, .context-menu .item:focus .shortcut { color: #3a2a12; }
+.context-menu .check { color: var(--accent); font-size: 11px; }
+.context-menu .item:focus .check { color: #141414; }
+.context-menu .shortcut { color: var(--muted); font-size: 11.5px; padding-left: 18px; }
+.context-menu .separator { height: 1px; background: #3a3f47; margin: 4px 6px; }
+
 /* ---------------------------------------------------------------- barra di stato */
 .status { padding: 5px 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); min-height: 26px; }

@@ -4,7 +4,11 @@ import type { Beats } from '../core/music-time';
 import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
 import { Project } from '../model/project';
-import { setLoopRegion } from '../store/edits';
+import { addMidiClip, addTrack, setLoopRegion, type TrackKind } from '../store/edits';
+import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
+import { showContextMenu } from '../ui/context-menu';
+import { gridStep } from '../ui/timeline/geometry';
+import { timelineMenu, type TimelineActions } from './menus';
 import { ProjectStore } from '../store/project-store';
 import { addedPlacements, deleteMany, duplicateMany, splitMany } from '../store/selection-edits';
 import { BottomPanel, type BottomView } from '../ui/bottom-panel';
@@ -22,7 +26,7 @@ import { AudioSystem } from './audio-system';
 import { ProjectSession } from './project-session';
 
 /** L'applicazione: crea le parti, le collega e implementa i comandi. */
-export class App implements Commands, FileCommands {
+export class App implements Commands, FileCommands, TimelineActions {
   readonly store = new ProjectStore(Project.empty('Nuovo progetto', randomIds), randomIds);
   readonly audio = new AudioSystem(this.store);
   readonly session = new ProjectSession(this.store, this.audio);
@@ -33,6 +37,8 @@ export class App implements Commands, FileCommands {
   readonly pianoRoll: PianoRoll;
   readonly device: DeviceView;
   private readonly bottom = new BottomPanel();
+  /** Appunti condivisi da timeline e piano roll. */
+  readonly clipboard = new Clipboard();
   /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
   private readonly clipEditors: Readonly<Record<string, BottomView & { open(id: PlacementId): boolean }>>;
   private readonly transport: TransportBar;
@@ -43,6 +49,7 @@ export class App implements Commands, FileCommands {
       store: this.store, ui: this.ui, engine: this.audio.engine, peaks: this.peaks,
       openClip: (track, id) => this.openClip(track, id),
       dropFiles: (files, track, beat) => this.run(() => this.session.importFiles(files, track, beat)),
+      contextMenu: (hit, x, y) => showContextMenu(x, y, timelineMenu(this, hit)),
     });
     this.editor = new ClipEditor({
       store: this.store, engine: this.audio.engine, peaks: this.peaks,
@@ -51,7 +58,7 @@ export class App implements Commands, FileCommands {
     });
     const audition = (track: TrackId, pitch: number, velocity = 100) => this.run(() => this.audio.audition(track, pitch, velocity));
     this.pianoRoll = new PianoRoll({
-      store: this.store, engine: this.audio.engine, audition,
+      store: this.store, engine: this.audio.engine, audition, clipboard: this.clipboard,
       openInstrument: track => this.openInstrument(track, true),
       say: t => this.say(t),
     });
@@ -105,11 +112,74 @@ export class App implements Commands, FileCommands {
     this.ui.select(addedPlacements(before, this.store.project).map(r => r.id));
   }
 
+  copySelection(): void {
+    const copied = copyClips(this.store.project, this.selection());
+    if (!copied) return this.say('Seleziona delle clip da copiare.');
+    this.clipboard.content = copied;
+    const n = copied.items.length;
+    this.say(`${n === 1 ? 'Copiata 1 clip: Ctrl+V la incolla' : `Copiate ${n} clip: Ctrl+V le incolla`} al cursore.`);
+  }
+
+  cutSelection(): void {
+    const refs = this.selection();
+    const copied = copyClips(this.store.project, refs);
+    if (!copied) return this.say('Seleziona delle clip da tagliare.');
+    this.clipboard.content = copied;
+    this.store.apply(deleteMany(refs));
+  }
+
+  /** Incolla al cursore, sulle tracce da cui si è copiato. */
+  paste(): void {
+    const copied = this.clipboard.clips;
+    if (!copied) return this.say(this.clipboard.notes ? 'Negli appunti ci sono delle note: incollale nel piano roll.' : 'Gli appunti sono vuoti.');
+    const index = this.store.project.tracks.findIndex(t => t.id === copied.sourceTrack);
+    this.pasteAt(Math.max(0, index), this.audio.engine.position);
+  }
+
+  get canPaste(): boolean {
+    return this.clipboard.clips !== null;
+  }
+
+  pasteAt(trackIndex: number, at: Beats): void {
+    const copied = this.clipboard.clips;
+    if (!copied) return;
+    const before = this.store.project;
+    this.store.apply(pasteClips(copied, trackIndex, at));
+    const added = addedPlacements(before, this.store.project);
+    if (!added.length) return this.say('Nessuna traccia adatta qui: le clip audio vanno su tracce audio, quelle MIDI su tracce MIDI.');
+    this.ui.select(added.map(r => r.id));
+    // il cursore va alla fine di ciò che si è incollato: Ctrl+V di nuovo continua in fila
+    if (!this.audio.engine.playing) this.audio.engine.seek(at + copied.span);
+    if (added.length < copied.items.length) this.say(`Incollate ${added.length} clip su ${copied.items.length}: le altre non hanno una traccia adatta.`);
+  }
+
   /** Divide nel punto del cursore le clip selezionate (o, senza selezione, tutte). */
   splitAtCursor(): void {
+    this.splitSelectionAt(this.audio.engine.position);
+  }
+
+  splitSelectionAt(beat: Beats): void {
     const p = this.store.project;
     const refs = this.selection().length ? this.selection() : p.tracks.flatMap(t => t.arrangement.map(x => ({ track: t.id, id: x.id })));
-    this.store.apply(splitMany(refs, this.audio.engine.position));
+    this.store.apply(splitMany(refs, beat));
+  }
+
+  snap(beat: Beats): Beats {
+    const step = gridStep(this.ui.geometry.pxPerBeat, this.store.project.signature);
+    return this.ui.snap ? Math.max(0, Math.round(beat / step) * step) : beat;
+  }
+
+  newMidiClip(track: TrackId, beat: Beats): void {
+    const bar = this.store.project.signature.beatsPerBar;
+    this.store.apply(addMidiClip(track, Math.floor(beat / bar) * bar, bar));
+  }
+
+  addTrack(kind: TrackKind): void {
+    this.store.apply(addTrack(kind));
+  }
+
+  isMidiTrack(track: TrackId): boolean {
+    return this.store.project.track(track)?.kind === 'midi';
   }
 
   selectAll(): void {
@@ -169,7 +239,7 @@ export class App implements Commands, FileCommands {
 
   // ---------------------------------------------------------------- aiuti
 
-  private openClip(track: TrackId, id: PlacementId): void {
+  openClip(track: TrackId, id: PlacementId): void {
     const clip = this.store.project.track(track)?.placement(id)?.clip;
     const editor = clip && this.clipEditors[clip.kind];
     if (!editor) return this.say(clip ? `Nessun editor per le clip "${clip.kind}".` : '');

@@ -24,6 +24,8 @@ export interface RollHost extends ClipHost<MidiClip> {
   /** Modo disegno: un clic crea una nota, un clic su una nota la toglie. */
   readonly drawMode: boolean;
   select(notes: Iterable<Note>): void;
+  /** Il punto dove incollare (la linea del cursore del piano roll). */
+  setInsertPoint(beat: Beats): void;
   /** Applica le note nuove e seleziona quelle indicate (un passo di annullamento). */
   commitNotes(label: string, change: NoteChange): void;
   audition(pitch: number, velocity: number): void;
@@ -214,7 +216,9 @@ export class MarqueeGesture implements RollGesture {
   }
 
   end(): void {
+    // un clic senza riquadro fissa il punto d'inserimento, sulla griglia
     if (this.boxed) this.host.select(this.boxed);
+    else this.host.setInsertPoint(Math.max(0, snap(this.host, this.origin, this.host.axis.xToBeat(this.origin.x))));
     this.host.invalidate();
   }
 

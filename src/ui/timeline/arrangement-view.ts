@@ -24,6 +24,8 @@ export interface ArrangementDeps {
   readonly openClip: (track: TrackId, placement: PlacementId) => void;
   /** File trascinati sulla timeline. */
   readonly dropFiles: (files: File[], track: TrackId | null, beat: Beats) => void;
+  /** Tasto destro: `hit` è ciò che c'è sotto, (x, y) il punto nella finestra. */
+  readonly contextMenu: (hit: Hit, x: number, y: number) => void;
 }
 
 type HitKey = 'clip:body' | 'clip:start' | 'clip:end' | 'lane' | 'empty';
@@ -178,6 +180,15 @@ export class ArrangementView implements GestureHost {
       el.style.cursor = hoverCursor[keyOf(hitTest(this.store.project, this.geo, p.x, p.y))];
     });
     this.bindGestureEnd(el);
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (this.gesture) return;
+      const p = this.pointer(e, el);
+      const hit = hitTest(this.store.project, this.geo, p.x, p.y);
+      // tasto destro su una clip non selezionata: diventa la selezione, come in Live
+      if (hit.kind === 'clip' && !this.ui.selection.has(hit.placement.id)) this.ui.select([hit.placement.id]);
+      this.deps.contextMenu(hit, e.clientX, e.clientY);
+    });
     el.addEventListener('dblclick', e => {
       const p = this.pointer(e, el);
       const hit = hitTest(this.store.project, this.geo, p.x, p.y);

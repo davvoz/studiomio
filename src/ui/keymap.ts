@@ -6,6 +6,9 @@ export interface Commands {
   redo(): void;
   deleteSelection(): void;
   duplicateSelection(): void;
+  cutSelection(): void;
+  copySelection(): void;
+  paste(): void;
   splitAtCursor(): void;
   selectAll(): void;
   toggleLoop(): void;
@@ -34,6 +37,9 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'delete', run: c => c.deleteSelection() },
   { key: 'backspace', run: c => c.deleteSelection() },
   { key: 'd', ctrl: true, run: c => c.duplicateSelection() },
+  { key: 'x', ctrl: true, run: c => c.cutSelection() },
+  { key: 'c', ctrl: true, run: c => c.copySelection() },
+  { key: 'v', ctrl: true, run: c => c.paste() },
   { key: 'e', ctrl: true, run: c => c.splitAtCursor() },
   { key: 'a', ctrl: true, run: c => c.selectAll() },
   { key: 'l', ctrl: true, run: c => c.toggleLoop() },

@@ -7,6 +7,7 @@ import { sampleDuration, type SampleRef } from '../../model/sample';
 import { autoWarp, followTempo } from '../../model/warp-tools';
 import { updateClip } from '../../store/edits';
 import type { ProjectStore } from '../../store/project-store';
+import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
 import { Surface } from '../surface';
 import type { Pointer } from '../timeline/gestures';
 import { gridStep } from '../timeline/geometry';
@@ -276,13 +277,17 @@ export class ClipEditor implements EditorHost {
     // doppio clic nella striscia o sulla forma d'onda: un warp marker in quel punto
     el.addEventListener('dblclick', e => {
       const p = this.pointer(e, el);
-      const clip = this.clip();
-      if (!clip?.warp.enabled || p.y < LAYOUT.ruler) return;
-      const t = clip.warp.markers.timeOf(this._axis.xToBeat(p.x));
-      if (t < 0 || t > this.duration()) return;
-      const { markers, index } = clip.warp.markers.withMarkerAt(t);
-      if (markers !== clip.warp.markers) this.commit('Aggiungi warp marker', c => c.withMarkers(markers));
-      this.selectMarker(index);
+      if (p.y >= LAYOUT.ruler) this.addMarkerAt(p.x);
+    });
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (this.gesture) return;
+      const p = this.pointer(e, el);
+      const h = this.hit(p);
+      if (!h) return;
+      this.element.focus();
+      if (h.hit.kind === 'marker') this.selectMarker(h.hit.index);
+      showContextMenu(e.clientX, e.clientY, this.menu(h.clip, h.hit, p));
     });
     el.addEventListener('wheel', e => {
       e.preventDefault();
@@ -297,13 +302,51 @@ export class ClipEditor implements EditorHost {
       if ((e.key === 'Delete' || e.key === 'Backspace') && this.selected >= 0) {
         e.stopPropagation();
         e.preventDefault();
-        const i = this.selected;
-        const clip = this.clip();
-        if (clip && clip.warp.markers.canRemove(i)) {
-          this.selected = -1;
-          this.commit('Elimina warp marker', c => c.withMarkers(c.warp.markers.without(i)));
-        } else this.deps.say('Servono almeno due warp marker: usa "Azzera" per ripartire da un tempo costante.');
+        this.deleteSelectedMarker();
       }
     });
+  }
+
+  private deleteSelectedMarker(): void {
+    const i = this.selected;
+    const clip = this.clip();
+    if (clip && i >= 0 && clip.warp.markers.canRemove(i)) {
+      this.selected = -1;
+      this.commit('Elimina warp marker', c => c.withMarkers(c.warp.markers.without(i)));
+    } else this.deps.say('Servono almeno due warp marker: usa "Azzera" per ripartire da un tempo costante.');
+  }
+
+  /** Un warp marker nel punto x (se il warp è attivo e x cade nel sample). */
+  private addMarkerAt(x: number): void {
+    const clip = this.clip();
+    if (!clip?.warp.enabled) return;
+    const t = clip.warp.markers.timeOf(this._axis.xToBeat(x));
+    if (t < 0 || t > this.duration()) return;
+    const { markers, index } = clip.warp.markers.withMarkerAt(t);
+    if (markers !== clip.warp.markers) this.commit('Aggiungi warp marker', c => c.withMarkers(markers));
+    this.selectMarker(index);
+  }
+
+  private menu(clip: AudioClip, hit: EditorHit, p: Pointer): MenuItem[] {
+    const warp = clip.warp.enabled;
+    const tools: MenuItem[] = [
+      { label: 'Auto-Warp', disabled: !this.target()?.sample.analysis, run: () => this.autoWarp() },
+      { label: 'Segui tempo', disabled: !this.target()?.sample.analysis, run: () => void this.followTempo() },
+      { label: 'Quantizza i warp marker', disabled: !warp, run: () => this.quantize() },
+      { label: 'Azzera i warp marker', disabled: !warp, run: () => this.commit('Azzera warp marker', c => c.withMarkers(c.warp.markers.cleared(this.duration()))) },
+      SEPARATOR,
+      { label: warp ? 'Spegni il warp' : 'Accendi il warp', run: () => this.commit(warp ? 'Warp spento' : 'Warp attivo', c => c.withWarp({ enabled: !warp })) },
+    ];
+    if (hit.kind === 'marker') {
+      const i = hit.index;
+      return [
+        { label: '1.1.1 qui', run: () => this.commit('Imposta 1.1.1', c => c.withMarkers(c.warp.markers.withOrigin(c.warp.markers.markers[i].t))) },
+        { label: 'Elimina warp marker', shortcut: KEY.delete, disabled: !clip.warp.markers.canRemove(i), run: () => this.deleteSelectedMarker() },
+        SEPARATOR,
+        ...tools,
+      ];
+    }
+    const here: MenuItem[] = p.y >= LAYOUT.ruler && warp ? [{ label: 'Aggiungi warp marker qui', shortcut: 'doppio clic', run: () => this.addMarkerAt(p.x) }, SEPARATOR] : [];
+    return [...here, ...tools];
   }
 }

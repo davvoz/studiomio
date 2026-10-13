@@ -8,11 +8,14 @@ import {
   addNote, deleteNotes, duplicateNotes, moveNotes, quantizeNotes, type NoteChange, type Selection,
 } from '../../model/note-edits';
 import { MidiTrack } from '../../model/track';
+import { copyNotes, pasteNotes, type Clipboard } from '../../store/clipboard';
 import { updateClip } from '../../store/edits';
 import type { ProjectStore } from '../../store/project-store';
 import { BeatAxis, contentBeatAt, timelineBeatOf } from '../clip-editor/clip-geometry';
 import { bindKeys, type Binding } from '../keymap';
+import { showContextMenu } from '../context-menu';
 import { Surface } from '../surface';
+import { rollMenu } from './roll-menu';
 import type { Pointer } from '../timeline/gestures';
 import { gridStep } from '../timeline/geometry';
 import { RollKeyboard } from './keyboard';
@@ -27,6 +30,8 @@ export interface PianoRollDeps {
   /** Suona subito una nota con lo strumento della traccia. */
   readonly audition: (track: TrackId, pitch: number, velocity: number) => void;
   readonly openInstrument: (track: TrackId) => void;
+  /** Appunti condivisi con la timeline. */
+  readonly clipboard: Clipboard;
   readonly say: (text: string) => void;
 }
 
@@ -43,6 +48,9 @@ const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
   { key: 'backspace', run: r => r.deleteSelected() },
   { key: 'a', ctrl: true, run: r => r.selectAll() },
   { key: 'd', ctrl: true, run: r => r.duplicate() },
+  { key: 'x', ctrl: true, run: r => r.cut() },
+  { key: 'c', ctrl: true, run: r => r.copy() },
+  { key: 'v', ctrl: true, run: r => r.paste() },
   { key: 'arrowup', run: r => r.transpose(1) },
   { key: 'arrowdown', run: r => r.transpose(-1) },
   { key: 'arrowup', shift: true, run: r => r.transpose(12) },
@@ -67,6 +75,7 @@ export class PianoRoll implements RollHost {
   private _pitches = new PitchAxis(12, 0, ROLL.ruler);
   private _selection = new Set<Note>();
   private gesture: RollGesture | null = null;
+  private insert: Beats | null = null;
   private dirty = true;
   private fitPending = false;
   noteLength: Beats = 0.25;
@@ -117,6 +126,7 @@ export class PianoRoll implements RollHost {
       return false;
     }
     this._selection = new Set();
+    this.insert = null;
     this.element.hidden = false;
     this.fitPending = true;
     this.fit();
@@ -173,6 +183,11 @@ export class PianoRoll implements RollHost {
     this.sync();
   }
 
+  setInsertPoint(beat: Beats): void {
+    this.insert = beat;
+    this.invalidate();
+  }
+
   audition(pitch: number, velocity: number): void {
     const t = this.target();
     if (t) this.deps.audition(t.track.id, pitch, velocity);
@@ -208,6 +223,42 @@ export class PianoRoll implements RollHost {
   duplicate(): void {
     const c = this.clip();
     if (c && this._selection.size) this.commitNotes('Duplica note', duplicateNotes(c.notes, this._selection, this.grid));
+  }
+
+  copy(): void {
+    const c = this.clip();
+    const copied = c && copyNotes(c.notes, this._selection);
+    if (!copied) return this.deps.say('Seleziona delle note da copiare.');
+    this.deps.clipboard.content = copied;
+    const n = copied.notes.length;
+    this.deps.say(`${n === 1 ? 'Copiata 1 nota: Ctrl+V la incolla' : `Copiate ${n} note: Ctrl+V le incolla`} al punto d'inserimento (clic nel vuoto per sceglierlo).`);
+  }
+
+  cut(): void {
+    const c = this.clip();
+    const copied = c && copyNotes(c.notes, this._selection);
+    if (!c || !copied) return this.deps.say('Seleziona delle note da tagliare.');
+    this.deps.clipboard.content = copied;
+    this.commitNotes('Taglia note', deleteNotes(c.notes, this._selection));
+  }
+
+  /** Incolla al punto `at`, al punto d'inserimento o, se non c'è, subito dopo le note copiate. */
+  paste(at?: Beats): void {
+    const c = this.clip(), copied = this.deps.clipboard.notes;
+    if (!c) return;
+    if (!copied) return this.deps.say(this.deps.clipboard.clips ? 'Negli appunti ci sono delle clip: incollale sulla timeline.' : 'Gli appunti sono vuoti.');
+    const start = at ?? this.insert ?? copied.origin + copied.span;
+    this.commitNotes('Incolla note', pasteNotes(c.notes, copied, start));
+    // il punto d'inserimento va alla fine: incollando di nuovo si continua in fila
+    this.setInsertPoint(start + copied.span);
+  }
+
+  get canPaste(): boolean {
+    return this.deps.clipboard.notes !== null;
+  }
+
+  cellStart(beat: Beats): Beats {
+    return Math.max(0, Math.floor(beat / this.grid + 1e-9) * this.grid);
   }
 
   /** Traspone le note selezionate (o tutte, se nessuna è selezionata). */
@@ -308,7 +359,7 @@ export class PianoRoll implements RollHost {
           g, width, height, axis: this._axis, pitches: this._pitches, clip,
           selection: this.gesture?.previewSelection?.() ?? this._selection,
           signature: this.deps.store.project.signature, grid: this.grid,
-          playhead: engine.playing ? contentBeatAt(t.placement, engine.position) : null,
+          playhead: engine.playing ? contentBeatAt(t.placement, engine.position) : null, insert: this.insert,
         });
         this.gesture?.paint?.(g);
       }
@@ -359,7 +410,7 @@ export class PianoRoll implements RollHost {
       if (this.drawMode) return;
       const h = this.hit(this.pointer(e, el));
       if (h?.hit.kind === 'empty') {
-        const b = Math.max(0, Math.floor(h.hit.beat / this.grid + 1e-9) * this.grid);
+        const b = this.cellStart(h.hit.beat);
         this.commitNotes('Aggiungi nota', addNote(h.clip.notes, { pitch: h.hit.pitch, start: b, duration: this.noteLength, velocity: 100 }));
         this.audition(h.hit.pitch, 100);
       } else if (h?.hit.kind === 'note') {
@@ -368,6 +419,17 @@ export class PianoRoll implements RollHost {
       }
     });
     el.addEventListener('wheel', e => this.wheel(e, this.pointer(e, el).x), { passive: false });
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (this.gesture) return;
+      const h = this.hit(this.pointer(e, el));
+      if (!h) return;
+      this.element.focus();
+      const note = h.hit.kind === 'note' || h.hit.kind === 'velocity' ? h.hit.note : null;
+      // tasto destro su una nota non selezionata: diventa la selezione
+      if (note && !this._selection.has(note)) this.select([note]);
+      showContextMenu(e.clientX, e.clientY, rollMenu(this, h.hit));
+    });
   }
 
   /** Rotella: in verticale scorre le note; Maiusc in orizzontale; Ctrl zooma il tempo, Alt le righe. */
