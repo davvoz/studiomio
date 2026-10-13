@@ -3,6 +3,7 @@
  * registra qui con il suo nome, e il pannello la usa al posto delle manopole. */
 import type { DeviceType } from '../../devices/device-type';
 import type { DeviceSettings, ParamValues } from '../../model/device';
+import { DriveDisplay } from './drive/drive-display';
 import { DrumDisplay } from './drums/drum-display';
 import { EqDisplay } from './eq/eq-display';
 
@@ -44,5 +45,6 @@ export type DisplayFactory = (ctx: DisplayContext) => DeviceDisplay;
 /** Pannelli grafici per tipo di dispositivo. */
 export const DEVICE_DISPLAYS: Readonly<Record<string, DisplayFactory>> = {
   eq: ctx => new EqDisplay(ctx),
+  drive: ctx => new DriveDisplay(ctx),
   drums: ctx => new DrumDisplay(ctx),
 };

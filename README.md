@@ -90,7 +90,7 @@ src/
     envelopes/         l'editor delle modulazioni: menu dei bersagli e corsia con la curva (piano roll ed editor audio)
     device/            catena dei dispositivi: un pannello per dispositivo, controlli generati dai parametri;
                        displays.ts registra i pannelli grafici (eq/: grafico con spettro e curva;
-                       drums/: griglia dei pad)
+                       drums/: griglia dei pad; drive/: curva, spettro e forme)
     dom.ts             creazione degli elementi
     bottom-panel.ts    l'area in basso, una vista alla volta
     waveform.ts        picchi della forma d'onda a più risoluzioni
@@ -102,7 +102,8 @@ src/
     instruments/drums/   la Drum Machine: pad, modelli e kit (drums.ts), suono (drums-core.ts)
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
     effects/eq/        l'EQ: descrizione (eq.ts), matematica dei filtri comune a suono e disegno (eq-math.ts), suono (eq-core.ts)
-    dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, rumore, polifonia; interfacce dei motori
+    effects/drive/     il Drive: descrizione e preset (drive.ts), curve e primitive (drive-math.ts), suono (drive-core.ts)
+    dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, rumore, polifonia, sovracampionamento; interfacce dei motori
     worklet/           i processori AudioWorklet (strumenti, effetti, misuratori), coda delle note, bypass, motori per tipo;
                        mod-timeline.ts applica le modulazioni ai parametri
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
@@ -279,6 +280,30 @@ fa sfumare quello prima in 4 ms, senza click; la durata delle note non conta.
 
 Mentre suona, i pad delle note che partono si accendono. Nel piano roll la tastiera mostra i
 nomi dei pad e le righe si adattano per farli stare tutti. Preset: Init, 808, Secco.
+
+**Drive**: saturazione e distorsione, da un calore leggero a un fuzz rotto, fatto per suonare
+pieno. Sei forme: Morbida (tanh, armoniche dispari), Valvola (asimmetrica: armoniche pari,
+calde), Nastro (ginocchio larghissimo), Dura, Fuzz (molto asimmetrica), Fold (ripiegamento).
+
+| Controllo | |
+| --- | --- |
+| Drive · Bias | quanto si spinge nella curva (0–36 dB) · asimmetria: più armoniche pari |
+| Colore | inclina lo spettro prima della curva e lo raddrizza dopo: a destra satura di più sugli alti, a sinistra sui medio-bassi; il timbro resta, cambia dove nasce la distorsione |
+| Bassi puliti · Crossover | sotto il crossover (Linkwitz-Riley, bassi + alti = suono intero) i bassi restano puliti in questa misura: con tanto drive il basso resta pieno e definito |
+| Tono · Auto gain · Uscita · Dry/Wet | passa-basso dopo la curva · alzando il drive il volume resta lì (cambia il colore, non il livello) · mix parallelo |
+| Oversampling | 2×, 4× (predefinito), 8× |
+
+Il pannello mostra la curva come si sente (con drive, bias, compensazione e mix) e lo spettro
+prima (linea) e dopo (pieno): si vedono nascere le armoniche. Preset: Init, Calda, Nastro,
+Basso 808, Batteria parallela, Presenza, Fuzz, Rotto.
+
+Sotto il cofano, per non sporcare: tutto gira sovracampionato con filtri a mezza banda a fase
+lineare (anche il dry e i bassi puliti, così i rami restano allineati e il mix parallelo non fa
+filtri a pettine), e la curva usa l'antialiasing ADAA con la primitiva esatta di ogni forma
+(in tabella, con interpolazione di Hermite). Misurato in un test: un clip duro su un seno a
+4.9 kHz senza sovracampionamento ripiega armoniche udibili a −18 dB, con il Drive a −113 dB.
+Costo misurato: circa il 2.8 % di un core per un'istanza stereo a 4× (in silenzio non calcola).
+Il WASM non è servito: il tempo andava nelle funzioni trascendenti, tolte con le tabelle.
 
 **Delay**: eco a tempo (da 1/32 a 1/1, con puntate e terzine, segue il BPM del progetto) o in
 millisecondi, stereo o ping-pong, feedback con low cut e high cut sulle ripetizioni, dry/wet.

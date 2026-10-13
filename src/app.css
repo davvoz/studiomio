@@ -302,3 +302,15 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drum-model { font-size: 12px; padding: 1px 4px; }
 .drum-hint { font-size: 11px; white-space: nowrap; }
 .drum-controls { display: flex; align-items: flex-start; gap: 2px; }
+
+/* Drive: curva, spettro, forme, controlli */
+.drive-display { display: flex; flex-direction: column; gap: 6px; }
+.drive-top { display: flex; gap: 6px; }
+.drive-curve { display: block; width: 150px; height: 118px; border-radius: 6px; border: 1px solid var(--line); }
+.drive-spectrum { display: block; width: 430px; height: 118px; border-radius: 6px; border: 1px solid var(--line); }
+.device-panel.off .drive-top { opacity: .6; }
+.drive-shapes { display: flex; gap: 4px; }
+.drive-shape { display: flex; align-items: center; gap: 5px; padding: 2px 8px 2px 4px; font-size: 11.5px; color: var(--muted); }
+.drive-shape.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); color: var(--text); border-color: var(--accent); }
+.drive-shape-icon { width: 26px; height: 18px; display: block; }
+.drive-controls { display: flex; align-items: flex-start; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; }
