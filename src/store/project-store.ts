@@ -51,6 +51,11 @@ export class ProjectStore {
     return this.current;
   }
 
+  /** Fabbrica degli id, per chi prepara dati da inserire con una modifica (es. un sample). */
+  get ids(): IdFactory {
+    return this.ctx.ids;
+  }
+
   get canUndo(): boolean { return this.past.length > 0; }
   get canRedo(): boolean { return this.future.length > 0; }
   /** Nome della modifica che "Annulla" toglierebbe. */

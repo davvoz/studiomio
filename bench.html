@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>studiomio · banco DSP</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <main class="bench">
+    <h1>studiomio <small>banco di prova del motore DSP</small></h1>
+
+    <section>
+      <h2>Ambiente</h2>
+      <dl id="env"></dl>
+    </section>
+
+    <section>
+      <h2>Sample</h2>
+      <div class="row">
+        <button id="demo">Loop demo</button>
+        <label class="file">Carica audio… <input id="file" type="file" accept="audio/*"></label>
+        <span id="source" class="muted">nessun sample</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Warp</h2>
+      <div class="row">
+        <label>Modalità
+          <select id="mode">
+            <option value="complex">Complex</option>
+            <option value="beats">Beats</option>
+            <option value="tones">Tones</option>
+            <option value="texture">Texture</option>
+            <option value="repitch">Re-Pitch</option>
+          </select>
+        </label>
+        <label>BPM <input id="bpm" type="number" value="128" min="40" max="300" step="0.1"></label>
+        <label>Transpose <input id="transpose" type="number" value="0" min="-48" max="48" step="1"></label>
+        <button id="render" disabled>Render</button>
+        <button id="play" disabled>▶</button>
+        <button id="parallel" disabled>Render × N in parallelo</button>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+  <script type="module" src="/src/bench.ts"></script>
+</body>
+</html>

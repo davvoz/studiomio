@@ -33,3 +33,11 @@ dd { margin: 0; }
 .ok { color: #7ddc8a; }
 .bad { color: #ff7a6b; }
 pre { background: #0e0f12; border-radius: 6px; padding: 10px; min-height: 60px; margin: 12px 0 0; white-space: pre-wrap; font-size: 12.5px; }
+.pos { font: 600 18px/1 ui-monospace, monospace; min-width: 84px; text-align: center; color: var(--accent); }
+.tracks { display: grid; gap: 6px; }
+.track { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-left: 4px solid var(--color); background: #1f2328; border-radius: 4px; }
+.track .name { flex: 1; }
+.track button { padding: 3px 9px; }
+.track button.on { background: var(--accent); color: #111; border-color: var(--accent); }
+.track input[type=range] { width: 140px; }
+a { color: var(--accent); }

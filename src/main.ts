@@ -1,151 +1,144 @@
-/* Banco di prova del motore DSP: verifica nel browser la catena completa
- * (server con COOP/COEP → memoria condivisa → worker pool → render). Non è l'interfaccia
- * dell'app, che arriverà con il modello del progetto e l'arrangement. */
-import { drumLoop } from './demo/demo-loop';
-import type { AudioAnalysis } from './dsp/analysis/analyze';
-import type { StretchSettings, WarpMode } from './dsp/stretch/stretcher';
-import type { WarpJob } from './dsp/stretch/warp-renderer';
-import type { AudioData } from './dsp/types';
-import { DspService } from './workers/dsp-service';
-import { SupersededError } from './workers/worker-pool';
+/* Pagina provvisoria del motore di riproduzione: un progetto demo con trasporto, tempo,
+ * loop, metronomo, mixer ed export. L'interfaccia vera (arrangement) arriva nella fase 4. */
+import { AudioSystem } from './app/audio-system';
+import { randomIds } from './core/id';
+import { buildDemoProject } from './demo/demo-project';
+import { onsetEnvelope } from './dsp/analysis/onset';
+import { detectTransients } from './dsp/analysis/transients';
+import { encodeWav } from './dsp/codec/wav';
+import { mixMono } from './dsp/signal';
+import { Project } from './model/project';
+import type { Track } from './model/track';
+import { setLoopRegion, setMixer, setTempo } from './store/edits';
+import { ProjectStore } from './store/project-store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const log = (line: string) => { $('log').textContent += `${line}\n`; };
-const ms = (t0: number) => `${Math.round(performance.now() - t0)} ms`;
 
-const dsp = new DspService();
-let audioCtx: AudioContext | null = null;
-let current: { audio: AudioData; analysis: AudioAnalysis; name: string } | null = null;
-let rendered: Float32Array[] | null = null;
-let playing: AudioBufferSourceNode | null = null;
+const store = new ProjectStore(Project.empty('Demo', randomIds), randomIds);
+const audio = new AudioSystem(store);
+const { engine } = audio;
 
-/** Impostazioni predefinite di ogni modalità (le stesse di WarpMio). */
-const defaultSettings: Record<WarpMode, (a: AudioAnalysis) => StretchSettings> = {
-  complex: a => ({ mode: 'complex', fftSize: 4096, transients: a.transients }),
-  beats: a => ({ mode: 'beats', slices: a.transients, loopMode: 'forward', envelope: 100 }),
-  tones: () => ({ mode: 'tones', grainMs: 50 }),
-  texture: () => ({ mode: 'texture', grainMs: 80, flux: 0.2 }),
-  repitch: () => ({ mode: 'repitch' }),
-};
+// ------------------------------------------------------------------ viste
 
-function ctx(): AudioContext {
-  audioCtx ??= new AudioContext();
-  return audioCtx;
+function renderTracks(): void {
+  const p = store.project;
+  $('tracks').replaceChildren(...p.tracks.map(trackRow));
 }
 
-function buildJob(): WarpJob {
-  const { audio, analysis } = current!;
-  const len = audio.channels[0].length;
-  const bpm = Number($<HTMLInputElement>('bpm').value) || analysis.tempo;
-  const outLength = Math.round((len * analysis.tempo) / bpm);
-  const mode = $<HTMLSelectElement>('mode').value as WarpMode;
-  return {
-    points: [[0, 0], [outLength, len]], outLength,
-    transpose: Number($<HTMLInputElement>('transpose').value) || 0,
-    settings: defaultSettings[mode](analysis),
+function trackRow(t: Track): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'track';
+  row.style.setProperty('--color', t.color);
+  const toggle = (label: string, on: boolean, patch: () => object) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.classList.toggle('on', on);
+    b.onclick = () => store.apply(setMixer(t.id, patch()));
+    return b;
   };
+  const vol = document.createElement('input');
+  vol.type = 'range';
+  vol.min = '-40'; vol.max = '6'; vol.step = '0.5';
+  vol.value = String(t.mixer.volumeDb);
+  // il trascinamento del cursore è un solo passo di annullamento
+  vol.oninput = () => store.apply(setMixer(t.id, { volumeDb: Number(vol.value) }), { mergeKey: `vol-${t.id}` });
+  vol.onchange = () => store.endMerge();
+  const name = document.createElement('span');
+  name.className = 'name';
+  name.textContent = `${t.name} · ${t.arrangement.length} clip`;
+  const db = document.createElement('span');
+  db.className = 'muted';
+  db.textContent = `${t.mixer.volumeDb.toFixed(1)} dB`;
+  row.append(name, toggle('M', t.mixer.mute, () => ({ mute: !t.mixer.mute })), toggle('S', t.mixer.solo, () => ({ solo: !t.mixer.solo })), vol, db);
+  return row;
 }
 
-async function showEnvironment(): Promise<void> {
-  const yes = (v: boolean, ok: string, ko: string) => `<span class="${v ? 'ok' : 'bad'}">${v ? ok : ko}</span>`;
-  const info = await dsp.info();
-  $('env').innerHTML = `
-    <dt>Isolamento cross-origin</dt><dd>${yes(crossOriginIsolated, 'attivo', 'assente (servono le intestazioni COOP/COEP)')}</dd>
-    <dt>SharedArrayBuffer</dt><dd>${yes(typeof SharedArrayBuffer !== 'undefined' && crossOriginIsolated, 'disponibile: i worker condividono i sample', 'non disponibile: i sample vengono copiati')}</dd>
-    <dt>Core / worker DSP</dt><dd>${navigator.hardwareConcurrency} / ${dsp.workers}</dd>
-    <dt>Implementazioni</dt><dd>${Object.entries(info).map(([m, impl]) => `${m}: ${impl}`).join(' · ')}</dd>`;
+function renderTransport(): void {
+  const p = store.project;
+  $<HTMLInputElement>('bpm').value = String(p.tempo.bpm);
+  $<HTMLInputElement>('loop').checked = p.loop.enabled;
+  $<HTMLButtonElement>('undo').disabled = !store.canUndo;
+  $<HTMLButtonElement>('redo').disabled = !store.canRedo;
+  $('undo').title = store.undoLabel ? `Annulla ${store.undoLabel}` : '';
+  $('redo').title = store.redoLabel ? `Ripeti ${store.redoLabel}` : '';
 }
 
-async function loadSource(name: string, audio: AudioData): Promise<void> {
-  stop();
-  rendered = null;
+function animatePosition(): void {
+  $('pos').textContent = store.project.signature.format(engine.position);
+  requestAnimationFrame(animatePosition);
+}
+
+// ------------------------------------------------------------------ azioni
+
+async function togglePlay(): Promise<void> {
+  if (engine.playing) engine.stop();
+  else await audio.play(0);
+}
+
+async function exportMix(): Promise<void> {
+  const end = store.project.arrangementEnd;
   const t0 = performance.now();
-  await dsp.loadSource('preview', audio);
-  const tLoad = ms(t0);
-  const t1 = performance.now();
-  const analysis = await dsp.analyze('preview');
-  current = { audio, analysis, name };
-  const secs = audio.channels[0].length / audio.sampleRate;
-  $('source').textContent = `${name} · ${secs.toFixed(2)} s · ${audio.channels.length} canali · ${audio.sampleRate} Hz`;
-  log(`Caricato "${name}" nei worker in ${tLoad}. Analisi: ${analysis.tempo} BPM, ${analysis.transients.length} transienti (${ms(t1)}).`);
-  for (const id of ['render', 'parallel']) $<HTMLButtonElement>(id).disabled = false;
+  const mix = await audio.exportMix(0, end);
+  log(`Mix esportato: ${(mix[0].length / audio.context.sampleRate).toFixed(2)} s in ${Math.round(performance.now() - t0)} ms.`);
+  const url = URL.createObjectURL(new Blob([encodeWav(mix, audio.context.sampleRate, 24)], { type: 'audio/wav' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: `${store.project.name}.wav` });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-async function render(): Promise<void> {
-  if (!current) return;
-  const job = buildJob();
-  const t0 = performance.now();
-  try {
-    rendered = await dsp.renderWarp('preview', job, 'preview');
-  } catch (e) {
-    if (e instanceof SupersededError) return;
-    throw e;
-  }
-  const secs = job.outLength / current.audio.sampleRate;
-  const took = performance.now() - t0;
-  log(`Render ${job.settings.mode}: ${secs.toFixed(2)} s di audio in ${Math.round(took)} ms (${Math.round((secs * 1000) / took)}× tempo reale).`);
-  $<HTMLButtonElement>('play').disabled = false;
-}
-
-/** Lo stesso render N volte insieme: misura quanto rende dividere il lavoro tra i core. */
-async function renderParallel(): Promise<void> {
-  if (!current) return;
-  const job = buildJob(), n = dsp.workers;
-  let t0 = performance.now();
-  await dsp.renderWarp('preview', job);
-  const single = performance.now() - t0;
-  t0 = performance.now();
-  await Promise.all(Array.from({ length: n }, () => dsp.renderWarp('preview', job)));
-  const all = performance.now() - t0;
-  log(`${n} render in parallelo: ${Math.round(all)} ms contro ${Math.round(single * n)} ms uno dopo l'altro → ${((single * n) / all).toFixed(1)}× più veloce.`);
-}
-
-function play(): void {
-  if (playing) return stop();
-  if (!rendered || !current) return;
-  const c = ctx();
-  const buf = c.createBuffer(rendered.length, rendered[0].length, current.audio.sampleRate);
-  rendered.forEach((ch, i) => buf.copyToChannel(ch as Float32Array<ArrayBuffer>, i));
-  playing = c.createBufferSource();
-  playing.buffer = buf;
-  playing.loop = true;
-  playing.connect(c.destination);
-  playing.start();
-  $('play').textContent = '■';
-}
-
-function stop(): void {
-  playing?.stop();
-  playing = null;
-  $('play').textContent = '▶';
-}
-
-async function decodeFile(file: File): Promise<AudioData> {
-  const decoded = await ctx().decodeAudioData(await file.arrayBuffer());
-  const channels = Array.from({ length: decoded.numberOfChannels }, (_, i) => decoded.getChannelData(i).slice());
-  return { channels, sampleRate: decoded.sampleRate };
-}
-
-const guard = (fn: () => Promise<void> | void) => () => {
-  Promise.resolve(fn()).catch(e => log(`Errore: ${e instanceof Error ? e.message : e}`));
+const guard = (fn: () => unknown) => () => {
+  Promise.resolve().then(fn).catch(e => log(`Errore: ${e instanceof Error ? e.message : e}`));
 };
 
-$('demo').addEventListener('click', guard(() => loadSource('Loop demo', { channels: drumLoop(4, 120), sampleRate: 44100 })));
-$<HTMLInputElement>('file').addEventListener('change', guard(async () => {
-  const file = $<HTMLInputElement>('file').files?.[0];
-  if (file) await loadSource(file.name, await decodeFile(file));
-}));
-$('render').addEventListener('click', guard(render));
-$('play').addEventListener('click', guard(play));
-$('parallel').addEventListener('click', guard(renderParallel));
-guard(showEnvironment)();
+store.onChange(() => { renderTracks(); renderTransport(); });
+engine.onStateChange(p => { $('play').textContent = p ? '■ Stop' : '▶ Play'; });
+$('play').onclick = guard(togglePlay);
+$('export').onclick = guard(exportMix);
+$('undo').onclick = () => store.undo();
+$('redo').onclick = () => store.redo();
+$<HTMLInputElement>('bpm').onchange = guard(() => store.apply(setTempo(Number($<HTMLInputElement>('bpm').value))));
+$<HTMLInputElement>('loop').onchange = () => store.apply(setLoopRegion({ enabled: $<HTMLInputElement>('loop').checked, start: 0, end: 16 }));
+$<HTMLInputElement>('metro').onchange = () => { engine.metronomeOn = $<HTMLInputElement>('metro').checked; };
+document.addEventListener('keydown', e => {
+  if (e.target instanceof HTMLInputElement) return;
+  if (e.code === 'Space') { e.preventDefault(); guard(togglePlay)(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) store.redo(); else store.undo(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); store.redo(); }
+});
 
-// ?auto: esegue da solo loop demo → render → render in parallelo (per le verifiche automatiche)
-if (new URLSearchParams(location.search).has('auto')) {
-  guard(async () => {
-    await loadSource('Loop demo', { channels: drumLoop(4, 120), sampleRate: 44100 });
-    await render();
-    await renderParallel();
-    log('FINE');
-  })();
+// ------------------------------------------------------------------ avvio
+
+guard(async () => {
+  const t0 = performance.now();
+  await buildDemoProject(store, audio);
+  store.load(store.project); // il progetto demo non si annulla
+  log(`Progetto demo pronto in ${Math.round(performance.now() - t0)} ms (${audio.dsp.workers} worker DSP).`);
+  for (const id of ['play', 'export']) $<HTMLButtonElement>(id).disabled = false;
+  renderTracks();
+  renderTransport();
+  animatePosition();
+  if (new URLSearchParams(location.search).has('auto')) await selfCheck();
+})();
+
+/** ?auto: verifica da sola riproduzione dal vivo ed export (per i controlli automatici). */
+async function selfCheck(): Promise<void> {
+  await audio.play(0);
+  await new Promise(r => setTimeout(r, 1500));
+  log(`Dal vivo: dopo 1,5 s la testina è a ${engine.position.toFixed(2)} battiti (attesi ~2,9 a 120 BPM).`);
+  engine.stop();
+
+  store.apply(setTempo(100));
+  store.apply(setMixer(store.project.tracks[0].id, { solo: true }));
+  const sr = audio.context.sampleRate;
+  const mix = await audio.exportMix(0, 16);
+  const onsets = detectTransients(mixMono(mix), onsetEnvelope(mixMono(mix), sr), 0.5).map(i => i / sr);
+  // la batteria ha una cassa su ogni battito: a 100 BPM uno ogni 0,6 s
+  const errors = Array.from({ length: 16 }, (_, b) => Math.min(...onsets.map(t => Math.abs(t - b * 0.6))));
+  const ok = errors.filter(e => e < 0.012).length;
+  log(`Export a 100 BPM: ${(mix[0].length / sr).toFixed(2)} s; colpi sul battito: ${ok}/16, errore massimo ${(Math.max(...errors) * 1000).toFixed(1)} ms.`);
+  store.undo();
+  store.undo();
+  log(`Annulla ×2: tempo ${store.project.tempo.bpm} BPM, solo ${store.project.tracks[0].mixer.solo}.`);
+  log('FINE');
 }

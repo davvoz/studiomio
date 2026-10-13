@@ -10,7 +10,8 @@ Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
 ```sh
 npm install
-npm run dev        # http://localhost:5173 – oggi c'è il banco di prova del motore DSP
+npm run dev        # http://localhost:5173 – progetto demo con trasporto, mixer ed export
+                   # http://localhost:5173/bench.html – banco di prova del DSP
 ```
 
 | Comando | Cosa fa |
@@ -46,15 +47,25 @@ src/
     project-codec.ts   progetto ⇄ JSON, con registri per tipi di clip e traccia
     project-folder.ts  cartella del progetto: progetto.json, backup, audio/
     directory.ts       interfaccia Directory (+ in memoria); fs-access-directory.ts per il disco
-  engine/
+  engine/              riproduzione, sulle interfacce di audio-graph.ts (Web Audio o finto nei test)
+    playback-engine.ts trasporto: play/stop/seek, aggiornamento a ogni versione del progetto
+    scheduler.ts       programmazione in anticipo, loop della timeline a corse
+    segments.ts        clip posata → tratti continui di contenuto
+    players/           un player per tipo di traccia (audio, MIDI), strumenti, metronomo
+    clip-audio.ts      clip audio → buffer pronto (render di warp o sample originale)
+    render-cache.ts    render di warp per contenuto, LRU con budget di memoria
+    mixer-graph.ts     canali con volume, pan, mute/solo e master
+    offline-mix.ts     export del mix con lo stesso motore (OfflineAudioContext)
     warp-job.ts        dalla clip audio al lavoro di warp per il DSP
+  app/
+    audio-system.ts    monta insieme worker, sample, cache, AudioContext e motore
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
     stretch/           modalità di warp, una classe per algoritmo (TimeStretcher)
     analysis/          onset, transienti, tempo, beat tracking
     codec/             WAV e ZIP
     wasm/              ponte verso il crate Rust
   workers/             RPC tipizzato, worker pool, worker DSP, DspService
-  demo/                loop demo
+  demo/                loop e progetto demo
 crates/dsp/            phase vocoder in Rust → WebAssembly (SIMD)
 tests/                 un file per modulo; test di equivalenza con WarpMio
 ```
