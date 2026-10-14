@@ -1,6 +1,7 @@
 import type { TrackId } from '../core/id';
 import { randomIds } from '../core/id';
 import type { Beats } from '../core/music-time';
+import { ControlSurfaces } from '../control/control-surfaces';
 import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
 import { MASTER, Project, type ChainOwner } from '../model/project';
@@ -49,6 +50,8 @@ export class App implements Commands, FileCommands, TimelineActions {
   /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
   private readonly clipEditors: Readonly<Record<string, BottomView & { open(ref: ClipRef): boolean }>>;
   private readonly transport: TransportBar;
+  /** I controller MIDI (l'APC40 mkII sulla session). */
+  readonly surfaces: ControlSurfaces;
   private readonly status = Object.assign(document.createElement('footer'), { className: 'status' });
 
   constructor(root: HTMLElement) {
@@ -112,6 +115,7 @@ export class App implements Commands, FileCommands, TimelineActions {
     };
     this.viewButtons.back.className = 'back-to-arrangement';
     transport.addGroup(this.viewButtons.arrangement, this.viewButtons.session, this.viewButtons.back);
+    this.surfaces = this.controlSurfaces();
     this.audio.engine.onSessionChange(() => this.renderViews());
     this.renderViews();
 
@@ -302,6 +306,39 @@ export class App implements Commands, FileCommands, TimelineActions {
   }
 
   // ---------------------------------------------------------------- aiuti
+
+  /** I controller MIDI: si collegano da soli se il permesso c'è già; il pulsante 🎛 lo chiede. */
+  private controlSurfaces(): ControlSurfaces {
+    const app = this;
+    const surfaces = new ControlSurfaces({
+      store: this.store, ui: this.ui, engine: this.audio.engine,
+      togglePlay: () => this.togglePlay(),
+      stopAndRewind: () => this.stopAndRewind(),
+      toggleMetronome: () => this.toggleMetronome(),
+      openDevices: owner => this.openDevices(owner),
+      openClip: ref => this.openClip(ref),
+      get detail() {
+        const open = app.bottom.open;
+        return open === app.device ? 'devices' : open ? 'clip' : null;
+      },
+      closeDetail: () => this.bottom.closeAll(),
+      say: t => this.say(t),
+    });
+    const button = Object.assign(document.createElement('button'), { textContent: '🎛', onclick: () => this.run(() => surfaces.enable()) });
+    const render = () => {
+      const name = surfaces.connected;
+      button.classList.toggle('on', name !== null);
+      button.title = name ? `${name}: collegato alla session`
+        : surfaces.enabled ? 'Controller MIDI: collega un APC40 mkII, si attiva da solo'
+          : "Controller MIDI: attiva l'APC40 mkII (il browser chiede il permesso per il MIDI)";
+    };
+    surfaces.onChange(render);
+    render();
+    this.transport.addGroup(button);
+    this.ui.onChange(() => this.device.markControlled(this.ui.controlledDevice));
+    void surfaces.autoStart();
+    return surfaces;
+  }
 
   /** Apre la clip (sulla timeline o in uno slot) nel suo editor. */
   openClip(ref: ClipRef): void {

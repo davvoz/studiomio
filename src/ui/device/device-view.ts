@@ -6,6 +6,7 @@ import { DEFAULT_INSTRUMENT, type EffectSettings } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
 import { MASTER, type ChainOwner } from '../../model/project';
 import { MidiTrack, type Track } from '../../model/track';
+import type { ControlledDevice } from '../ui-state';
 import {
   addEffect, loadEffectPreset, loadPreset, moveEffect, removeEffect, setEffectEnabled, setEffectParam,
   setEffectParams, setInstrument, setInstrumentParam, setInstrumentParams, setInstrumentSamples,
@@ -58,6 +59,8 @@ export class DeviceView {
   private readonly title = el('span', { className: 'device-title' });
   private readonly backButton = el<HTMLButtonElement>('button', { textContent: '◂ Note', title: 'Torna al piano roll' });
   private readonly chain = el('div', { className: 'device-chain' });
+  /** Il dispositivo che le manopole di un controller muovono (la "mano blu" di Live). */
+  private controlled: ControlledDevice | null = null;
 
   constructor(private readonly deps: DeviceViewDeps) {
     this.backButton.onclick = () => this.back?.();
@@ -98,6 +101,17 @@ export class DeviceView {
   close(): void {
     this.owner = null;
     this.element.hidden = true;
+  }
+
+  /** Segna il dispositivo che un controller muove (null: nessuno). */
+  markControlled(device: ControlledDevice | null): void {
+    this.controlled = device;
+    this.showControlled();
+  }
+
+  private showControlled(): void {
+    const c = this.controlled;
+    for (const [key, panel] of this.panels) panel.element.classList.toggle('controlled', !!c && c.owner === this.owner && c.device === key);
   }
 
   /** Il menu dei tipi di effetto; quello scelto va in fondo alla catena. */
@@ -142,6 +156,7 @@ export class DeviceView {
     if (!effects.length) items.push(el('div', { className: 'device-empty muted', textContent: 'Nessun effetto: "+ Effetto" ne aggiunge uno.' }));
     this.chain.replaceChildren(...items);
     this.chain.scrollLeft = scroll;
+    this.showControlled();
     // un effetto appena aggiunto si vede subito, anche in fondo a una catena lunga
     const added = known.size ? effects.filter(e => !known.has(e.id)).at(-1) : undefined;
     if (added) this.panels.get(added.id)?.element.scrollIntoView({ inline: 'nearest', block: 'nearest' });

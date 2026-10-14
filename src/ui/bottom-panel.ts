@@ -15,6 +15,15 @@ export class BottomPanel {
     this.element.append(...views.map(v => v.element));
   }
 
+  /** La vista aperta, se ce n'è una. */
+  get open(): BottomView | null {
+    return this.views.find(v => v.isOpen) ?? null;
+  }
+
+  closeAll(): void {
+    for (const v of this.views) if (v.isOpen) v.close();
+  }
+
   /** Apre `view` con `open` (che dice se ci è riuscita) e chiude le altre. */
   show(view: BottomView, open: () => boolean): boolean {
     for (const v of this.views) if (v !== view && v.isOpen) v.close();

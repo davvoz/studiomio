@@ -116,6 +116,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-head .close { padding: 2px 9px; }
 .device-chain { display: flex; gap: 10px; padding: 8px 10px; overflow: auto hidden; flex: 1; min-height: 0; align-items: stretch; }
 .device-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #1f2328; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 8px; }
+.device-panel.controlled { border-color: #4c88ff; box-shadow: 0 0 0 1px #4c88ff; }
 .device-panel.instrument-panel .device-sections { max-width: 1100px; }
 .device-panel.off .device-sections, .device-panel.off .device-name { opacity: .35; }
 .device-panel-head { display: flex; align-items: center; gap: 5px; }
@@ -263,6 +264,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .scene-name { flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
 .scene .rename { flex: 1; min-width: 0; padding: 0 3px; font-size: 12px; }
 .stop-all { position: sticky; right: 0; z-index: 1; align-self: center; padding: 2px 6px; font-size: 11px; }
+.session-ring { z-index: 1; margin: -2px; border: 2px solid #e5484d; border-radius: 4px; pointer-events: none; box-shadow: 0 0 0 1px #0008; }
 @keyframes session-blink { 50% { background: #3ec46d; color: #0c1a10; } }
 
 /* il mixer in fondo alla session */

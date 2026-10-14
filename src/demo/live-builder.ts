@@ -4,6 +4,7 @@
  * montaggio è qui, uguale per tutti. */
 import type { TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
+import { CLIPPER } from '../devices/effects/clipper/clipper';
 import { COMPRESSOR } from '../devices/effects/compressor/compressor';
 import { DELAY } from '../devices/effects/delay/delay';
 import { DRIVE } from '../devices/effects/drive/drive';
@@ -12,6 +13,7 @@ import { LIMITER } from '../devices/effects/limiter/limiter';
 import { MULTIBAND } from '../devices/effects/multiband/multiband';
 import { PHASER } from '../devices/effects/phaser/phaser';
 import { REVERB } from '../devices/effects/reverb/reverb';
+import { STEREO } from '../devices/effects/stereo/stereo';
 import { ANALOG } from '../devices/instruments/analog/analog';
 import { DRUM_MODELS, DRUMS, MODEL, padParam, padSlot } from '../devices/instruments/drums/drums';
 import { NEURO } from '../devices/instruments/neuro/neuro';
@@ -98,6 +100,8 @@ export const limiter = effect(LIMITER);
 export const multiband = effect(MULTIBAND);
 export const phaser = effect(PHASER);
 export const eq = effect(EQ);
+export const clipper = effect(CLIPPER);
+export const stereo = effect(STEREO);
 
 /** Un EQ che taglia sotto `freq` (lascia i bassi a chi li deve tenere). */
 export const lowCut = (freq: number): EffectSpec =>

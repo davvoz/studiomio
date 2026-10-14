@@ -27,9 +27,11 @@ Per usare gli algoritmi WebAssembly nell'app: `VITE_DSP_WASM=1 npm run dev`.
 
 Gli script in `scripts/` girano con i moduli dell'app (risolti da Vite):
 `node scripts/run.mjs scripts/<nome>.ts <argomenti…>`. `build-acid-live.ts`,
-`build-pazzi-live.ts`, `build-sacrificio-live.ts` e `build-fuori-live.ts` costruiscono i live
-"Acido crudo", "Siete pazzi", "Sacrificio" e "Fuori dal corpo" come cartelle di progetto (vedi
-sotto: I live).
+`build-pazzi-live.ts`, `build-sacrificio-live.ts`, `build-fuori-live.ts` e
+`build-sottosuolo-live.ts` costruiscono i live "Acido crudo", "Siete pazzi", "Sacrificio", "Fuori
+dal corpo" e "Sottosuolo" come cartelle di progetto (vedi sotto: I live). `render-project.ts`
+calcola in Node il mix della timeline di una cartella di progetto (vedi sotto: Render senza
+browser).
 
 Requisiti: Node 22+, Rust (`rustup target add wasm32-unknown-unknown`) e `wasm-pack`.
 Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una volta
@@ -82,6 +84,10 @@ src/
     audio-system.ts    monta insieme worker, sample, cache, AudioContext e motore
     effect-spectrum.ts lo spettro prima e dopo un effetto (AnalyserNode)
     project-session.ts cartella del progetto: importa, apri, salva, salva con nome
+  control/
+    control-surfaces.ts i controller MIDI (Web MIDI): riconosce l'APC40 mkII, lo collega e lo scollega a caldo
+    apc40/protocol.ts  il protocollo dell'APC40 mkII: note, CC, SysEx dell'Ableton mode, tavolozza, curva del fader
+    apc40/apc40.ts     l'APC40 sulla session: lancio, riquadro rosso, mixer, dispositivi, trasporto, LED
   ui/
     timeline/          arrangement: geometria, disegno su canvas, gesti, pianificazione
     track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume, livello)
@@ -112,6 +118,8 @@ src/
     effects/phaser/    il Phaser (anche flanger): descrizione e preset (phaser.ts), suono (phaser-core.ts)
     effects/eq/        l'EQ: descrizione (eq.ts), matematica dei filtri comune a suono e disegno (eq-math.ts), suono (eq-core.ts)
     effects/drive/     il Drive: descrizione e preset (drive.ts), curve e primitive (drive-math.ts), suono (drive-core.ts)
+    effects/clipper/   il Clipper: descrizione e preset (clipper.ts), suono (clipper-core.ts)
+    effects/stereo/    lo Stereo (larghezza e bassi mono): descrizione (stereo.ts), suono (stereo-core.ts)
     dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, rumore, polifonia, sovracampionamento; interfacce dei motori
     worklet/           i processori AudioWorklet (strumenti, effetti, misuratori), coda delle note, bypass, motori per tipo;
                        mod-timeline.ts applica le modulazioni ai parametri
@@ -124,9 +132,10 @@ src/
   demo/                loop e progetto demo; patterns.ts (parti scritte come su una drum
                        machine o una 303: ritmi, linee, chop, rulli, pompa, gate),
                        live-builder.ts (un live come dati → progetto) e i live acid-live.ts,
-                       pazzi-live.ts, sacrificio-live.ts e fuori-live.ts
+                       pazzi-live.ts, sacrificio-live.ts, fuori-live.ts e sottosuolo-live.ts
 scripts/               script in Node con i moduli dell'app (run.mjs li avvia; live-folder.ts
-                       copia i suoni e salva la cartella di un live)
+                       copia i suoni e salva la cartella di un live; headless-render.ts calcola
+                       il mix senza browser, loudness.ts lo misura secondo BS.1770)
 crates/dsp/            phase vocoder in Rust → WebAssembly (SIMD)
 tests/                 un file per modulo; test di equivalenza con WarpMio
 ```
@@ -185,6 +194,32 @@ nell'arrangement si vede spenta) finché non si preme **↩** (Torna all'arrange
 quando serve. Le clip della session girano su un orologio che non salta: con il loop della
 timeline acceso o spostando il cursore restano in fase. Le clip della session non finiscono
 nell'export, che è il mix della timeline.
+
+### Akai APC40 mkII
+
+Plug and play come in Live: si collega l'APC40 mkII e funziona, senza mappature. Serve Chrome
+o Edge (Web MIDI con il SysEx): la prima volta si preme **🎛** in alto e si dà il permesso al
+MIDI; da lì in poi, a ogni avvio e ogni volta che lo si collega, si attiva da solo (lo mette in
+Ableton mode). Un altro programma che tiene aperto l'APC40 (Live) lo blocca: uno alla volta.
+
+| Sull'APC40 | In studiomio |
+|---|---|
+| Griglia 8×5 | le clip del **riquadro rosso** della session: colore della clip, verde che pulsa = suona, verde che lampeggia = in coda (a tempo); un pad su uno slot vuoto ferma la traccia |
+| Frecce · Shift+frecce · Bank | spostano il riquadro di 1 · di una pagina (8 tracce, 5 scene) · Bank acceso: sempre di una pagina |
+| Shift + griglia | mappa dei blocchi 8×5 (bianco: il riquadro, verde: suona, ambra: ci sono clip); un pad porta lì il riquadro |
+| Scene Launch · Clip Stop · Stop All Clips | lancia la riga · ferma la traccia (lampeggia se lo stop è in coda) · ferma tutte le clip |
+| Track Select · Master | sceglie la traccia o il master (con i dispositivi aperti, mostra i suoi) |
+| Activator · Solo | mute (acceso = la traccia suona) · solo |
+| Fader · Master | volume come in Live (0 dB all'85% della corsa, +6 dB in cima, in fondo silenzio) |
+| Manopole in alto | pan (Pan acceso) |
+| Device Control (8 manopole) | i parametri del dispositivo scelto, evidenziato in blu nel pannello; Device ◂ ▸ cambia dispositivo, Bank ◂ ▸ passa ai parametri successivi (nella barra di stato: quali sono), Device On/Off accende e spegne l'effetto, Device Lock blocca le manopole su quel dispositivo |
+| Clip/Device View · Detail View | passa dai dispositivi alla clip della traccia · mostra o nasconde l'area in basso |
+| Play · Shift+Play · Metronome | play/stop · stop e torna all'inizio · metronomo |
+| Tempo · Shift+Tempo · Tap Tempo | ±1 BPM · ±0,1 BPM · il tempo dai colpi |
+
+Fader e manopole sono un solo passo di annullamento per ogni movimento. Non ci sono ancora
+(il pulsante lo dice nella barra di stato): Record Arm e registrazione, mandate (Sends, User),
+crossfader, cue e nudge.
 
 ## Editor delle clip audio
 
@@ -393,6 +428,21 @@ Dry/Wet. Il phaser lascia passare il sub com'è (in basso gli allpass non sposta
 il flanger no: sui bassi va il phaser. Preset: Phaser lento, Jet, Reese che gira, Hat metallici,
 Gola. Costo: 0.5 % di un core.
 
+**Clipper**: taglia i picchi sopra il Tetto senza tempi (né attacco né rilascio): la forma
+d'onda si appiattisce solo dove supera. Sulla cassa toglie i picchi dell'attacco e lascia il
+corpo; prima del Limiter del master si prende i picchi più brevi, così il limiter lavora meno e il
+mix suona forte senza pompare. Ingresso, Tetto, Ginocchio (0 = taglio netto, 100 = una tanh
+intera: la curva resta dritta fino al ginocchio e poi entra nel tetto con pendenza 1, senza
+spigoli), Uscita. Gira sovracampionato (2×, 4× predefinito, 8×) con gli stessi filtri a mezza
+banda del Drive: misurato in un test, un seno a 7 kHz tagliato di 12 dB lascia l'alias a 13 kHz
+a −54 dB, contro −17 dB senza sovracampionamento. Preset: Cassa, Batteria, Master, Saturazione.
+
+**Stereo**: l'immagine, come l'Utility di Live. Larghezza (0 % mono … 200 %) e **Bassi mono**:
+sotto la frequenza scelta il lato (la differenza tra i canali) passa da un passa-alto
+Linkwitz-Riley a 24 dB e sparisce, il mezzo non passa da nessun filtro (un suono mono esce
+identico, verificato in un test). Il sub e la cassa restano al centro, come vogliono gli impianti
+dei club e il vinile. Preset: Master, Basso mono, Largo, Mono.
+
 **Delay**: eco a tempo (da 1/32 a 1/1, con puntate e terzine, segue il BPM del progetto) o in
 millisecondi, stereo o ping-pong, feedback con low cut e high cut sulle ripetizioni, dry/wet.
 Preset: Init, Ping-pong 1/8., Slapback, Eco lungo, Dub.
@@ -434,7 +484,7 @@ contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli ef
 
 ## I live
 
-Quattro live montati per la session con i sample della libreria dell'utente. Ogni live è descritto
+Cinque live montati per la session con i sample della libreria dell'utente. Ogni live è descritto
 come dati in `src/demo` (tracce, kit, suoni di Analog e Neuro, effetti, scene, ordine della
 registrazione; nei kit un pad è un sample o un suono sintetizzato della Drum Machine) e montato da `live-builder.ts`; lo script copia i file (elencati nello script)
 nella cartella del progetto:
@@ -444,6 +494,7 @@ node scripts/run.mjs scripts/build-acid-live.ts "C:/Users/<utente>/Music" "C:/�
 node scripts/run.mjs scripts/build-pazzi-live.ts "C:/Users/<utente>/Music" "C:/…/Siete pazzi"
 node scripts/run.mjs scripts/build-sacrificio-live.ts "C:/Users/<utente>/Music" "C:/…/Sacrificio"
 node scripts/run.mjs scripts/build-fuori-live.ts "C:/Users/<utente>/Music" "C:/…/Fuori dal corpo"
+node scripts/run.mjs scripts/build-sottosuolo-live.ts "C:/Users/<utente>/Music" "C:/…/Sottosuolo"
 ```
 
 poi **Apri** sulla cartella creata. In tutti la timeline tiene una "registrazione" del live
@@ -515,6 +566,51 @@ La pompa e il movimento lento dei bassi (vocale, cutoff, fold, trasporto) sono m
 delle clip. Misurato sul render: drop a −8.9/−9.2 LUFS, salita −9.0, intro −10.3, break
 −12.6, −9.6 LUFS integrati, true peak −0.49 dBTP, PLR circa 8.5 dB; nessuna traccia oltre 0 dB.
 Registrazione: 144 battute, 4 minuti e 8 secondi.
+
+### Sottosuolo
+
+Techno underground scura e ipnotica a 133 BPM in Sol# frigio, costruita come la farebbe chi
+suona nei magazzini: il pezzo lo portano il groove della cassa e del basso, non una melodia.
+Tredici tracce. La **Cassa** ha due strati: il corpo pulito di una cassa già in Sol#1 (52 Hz,
+nessuna trasposizione che sporchi il colpo; scelta guardando forma d'onda e spettrogramma di
+tutte le casse della libreria: molte sono troncate a 343 ms senza sfumatura) e la grana di una
+cassa industriale tenuta solo sopra i 230 Hz; l'EQ toglie 6 dB al seno a 52 Hz e ne dà 4 al colpo
+a 90 Hz, il Clipper le toglie i picchi, lo Stereo la tiene mono. Il **Rumble** è la cassa distorta
+in un riverbero tutto bagnato e mono, saturata e chiusa sotto i 190 Hz, con la pompa disegnata:
+zero sul colpo, pieno sul levare dell'ottavo, poi respira prima del colpo dopo. Il **Basso** è
+Neuro senza sub, sedicesimi che non cadono mai sul battere, con un clipper morbido che toglie la
+punta del primo mezzo periodo della sega. La **Sequenza** (Analog a una voce, sega con l'ottava
+sotto) gira a passi di tre sedicesimi contro il quattro quarti, nel delay puntato; nel secondo
+drop sale d'ottava. **Stab** (Sol# minore con la nona bemolle, nella cattedrale), **Bordone**,
+**Piatti** (swing leggero), **Ride**, **Clap** (con il rullante sotto e i fantasmi),
+**Percussioni** (tom intonati in Sol#), **Atmosfere** (un bordone campionato in Sol#, il coro della
+pausa), **Voci** (sussurri, "darkness" e lo stesso giù di una quinta) ed **FX**. I suoni tonali
+della libreria sono stati scelti analizzandone il croma: restano solo quelli compatibili con Sol#
+frigio. Dieci scene: Intro e Groove (32 battute per chi mixa), Tensione (con due battute senza
+cassa prima del drop), Drop, Pausa, Salita, Drop 2, Dopo, Outro e Fine (sola batteria). Master:
+EQ (−2.5 dB a 50 Hz, −4 dB sopra i 10 kHz), compressore "Colla", Clipper, bassi mono sotto i
+110 Hz, Limiter con i picchi tra i campioni.
+
+Il mix è stato bilanciato misurando, come in mastering: render senza browser, stem per traccia,
+loudness per sezione, spettro a terzi d'ottava confrontato con un bersaglio (la media di un
+profilo da techno da club e delle tracce dark techno della libreria): da 100 Hz a 10 kHz sta
+entro ±1.5 dB. Misurato sul render (BS.1770, verificato anche con ffmpeg): −8.4 LUFS integrati,
+drop a −7.9/−7.8 LUFS (short-term massima −7.4), pausa −10.2, true peak −0.79 dBTP, PLR 7.6 dB,
+crest dei drop 8.6 dB; bassi in fase (correlazione 1.00 sotto i 120 Hz). Registrazione: 184
+battute, 5 minuti e 32 secondi. Nella cartella del progetto c'è anche il master renderizzato.
+
+## Render senza browser
+
+```sh
+node scripts/run.mjs scripts/render-project.ts "C:/…/Sottosuolo" mix.wav [cartella degli stem]
+```
+
+calcola il mix della timeline con gli stessi motori DSP dell'AudioWorklet (strumenti, effetti,
+modulazioni a blocchi di 128 campioni, canale del mixer con la modulazione del volume al quadrato
+e il pan stereo di Web Audio), stampa la loudness (integrata, short-term massima, true peak) e
+salva il WAV (32 bit float, o 24 bit se il nome finisce con `.24.wav`) e, a richiesta, una
+traccia per stem. Gira a circa 3–5 volte il tempo reale. Verificato su "Fuori dal corpo": −9.63
+LUFS e −0.47 dBTP, come la misura fatta sul render del browser.
 
 ## Principi
 

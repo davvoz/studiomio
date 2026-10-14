@@ -96,6 +96,9 @@ export class SessionView {
   readonly element = el('section', { className: 'session-view', hidden: true, tabIndex: -1 });
   private readonly grid = el('div', { className: 'session-grid' });
   private readonly scroll = el('div', { className: 'session-scroll' }, this.grid);
+  /** Il riquadro del controller collegato (il "riquadro rosso" di Live): le clip che la sua griglia suona. */
+  private readonly ring = el('div', { className: 'session-ring', hidden: true });
+  private ringAt = '';
   private readonly mixerToggle = el<HTMLButtonElement>('button', { textContent: '🎚 Mixer', title: 'Mostra o nascondi il mixer in fondo alle tracce' });
   private readonly quantize = el<HTMLSelectElement>('select', { title: 'Quantizzazione del lancio: le clip partono al prossimo confine' },
     ...LAUNCH_QUANTA.map(q => el('option', { value: q.id, textContent: q.label })));
@@ -129,7 +132,10 @@ export class SessionView {
     this.bindGrid();
     bindKeys(this.element, this, SESSION_KEYS, true);
     store.onChange(() => this.render());
-    deps.ui.onChange(() => this.highlightTrack());
+    deps.ui.onChange(() => {
+      this.highlightTrack();
+      this.placeRing();
+    });
     deps.engine.onSessionChange(() => this.refreshState());
     this.render();
     requestAnimationFrame(this.frame);
@@ -240,9 +246,10 @@ export class SessionView {
       onclick: () => this.deps.engine.stopAllClips(),
     }), row.stop(S), masterCol));
     this.cells = cells;
-    this.grid.append(...cells);
+    this.grid.append(...cells, this.ring);
     this.renderStrips(T, S);
     this.highlightTrack();
+    this.placeRing();
     this.refreshState();
   }
 
@@ -252,6 +259,20 @@ export class SessionView {
     for (const [t, head] of this.heads) head.classList.toggle('selected', t === id);
     for (const cell of this.slots.values()) cell.classList.toggle('track-selected', cell.dataset.track === id);
     for (const [t, strip] of this.strips) strip.element.classList.toggle('selected', t === id);
+  }
+
+  /** Il riquadro sopra gli slot che copre; quando si sposta, lo si porta in vista. */
+  private placeRing(): void {
+    const r = this.deps.ui.sessionRing, p = this.deps.store.project;
+    const T = p.tracks.length, S = p.scenes.length;
+    this.ring.hidden = !r || r.track >= T || r.scene >= S;
+    if (!r || this.ring.hidden) return;
+    place(this.ring, row.scene(r.scene), r.track + 1);
+    this.ring.style.gridRowEnd = `span ${Math.min(r.height, S - r.scene)}`;
+    this.ring.style.gridColumnEnd = `span ${Math.min(r.width, T - r.track)}`;
+    const at = `${r.track}:${r.scene}`;
+    if (at !== this.ringAt && this.isVisible) this.ring.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    this.ringAt = at;
   }
 
   /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano. */

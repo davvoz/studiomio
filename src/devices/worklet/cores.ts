@@ -1,4 +1,5 @@
 import type { CoreFactory, EffectFactory } from '../dsp/core';
+import { ClipperCore } from '../effects/clipper/clipper-core';
 import { CompressorCore } from '../effects/compressor/compressor-core';
 import { DelayCore } from '../effects/delay/delay-core';
 import { DriveCore } from '../effects/drive/drive-core';
@@ -7,6 +8,7 @@ import { LimiterCore } from '../effects/limiter/limiter-core';
 import { MultibandCore } from '../effects/multiband/multiband-core';
 import { PhaserCore } from '../effects/phaser/phaser-core';
 import { ReverbCore } from '../effects/reverb/reverb-core';
+import { StereoCore } from '../effects/stereo/stereo-core';
 import { AnalogCore } from '../instruments/analog/analog-core';
 import { DrumCore } from '../instruments/drums/drums-core';
 import { NeuroCore } from '../instruments/neuro/neuro-core';
@@ -21,6 +23,7 @@ export const INSTRUMENT_CORES: Readonly<Record<string, CoreFactory>> = {
 
 /** I motori DSP degli effetti, per tipo (stesso schema degli strumenti). */
 export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
+  clipper: sampleRate => new ClipperCore(sampleRate),
   compressor: sampleRate => new CompressorCore(sampleRate),
   delay: sampleRate => new DelayCore(sampleRate),
   drive: sampleRate => new DriveCore(sampleRate),
@@ -29,4 +32,5 @@ export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
   multiband: sampleRate => new MultibandCore(sampleRate),
   phaser: sampleRate => new PhaserCore(sampleRate),
   reverb: sampleRate => new ReverbCore(sampleRate),
+  stereo: sampleRate => new StereoCore(sampleRate),
 };
