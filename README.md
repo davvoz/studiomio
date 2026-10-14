@@ -26,9 +26,9 @@ npm run dev        # http://localhost:5173 – l'app (Chrome o Edge: servono per
 Per usare gli algoritmi WebAssembly nell'app: `VITE_DSP_WASM=1 npm run dev`.
 
 Gli script in `scripts/` girano con i moduli dell'app (risolti da Vite):
-`node scripts/run.mjs scripts/<nome>.ts <argomenti…>`. `build-acid-live.ts` e
-`build-pazzi-live.ts` costruiscono i live "Acido crudo" e "Siete pazzi" come cartelle di
-progetto (vedi sotto: I live).
+`node scripts/run.mjs scripts/<nome>.ts <argomenti…>`. `build-acid-live.ts`,
+`build-pazzi-live.ts` e `build-sacrificio-live.ts` costruiscono i live "Acido crudo", "Siete
+pazzi" e "Sacrificio" come cartelle di progetto (vedi sotto: I live).
 
 Requisiti: Node 22+, Rust (`rustup target add wasm32-unknown-unknown`) e `wasm-pack`.
 Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una volta
@@ -119,8 +119,8 @@ src/
   workers/             RPC tipizzato, worker pool, worker DSP, DspService
   demo/                loop e progetto demo; patterns.ts (parti scritte come su una drum
                        machine o una 303: ritmi, linee, chop, rulli, pompa, gate),
-                       live-builder.ts (un live come dati → progetto) e i live acid-live.ts
-                       e pazzi-live.ts
+                       live-builder.ts (un live come dati → progetto) e i live acid-live.ts,
+                       pazzi-live.ts e sacrificio-live.ts
 scripts/               script in Node con i moduli dell'app (run.mjs li avvia; live-folder.ts
                        copia i suoni e salva la cartella di un live)
 crates/dsp/            phase vocoder in Rust → WebAssembly (SIMD)
@@ -275,7 +275,10 @@ il glide dalla nota di prima) o **Legato** (una voce: le note che si sovrappongo
 senza far ripartire gli inviluppi, lo slide della 303; le note staccate ripartono senza glide).
 **Accento**: le note con velocity oltre 100 suonano più forti e aprono il filtro con un
 inviluppo breve che si accumula sugli accenti vicini (il "wow" della 303). Preset: Init, Basso,
-Acid e Acid quadra (Legato, glide e accento), Pad, Pluck, Lead.
+Acid e Acid quadra (Legato, glide e accento), Pad, Pluck, Lead. **Unison**: fino a 7 copie
+per voce, scordate a ventaglio (Scordatura, in centesimi) e aperte nello stereo (Apertura),
+con un filtro per canale: il "supersaw" per lead e accordi larghi; il livello resta quello di
+una copia.
 
 **Drum Machine**: 16 pad sulle note da C1 (36) a D#2 (51), come il Drum Rack di Live, con il
 kit di partenza sulla mappa General MIDI (36 cassa, 38 rullante, 42 hi-hat chiuso, 46 aperto…),
@@ -350,7 +353,15 @@ Dimensione e Decadimento separati (il decadimento è esatto: −60 dB nel tempo 
 in un test), Pre-delay, Diffusione, Smorzamento, Low cut sulla coda, Larghezza, Dry/Wet a
 potenza costante. Preset: Stanza, Sala, Piatto, Lancio voce, Coda infinita.
 
-Costo misurato per un'istanza stereo: compressore 0.2 %, limiter 0.8 %, riverbero 0.7 % di un core.
+**Multibanda**: compressione su tre bande (crossover Linkwitz-Riley) verso il basso e verso
+l'alto, come l'OTT: i picchi scendono, i dettagli piani salgono, il suono si fa denso e vicino.
+Profondità, Tempo (attacco e rilascio insieme), quanto verso l'alto e verso il basso, Ingresso,
+i due tagli, il guadagno di ogni banda, Uscita e Dry/Wet. A riposo è piatta (le bande risommate
+sono un allpass, verificato in un test su tutta la banda); sotto −70 dB non alza nulla.
+Preset: OTT, Denso, Lead aggressivo, Batteria, Master leggero.
+
+Costo misurato per un'istanza stereo: compressore 0.2 %, limiter 0.6 %, riverbero 0.6 %,
+multibanda 1 % di un core.
 
 **Delay**: eco a tempo (da 1/32 a 1/1, con puntate e terzine, segue il BPM del progetto) o in
 millisecondi, stereo o ping-pong, feedback con low cut e high cut sulle ripetizioni, dry/wet.
@@ -400,6 +411,7 @@ nella cartella del progetto:
 ```sh
 node scripts/run.mjs scripts/build-acid-live.ts "C:/Users/<utente>/Music" "C:/…/Acido crudo"
 node scripts/run.mjs scripts/build-pazzi-live.ts "C:/Users/<utente>/Music" "C:/…/Siete pazzi"
+node scripts/run.mjs scripts/build-sacrificio-live.ts "C:/Users/<utente>/Music" "C:/…/Sacrificio"
 ```
 
 poi **Apri** sulla cartella creata. In entrambi la timeline tiene una "registrazione" del live
@@ -434,6 +446,21 @@ scene: Intro, Salita, Stacco ("siete pazzi" da solo), Drop, Drop B, Glitch, Paus
 Drop 2, Drop 2B, Fine. Master: EQ (taglio a 25 Hz), Compressore "Colla", Limiter con i picchi
 tra i campioni. Misurato sul render (BS.1770): drop tra −8.3 e −8.7 LUFS, −9.7 LUFS integrati,
 true peak −0.42 dBTP; nessuna traccia oltre 0 dB. Registrazione: 130 battute, circa 3 minuti.
+
+### Sacrificio
+
+Techno dura e scura a 150 BPM in La frigio: intro, drop, bridge, drop modificato, outro. La
+**Cassa** è una cassa industriale distorta portata in La, tagliata da un limiter veloce come un
+clipper (picchi giù, corpo su). Il **Rumble** è fatto come nella techno di oggi: la stessa cassa
+in un riverbero tutto bagnato, poi distorta, chiusa da un passa-basso e schiacciata dalla pompa
+a ogni colpo. Il gancio è un **Lead** supersaw (unison a 7) in La frigio sulla progressione La
+minore – Si bemolle – Sol minore – La minore, spinto dalla Multibanda; nel drop modificato
+arrivano gli **Stab** supersaw in levare e il gancio sale d'ottava. **Cori**: il bordone "atmos"
+in La minore, il coro alzato in La con il Si bemolle sopra, il mostro nel vuoto. **Voci**:
+"kill", "sacrifice", "ho visto qualcosa dentro di lei", sussurri, "open fire" prima del drop.
+Master: EQ, Multibanda leggera, Compressore "Colla", Limiter. Misurato sul render: drop a
+−8.5/−8.3 LUFS (intro −10.6), −9.0 LUFS integrati, true peak −0.46 dBTP, PLR circa 8 dB;
+nessuna traccia oltre 0 dB. Registrazione: 112 battute, 3 minuti.
 
 ## Principi
 

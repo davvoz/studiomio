@@ -217,6 +217,50 @@ describe('Analog a una voce: legato, glide, accento', () => {
   });
 });
 
+describe('Analog: unison', () => {
+  /** Fa suonare a blocchi e restituisce i due canali. */
+  const stereo = (params: Record<string, number>, pitch = 57) => {
+    const { core, queue } = synth({ oscA: 0, mix: 0, cutoff: 20000, filterEnv: 0, keyTrack: 0, sustain: 100, velocity: 0, volume: 0, ...params });
+    queue.add(pitch, 100, 0, SR);
+    const l = new Float32Array(SR / 2), r = new Float32Array(SR / 2);
+    for (let f = 0; f < l.length; f += BLOCK) {
+      const a = new Float32Array(BLOCK), b = new Float32Array(BLOCK);
+      queue.renderBlock(core, a, b, f);
+      l.set(a.subarray(0, Math.min(BLOCK, l.length - f)), f);
+      r.set(b.subarray(0, Math.min(BLOCK, l.length - f)), f);
+    }
+    return { l, r };
+  };
+  const corr = (a: Float32Array, b: Float32Array) => {
+    let ab = 0, aa = 0, bb = 0;
+    for (let i = 4800; i < a.length; i++) { ab += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i]; }
+    return ab / Math.sqrt(aa * bb);
+  };
+
+  it('sette copie aperte: lo stereo si allarga, il livello resta quello di una', () => {
+    const one = stereo({ unison: 1 }), seven = stereo({ unison: 7, detune: 30, spread: 100 });
+    expect(corr(one.l, one.r)).toBeCloseTo(1, 6);
+    expect(corr(seven.l, seven.r)).toBeLessThan(0.8);
+    const level = (x: { l: Float32Array; r: Float32Array }) => Math.hypot(rms(x.l, 4800), rms(x.r, 4800));
+    expect(Math.abs(20 * Math.log10(level(seven) / level(one)))).toBeLessThan(3);
+    expect(seven.l.every(Number.isFinite)).toBe(true);
+  });
+
+  it('senza apertura resta al centro; la scordatura allarga la nota attorno alla sua altezza', () => {
+    const narrow = stereo({ unison: 5, detune: 30, spread: 0 });
+    expect(corr(narrow.l, narrow.r)).toBeCloseTo(1, 4);
+    // le copie scordate battono tra loro: il volume a breve termine ondeggia (con una sola è piatto)
+    const wobble = (x: Float32Array) => {
+      const w = 2182, levels: number[] = []; // dieci periodi esatti di 220 Hz
+      for (let i = 4800; i + w <= x.length; i += w) levels.push(rms(x, i, i + w));
+      const mean = levels.reduce((a, b) => a + b) / levels.length;
+      return Math.sqrt(levels.reduce((a, b) => a + (b - mean) ** 2, 0) / levels.length) / mean;
+    };
+    expect(wobble(stereo({ unison: 1 }).l)).toBeLessThan(0.01);
+    expect(wobble(narrow.l)).toBeGreaterThan(0.08);
+  });
+});
+
 describe('NoteQueue', () => {
   it('a parità di campione lo spegnimento viene prima dell\'accensione', () => {
     const calls: string[] = [];

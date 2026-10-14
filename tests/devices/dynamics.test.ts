@@ -8,6 +8,8 @@ import { LIMITER } from '../../src/devices/effects/limiter/limiter';
 import { LimiterCore } from '../../src/devices/effects/limiter/limiter-core';
 import { REVERB } from '../../src/devices/effects/reverb/reverb';
 import { ReverbCore } from '../../src/devices/effects/reverb/reverb-core';
+import { MULTIBAND } from '../../src/devices/effects/multiband/multiband';
+import { MultibandCore } from '../../src/devices/effects/multiband/multiband-core';
 import type { EffectCore } from '../../src/devices/dsp/core';
 
 const SR = 48000, BLOCK = 128;
@@ -228,10 +230,57 @@ describe('Riverbero', () => {
   });
 });
 
+const multiband = (params: Record<string, number>) => {
+  const c = new MultibandCore(SR);
+  c.setParams(resolveParams(MULTIBAND, params));
+  return c;
+};
+
+/** Ampiezza della componente a `freq` in x[from…] (finestra di Hann). */
+function amplitude(x: Float32Array, freq: number, from: number, n: number): number {
+  let re = 0, im = 0, wsum = 0;
+  for (let i = 0; i < n; i++) {
+    const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1)), a = (2 * Math.PI * freq * (from + i)) / SR;
+    re += w * x[from + i] * Math.cos(a);
+    im += w * x[from + i] * Math.sin(a);
+    wsum += w;
+  }
+  return (2 * Math.hypot(re, im)) / wsum;
+}
+
+describe('Multibanda', () => {
+  it('a riposo è piatta: le tre bande risommate danno il suono intero (ogni frequenza)', () => {
+    for (const freq of [40, 120, 700, 2500, 9000]) {
+      const out = run(multiband({ depth: 0 }), sine(freq, 0.5, SR / 2))[0];
+      expect(Math.abs(db(amplitude(out, freq, SR / 4, SR / 4) / 0.5))).toBeLessThan(0.1);
+    }
+  });
+
+  it('verso il basso: un suono forte scende; verso l\'alto: uno piano sale', () => {
+    const level = (amp: number, params: Record<string, number>) => {
+      const out = run(multiband(params), sine(1000, amp, SR))[0];
+      return db(amplitude(out, 1000, SR / 2, SR / 2) / amp);
+    };
+    expect(level(0.8, { depth: 100, upward: 0 })).toBeLessThan(-15);
+    expect(level(0.001, { depth: 100, downward: 0 })).toBeGreaterThan(10); // −60 dB: 18 sotto la soglia, ×¾
+    // la profondità dosa: a metà, metà dei dB
+    expect(Math.abs(level(0.8, { depth: 50, upward: 0 }) - level(0.8, { depth: 100, upward: 0 }) / 2)).toBeLessThan(1.5);
+    // il pavimento: il silenzio quasi totale non si gonfia
+    expect(level(0.00005, { depth: 100 })).toBeLessThan(1);
+  });
+
+  it('le bande lavorano da sole: un basso forte non abbassa gli acuti', () => {
+    const x = Float32Array.from({ length: SR }, (_, i) => 0.8 * Math.sin((2 * Math.PI * 60 * i) / SR) + 0.01 * Math.sin((2 * Math.PI * 6000 * i) / SR));
+    const out = run(multiband({ depth: 100, upward: 0 }), x)[0];
+    expect(db(amplitude(out, 60, SR / 2, SR / 2) / 0.8)).toBeLessThan(-10);
+    expect(Math.abs(db(amplitude(out, 6000, SR / 2, SR / 2) / 0.01))).toBeLessThan(1);
+  });
+});
+
 describe('costo', () => {
   it('compressore, limiter e riverbero stereo: una frazione piccola del tempo reale', () => {
     const x = sine(220, 0.8, BLOCK);
-    for (const [name, core] of [['compressore', compressor({})], ['limiter', limiter({ gain: 6 })], ['riverbero', reverb({})]] as const) {
+    for (const [name, core] of [['compressore', compressor({})], ['limiter', limiter({ gain: 6 })], ['riverbero', reverb({})], ['multibanda', multiband({})]] as const) {
       const l = new Float32Array(BLOCK), r = new Float32Array(BLOCK);
       for (let i = 0; i < 200; i++) core.process(x, x, l, r, BLOCK);
       const blocks = 2000, t0 = performance.now();

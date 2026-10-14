@@ -4,6 +4,7 @@ import { DelayCore } from '../effects/delay/delay-core';
 import { DriveCore } from '../effects/drive/drive-core';
 import { EqCore } from '../effects/eq/eq-core';
 import { LimiterCore } from '../effects/limiter/limiter-core';
+import { MultibandCore } from '../effects/multiband/multiband-core';
 import { ReverbCore } from '../effects/reverb/reverb-core';
 import { AnalogCore } from '../instruments/analog/analog-core';
 import { DrumCore } from '../instruments/drums/drums-core';
@@ -22,5 +23,6 @@ export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
   drive: sampleRate => new DriveCore(sampleRate),
   eq: sampleRate => new EqCore(sampleRate),
   limiter: sampleRate => new LimiterCore(sampleRate),
+  multiband: sampleRate => new MultibandCore(sampleRate),
   reverb: sampleRate => new ReverbCore(sampleRate),
 };

@@ -13,6 +13,8 @@ export const LFO_WAVES = ['Sine', 'Triangle', 'Square'] as const;
  *  una voce, le note sovrapposte scivolano senza far ripartire gli inviluppi. */
 export const VOICE_MODES = ['Poli', 'Mono', 'Legato'] as const;
 export const VOICE_MODE = { poly: 0, mono: 1, legato: 2 } as const;
+/** Quante copie scordate di ogni voce al massimo (unison, il "supersaw"). */
+export const MAX_UNISON = 7;
 /** Sopra questa velocity una nota è accentata (come gli accenti di un sequencer 303). */
 export const ACCENT_VELOCITY = 100;
 
@@ -35,6 +37,14 @@ export const ANALOG: DeviceType = {
         num('oscBSemi', 'B semitoni', -24, 24, 0, 'st', { step: 1 }),
         num('oscBFine', 'B fine', -50, 50, 7, 'ct', { step: 1 }),
         percent('mix', 'Mix A/B', 50),
+      ],
+    },
+    {
+      label: 'Unison',
+      params: [
+        num('unison', 'Copie', 1, MAX_UNISON, 1, '', { step: 1 }),
+        num('detune', 'Scordatura', 0, 100, 25, 'ct', { step: 1, when: { param: 'unison', is: [2, 3, 4, 5, 6, 7] } }),
+        { ...percent('spread', 'Apertura', 80), when: { param: 'unison', is: [2, 3, 4, 5, 6, 7] } },
       ],
     },
     {

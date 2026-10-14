@@ -1,5 +1,7 @@
 /* Il suono di Analog: 16 voci, ognuna con due oscillatori PolyBLEP, filtro SVF con il suo
- * inviluppo, inviluppo del volume e LFO. A una voce (Mono, Legato) le note passano da una
+ * inviluppo, inviluppo del volume e LFO. Con l'unison ogni voce suona fino a 7 copie degli
+ * oscillatori, scordate a ventaglio e aperte nello stereo (il "supersaw"): allora la voce ha
+ * due filtri, uno per canale. A una voce (Mono, Legato) le note passano da una
  * pila come nei synth monofonici, con il glide; l'accento apre il filtro con un suo inviluppo
  * breve che si accumula sugli accenti vicini (il "wow" della 303). Gira nell'AudioWorklet;
  * qui niente Web Audio, così si prova anche in Node. */
@@ -8,7 +10,7 @@ import { Adsr } from '../../dsp/envelope';
 import { LFO_TABLE, WAVE_TABLE, type Wave } from '../../dsp/oscillators';
 import { Svf } from '../../dsp/svf';
 import { VoicePool, type PolyVoice } from '../../dsp/voice-pool';
-import { ACCENT_VELOCITY, VOICE_MODE } from './analog';
+import { ACCENT_VELOCITY, MAX_UNISON, VOICE_MODE } from './analog';
 
 export const ANALOG_VOICES = 16;
 /** Ogni quanti campioni si ricalcolano LFO, intonazione e cutoff. */
@@ -27,6 +29,10 @@ class Settings {
   ratioB = 1;
   mix = 0.5;
   voiceMode = 0;
+  /** Copie per voce, quanto si scostano le estreme (centesimi, ±) e quanto si aprono (0..1). */
+  unison = 1;
+  detune = 25;
+  spread = 0.8;
   /** Secondi. */
   glide = 0;
   accent = 0;
@@ -51,6 +57,9 @@ class Settings {
     this.ratioB = Math.pow(2, (v('oscBSemi', 0) + v('oscBFine', 0) / 100) / 12);
     this.mix = v('mix', 50) / 100;
     this.voiceMode = v('voiceMode', 0);
+    this.unison = Math.max(1, Math.min(MAX_UNISON, Math.round(v('unison', 1))));
+    this.detune = v('detune', 25);
+    this.spread = v('spread', 80) / 100;
     this.glide = v('glide', 0) / 1000;
     this.accent = v('accent', 0) / 100;
     this.filterType = v('filterType', 0);
@@ -74,10 +83,20 @@ class Settings {
   }
 }
 
+/** La posizione della copia `k` di `n` nel ventaglio: da −1 a +1 (0 se è sola). */
+const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
+
 class AnalogVoice implements PolyVoice {
   private readonly amp: Adsr;
   private readonly fenv: Adsr;
   private readonly filter: Svf;
+  /** Il filtro del canale destro, quando l'unison apre lo stereo. */
+  private readonly filterR: Svf;
+  /** Fasi e passi delle copie dell'unison (la copia 0 è quella senza unison). */
+  private readonly phasesA = new Float64Array(MAX_UNISON);
+  private readonly phasesB = new Float64Array(MAX_UNISON);
+  private readonly dtsA = new Float64Array(MAX_UNISON);
+  private readonly dtsB = new Float64Array(MAX_UNISON);
   /** L'intonazione che suona (in semitoni MIDI, con il glide anche fra due note) e quella
    *  verso cui va. */
   private pitch = 60;
@@ -97,6 +116,7 @@ class AnalogVoice implements PolyVoice {
     this.amp = new Adsr(sampleRate);
     this.fenv = new Adsr(sampleRate);
     this.filter = new Svf(sampleRate);
+    this.filterR = new Svf(sampleRate);
     this.accentK = Math.exp(-CONTROL_RATE / (ACCENT_TIME * sampleRate));
   }
 
@@ -118,8 +138,15 @@ class AnalogVoice implements PolyVoice {
     const { s } = this;
     if (!this.amp.active) {
       this.filter.reset();
+      this.filterR.reset();
       this.lfoPhase = 0;
       this.accentEnv = 0;
+      // le copie partono da fasi diverse (fisse: lo stesso suono ogni volta), così non si
+      // sommano tutte nello stesso punto
+      for (let k = 1; k < MAX_UNISON; k++) {
+        this.phasesA[k] = (k * 0.618034) % 1;
+        this.phasesB[k] = (k * 0.381966) % 1;
+      }
     }
     this.target = pitch;
     this.pitch = from ?? pitch;
@@ -157,6 +184,7 @@ class AnalogVoice implements PolyVoice {
   }
 
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
+    if (this.s.unison > 1) return this.renderUnison(left, right, from, to);
     const { s, amp, fenv, filter } = this;
     const { waveA, waveB } = s;
     const mixB = s.mix, mixA = 1 - mixB;
@@ -171,6 +199,35 @@ class AnalogVoice implements PolyVoice {
       const out = filter.process(a * mixA + b * mixB) * amp.next() * this.level;
       left[i] += out;
       right[i] += out;
+      if (!amp.active) break;
+    }
+  }
+
+  /** L'unison: le copie a ventaglio, ognuna con il suo pan; due filtri, uno per canale.
+   *  Il livello scende come la radice delle copie (la potenza resta quella di una). */
+  private renderUnison(left: Float32Array, right: Float32Array, from: number, to: number): void {
+    const { s, amp, fenv, filter, filterR, phasesA, phasesB, dtsA, dtsB } = this;
+    const { waveA, waveB } = s;
+    const n = s.unison, norm = 1 / Math.sqrt(n);
+    const mixB = s.mix * norm, mixA = (1 - s.mix) * norm;
+    for (let i = from; i < to; i++) {
+      if (--this.countdown <= 0) this.control();
+      let l = 0, r = 0;
+      for (let k = 0; k < n; k++) {
+        const v = waveA(phasesA[k], dtsA[k]) * mixA + waveB(phasesB[k], dtsB[k]) * mixB;
+        phasesA[k] += dtsA[k];
+        if (phasesA[k] >= 1) phasesA[k] -= 1;
+        phasesB[k] += dtsB[k];
+        if (phasesB[k] >= 1) phasesB[k] -= 1;
+        // pan a potenza costante lungo il ventaglio
+        const p = fan(k, n) * s.spread;
+        l += v * Math.sqrt(0.5 * (1 - p));
+        r += v * Math.sqrt(0.5 * (1 + p));
+      }
+      fenv.next();
+      const g = amp.next() * this.level * Math.SQRT2;
+      left[i] += filter.process(l) * g;
+      right[i] += filterR.process(r) * g;
       if (!amp.active) break;
     }
   }
@@ -191,9 +248,17 @@ class AnalogVoice implements PolyVoice {
     const hz = midiToHz(this.pitch) * Math.pow(2, (lfo * s.lfoCents) / 1200);
     this.dtA = Math.min(0.49, hz / sampleRate);
     this.dtB = Math.min(0.49, this.dtA * s.ratioB);
+    if (s.unison > 1) {
+      for (let k = 0; k < s.unison; k++) {
+        const ratio = Math.pow(2, (fan(k, s.unison) * s.detune) / 1200);
+        this.dtsA[k] = Math.min(0.49, this.dtA * ratio);
+        this.dtsB[k] = Math.min(0.49, this.dtB * ratio);
+      }
+    }
     const octaves = s.envOctaves * this.fenv.value + s.keyTrack * (this.pitch - 60) / 12 + lfo * s.lfoOctaves
       + ACCENT_OCTAVES * this.accentEnv;
     this.filter.set(s.cutoff * Math.pow(2, octaves), s.resonance, s.filterType);
+    if (s.unison > 1) this.filterR.set(s.cutoff * Math.pow(2, octaves), s.resonance, s.filterType);
   }
 }
 

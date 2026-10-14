@@ -9,6 +9,7 @@ import { DELAY } from '../devices/effects/delay/delay';
 import { DRIVE } from '../devices/effects/drive/drive';
 import { bandParam, EQ } from '../devices/effects/eq/eq';
 import { LIMITER } from '../devices/effects/limiter/limiter';
+import { MULTIBAND } from '../devices/effects/multiband/multiband';
 import { REVERB } from '../devices/effects/reverb/reverb';
 import { ANALOG } from '../devices/instruments/analog/analog';
 import { DRUMS, MODEL, MAX_DECAY, padParam, padSlot } from '../devices/instruments/drums/drums';
@@ -79,6 +80,7 @@ export const delay = effect(DELAY);
 export const compressor = effect(COMPRESSOR);
 export const reverb = effect(REVERB);
 export const limiter = effect(LIMITER);
+export const multiband = effect(MULTIBAND);
 export const eq = effect(EQ);
 
 /** Un EQ che taglia sotto `freq` (lascia i bassi a chi li deve tenere). */
