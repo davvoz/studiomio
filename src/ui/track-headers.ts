@@ -56,7 +56,10 @@ export class TrackHeaders {
     };
     this.element.append(add, scroll);
     store.onChange(() => this.render());
-    ui.onChange(() => this.position());
+    ui.onChange(() => {
+      this.position();
+      this.highlight();
+    });
     this.render();
   }
 
@@ -69,7 +72,7 @@ export class TrackHeaders {
     const tracks = this.store.project.tracks;
     const rows = new Map<TrackId, HeaderRow>();
     for (const t of tracks) {
-      const row = this.rows.get(t.id) ?? new HeaderRow(t.id, this.store, this.actions, this.meters);
+      const row = this.rows.get(t.id) ?? new HeaderRow(t.id, this.store, this.ui, this.actions, this.meters);
       row.update(t, h);
       rows.set(t.id, row);
     }
@@ -80,6 +83,11 @@ export class TrackHeaders {
     const children = this.list.children;
     if (children.length !== elements.length || elements.some((e, i) => children[i] !== e)) this.list.replaceChildren(...elements);
     this.position();
+    this.highlight();
+  }
+
+  private highlight(): void {
+    for (const [id, row] of this.rows) row.element.classList.toggle('selected', id === this.ui.track);
   }
 }
 
@@ -96,8 +104,10 @@ class HeaderRow {
   private shown: Track | null = null;
   private readonly detachMeter: () => void;
 
-  constructor(private readonly id: TrackId, private readonly store: ProjectStore, private readonly actions: HeaderActions, meters: MeterBoard) {
+  constructor(private readonly id: TrackId, private readonly store: ProjectStore, ui: UiState, private readonly actions: HeaderActions, meters: MeterBoard) {
     const open = () => actions.openDevices(id);
+    // un clic ovunque nell'intestazione sceglie la traccia
+    this.element.addEventListener('pointerdown', () => ui.selectTrack(id));
     const toggle = (label: string, title: string, flag: 'mute' | 'solo') =>
       el<HTMLButtonElement>('button', { textContent: label, title, onclick: () => this.mixer({ [flag]: !this.track().mixer[flag] }) });
     this.mute = toggle('M', 'Mute', 'mute');

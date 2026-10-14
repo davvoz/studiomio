@@ -88,7 +88,7 @@ export class App implements Commands, FileCommands, TimelineActions {
     const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner) };
     const meters = new MeterBoard(owner => this.audio.engine.levels(owner));
     this.sessionView = new SessionView({
-      store: this.store, engine: this.audio.engine, meters, clipboard: this.clipboard,
+      store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard,
       openClip: ref => this.openClip(ref),
       openDevices: owner => this.openDevices(owner),
       importToSlot: (files, track, slot) => this.run(() => this.session.importFilesToSlots(files, track, slot)),
@@ -117,10 +117,11 @@ export class App implements Commands, FileCommands, TimelineActions {
 
     this.session.on('message', t => this.say(t));
     this.session.on('change', () => transport.render());
-    // le clip eliminate escono dalla selezione
+    // le clip eliminate escono dalla selezione, la traccia eliminata non è più quella scelta
     this.store.onChange(p => {
       const alive = new Set(p.tracks.flatMap(t => t.arrangement.map(x => x.id)));
       if ([...this.ui.selection].some(id => !alive.has(id))) this.ui.select([...this.ui.selection].filter(id => alive.has(id)));
+      if (this.ui.track && !p.track(this.ui.track)) this.ui.selectTrack(null);
     });
     bindKeys(document, this, KEYMAP);
     this.say('Trascina dei file audio sulla timeline o premi "Demo". Ctrl+rotella per lo zoom, Alt per trascinare senza griglia.');
@@ -307,6 +308,7 @@ export class App implements Commands, FileCommands, TimelineActions {
     const clip = findClip(this.store.project, ref)?.clip;
     const editor = clip && this.clipEditors[clip.kind];
     if (!editor) return this.say(clip ? `Nessun editor per le clip "${clip.kind}".` : '');
+    this.ui.selectTrack(ref.track);
     this.bottom.show(editor, () => editor.open(ref));
   }
 
@@ -315,6 +317,7 @@ export class App implements Commands, FileCommands, TimelineActions {
   openDevices(owner: ChainOwner, fromRoll = false): void {
     const clip = fromRoll ? this.pianoRoll.openClip : null;
     const back = clip && owner !== MASTER ? () => this.openClip(clip) : null;
+    if (owner !== MASTER) this.ui.selectTrack(owner);
     this.bottom.show(this.device, () => this.device.open(owner, back));
   }
 

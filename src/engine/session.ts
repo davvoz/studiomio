@@ -2,6 +2,7 @@
  * del trasporto (battiti che scorrono senza mai saltare, anche quando la timeline torna
  * all'inizio del loop). Una traccia segue l'arrangement finché non le si lancia una clip;
  * da lì suona la clip (o niente, se la si ferma) finché non si torna all'arrangement.
+ * Fermando il trasporto le clip che suonano si ricordano, e ripartono con il play.
  * È stato della riproduzione, non del progetto: non si salva e non si annulla. */
 import type { ClipId, TrackId } from '../core/id';
 import type { Clip } from '../model/clip';
@@ -36,6 +37,8 @@ export interface TrackSessionState {
 /** La scaletta di una traccia: tratti in ordine, che non si sovrappongono. */
 export class TrackSchedule {
   private list: readonly Program[] = ALWAYS_ARRANGEMENT;
+  /** La clip che suonava quando il trasporto si è fermato: ripartirà con il play. */
+  private paused: ClipId | null = null;
 
   get programs(): readonly Program[] {
     return this.list;
@@ -44,6 +47,7 @@ export class TrackSchedule {
   /** Da `at` in poi suona `source` (niente se null): ciò che suonava si chiude in `at`, ciò che
    *  era in coda dopo `at` si cancella. */
   switchAt(at: number, source: ProgramSource | null): void {
+    this.paused = null;
     const kept = this.list.filter(p => p.from < at).map(p => (p.until > at ? { ...p, until: at } : p));
     this.list = source ? [...kept, { source, from: at, until: Infinity }] : kept;
   }
@@ -63,10 +67,27 @@ export class TrackSchedule {
   }
 
   /** Trasporto fermo: le clip si fermano e ciò che era in coda si cancella. Una traccia che
-   *  seguiva l'arrangement continua a seguirlo; una presa dalla session resta muta (come in
-   *  Live, finché non si torna all'arrangement). L'orologio ripartirà da capo. */
-  reset(clock: number): void {
+   *  seguiva l'arrangement continua a seguirlo; una presa dalla session tace, e se suonava
+   *  la clip `resume` la riprende dall'inizio al prossimo play (come in Live). L'orologio
+   *  ripartirà da capo. */
+  reset(clock: number, resume: ClipId | null): void {
     this.list = this.at(clock)?.source.kind === 'arrangement' ? ALWAYS_ARRANGEMENT : [];
+    this.paused = resume;
+  }
+
+  /** Il trasporto riparte all'istante `clock`: la clip ricordata allo stop suona da lì. */
+  start(clock: number): void {
+    if (this.paused) this.list = [{ source: { kind: 'clip', clip: this.paused, origin: clock }, from: clock, until: Infinity }];
+    this.paused = null;
+  }
+
+  /** A trasporto fermo: la clip ricordata non ripartirà. */
+  forget(): void {
+    this.paused = null;
+  }
+
+  get hasPaused(): boolean {
+    return this.paused !== null;
   }
 }
 
@@ -121,9 +142,31 @@ export class Session {
     };
   }
 
-  /** Trasporto fermo: vedi TrackSchedule.reset. */
-  reset(clock: number): void {
-    for (const s of this.tracks.values()) s.reset(clock);
+  /** Trasporto fermo: vedi TrackSchedule.reset. Le clip che suonano ancora (non quelle
+   *  senza loop già finite) ripartiranno con il play. */
+  reset(tracks: readonly Track[], clock: number): void {
+    for (const [id, s] of this.tracks) {
+      const track = tracks.find(t => t.id === id);
+      const slot = track && this.state(track, clock).playing?.slot;
+      s.reset(clock, slot === undefined ? null : track!.slots[slot]!.id);
+    }
+  }
+
+  /** Il trasporto riparte: vedi TrackSchedule.start. */
+  start(clock: number): void {
+    for (const s of this.tracks.values()) s.start(clock);
+  }
+
+  /** A trasporto fermo: le clip ricordate di `tracks` (tutte se omesso) non ripartiranno;
+   *  restituisce se ce n'erano. */
+  forget(tracks?: readonly TrackId[]): boolean {
+    let any = false;
+    for (const [id, s] of this.tracks) {
+      if (tracks && !tracks.includes(id)) continue;
+      any ||= s.hasPaused;
+      s.forget();
+    }
+    return any;
   }
 
   prune(clock: number): void {

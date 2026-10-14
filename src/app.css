@@ -48,6 +48,9 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
   padding: 0 21px 0 12px; border-bottom: 1px solid #0006; position: relative;
 }
 .header::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 3px; width: 5px; background: var(--color); border-radius: 0 3px 3px 0; }
+/* la traccia scelta: sfondo nel suo colore, come la sua corsia sulla timeline */
+.header.selected { background: color-mix(in srgb, var(--color) 18%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color) 55%, transparent); }
+.header.selected::before { width: 7px; }
 .header .top { display: flex; align-items: center; gap: 6px; }
 .header .track-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
 .header .rename { flex: 1; padding: 1px 4px; }
@@ -222,6 +225,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
   font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
 }
 .session-head:hover { background: var(--panel-2); }
+.session-head.selected { background: color-mix(in srgb, var(--color) 30%, var(--panel)); color: #fff; }
 .session-head.taken::after { content: ' ●'; color: #e5a33a; font-size: 9px; vertical-align: middle; }
 .session-head .rename { width: 100%; padding: 0 3px; font-size: 12px; }
 .master-head { --color: var(--text); right: 0; z-index: 3; cursor: default; }
@@ -230,6 +234,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
   background: #1a1d21; border-radius: 3px;
 }
 .slot.filled { background: color-mix(in srgb, var(--clip) 62%, #101214); cursor: grab; }
+.slot.track-selected:not(.filled) { background: #23272d; }
 .slot .launch, .scene .launch {
   flex: none; width: 18px; height: 18px; padding: 0; font-size: 9px; line-height: 1; border-radius: 3px;
   border: none; background: #0005; color: #fff;
@@ -266,6 +271,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
   padding: 5px 4px 6px; background: var(--panel); border-top: 3px solid var(--color, var(--line));
 }
 .master-strip { right: 0; z-index: 4; --color: var(--text); }
+.strip.selected { background: color-mix(in srgb, var(--color) 18%, var(--panel)); }
 .strip .fx { padding: 1px 8px; font-size: 11px; }
 .strip-badge { max-width: 100%; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .strip .knob { width: 54px; margin: -4px 0 -2px; }

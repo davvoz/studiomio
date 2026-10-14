@@ -150,15 +150,24 @@ export class PlaybackEngine {
     this.launch(this.project?.tracks.map(t => [t.id, index] as const) ?? []);
   }
 
-  /** Ferma la clip della traccia al prossimo confine (la traccia resta muta, come in Live). */
+  /** Ferma la clip della traccia al prossimo confine (la traccia resta muta, come in Live); a
+   *  trasporto fermo, la clip che suonava allo stop non ripartirà con il play. */
   stopTrack(track: TrackId): void {
-    if (!this.playing) return;
+    if (!this.playing) {
+      if (this.session.forget([track])) this.events.emit('session');
+      return;
+    }
     this.switchTracks([track], at => this.session.stop(track, at));
   }
 
-  /** Ferma tutte le clip della session (le tracce che seguono la timeline continuano). */
+  /** Ferma tutte le clip della session (le tracce che seguono la timeline continuano); a
+   *  trasporto fermo, nessuna clip ripartirà con il play. */
   stopAllClips(): void {
-    if (!this.playing || !this.project) return;
+    if (!this.playing) {
+      if (this.session.forget()) this.events.emit('session');
+      return;
+    }
+    if (!this.project) return;
     const clock = this.clock;
     const busy = this.project.tracks.filter(t => {
       const s = this.session.state(t, clock);
@@ -246,6 +255,8 @@ export class PlaybackEngine {
   play(from: Beats = this.cursor): void {
     if (!this.project) return;
     this.cursor = Math.max(0, from);
+    // da fermo: le clip che suonavano allo stop ripartono con il trasporto
+    if (!this.playing) this.session.start(this.cursor);
     this.restart(this.cursor);
     this.cancelTimer ??= this.timer.every(this.tickMs, () => this.scheduler.advance(this.graph.currentTime));
     this.events.emit('state', true);
@@ -253,7 +264,7 @@ export class PlaybackEngine {
 
   stop(): void {
     if (!this.playing) return;
-    this.session.reset(this.clock);
+    this.session.reset(this.project?.tracks ?? [], this.clock);
     this.scheduler.stop();
     for (const m of this.modulators.values()) m.reset();
     this.cancelTimer?.();

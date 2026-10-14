@@ -23,10 +23,12 @@ import { renameInline } from '../inline-rename';
 import { bindKeys, type Binding } from '../keymap';
 import type { MeterBoard } from '../meters/meter-board';
 import { addEffectItems } from '../mixer-controls';
+import type { UiState } from '../ui-state';
 import { MasterStripView, TrackStrip } from './mixer-strip';
 
 export interface SessionViewDeps {
   readonly store: ProjectStore;
+  readonly ui: UiState;
   readonly engine: PlaybackEngine;
   readonly meters: MeterBoard;
   readonly clipboard: Clipboard;
@@ -127,6 +129,7 @@ export class SessionView {
     this.bindGrid();
     bindKeys(this.element, this, SESSION_KEYS, true);
     store.onChange(() => this.render());
+    deps.ui.onChange(() => this.highlightTrack());
     deps.engine.onSessionChange(() => this.refreshState());
     this.render();
     requestAnimationFrame(this.frame);
@@ -239,7 +242,16 @@ export class SessionView {
     this.cells = cells;
     this.grid.append(...cells);
     this.renderStrips(T, S);
+    this.highlightTrack();
     this.refreshState();
+  }
+
+  /** La traccia scelta: intestazione, slot e striscia del mixer della sua colonna. */
+  private highlightTrack(): void {
+    const id = this.deps.ui.track;
+    for (const [t, head] of this.heads) head.classList.toggle('selected', t === id);
+    for (const cell of this.slots.values()) cell.classList.toggle('track-selected', cell.dataset.track === id);
+    for (const [t, strip] of this.strips) strip.element.classList.toggle('selected', t === id);
   }
 
   /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano. */
@@ -256,6 +268,8 @@ export class SessionView {
       let strip = this.strips.get(t.id);
       if (!strip) {
         strip = new TrackStrip(t.id, this.deps.store, this.deps, this.deps.meters);
+        const id = t.id;
+        strip.element.addEventListener('pointerdown', () => this.deps.ui.selectTrack(id));
         this.strips.set(t.id, strip);
         this.grid.append(strip.element);
       }
@@ -270,6 +284,7 @@ export class SessionView {
     const name = el('span', { className: 'session-track-name', textContent: t.name });
     const head = el('div', { className: 'session-head', title: `${t.name}: un clic apre strumento ed effetti, doppio clic rinomina` }, name);
     head.style.setProperty('--color', t.color);
+    head.onpointerdown = () => this.deps.ui.selectTrack(t.id);
     head.onclick = () => this.deps.openDevices(t.id);
     head.ondblclick = e => {
       e.stopPropagation();
@@ -470,6 +485,7 @@ export class SessionView {
 
   private select(ref: SlotRef): void {
     this.selected = ref;
+    this.deps.ui.selectTrack(ref.track);
     for (const c of this.slots.values()) c.classList.remove('selected');
     const cell = this.slots.get(slotKey(ref.track, ref.slot));
     cell?.classList.add('selected');

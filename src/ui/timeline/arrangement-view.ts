@@ -123,7 +123,7 @@ export class ArrangementView implements GestureHost {
       paintRuler(this.ruler.g, project, this.geo, this.ruler.width, this.ruler.height, grid);
       paintLanes(this.lanes.g, {
         project, geo: this.geo, width: this.lanes.width, height: this.lanes.height, grid,
-        selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks,
+        selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTrack: this.ui.track,
         peaks: (c: AudioClip) => this.deps.peaks.get(c.sample),
       });
     }
@@ -170,6 +170,7 @@ export class ArrangementView implements GestureHost {
     el.addEventListener('pointerdown', e => {
       const p = this.pointer(e, el);
       const hit = hitTest(this.store.project, this.geo, p.x, p.y);
+      if (hit.kind === 'clip' || hit.kind === 'lane') this.ui.selectTrack(hit.track);
       this.startGesture(e, el, pp => gestureFor[keyOf(hit)](this, hit, pp));
     });
     el.addEventListener('pointermove', e => {

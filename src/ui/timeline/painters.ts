@@ -33,6 +33,8 @@ export interface LanePaint {
   readonly hidden: ReadonlySet<PlacementId>;
   /** Tracce prese dalla session: la loro timeline non suona e si mostra spenta. */
   readonly taken: ReadonlySet<TrackId>;
+  /** La traccia scelta: la sua corsia si colora appena. */
+  readonly selectedTrack: TrackId | null;
 }
 
 /** Contenuto di un tipo di clip dentro il suo rettangolo: un pittore per tipo. */
@@ -48,11 +50,15 @@ export function paintLanes(g: CanvasRenderingContext2D, lp: LanePaint): void {
   const { project, geo, width, height } = lp;
   g.fillStyle = COLORS.bg;
   g.fillRect(0, 0, width, height);
-  project.tracks.forEach((_, i) => {
+  project.tracks.forEach((t, i) => {
     const y = geo.trackTop(i);
     if (y > height || y + geo.trackHeight < 0) return;
     if (i % 2) {
       g.fillStyle = COLORS.laneAlt;
+      g.fillRect(0, y, width, geo.trackHeight);
+    }
+    if (t.id === lp.selectedTrack) {
+      g.fillStyle = withAlpha(t.color, 0.1);
       g.fillRect(0, y, width, geo.trackHeight);
     }
   });

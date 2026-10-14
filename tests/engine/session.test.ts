@@ -118,21 +118,66 @@ describe('session: lancio delle clip', () => {
     expect(r.state(0).followsArrangement).toBe(true);
   });
 
-  it('fermato il trasporto, una traccia presa dalla session resta muta finché non torna all\'arrangement', () => {
+  it('fermato il trasporto, al play le clip che suonavano ripartono dall\'inizio (la timeline resta spenta)', () => {
     const r = rig();
-    r.engine.launchSlot(r.t(0), 0);
-    r.runUntil(1);
+    r.engine.launchScene(0);
+    r.runUntil(0.7);
     r.engine.stop();
     expect(r.state(0)).toMatchObject({ playing: null, followsArrangement: false });
     r.engine.play(0);
-    r.runUntil(2);
-    expect(r.played(0, 40)).toEqual([]);
-    expect(r.engine.arrangementOverridden).toBe(true);
+    r.runUntil(1.5);
+    expect(r.played(0)).toEqual([[60, 0.05], [60, 0.55], [60, 0.75], [60, 1.25]]); // A riparte con il trasporto
+    expect(r.played(1)).toEqual([[50, 0.05], [50, 0.75]]); // e C con lei
+    expect(r.state(0)).toMatchObject({ playing: { slot: 0 }, followsArrangement: false });
     r.engine.stop();
     r.engine.backToArrangement();
     r.engine.play(0);
     r.runUntil(2.3);
     expect(r.played(0, 40).length).toBeGreaterThan(0);
+    expect(r.state(0).playing).toBeNull();
+  });
+
+  it('una traccia fermata, o "ferma tutte" a trasporto fermo: al play quelle clip non ripartono', () => {
+    const r = rig();
+    r.engine.launchScene(0);
+    r.runUntil(0.6);
+    r.engine.stopTrack(r.t(1));
+    r.runUntil(2.2);
+    r.engine.stop();
+    r.engine.play(0);
+    r.runUntil(2.6);
+    expect(r.state(0).playing).toMatchObject({ slot: 0 });
+    expect(r.state(1).playing).toBeNull(); // era già ferma
+    r.engine.stop();
+    r.engine.stopAllClips();
+    r.engine.play(0);
+    r.runUntil(3);
+    expect(r.state(0).playing).toBeNull();
+    expect(r.engine.playing).toBe(true);
+  });
+
+  it('una clip senza loop già finita non riparte', () => {
+    const r = rig();
+    const a = r.store.project.tracks[0].slots[0]!;
+    const once = MidiClip.empty(a.id, 'A', '#fff', 4).addingNotes(note(60, 0));
+    r.store.apply(setSlot(r.t(0), 0, once.withLoop({ ...once.loop, enabled: false })));
+    r.engine.launchSlot(r.t(0), 0);
+    r.runUntil(2.5);
+    r.engine.stop();
+    r.engine.play(0);
+    r.runUntil(3.5);
+    expect(r.played(0)).toEqual([[60, 0.05]]);
+  });
+
+  it('da fermo, lanciare una clip la fa partire al posto di quella ricordata sulla stessa traccia', () => {
+    const r = rig();
+    r.engine.launchScene(0);
+    r.runUntil(0.6);
+    r.engine.stop();
+    r.engine.launchSlot(r.t(0), 1);
+    r.runUntil(1.2);
+    expect(r.state(0).playing).toMatchObject({ slot: 1 });
+    expect(r.state(1).playing).toMatchObject({ slot: 0 }); // l'altra traccia riprende la sua
   });
 
   it('una clip senza loop suona una volta e finisce', () => {
