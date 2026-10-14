@@ -5,15 +5,18 @@ import { DriveCore } from '../effects/drive/drive-core';
 import { EqCore } from '../effects/eq/eq-core';
 import { LimiterCore } from '../effects/limiter/limiter-core';
 import { MultibandCore } from '../effects/multiband/multiband-core';
+import { PhaserCore } from '../effects/phaser/phaser-core';
 import { ReverbCore } from '../effects/reverb/reverb-core';
 import { AnalogCore } from '../instruments/analog/analog-core';
 import { DrumCore } from '../instruments/drums/drums-core';
+import { NeuroCore } from '../instruments/neuro/neuro-core';
 
 /** I motori DSP degli strumenti, per tipo: aggiungere un synth è aggiungere una riga qui e
  *  la sua descrizione in registry.ts. */
 export const INSTRUMENT_CORES: Readonly<Record<string, CoreFactory>> = {
   analog: sampleRate => new AnalogCore(sampleRate),
   drums: sampleRate => new DrumCore(sampleRate),
+  neuro: sampleRate => new NeuroCore(sampleRate),
 };
 
 /** I motori DSP degli effetti, per tipo (stesso schema degli strumenti). */
@@ -24,5 +27,6 @@ export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
   eq: sampleRate => new EqCore(sampleRate),
   limiter: sampleRate => new LimiterCore(sampleRate),
   multiband: sampleRate => new MultibandCore(sampleRate),
+  phaser: sampleRate => new PhaserCore(sampleRate),
   reverb: sampleRate => new ReverbCore(sampleRate),
 };

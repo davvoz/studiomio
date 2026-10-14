@@ -217,6 +217,18 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     expect(r.instruments.created[1].notes).toEqual([{ pitch: 64, velocity: 90, when: 0.005, duration: 0.5 }]);
   });
 
+  it('lo strumento nasce con il tempo del progetto e lo segue quando cambia', async () => {
+    const r = await rig();
+    const synth = r.instruments.created[0];
+    expect(synth.bpm).toBe(120);
+    r.store.apply(setInstrumentParam(r.t(1), 'cutoff', 500));
+    expect(synth.tempos).toEqual([]);
+    r.store.apply(setTempo(140));
+    expect(synth.tempos).toEqual([140]);
+    r.store.apply(setInstrument(r.t(1), { type: 'altro', preset: null, params: {} }));
+    expect(r.instruments.created[1].bpm).toBe(140);
+  });
+
   it('metronomo: un clic per battito, accento sul primo della battuta', async () => {
     const r = await rig();
     r.engine.metronomeOn = true;

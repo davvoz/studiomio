@@ -53,11 +53,13 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     const core = this.core;
     const setSample = playsSamples(core) ? core.setSample.bind(core) : () => {};
     for (const [slot, sample] of Object.entries(o.samples ?? {})) setSample(slot, sample);
+    core.setTempo?.(o.bpm);
     listen<InstrumentMessage>(this.port, {
       note: m => this.queue.add(m.pitch, m.velocity, Math.round(m.on * sampleRate), Math.round(m.off * sampleRate)),
       params: m => this.mod.setBase(m.params),
       mod: m => this.mod.event(m.param, m.kind, m.value, m.time),
       sample: m => setSample(m.slot, m.sample),
+      tempo: m => core.setTempo?.(m.bpm),
       stop: () => {
         this.queue.clear();
         this.core.silence();

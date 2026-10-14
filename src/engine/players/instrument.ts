@@ -13,6 +13,8 @@ export interface Instrument {
   play(pitch: number, velocity: number, when: number, duration: number): void;
   /** Nuovi valori dei parametri (stesso tipo di strumento). */
   update(settings: InstrumentSettings): void;
+  /** Il tempo del progetto è cambiato (per le modulazioni a tempo dello strumento). */
+  setTempo?(bpm: number): void;
   stopAll(): void;
   /** Toglie le note che partirebbero da `at` (secondi del contesto) e chiude lì quelle che
    *  suonerebbero oltre. */
@@ -24,7 +26,7 @@ export interface Instrument {
 export interface InstrumentHost {
   /** Prepara il grafo (es. carica il modulo AudioWorklet). */
   prepare(graph: AudioGraph): Promise<void>;
-  create(graph: AudioGraph, settings: InstrumentSettings): Instrument;
+  create(graph: AudioGraph, settings: InstrumentSettings, bpm: number): Instrument;
   /** Si risolve quando gli strumenti del grafo hanno ricevuto tutto quello che è stato
    *  mandato loro: serve prima di un export offline. */
   settle(graph: AudioGraph): Promise<void>;

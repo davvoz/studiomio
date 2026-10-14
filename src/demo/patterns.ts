@@ -46,6 +46,15 @@ export function acid(line: string, from: Beats = 0): Note[] {
   }));
 }
 
+/** Lo swing: i sedicesimi in levare (il secondo e il quarto di ogni battito) arrivano in
+ *  ritardo di `amount` sedicesimi (0.1–0.2 è il groove leggero della techno). Le note sui
+ *  battiti e sugli ottavi restano dove sono. */
+export const swing = (notes: readonly Note[], amount: number): Note[] =>
+  notes.map(n => {
+    const step = Math.round(n.start / STEP);
+    return Math.abs(n.start - step * STEP) < 1e-6 && step % 2 === 1 ? { ...n, start: n.start + amount * STEP } : { ...n };
+  });
+
 /** Le note ripetute `times` volte, ogni `period` battiti. */
 export const repeat = (notes: readonly Note[], period: Beats, times: number): Note[] =>
   Array.from({ length: times }, (_, k) => notes.map(n => ({ ...n, start: n.start + k * period }))).flat();

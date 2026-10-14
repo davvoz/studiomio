@@ -11,6 +11,8 @@ export interface InstrumentCore {
   silence(): void;
   /** Somma l'uscita nei campioni [from, to) dei due canali. */
   render(left: Float32Array, right: Float32Array, from: number, to: number): void;
+  /** Il tempo del progetto, per chi ha modulazioni a tempo (LFO sincronizzati). */
+  setTempo?(bpm: number): void;
 }
 
 export type CoreFactory = (sampleRate: number) => InstrumentCore;

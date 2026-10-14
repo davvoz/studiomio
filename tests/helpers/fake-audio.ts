@@ -114,17 +114,19 @@ export class FakeGraph implements AudioGraph {
   }
 }
 
-/** Strumento finto: registra note, parametri e stop. */
+/** Strumento finto: registra note, parametri, tempo e stop. */
 export class FakeInstrument implements Instrument {
   readonly output = new FakeGain();
+  readonly tempos: number[] = [];
   readonly notes: { pitch: number; velocity: number; when: number; duration: number }[] = [];
   readonly updates: InstrumentSettings[] = [];
   stops = 0;
   readonly cuts: number[] = [];
   readonly modulation = new FakeModulation();
   disposed = false;
-  constructor(readonly type: string) {}
+  constructor(readonly type: string, readonly bpm = 120) {}
   cut(at: number) { this.cuts.push(at); }
+  setTempo(bpm: number) { this.tempos.push(bpm); }
   play(pitch: number, velocity: number, when: number, duration: number) { this.notes.push({ pitch, velocity, when, duration }); }
   update(s: InstrumentSettings) { this.updates.push(s); }
   stopAll() { this.stops++; }
@@ -135,8 +137,8 @@ export class FakeInstruments implements InstrumentHost {
   readonly created: FakeInstrument[] = [];
   async prepare() {}
   async settle() {}
-  create(_g: AudioGraph, s: InstrumentSettings) {
-    const i = new FakeInstrument(s.type);
+  create(_g: AudioGraph, s: InstrumentSettings, bpm: number) {
+    const i = new FakeInstrument(s.type, bpm);
     this.created.push(i);
     return i;
   }

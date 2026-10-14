@@ -122,6 +122,8 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-panel-head .power { color: var(--muted); }
 .device-panel:not(.off) .power { background: var(--accent); color: #141414; border-color: var(--accent); }
 .device-sections { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; }
+.device-sections.grid { display: grid; grid-auto-flow: column; grid-template-rows: auto auto; justify-content: start; align-items: start; }
+.device-panel.instrument-panel .device-sections.grid { max-width: none; }
 .device-section { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 4px 9px 5px; flex: none; }
 .device-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 3px; }
 .device-controls { display: flex; gap: 6px; align-items: flex-start; }

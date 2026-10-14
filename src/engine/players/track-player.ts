@@ -28,6 +28,8 @@ export interface PlayerContext {
   readonly programs: () => readonly Program[];
   /** Dove annotare le note programmate, per l'interfaccia. */
   readonly notes: NoteActivity;
+  /** Il tempo del progetto (BPM). */
+  readonly tempo: () => number;
 }
 
 /** Nodi programmati e non ancora finiti, per poterli fermare tutti insieme. */

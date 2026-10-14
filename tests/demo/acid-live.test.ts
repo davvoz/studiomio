@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { sequentialIds } from '../../src/core/id';
 import { ACID_LIVE_BPM, ACID_LIVE_SOUNDS, buildAcidLive, type AcidLiveSound } from '../../src/demo/acid-live';
-import { acid, bars, repeat, steps } from '../../src/demo/patterns';
-import { padNote } from '../../src/devices/instruments/drums/drums';
+import { kitParams } from '../../src/demo/live-builder';
+import { acid, bars, repeat, steps, swing } from '../../src/demo/patterns';
+import { DRUM_MODELS, MODEL, padNote, padParam } from '../../src/devices/instruments/drums/drums';
 import { MidiClip } from '../../src/model/midi-clip';
 import { Project } from '../../src/model/project';
 import type { SampleRef } from '../../src/model/sample';
@@ -31,6 +32,22 @@ describe('scrivere le parti', () => {
     expect(n[4].start + n[4].duration).toBeGreaterThan(n[5].start);
     expect(() => acid('h2')).toThrow(/non valido/);
     expect(repeat(acid('a2 . a2'), 1, 2).map(x => x.start)).toEqual([0, 0.5, 1, 1.5]);
+  });
+
+  it('lo swing sposta solo i sedicesimi in levare', () => {
+    const n = swing(steps(0, 'xxxx xxxx'), 0.2);
+    expect(n.map(x => x.start)).toEqual([0, 0.3, 0.5, 0.8, 1, 1.3, 1.5, 1.8]);
+  });
+
+  it('nei kit i pad sono Sample o, con il modello, suoni sintetizzati con i loro predefiniti', () => {
+    const p = kitParams([{ model: 'kick', tune: -1 }, { sound: 'x', decay: 0.1 }]);
+    expect(p[padParam(0, 'model')]).toBe(MODEL.kick);
+    expect(p[padParam(0, 'decay')]).toBe(DRUM_MODELS[MODEL.kick].decay);
+    expect(p[padParam(0, 'tune')]).toBe(-1);
+    expect(p[padParam(1, 'model')]).toBe(MODEL.sample);
+    expect(p[padParam(1, 'tone')]).toBe(50);
+    expect(() => kitParams([{ tune: 0 }])).toThrow(/suono/);
+    expect(() => kitParams([{ model: 'theremin' }])).toThrow(/sconosciuto/);
   });
 });
 

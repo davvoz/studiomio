@@ -19,6 +19,7 @@ export interface InstrumentProcessorOptions {
   readonly params: Readonly<Record<string, number>>;
   /** I sample caricati, per posto (vedi SamplePlayer). */
   readonly samples: Readonly<Record<string, SampleData>>;
+  readonly bpm: number;
 }
 
 export type InstrumentMessage =
@@ -27,6 +28,7 @@ export type InstrumentMessage =
   | ModMessage
   /** Un sample nuovo (o null: tolto) al posto `slot`. */
   | { readonly type: 'sample'; readonly slot: string; readonly sample: SampleData | null }
+  | { readonly type: 'tempo'; readonly bpm: number }
   /** Toglie le note programmate e spegne quelle che suonano. */
   | { readonly type: 'stop' }
   /** Taglia all'istante `at`: le note dopo spariscono, quelle a cavallo finiscono lì. */

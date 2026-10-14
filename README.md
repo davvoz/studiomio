@@ -27,8 +27,9 @@ Per usare gli algoritmi WebAssembly nell'app: `VITE_DSP_WASM=1 npm run dev`.
 
 Gli script in `scripts/` girano con i moduli dell'app (risolti da Vite):
 `node scripts/run.mjs scripts/<nome>.ts <argomenti…>`. `build-acid-live.ts`,
-`build-pazzi-live.ts` e `build-sacrificio-live.ts` costruiscono i live "Acido crudo", "Siete
-pazzi" e "Sacrificio" come cartelle di progetto (vedi sotto: I live).
+`build-pazzi-live.ts`, `build-sacrificio-live.ts` e `build-fuori-live.ts` costruiscono i live
+"Acido crudo", "Siete pazzi", "Sacrificio" e "Fuori dal corpo" come cartelle di progetto (vedi
+sotto: I live).
 
 Requisiti: Node 22+, Rust (`rustup target add wasm32-unknown-unknown`) e `wasm-pack`.
 Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una volta
@@ -103,9 +104,12 @@ src/
     params.ts          descrizione dei parametri (da cui nascono controlli, default, validazione)
     device-type.ts     un tipo di dispositivo: sezioni di parametri e preset
     registry.ts        gli strumenti e gli effetti disponibili
+    rates.ts           le velocità a tempo delle modulazioni (8 battute … 1/32)
     instruments/analog/  il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
+    instruments/neuro/   il synth Neuro dei bassi reese: descrizione e preset (neuro.ts), suono (neuro-core.ts)
     instruments/drums/   la Drum Machine: pad, modelli e kit (drums.ts), suono (drums-core.ts)
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
+    effects/phaser/    il Phaser (anche flanger): descrizione e preset (phaser.ts), suono (phaser-core.ts)
     effects/eq/        l'EQ: descrizione (eq.ts), matematica dei filtri comune a suono e disegno (eq-math.ts), suono (eq-core.ts)
     effects/drive/     il Drive: descrizione e preset (drive.ts), curve e primitive (drive-math.ts), suono (drive-core.ts)
     dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, rumore, polifonia, sovracampionamento; interfacce dei motori
@@ -120,7 +124,7 @@ src/
   demo/                loop e progetto demo; patterns.ts (parti scritte come su una drum
                        machine o una 303: ritmi, linee, chop, rulli, pompa, gate),
                        live-builder.ts (un live come dati → progetto) e i live acid-live.ts,
-                       pazzi-live.ts e sacrificio-live.ts
+                       pazzi-live.ts, sacrificio-live.ts e fuori-live.ts
 scripts/               script in Node con i moduli dell'app (run.mjs li avvia; live-folder.ts
                        copia i suoni e salva la cartella di un live)
 crates/dsp/            phase vocoder in Rust → WebAssembly (SIMD)
@@ -280,6 +284,24 @@ per voce, scordate a ventaglio (Scordatura, in centesimi) e aperte nello stereo 
 con un filtro per canale: il "supersaw" per lead e accordi larghi; il livello resta quello di
 una copia.
 
+**Neuro**: il synth dei bassi reese e neuro, a una voce (Mono o Legato, con il glide). Due
+oscillatori con l'unison (fino a 7 copie scordate e aperte: il reese è due o tre dente di sega
+che battono lenti), la **FM** (modulazione di fase, con il suo rapporto) per il ringhio, il
+**Fold** (wavefolder), il filtro (LP 24, LP 12, banda, passa-alto, notch) con la sua saturazione
+davanti, il **Formante** che fa parlare il basso (tre formanti che passano per le vocali A E I O
+U, spostabili di un'ottava), la **Distorsione** finale (tanh asimmetrico) e, a parte, il **Sub**:
+un seno pulito e centrato, mentre il corpo passa da un crossover Linkwitz-Riley e resta sopra
+il **Taglio** (il basso resta definito anche con il corpo largo e distorto). Il movimento: due
+**LFO a tempo** (da 8 battute a 1/32, terzine e puntate; Sine, Triangle, Saw giù e su, Square,
+S&H e S&H morbido; ripartenza a ogni nota o liberi, fase iniziale) e un **inviluppo di
+modulazione**, ognuno verso due destinazioni a scelta (Cutoff, Risonanza, Vocale, Formante,
+Fold, FM, Drive, Distorsione, Pitch, Scordatura, Volume) con una quantità positiva o negativa;
+il **Trasporto** continuo, modulato da una clip, fa salite e picchiate di pitch. Tutto gira al
+doppio della frequenza di campionamento (FM, fold e distorsione non si ripiegano in aliasing)
+e torna giù con il filtro a mezza banda. Preset: Reese, Reese parlante, Neuro ringhio, Colpo
+neuro, Sub pulito. Gli strumenti ricevono il tempo del progetto come gli effetti. Costo
+misurato: 3.4 % di un core con tre copie e il formante, 4.2 % con sette.
+
 **Drum Machine**: 16 pad sulle note da C1 (36) a D#2 (51), come il Drum Rack di Live, con il
 kit di partenza sulla mappa General MIDI (36 cassa, 38 rullante, 42 hi-hat chiuso, 46 aperto…),
 così le parti di batteria scritte altrove suonano giuste. Ogni pad ha un suono sintetizzato
@@ -363,6 +385,14 @@ Preset: OTT, Denso, Lead aggressivo, Batteria, Master leggero.
 Costo misurato per un'istanza stereo: compressore 0.2 %, limiter 0.6 %, riverbero 0.6 %,
 multibanda 1 % di un core.
 
+**Phaser**: il movimento che gira. Da **Phaser** è una fila di allpass (2–12 stadi) attorno al
+Centro, risommata al suono: le buche nello spettro salgono e scendono; da **Flanger** è un
+ritardo cortissimo che oscilla (il "jet"). Velocità a tempo o in Hz, Profondità, Stereo (il
+canale destro sfasato fino a 180°), Feedback anche negativo (passa da una tanh: non esplode),
+Dry/Wet. Il phaser lascia passare il sub com'è (in basso gli allpass non spostano la fase),
+il flanger no: sui bassi va il phaser. Preset: Phaser lento, Jet, Reese che gira, Hat metallici,
+Gola. Costo: 0.5 % di un core.
+
 **Delay**: eco a tempo (da 1/32 a 1/1, con puntate e terzine, segue il BPM del progetto) o in
 millisecondi, stereo o ping-pong, feedback con low cut e high cut sulle ripetizioni, dry/wet.
 Preset: Init, Ping-pong 1/8., Slapback, Eco lungo, Dub.
@@ -394,7 +424,8 @@ Per aggiungere un dispositivo (synth o effetto) servono due parti:
    `InstrumentCore` (`noteOn`, `noteOff`, `setParams`, `render`; `VoicePool`, `Adsr`, `Svf` e gli
    oscillatori sono pronti), per un effetto un `EffectCore` (`setParams`, `setTempo`, `process`).
 
-Interfaccia, salvataggio, preset, annulla, bypass e messaggi verso l'audio vengono da soli.
+Interfaccia, salvataggio, preset, annulla, bypass e messaggi verso l'audio vengono da soli
+(con più di sei sezioni le schede vanno su due righe che scorrono con la catena).
 Un dispositivo che vuole un'interfaccia sua (come l'EQ o la Drum Machine) la registra in
 `ui/device/displays.ts`; uno strumento che dà un nome alle note (`noteNames`) li fa vedere nel
 piano roll. I
@@ -403,18 +434,19 @@ contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli ef
 
 ## I live
 
-Due live montati per la session con i sample della libreria dell'utente. Ogni live è descritto
-come dati in `src/demo` (tracce, kit, suoni di Analog, effetti, scene, ordine della
-registrazione) e montato da `live-builder.ts`; lo script copia i file (elencati nello script)
+Quattro live montati per la session con i sample della libreria dell'utente. Ogni live è descritto
+come dati in `src/demo` (tracce, kit, suoni di Analog e Neuro, effetti, scene, ordine della
+registrazione; nei kit un pad è un sample o un suono sintetizzato della Drum Machine) e montato da `live-builder.ts`; lo script copia i file (elencati nello script)
 nella cartella del progetto:
 
 ```sh
 node scripts/run.mjs scripts/build-acid-live.ts "C:/Users/<utente>/Music" "C:/…/Acido crudo"
 node scripts/run.mjs scripts/build-pazzi-live.ts "C:/Users/<utente>/Music" "C:/…/Siete pazzi"
 node scripts/run.mjs scripts/build-sacrificio-live.ts "C:/Users/<utente>/Music" "C:/…/Sacrificio"
+node scripts/run.mjs scripts/build-fuori-live.ts "C:/Users/<utente>/Music" "C:/…/Fuori dal corpo"
 ```
 
-poi **Apri** sulla cartella creata. In entrambi la timeline tiene una "registrazione" del live
+poi **Apri** sulla cartella creata. In tutti la timeline tiene una "registrazione" del live
 (le scene una dopo l'altra), utile anche per l'export.
 
 ### Acido crudo
@@ -461,6 +493,28 @@ in La minore, il coro alzato in La con il Si bemolle sopra, il mostro nel vuoto.
 Master: EQ, Multibanda leggera, Compressore "Colla", Limiter. Misurato sul render: drop a
 −8.5/−8.3 LUFS (intro −10.6), −9.0 LUFS integrati, true peak −0.46 dBTP, PLR circa 8 dB;
 nessuna traccia oltre 0 dB. Registrazione: 112 battute, 3 minuti.
+
+### Fuori dal corpo
+
+Techno da rave buio a 140 BPM in Sol frigio, senza melodie: lo portano il groove e i bassi che
+si muovono, come la neuro di Noisia in quattro quarti. Intro, groove, salita, drop, vuoto (il
+break), salita, secondo drop, outro. La **Cassa** è un layer: il corpo è la cassa sintetica in
+Sol (scende e decade in fretta, lascia spazio al basso), l'attacco è quello distorto di un
+campione; un limiter veloce la taglia come un clipper. **Rullante** e clap sul due e sul
+quattro con i fantasmi in levare, **Piatti** a sedicesimi in un flanger lento, **Percussioni**
+sincopate su due battute con l'eco: tutto con lo swing. Il **Reese** è Neuro (tre dente di sega
+scordati, formante, fold, distorsione, sub pulito): un riff a domanda e risposta in cui ogni
+nota "parla" (l'inviluppo apre il filtro e sposta la vocale, un LFO in quarti la fa ondeggiare)
+e lascia buchi per il **Neuro**: fette dei loop reese della libreria, tutte in Sol, che si
+tagliano a vicenda come gli edit di Noisia. Nel secondo drop il **Ringhio** (FM, un LFO in
+terzine contro i quarti della cassa, il tritono). Il **Vuoto** è il bordone che dissocia: un
+cluster Sol–Re–La bemolle che ondeggia d'intonazione, nel phaser e in una coda di 12 secondi;
+nel break il reese respira da solo su note lunghe legate e finisce con una picchiata di
+un'ottava. **Atmosfere**, **Voci** (frasi spezzate e un robot abbassato di una quinta) e **FX**.
+La pompa e il movimento lento dei bassi (vocale, cutoff, fold, trasporto) sono modulazioni
+delle clip. Misurato sul render: drop a −8.9/−9.2 LUFS, salita −9.0, intro −10.3, break
+−12.6, −9.6 LUFS integrati, true peak −0.49 dBTP, PLR circa 8.5 dB; nessuna traccia oltre 0 dB.
+Registrazione: 144 battute, 4 minuti e 8 secondi.
 
 ## Principi
 

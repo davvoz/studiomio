@@ -15,10 +15,13 @@ import type { PlayerContext, TrackPlayer } from './track-player';
 export class MidiTrackPlayer implements TrackPlayer {
   private track: MidiTrack;
   private instrument: Instrument;
+  /** Il tempo che lo strumento conosce. */
+  private bpm: number;
   private readonly segments = new WeakMap<Placement, Segment[]>();
 
   constructor(track: MidiTrack, private readonly ctx: PlayerContext, private readonly host: InstrumentHost) {
     this.track = track;
+    this.bpm = ctx.tempo();
     this.instrument = this.connect(track.instrument);
   }
 
@@ -26,6 +29,11 @@ export class MidiTrackPlayer implements TrackPlayer {
     const next = track as MidiTrack;
     if (next.instrument !== this.track.instrument) this.setInstrument(next.instrument);
     this.track = next;
+    const bpm = this.ctx.tempo();
+    if (bpm !== this.bpm) {
+      this.bpm = bpm;
+      this.instrument.setTempo?.(bpm);
+    }
   }
 
   schedule(w: ScheduleWindow): void {
@@ -55,7 +63,7 @@ export class MidiTrackPlayer implements TrackPlayer {
   }
 
   private connect(settings: InstrumentSettings): Instrument {
-    const instrument = this.host.create(this.ctx.graph, settings);
+    const instrument = this.host.create(this.ctx.graph, settings, this.ctx.tempo());
     instrument.output.connect(this.ctx.output);
     return instrument;
   }

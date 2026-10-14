@@ -373,7 +373,7 @@ export class PlaybackEngine {
       this.activity.set(id, notes);
       const ctx: PlayerContext = {
         graph: this.graph, output: this.mixer.input(id), missing: () => { this.missed = true; },
-        programs: () => this.session.programs(id), notes,
+        programs: () => this.session.programs(id), notes, tempo: () => this.project?.tempo.bpm ?? 120,
       };
       this.players.set(t.id, { kind: t.kind, player: factory(t, ctx, this.services) });
       changed = true;

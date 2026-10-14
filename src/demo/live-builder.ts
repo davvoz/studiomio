@@ -10,9 +10,11 @@ import { DRIVE } from '../devices/effects/drive/drive';
 import { bandParam, EQ } from '../devices/effects/eq/eq';
 import { LIMITER } from '../devices/effects/limiter/limiter';
 import { MULTIBAND } from '../devices/effects/multiband/multiband';
+import { PHASER } from '../devices/effects/phaser/phaser';
 import { REVERB } from '../devices/effects/reverb/reverb';
 import { ANALOG } from '../devices/instruments/analog/analog';
-import { DRUMS, MODEL, MAX_DECAY, padParam, padSlot } from '../devices/instruments/drums/drums';
+import { DRUM_MODELS, DRUMS, MODEL, padParam, padSlot } from '../devices/instruments/drums/drums';
+import { NEURO } from '../devices/instruments/neuro/neuro';
 import type { EffectSettings, ParamValues } from '../model/device';
 import { INSTRUMENT_DEVICE, type EnvelopePoint, type ModTarget } from '../model/envelope';
 import { MidiClip, type Note } from '../model/midi-clip';
@@ -28,9 +30,11 @@ import { BAR } from './patterns';
 
 // ------------------------------------------------------------------ suoni
 
-/** Un pad Sample: il suono (per nome) e i suoi controlli; quelli mancanti restano neutri. */
+/** Un pad: un Sample (il suono per nome) o, con `model`, un suono sintetizzato della Drum
+ *  Machine ("kick", "snare"…); i controlli mancanti restano quelli del modello. */
 export interface PadSound<S extends string> {
-  readonly sound: S;
+  readonly sound?: S;
+  readonly model?: string;
   readonly tune?: number;
   readonly decay?: number;
   /** Inizio nel file, in percento (per affettare un loop o una frase)… */
@@ -48,19 +52,30 @@ export interface PadSound<S extends string> {
 /** L'Inizio di un pad in percento: dato, o dai secondi `at` con la durata del suo sample. */
 const startOf = <S extends string>(p: PadSound<S>, sounds?: Readonly<Record<S, SampleRef>>): number => {
   if (p.at === undefined) return p.start ?? 0;
-  const s = sounds?.[p.sound];
+  const s = p.sound === undefined ? undefined : sounds?.[p.sound];
   if (!s) throw new Error(`per "at" serve la durata del sample "${p.sound}"`);
   return Math.round((p.at / sampleDuration(s)) * 1e6) / 1e4;
 };
 
-/** I parametri dei pad Sample di un kit (con i sample, se qualche pad dice "at"). */
+/** Il modello di un pad: quello dato o, se c'è un suono, Sample. */
+const modelOf = <S extends string>(p: PadSound<S>): number => {
+  const model = MODEL[p.model ?? 'sample'];
+  if (model === undefined) throw new Error(`modello di pad sconosciuto: "${p.model}"`);
+  if (model === MODEL.sample && p.sound === undefined) throw new Error('un pad Sample vuole il suo suono');
+  return model;
+};
+
+/** I parametri dei pad di un kit (con i sample, se qualche pad dice "at"). */
 export const kitParams = <S extends string>(kit: readonly PadSound<S>[], sounds?: Readonly<Record<S, SampleRef>>): Record<string, number> =>
-  Object.fromEntries(kit.flatMap((p, i) => [
-    [padParam(i, 'model'), MODEL.sample], [padParam(i, 'tune'), p.tune ?? 0], [padParam(i, 'decay'), p.decay ?? MAX_DECAY],
-    [padParam(i, 'start'), startOf(p, sounds)], [padParam(i, 'reverse'), p.reverse ? 1 : 0],
-    [padParam(i, 'tone'), p.tone ?? 50], [padParam(i, 'snap'), p.snap ?? 0], [padParam(i, 'level'), p.level ?? 0],
-    [padParam(i, 'pan'), p.pan ?? 0], [padParam(i, 'choke'), p.choke ?? 0],
-  ]));
+  Object.fromEntries(kit.flatMap((p, i) => {
+    const model = modelOf(p), d = DRUM_MODELS[model];
+    return [
+      [padParam(i, 'model'), model], [padParam(i, 'tune'), p.tune ?? 0], [padParam(i, 'decay'), p.decay ?? d.decay],
+      [padParam(i, 'start'), startOf(p, sounds)], [padParam(i, 'reverse'), p.reverse ? 1 : 0],
+      [padParam(i, 'tone'), p.tone ?? d.tone], [padParam(i, 'snap'), p.snap ?? d.snap], [padParam(i, 'level'), p.level ?? 0],
+      [padParam(i, 'pan'), p.pan ?? 0], [padParam(i, 'choke'), p.choke ?? 0],
+    ];
+  }));
 
 // ------------------------------------------------------------------ effetti
 
@@ -81,6 +96,7 @@ export const compressor = effect(COMPRESSOR);
 export const reverb = effect(REVERB);
 export const limiter = effect(LIMITER);
 export const multiband = effect(MULTIBAND);
+export const phaser = effect(PHASER);
 export const eq = effect(EQ);
 
 /** Un EQ che taglia sotto `freq` (lascia i bassi a chi li deve tenere). */
@@ -94,8 +110,9 @@ export interface TrackSpec<S extends string, K extends string = string> {
   readonly name: string;
   readonly volumeDb: number;
   readonly pan?: number;
-  /** Un kit di Drum Machine o un suono di Analog. */
+  /** Un kit di Drum Machine, un suono di Neuro o (se mancano tutti e due) di Analog. */
   readonly kit?: readonly PadSound<S>[];
+  readonly neuro?: ParamValues;
   readonly analog?: ParamValues;
   readonly effects: readonly EffectSpec[];
 }
@@ -178,7 +195,9 @@ export function buildLive<S extends string, K extends string>(store: ProjectStor
     if (spec.kit) {
       const kit = spec.kit;
       store.apply(setInstrument(track, { type: DRUMS.type, preset: null, params: { volume: 0, velocity: 60, ...kitParams(kit, sounds) } }));
-      store.apply(setInstrumentSamples(track, Object.fromEntries(kit.map((p, i) => [padSlot(i), sounds[p.sound]]))));
+      store.apply(setInstrumentSamples(track, Object.fromEntries(kit.flatMap((p, i) => (p.sound === undefined ? [] : [[padSlot(i), sounds[p.sound]]])))));
+    } else if (spec.neuro) {
+      store.apply(setInstrument(track, { type: NEURO.type, preset: null, params: { ...spec.neuro } }));
     } else {
       store.apply(setInstrument(track, { type: ANALOG.type, preset: null, params: { ...spec.analog } }));
     }

@@ -18,6 +18,10 @@ export interface DevicePanelOptions {
   readonly display?: DeviceDisplay;
 }
 
+/** Oltre queste sezioni le schede vanno su due righe che scorrono in orizzontale (come la
+ *  catena): un synth grande resta tutto visibile nell'altezza del pannello. */
+const GRID_SECTIONS = 6;
+
 /** Un dispositivo (strumento o effetto) nella catena: intestazione con nome e preset, poi una
  *  scheda per sezione e un controllo per parametro, tutto dalla descrizione del tipo; oppure
  *  il pannello grafico del tipo, se ne ha uno. */
@@ -43,7 +47,7 @@ export class DevicePanel {
     this.element.append(
       el('div', { className: 'device-panel-head' },
         ...(options.before ?? []), el('span', { className: 'device-name', textContent: type.label }), this.presets, ...(options.after ?? [])),
-      el('div', { className: 'device-sections' }, ...sections));
+      el('div', { className: !options.display && sections.length > GRID_SECTIONS ? 'device-sections grid' : 'device-sections' }, ...sections));
     this.update(settings);
   }
 

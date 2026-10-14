@@ -53,15 +53,17 @@ class WorkletInstrument implements Instrument {
   readonly modulation = workletModulation(m => this.send(m));
   private node: AudioWorkletNode | null = null;
   private settings: InstrumentSettings;
+  private bpm: number;
   private pings = 0;
   private readonly waiting = new Map<number, () => void>();
 
   constructor(
-    private readonly ctx: BaseAudioContext, settings: InstrumentSettings, ready: Promise<void> | null,
+    private readonly ctx: BaseAudioContext, settings: InstrumentSettings, bpm: number, ready: Promise<void> | null,
     private readonly source: SampleSource, private readonly onDispose: () => void,
   ) {
     this.type = settings.type;
     this.settings = settings;
+    this.bpm = bpm;
     this.output = ctx.createGain();
     if (ready) ready.then(() => this.build(), e => console.error('strumento non disponibile', e));
     else this.build();
@@ -77,6 +79,11 @@ class WorkletInstrument implements Instrument {
     this.settings = settings;
     if (settings.params !== prev.params) this.send({ type: 'params', params: fullParams(settings) });
     if (settings.samples !== prev.samples) this.sendSamples(prev.samples, settings.samples);
+  }
+
+  setTempo(bpm: number): void {
+    this.bpm = bpm;
+    this.send({ type: 'tempo', bpm });
   }
 
   stopAll(): void {
@@ -119,6 +126,7 @@ class WorkletInstrument implements Instrument {
   private build(): void {
     const processorOptions: InstrumentProcessorOptions = {
       type: this.settings.type, params: fullParams(this.settings), samples: samplesOf(this.settings.samples, this.source),
+      bpm: this.bpm,
     };
     this.node = new AudioWorkletNode(this.ctx, INSTRUMENT_PROCESSOR, {
       numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2], processorOptions,
@@ -166,12 +174,12 @@ export class WorkletInstruments implements InstrumentHost {
     return this.worklet.prepare(graph);
   }
 
-  create(graph: AudioGraph, settings: InstrumentSettings): Instrument {
+  create(graph: AudioGraph, settings: InstrumentSettings, bpm: number): Instrument {
     const ctx = contextOf(graph);
     let set = this.live.get(ctx);
     if (!set) this.live.set(ctx, (set = new Set()));
     const all = set;
-    const instrument: WorkletInstrument = new WorkletInstrument(ctx, settings, this.worklet.pending(graph), this.samples, () => all.delete(instrument));
+    const instrument: WorkletInstrument = new WorkletInstrument(ctx, settings, bpm, this.worklet.pending(graph), this.samples, () => all.delete(instrument));
     all.add(instrument);
     return instrument;
   }
