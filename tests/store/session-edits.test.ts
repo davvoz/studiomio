@@ -5,7 +5,7 @@ import { findClip, placementRef, slotRef, updateClipAt } from '../../src/store/c
 import { copySlotClip, pasteClips, pasteToSlot } from '../../src/store/clipboard';
 import { addMidiClip, setLaunchQuantization } from '../../src/store/edits';
 import {
-  clearSlot, deleteScene, duplicateScene, duplicateSlotClip, importSampleToSlot, insertScene, moveSlotClip, newSlotMidiClip,
+  captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, importSampleToSlot, insertScene, moveSlotClip, newSlotMidiClip,
   renameScene,
 } from '../../src/store/session-edits';
 import { setup } from '../helpers/fixtures';
@@ -73,6 +73,25 @@ describe('session: clip negli slot', () => {
     expect(store.project.tracks[0].slots[0]).toBeNull();
     store.apply(deleteScene(s0));
     expect(store.project.scenes.map(s => s.name)).toEqual(['6', 'Strofa copia', '2', '3', '4']);
+  });
+
+  it('cattura e inserisci scena: le clip che suonano vanno nella scena nuova, al loro posto restano copie', () => {
+    const { store, track } = setup({ midi: 3 });
+    store.apply(newSlotMidiClip({ track: track(0), slot: 0 }));
+    store.apply(newSlotMidiClip({ track: track(1), slot: 2 }));
+    store.apply(newSlotMidiClip({ track: track(2), slot: 1 }));
+    const [a, b] = [store.project.tracks[0].slots[0]!, store.project.tracks[1].slots[2]!];
+    store.apply(captureScene(0, new Map([[track(0), a.id], [track(1), b.id]]))); // la traccia 2 non suona
+    expect(store.project.scenes).toHaveLength(5);
+    const [t0, t1, t2] = store.project.tracks;
+    expect([t0.slots[1], t1.slots[1], t2.slots[1]]).toEqual([a, b, null]); // le clip stesse
+    expect(t0.slots[0]?.id).not.toBe(a.id); // dove erano, delle copie
+    expect(t1.slots[3]?.id).not.toBe(b.id);
+    expect(t1.slots[3]?.name).toBe(b.name);
+    expect(t2.slots[2]).not.toBeNull(); // la riga sotto è scesa di uno
+    expect(store.undoLabel).toBe('Cattura e inserisci scena');
+    store.undo();
+    expect(store.project.tracks[0].slots[0]).toBe(a);
   });
 
   it('si salvano: clip negli slot, scene e quantizzazione del lancio; un file v4 si apre', () => {

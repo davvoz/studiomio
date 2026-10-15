@@ -1,5 +1,5 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
-import type { DeviceId, TrackId } from '../core/id';
+import type { ClipId, DeviceId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { INSTRUMENT_DEVICE, type ModTarget } from '../model/envelope';
 import { mappingSpec, mappingTravel } from '../devices/rack-params';
@@ -193,6 +193,16 @@ export class PlaybackEngine {
     const clock = this.clock;
     if (track instanceof GroupTrack && this.project) return mergedState(this.project.soundingTracks(track.id).map(t => this.session.state(t, clock)));
     return this.session.state(track, clock);
+  }
+
+  /** Le clip della session che suonano adesso, traccia per traccia ("Cattura e inserisci scena"). */
+  playingClips(): Map<TrackId, ClipId> {
+    const clock = this.clock, playing = new Map<TrackId, ClipId>();
+    for (const t of this.project?.tracks ?? []) {
+      const slot = t instanceof GroupTrack ? undefined : this.session.state(t, clock).playing?.slot;
+      if (slot !== undefined) playing.set(t.id, t.slots[slot]!.id);
+    }
+    return playing;
   }
 
   /** Vero se qualche traccia non segue la timeline (si accende "Torna all'arrangement"). */

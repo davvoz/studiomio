@@ -10,7 +10,8 @@ import { Adsr } from '../../dsp/envelope';
 import { LFO_TABLE, WAVE_TABLE, type Wave } from '../../dsp/oscillators';
 import { Svf } from '../../dsp/svf';
 import { VoicePool, type PolyVoice } from '../../dsp/voice-pool';
-import { ACCENT_VELOCITY, MAX_UNISON, VOICE_MODE } from './analog';
+import { TEMPO_RATES } from '../../rates';
+import { ACCENT_VELOCITY, LFO_SYNC, MAX_UNISON, VOICE_MODE } from './analog';
 
 export const ANALOG_VOICES = 16;
 /** Ogni quanti campioni si ricalcolano LFO, intonazione e cutoff. */
@@ -42,7 +43,12 @@ class Settings {
   envOctaves = 0;
   keyTrack = 0.5;
   lfoWave: Wave = LFO_TABLE[0];
+  /** A tempo (`lfoBeats` battiti per giro) o libero (`lfoRate` Hz). */
+  lfoTempo = false;
+  lfoBeats = 1;
   lfoRate = 5;
+  /** Il tempo del progetto, per l'LFO a tempo. */
+  bpm = 120;
   lfoCents = 0;
   lfoOctaves = 0;
   velocity = 0.6;
@@ -68,6 +74,8 @@ class Settings {
     this.envOctaves = (v('filterEnv', 0) / 100) * ENV_OCTAVES;
     this.keyTrack = v('keyTrack', 50) / 100;
     this.lfoWave = LFO_TABLE[v('lfoWave', 0)] ?? LFO_TABLE[0];
+    this.lfoTempo = v('lfoSync', LFO_SYNC.hz) === LFO_SYNC.tempo;
+    this.lfoBeats = (TEMPO_RATES[v('lfoDivision', 6)] ?? TEMPO_RATES[6])[1];
     this.lfoRate = v('lfoRate', 5);
     this.lfoCents = v('lfoPitch', 0);
     this.lfoOctaves = (v('lfoCutoff', 0) / 100) * LFO_OCTAVES;
@@ -75,6 +83,11 @@ class Settings {
     this.gain = dbToGain(v('volume', -8));
     this.filterEnv = { attack: v('fAttack', 0.003), decay: v('fDecay', 0.35), sustain: v('fSustain', 25) / 100, release: v('fRelease', 0.25) };
     this.ampEnv = { attack: v('attack', 0.003), decay: v('decay', 0.4), sustain: v('sustain', 80) / 100, release: v('release', 0.2) };
+  }
+
+  /** La velocità dell'LFO in Hz, a tempo o libera. */
+  get lfoHz(): number {
+    return this.lfoTempo ? this.bpm / 60 / this.lfoBeats : this.lfoRate;
   }
 
   /** Quanto è accentata una nota: 0 fino ad ACCENT_VELOCITY, poi su fino a 127. */
@@ -244,7 +257,7 @@ class AnalogVoice implements PolyVoice {
     }
     this.accentEnv *= this.accentK;
     const lfo = s.lfoWave(this.lfoPhase, 0);
-    this.lfoPhase = (this.lfoPhase + (s.lfoRate * CONTROL_RATE) / sampleRate) % 1;
+    this.lfoPhase = (this.lfoPhase + (s.lfoHz * CONTROL_RATE) / sampleRate) % 1;
     const hz = midiToHz(this.pitch) * Math.pow(2, (lfo * s.lfoCents) / 1200);
     this.dtA = Math.min(0.49, hz / sampleRate);
     this.dtB = Math.min(0.49, this.dtA * s.ratioB);
@@ -337,6 +350,10 @@ export class AnalogCore implements InstrumentCore {
     const single = this.settings.voiceMode !== VOICE_MODE.poly;
     if (this.single !== null && single !== this.single) this.silence();
     this.single = single;
+  }
+
+  setTempo(bpm: number): void {
+    if (bpm > 0) this.settings.bpm = bpm;
   }
 
   noteOn(id: number, pitch: number, velocity: number): void {

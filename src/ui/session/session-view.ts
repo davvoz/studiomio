@@ -15,7 +15,7 @@ import { copySlotClip, pasteToSlot, type Clipboard } from '../../store/clipboard
 import { removeTrack, renameTrack, setLaunchQuantization, type TrackKind } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import {
-  clearSlot, deleteScene, duplicateScene, duplicateSlotClip, insertScene, moveSlotClip, newSlotMidiClip, renameScene,
+  captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, insertScene, moveSlotClip, newSlotMidiClip, renameScene,
   updateSlotClip, type SlotRef,
 } from '../../store/session-edits';
 import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
@@ -48,6 +48,7 @@ const SESSION_KEYS: readonly Binding<SessionView>[] = [
   { key: 'delete', run: v => v.clearSelected() },
   { key: 'backspace', run: v => v.clearSelected() },
   { key: 'd', ctrl: true, run: v => v.duplicateSelected() },
+  { key: 'i', ctrl: true, shift: true, run: v => v.captureAndInsertScene() },
   { key: 'c', ctrl: true, run: v => v.copySelected() },
   { key: 'x', ctrl: true, run: v => v.cutSelected() },
   { key: 'v', ctrl: true, run: v => v.pasteSelected() },
@@ -188,6 +189,15 @@ export class SessionView {
     if (!this.selectedClip()) return;
     this.apply(duplicateSlotClip(this.selected!));
     this.select({ ...this.selected!, slot: this.selected!.slot + 1 });
+  }
+
+  /** Cattura e inserisci scena: sotto `index` (la scena dello slot scelto, se no l'ultima) una
+   *  scena con le clip che suonano, che continuano a suonare da lì. */
+  captureAndInsertScene(index = this.selected?.slot ?? this.deps.store.project.scenes.length - 1): void {
+    const playing = this.deps.engine.playingClips();
+    if (!this.apply(captureScene(index, playing))) return;
+    if (this.selected) this.select({ ...this.selected, slot: index + 1 });
+    if (!playing.size) this.deps.say('Nessuna clip suona: inserita una scena vuota.');
   }
 
   copySelected(): boolean {
@@ -405,6 +415,7 @@ export class SessionView {
         { label: 'Lancia la scena', run: () => this.deps.engine.launchScene(index) },
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameScene(scene.id, n))) },
         { label: 'Duplica', run: () => this.apply(duplicateScene(scene.id)) },
+        { label: 'Cattura e inserisci scena', shortcut: 'Ctrl+Maiusc+I', run: () => this.captureAndInsertScene(index) },
         { label: 'Inserisci una scena sopra', run: () => this.apply(insertScene(index)) },
         { label: 'Inserisci una scena sotto', run: () => this.apply(insertScene(index + 1)) },
         SEPARATOR,

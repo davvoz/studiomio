@@ -5,10 +5,13 @@
  * Qui c'è solo la descrizione (parametri e preset); il suono è in analog-core.ts. */
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam } from '../../params';
+import { TEMPO_RATE, TEMPO_RATES } from '../../rates';
 
 export const WAVES = ['Saw', 'Square', 'Triangle', 'Sine'] as const;
 export const FILTER_TYPES = ['Low-pass', 'Band-pass', 'High-pass'] as const;
 export const LFO_WAVES = ['Sine', 'Triangle', 'Square'] as const;
+/** La velocità dell'LFO: a tempo (una divisione) o libera in Hz. */
+export const LFO_SYNC = { tempo: 0, hz: 1 } as const;
 /** Poli: ogni nota la sua voce. Mono: una voce, ogni nota riparte (con glide se c'è). Legato:
  *  una voce, le note sovrapposte scivolano senza far ripartire gli inviluppi. */
 export const VOICE_MODES = ['Poli', 'Mono', 'Legato'] as const;
@@ -20,8 +23,8 @@ export const ACCENT_VELOCITY = 100;
 
 const num = (id: string, label: string, min: number, max: number, def: number, unit = '', extra: Partial<NumberParam> = {}): NumberParam =>
   ({ kind: 'number', id, label, min, max, default: def, unit, ...extra });
-const choice = (id: string, label: string, options: readonly string[], def = 0): ChoiceParam =>
-  ({ kind: 'choice', id, label, options, default: def });
+const choice = (id: string, label: string, options: readonly string[], def = 0, extra: Partial<ChoiceParam> = {}): ChoiceParam =>
+  ({ kind: 'choice', id, label, options, default: def, ...extra });
 const time = (id: string, label: string, def: number) => num(id, label, 0.001, 10, def, 's', { scale: 'log' });
 const percent = (id: string, label: string, def: number, min = 0) => num(id, label, min, 100, def, '%', { step: 1 });
 
@@ -77,7 +80,9 @@ export const ANALOG: DeviceType = {
       label: 'LFO',
       params: [
         choice('lfoWave', 'Onda', LFO_WAVES),
-        num('lfoRate', 'Velocità', 0.05, 20, 5, 'Hz', { scale: 'log' }),
+        choice('lfoSync', 'Sincro', ['Tempo', 'Hz'], LFO_SYNC.hz),
+        choice('lfoDivision', 'Divisione', TEMPO_RATES.map(([l]) => l), TEMPO_RATE['1/4'], { when: { param: 'lfoSync', is: LFO_SYNC.tempo } }),
+        num('lfoRate', 'Velocità', 0.05, 20, 5, 'Hz', { scale: 'log', when: { param: 'lfoSync', is: LFO_SYNC.hz } }),
         num('lfoPitch', '→ Pitch', 0, 100, 0, 'ct', { step: 1 }),
         percent('lfoCutoff', '→ Cutoff', 0),
       ],

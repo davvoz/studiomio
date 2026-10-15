@@ -6,6 +6,7 @@ import { clipSegmentsBetween } from '../../src/engine/segments';
 import { groupSlotState } from '../../src/engine/session';
 import { MidiClip, type Note } from '../../src/model/midi-clip';
 import { Project } from '../../src/model/project';
+import { captureScene } from '../../src/store/session-edits';
 import { addMidiClip, addTrack, groupTracks, resizePlacement, setLaunchQuantization, setLoopRegion, setSlot, updateClip } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 import { FakeEffects, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
@@ -214,6 +215,20 @@ describe('session: lancio delle clip', () => {
     const [first] = r.played(0, 72);
     expect(first[1]).toBeGreaterThan(0.6);
     expect(first[1]).toBeLessThan(0.85); // entro l'anticipo della programmazione
+  });
+
+  it('cattura e inserisci scena: le clip continuano senza interruzioni, ora dalla scena nuova', () => {
+    const r = rig();
+    r.engine.launchSlot(r.t(0), 1); // B, e la traccia 1 segue la timeline
+    r.runUntil(1.2);
+    const playing = r.engine.playingClips();
+    expect([...playing.keys()]).toEqual([r.t(0)]);
+    r.store.apply(captureScene(1, playing));
+    r.runUntil(4.2);
+    expect(r.played(0, 72)).toEqual([[72, 0.05], [72, 1.05], [72, 2.05], [72, 3.05], [72, 4.05]]);
+    expect(r.instruments.created[0].cuts).toEqual([]);
+    expect(r.state(0)).toMatchObject({ playing: { slot: 2 }, queued: null });
+    expect(r.store.project.tracks[0].slots[1]?.name).toBe('B'); // al suo posto, una copia
   });
 });
 

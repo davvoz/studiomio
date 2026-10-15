@@ -92,6 +92,21 @@ export const renameScene = (id: SceneId, name: string): Edit =>
 
 export const deleteScene = (id: SceneId): Edit => edit('Elimina scena', p => p.removingScene(id));
 
+/** Cattura e inserisci scena, come in Live: una scena nuova sotto la `index` con le clip che
+ *  suonano (`playing`: traccia → clip). Nella scena nuova vanno le clip stesse e al loro posto
+ *  restano delle copie: chi suona continua senza interruzioni, ma ora dalla riga nuova. */
+export const captureScene = (index: number, playing: ReadonlyMap<TrackId, ClipId>): Edit =>
+  edit('Cattura e inserisci scena', (p, { ids }) => {
+    const at = index + 1;
+    let next = p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, at);
+    for (const [track, id] of playing) {
+      const slot = next.track(track)?.slots.findIndex(c => c?.id === id) ?? -1;
+      if (slot < 0) continue;
+      next = next.updatingTrack(track, t => t.withSlot(slot, t.slots[slot]!.withId(ids.next('clip'))).withSlot(at, t.slots[slot]));
+    }
+    return next;
+  });
+
 /** Una copia della scena subito sotto, con copie delle sue clip. */
 export const duplicateScene = (id: SceneId): Edit =>
   edit('Duplica scena', (p, { ids }) => {

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ANALOG, VOICE_MODE } from '../../src/devices/instruments/analog/analog';
+import { ANALOG, LFO_SYNC, VOICE_MODE } from '../../src/devices/instruments/analog/analog';
 import { AnalogCore } from '../../src/devices/instruments/analog/analog-core';
 import { paramsOf, paramSpec, resolveParams } from '../../src/devices/device-type';
 import { clampParam, formatParam, paramFromUnit, paramToUnit } from '../../src/devices/params';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
+import { TEMPO_RATE } from '../../src/devices/rates';
 
 const SR = 48000, BLOCK = 128;
 
@@ -258,6 +259,37 @@ describe('Analog: unison', () => {
     };
     expect(wobble(stereo({ unison: 1 }).l)).toBeLessThan(0.01);
     expect(wobble(narrow.l)).toBeGreaterThan(0.08);
+  });
+});
+
+describe('Analog: LFO a tempo', () => {
+  /** Il periodo del vibrato (in campioni): fra due volte che l'intonazione sale oltre la sua media. */
+  const vibratoPeriod = (params: Record<string, number>, bpm: number) => {
+    const { core, queue } = synth({ ...PURE, lfoPitch: 100, ...params });
+    core.setTempo(bpm);
+    queue.add(69, 100, 0, SR * 2);
+    const x = run(core, queue, SR * 2);
+    // attraversamenti dello zero in salita, interpolati: la loro distanza è il periodo della nota
+    const ups: number[] = [];
+    for (let i = 1; i < x.length; i++) if (x[i - 1] < 0 && x[i] >= 0) ups.push(i - 1 + x[i - 1] / (x[i - 1] - x[i]));
+    const periods = ups.slice(1).map((u, i) => u - ups[i]);
+    const mean = periods.reduce((a, b) => a + b) / periods.length;
+    const rising: number[] = [];
+    for (let i = 1; i < periods.length; i++) if (periods[i - 1] >= mean && periods[i] < mean) rising.push(ups[i]);
+    return rising[2] - rising[1];
+  };
+
+  it('a tempo il giro dura la divisione al bpm del progetto; in Hz non segue il tempo', () => {
+    const quarter = { lfoSync: LFO_SYNC.tempo, lfoDivision: TEMPO_RATE['1/8'] };
+    // 1/8 a 120 bpm = 0,25 s; a 60 bpm = 0,5 s
+    expect(vibratoPeriod(quarter, 120) / SR).toBeCloseTo(0.25, 1);
+    expect(vibratoPeriod(quarter, 60) / SR).toBeCloseTo(0.5, 1);
+    const free = { lfoSync: LFO_SYNC.hz, lfoRate: 4 };
+    expect(vibratoPeriod(free, 60) / SR).toBeCloseTo(0.25, 1);
+  });
+
+  it('senza lfoSync (progetti vecchi) resta in Hz', () => {
+    expect(resolveParams(ANALOG, {}).lfoSync).toBe(LFO_SYNC.hz);
   });
 });
 

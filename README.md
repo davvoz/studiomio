@@ -27,9 +27,9 @@ Per usare gli algoritmi WebAssembly nell'app: `VITE_DSP_WASM=1 npm run dev`.
 
 Gli script in `scripts/` girano con i moduli dell'app (risolti da Vite):
 `node scripts/run.mjs scripts/<nome>.ts <argomenti…>`. `build-acid-live.ts`,
-`build-pazzi-live.ts`, `build-sacrificio-live.ts`, `build-fuori-live.ts` e
-`build-sottosuolo-live.ts` costruiscono i live "Acido crudo", "Siete pazzi", "Sacrificio", "Fuori
-dal corpo" e "Sottosuolo" come cartelle di progetto (vedi sotto: I live). `render-project.ts`
+`build-pazzi-live.ts`, `build-sacrificio-live.ts`, `build-fuori-live.ts`,
+`build-sottosuolo-live.ts` e `build-prestabiliti-live.ts` costruiscono i live "Acido crudo",
+"Siete pazzi", "Sacrificio", "Fuori dal corpo", "Sottosuolo" e "Prestabiliti" come cartelle di progetto (vedi sotto: I live). `render-project.ts`
 calcola in Node il mix della timeline di una cartella di progetto (vedi sotto: Render senza
 browser).
 
@@ -136,7 +136,8 @@ src/
   demo/                loop e progetto demo; patterns.ts (parti scritte come su una drum
                        machine o una 303: ritmi, linee, chop, rulli, pompa, gate),
                        live-builder.ts (un live come dati → progetto) e i live acid-live.ts,
-                       pazzi-live.ts, sacrificio-live.ts, fuori-live.ts e sottosuolo-live.ts
+                       pazzi-live.ts, sacrificio-live.ts, fuori-live.ts, sottosuolo-live.ts
+                       e prestabiliti-live.ts
 scripts/               script in Node con i moduli dell'app (run.mjs li avvia; live-folder.ts
                        copia i suoni e salva la cartella di un live; headless-render.ts calcola
                        il mix senza browser, loudness.ts lo misura secondo BS.1770)
@@ -358,7 +359,7 @@ perdono nessun picco e leggerli non costa nulla.
 
 **Analog**: due oscillatori (Saw, Square, Triangle, Sine; il secondo intonabile), filtro
 passa-basso/banda/alto risonante con inviluppo e key track, inviluppo del volume, LFO su
-intonazione e cutoff. La voce: **Poli** (16 voci), **Mono** (una voce, ogni nota riparte, con
+intonazione e cutoff, libero in Hz o a tempo (da 8 battute a 1/32). La voce: **Poli** (16 voci), **Mono** (una voce, ogni nota riparte, con
 il glide dalla nota di prima) o **Legato** (una voce: le note che si sovrappongono scivolano
 senza far ripartire gli inviluppi, lo slide della 303; le note staccate ripartono senza glide).
 **Accento**: le note con velocity oltre 100 suonano più forti e aprono il filtro con un
@@ -533,7 +534,7 @@ contesto e divide ogni blocco nel campione esatto di ogni nota) e uno per gli ef
 
 ## I live
 
-Cinque live montati per la session con i sample della libreria dell'utente. Ogni live è descritto
+Sei live montati per la session con i sample della libreria dell'utente. Ogni live è descritto
 come dati in `src/demo` (tracce, kit, suoni di Analog e Neuro, effetti, scene, ordine della
 registrazione; nei kit un pad è un sample o un suono sintetizzato della Drum Machine) e montato da `live-builder.ts`; lo script copia i file (elencati nello script)
 nella cartella del progetto:
@@ -544,6 +545,7 @@ node scripts/run.mjs scripts/build-pazzi-live.ts "C:/Users/<utente>/Music" "C:/�
 node scripts/run.mjs scripts/build-sacrificio-live.ts "C:/Users/<utente>/Music" "C:/…/Sacrificio"
 node scripts/run.mjs scripts/build-fuori-live.ts "C:/Users/<utente>/Music" "C:/…/Fuori dal corpo"
 node scripts/run.mjs scripts/build-sottosuolo-live.ts "C:/Users/<utente>/Music" "C:/…/Sottosuolo"
+node scripts/run.mjs scripts/build-prestabiliti-live.ts "C:/Users/<utente>/Music" "C:/…/Prestabiliti"
 ```
 
 poi **Apri** sulla cartella creata. In tutti la timeline tiene una "registrazione" del live
@@ -647,6 +649,42 @@ entro ±1.5 dB. Misurato sul render (BS.1770, verificato anche con ffmpeg): −8
 drop a −7.9/−7.8 LUFS (short-term massima −7.4), pausa −10.2, true peak −0.79 dBTP, PLR 7.6 dB,
 crest dei drop 8.6 dB; bassi in fase (correlazione 1.00 sotto i 120 Hz). Registrazione: 184
 battute, 5 minuti e 32 secondi. Nella cartella del progetto c'è anche il master renderizzato.
+
+### Prestabiliti
+
+Hard techno a 146 BPM in Fa frigio, costruita sullo sketch "brehho23" e pensata per essere
+suonata dalla session con l'APC40: otto tracce (una pagina della griglia) e dieci scene (due
+pagine). Il tempo è quello della voce: il monologo dello sketch ("0 Lead Vocals", parlato in
+italiano) è a 146 BPM, così le sue frasi affettate sui pad restano a tempo senza warp. La
+tonalità viene dai suoni dello sketch: il Robotoid è un Fa1 tenuto, gli One_Shot 23 e 26 sono
+in Fa, il motivo del basso (Do–Reb–Fa#: tonica, seconda bemolle, tritono) diventa Fa–Solb–Si.
+La **Cassa** è "ancora" dello sketch (il corpo è un Fa#1 a 45 Hz, portato giù di un semitono)
+con la grana di una cassa industriale sopra i 230 Hz; il **Rumble** è la stessa cassa nel
+riverbero tutto bagnato, saturata, chiusa sotto i 190 Hz e schiacciata dalla pompa. L'**Acido**
+è la patch "Acid" dello sketch (Legato, glide 60, accento 70, con la sua Multibanda "Denso" e
+il suo EQ) aperta in una 303: il motivo, la linea piena a sedicesimi, il martello del secondo
+drop, le note lunghe del break. **Robot**: il Robotoid a pezzi in choke dove non c'è il rumble
+(break, ritmo spezzato, outro) e gli One_Shot in Fa come stab in levare nei drop. **Clap** con
+la "fruity snare" dello sketch sotto; **Piatti**; **Perc & FX** con il kit dello sketch (il rim
+giù di nove semitoni e gli One_Shot 17, 18, 19 con i loro decay) e il suo groove, tom in Fa,
+salite e impatti. La **Voce** ha tredici frasi (dieci del monologo, tre di "terrible cicle":
+"never speak to me of such things again", "we are born men…", "you must break the chain…"),
+trovate trascrivendo i file e misurandone i silenzi; tutte in choke, ognuna chiusa da un pad
+muto nello stesso choke dove finisce (sono pezzi di un file solo: senza taglio continuerebbero
+nella frase dopo); più "again", anche giù di una quarta. Scene: Intro, Groove, Monologo,
+Tensione (due battute senza cassa, il rullo, "mi sento… prigioniera"), Drop, Prigioniera (il
+break senza cassa), Libera ("libera di espandermi solo entro confini prestabiliti" e l'eco di
+"prestabiliti" sulla salita), Drop 2, Catena (il ritmo spezzato dello sketch, cassa sull'uno e
+sul levare del tre, che torna dritto con "you must break the chain"), Outro. Nella session le
+clip della Voce si lanciano e si fermano a piacere sopra qualunque scena.
+
+Misurato sul render (BS.1770, verificato con ffmpeg): −8.0 LUFS integrati, drop a −7.5/−7.6
+LUFS, break −10.0, true peak −0.80 dBTP; nessuna traccia oltre 0 dB; bassi in fase
+(correlazione 1.00 sotto i 120 Hz); da 40 Hz a 10 kHz lo spettro dei due drop sta entro 1.5 dB
+da quello del primo drop di Sottosuolo (gli stab del Robot hanno un picco a 1.8–2.2 kHz: l'EQ
+gli toglie 3 dB lì); la voce, mentre parla, sta in mediana circa 7 LU sotto il resto (sopra,
+nel break). Registrazione: 184
+battute, 5 minuti e 4 secondi. Nella cartella del progetto c'è anche il master renderizzato.
 
 ## Render senza browser
 
