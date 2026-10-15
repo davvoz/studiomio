@@ -4,8 +4,9 @@ import { AudioClip } from './audio-clip';
 import { deviceSampleIds, type DeviceSettings } from './device';
 import type { EffectList } from './effect-list';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
+import { checkRacks, NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
 import type { SampleRef } from './sample';
-import { DEFAULT_MIXER, type MixerSettings, type Track } from './track';
+import { DEFAULT_MIXER, GroupTrack, type MixerSettings, type Track } from './track';
 
 export interface Scene {
   readonly id: SceneId;
@@ -38,6 +39,8 @@ export interface ProjectProps {
   readonly master: MixerSettings;
   /** Effetti sul mix di tutte le tracce, prima del volume del master. */
   readonly masterEffects: EffectList;
+  /** I rack della catena del master (assenti: nessuno). */
+  readonly masterRacks?: RackList;
   /** Quantizzazione del lancio delle clip della session (un id di LAUNCH_QUANTA). */
   readonly launchQuantization: string;
 }
@@ -48,6 +51,8 @@ export interface ProjectProps {
  *  coinvolgono più parti: ogni traccia ha uno slot per scena, i sample usati esistono. */
 export class Project {
   private readonly props: ProjectProps;
+  /** Le tracce visibili, calcolate alla prima richiesta (il progetto non cambia). */
+  private visible: readonly Track[] | null = null;
 
   private constructor(props: ProjectProps) {
     this.props = props;
@@ -87,6 +92,7 @@ export class Project {
   get loop(): LoopRegion { return this.props.loop; }
   get master(): MixerSettings { return this.props.master; }
   get masterEffects(): EffectList { return this.props.masterEffects; }
+  get masterRacks(): RackList { return this.props.masterRacks ?? NO_RACKS; }
   get launchQuantization(): string { return this.props.launchQuantization; }
 
   track(id: TrackId): Track | undefined {
@@ -137,11 +143,36 @@ export class Project {
     return owner === MASTER ? this.masterEffects : this.requireTrack(owner).effects;
   }
 
-  /** Modifica la catena di una traccia o del master (le operazioni sono in `effect-list`). */
+  /** I rack della catena di una traccia o del master. */
+  racksOf(owner: ChainOwner): RackList {
+    return owner === MASTER ? this.masterRacks : this.requireTrack(owner).racks;
+  }
+
+  /** I dispositivi della catena nell'ordine del suono ("instrument" per lo strumento). */
+  chainKeys(owner: ChainOwner): readonly DeviceKey[] {
+    return owner === MASTER ? this.masterEffects.map(e => e.id) : this.requireTrack(owner).chainKeys;
+  }
+
+  /** Modifica la catena di una traccia o del master (le operazioni sono in `effect-list`); gli
+   *  effetti tolti escono dai loro rack. */
   updatingEffects(owner: ChainOwner, fn: (list: EffectList) => EffectList): Project {
     if (owner !== MASTER) return this.updatingTrack(owner, t => t.withEffects(fn(t.effects)));
     const masterEffects = fn(this.masterEffects);
-    return masterEffects === this.masterEffects ? this : this.with({ masterEffects });
+    if (masterEffects === this.masterEffects) return this;
+    return this.updatingChain(MASTER, () => ({ effects: masterEffects, racks: pruneRacks(masterEffects.map(e => e.id), this.masterRacks) }));
+  }
+
+  /** Modifica insieme effetti e rack di una catena (le operazioni sui rack sono in `rack`). */
+  updatingChain(owner: ChainOwner, fn: (chain: { effects: EffectList; racks: RackList }) => { effects: EffectList; racks: RackList }): Project {
+    const { effects, racks } = fn({ effects: this.effectsOf(owner), racks: this.racksOf(owner) });
+    if (owner !== MASTER) return this.updatingTrack(owner, t => t.withChain(effects, racks));
+    if (effects === this.masterEffects && racks === this.masterRacks) return this;
+    checkRacks(effects.map(e => e.id), racks);
+    return this.with({ masterEffects: effects, masterRacks: racks.length ? racks : undefined });
+  }
+
+  updatingRacks(owner: ChainOwner, fn: (racks: RackList) => RackList): Project {
+    return this.updatingChain(owner, c => ({ effects: c.effects, racks: fn(c.racks) }));
   }
 
   // ---------------------------------------------------------------- tracce
@@ -149,24 +180,25 @@ export class Project {
   /** Aggiunge una traccia (in fondo, o in `index`), adattando i suoi slot alle scene. */
   addingTrack(track: Track, index = this.tracks.length): Project {
     if (this.track(track.id)) throw new Error(`traccia ${track.id} già presente`);
-    let t = track;
-    while (t.slots.length < this.scenes.length) t = t.insertingSlot(t.slots.length);
-    while (t.slots.length > this.scenes.length) t = t.removingSlot(t.slots.length - 1);
     const tracks = [...this.tracks];
-    tracks.splice(index, 0, t);
+    tracks.splice(index, 0, this.fitted(track));
     return this.with({ tracks }).validated();
   }
 
+  /** Toglie la traccia; un gruppo se ne va con tutte le sue tracce. */
   removingTrack(id: TrackId): Project {
-    this.requireTrack(id);
-    return this.with({ tracks: this.tracks.filter(t => t.id !== id) });
+    const gone = new Set(this.trackBlock(this.requireTrack(id).id).map(t => t.id));
+    return this.with({ tracks: this.tracks.filter(t => !gone.has(t.id)) });
   }
 
+  /** Sposta la traccia (un gruppo con le sue tracce) in `toIndex` tra le tracce che restano;
+   *  il gruppo che la contiene non cambia. */
   movingTrack(id: TrackId, toIndex: number): Project {
-    const t = this.requireTrack(id);
-    const rest = this.tracks.filter(x => x.id !== id);
-    rest.splice(Math.max(0, Math.min(rest.length, toIndex)), 0, t);
-    return this.with({ tracks: rest });
+    this.requireTrack(id);
+    const block = this.trackBlock(id), moved = new Set(block.map(t => t.id));
+    const rest = this.tracks.filter(x => !moved.has(x.id));
+    rest.splice(Math.max(0, Math.min(rest.length, toIndex)), 0, ...block);
+    return this.with({ tracks: rest }).validated();
   }
 
   /** Modifica una traccia; il tipo della traccia resta quello che `fn` riceve. */
@@ -175,6 +207,75 @@ export class Project {
     const updated = fn(old);
     if (updated === old) return this;
     return this.with({ tracks: this.tracks.map(t => (t.id === id ? updated : t)) }).validated();
+  }
+
+  // ---------------------------------------------------------------- gruppi
+  // Come in Live le tracce sono una lista sola: un gruppo viene subito prima delle sue tracce,
+  // che stanno di seguito (anche altri gruppi, con le loro).
+
+  /** Le tracce che si vedono (timeline, session, controller): non quelle dentro un gruppo chiuso. */
+  get visibleTracks(): readonly Track[] {
+    return (this.visible ??= this.tracks.filter(t => !this.groupsOf(t.id).some(g => g.folded)));
+  }
+
+  /** I gruppi che contengono la traccia, dal più vicino al più esterno. */
+  groupsOf(id: TrackId): GroupTrack[] {
+    const out: GroupTrack[] = [];
+    for (let g = this.track(id)?.group; g; ) {
+      const group = this.track(g);
+      if (!(group instanceof GroupTrack)) break;
+      out.push(group);
+      g = group.group;
+    }
+    return out;
+  }
+
+  /** Vero se la traccia sta nel gruppo, anche dentro un gruppo del gruppo. */
+  isInGroup(id: TrackId, group: TrackId): boolean {
+    return this.groupsOf(id).some(g => g.id === group);
+  }
+
+  /** La traccia e, se è un gruppo, tutte quelle che contiene: un tratto contiguo della lista. */
+  trackBlock(id: TrackId): Track[] {
+    const i = this.tracks.findIndex(t => t.id === id);
+    if (i < 0) return [];
+    let end = i + 1;
+    while (end < this.tracks.length && this.isInGroup(this.tracks[end].id, id)) end++;
+    return this.tracks.slice(i, end);
+  }
+
+  /** Dove finisce il blocco della traccia: l'indice della prima traccia che non ne fa parte. */
+  blockEnd(id: TrackId): number {
+    return this.tracks.findIndex(t => t.id === id) + this.trackBlock(id).length;
+  }
+
+  /** Le tracce che suonano clip per `id`: la traccia stessa o, per un gruppo, le sue tracce
+   *  che non sono gruppi (lanciare uno slot di un gruppo lancia la riga di queste). */
+  soundingTracks(id: TrackId): Track[] {
+    return this.trackBlock(id).filter(t => !(t instanceof GroupTrack));
+  }
+
+  /** Raggruppa le tracce (con ciò che contengono) nel gruppo nuovo `group`, come Ctrl+G in Live:
+   *  il gruppo prende il posto della prima e sta dove stava lei; le tracce lo seguono in ordine. */
+  groupingTracks(ids: Iterable<TrackId>, group: GroupTrack): Project {
+    if (this.track(group.id)) throw new Error(`traccia ${group.id} già presente`);
+    const chosen = new Set(ids);
+    // una traccia scelta dentro un gruppo scelto va con il suo gruppo
+    const roots = this.tracks.filter(t => chosen.has(t.id) && !this.groupsOf(t.id).some(g => chosen.has(g.id)));
+    if (!roots.length) throw new Error('nessuna traccia da raggruppare');
+    const rootIds = new Set(roots.map(t => t.id));
+    const moved = new Set(roots.flatMap(t => this.trackBlock(t.id)).map(t => t.id));
+    const block = this.tracks.filter(t => moved.has(t.id)).map(t => (rootIds.has(t.id) ? t.withGroup(group.id) : t));
+    const tracks = this.tracks.flatMap(t =>
+      (t.id === roots[0].id ? [this.fitted(group.withGroup(roots[0].group)), ...block] : moved.has(t.id) ? [] : [t]));
+    return this.with({ tracks }).validated();
+  }
+
+  /** Toglie il gruppo ma non le sue tracce: restano dove sono, nel gruppo che lo conteneva. */
+  ungroupingTrack(id: TrackId): Project {
+    const g = this.requireTrack(id);
+    if (!(g instanceof GroupTrack)) throw new TypeError(`la traccia ${g.name} non è un gruppo`);
+    return this.with({ tracks: this.tracks.filter(t => t.id !== id).map(t => (t.group === id ? t.withGroup(g.group) : t)) }).validated();
   }
 
   // ---------------------------------------------------------------- scene
@@ -231,6 +332,14 @@ export class Project {
     return t;
   }
 
+  /** La traccia con uno slot per scena. */
+  private fitted(track: Track): Track {
+    let t = track;
+    while (t.slots.length < this.scenes.length) t = t.insertingSlot(t.slots.length);
+    while (t.slots.length > this.scenes.length) t = t.removingSlot(t.slots.length - 1);
+    return t;
+  }
+
   private validated(): Project {
     this.validate();
     return this;
@@ -238,13 +347,24 @@ export class Project {
 
   private validate(): void {
     const ids = new Set<string>();
+    let previous: Track | null = null;
     for (const t of this.tracks) {
       if (ids.has(t.id)) throw new Error(`traccia ${t.id} duplicata`);
+      if (t.group) {
+        // il gruppo viene prima e le sue tracce lo seguono: prima c'è il gruppo o un'altra sua traccia
+        if (!ids.has(t.group) || !(this.track(t.group) instanceof GroupTrack)) throw new Error(`la traccia "${t.name}" è in un gruppo che non c'è`);
+        if (previous!.id !== t.group && !this.isInGroup(previous!.id, t.group)) {
+          throw new Error(`la traccia "${t.name}" non è di seguito alle altre del suo gruppo`);
+        }
+      }
       ids.add(t.id);
+      previous = t;
       if (t.slots.length !== this.scenes.length) {
         throw new Error(`la traccia "${t.name}" ha ${t.slots.length} slot ma le scene sono ${this.scenes.length}`);
       }
+      checkRacks(t.chainKeys, t.racks);
     }
+    checkRacks(this.masterEffects.map(e => e.id), this.masterRacks);
     const known = new Set(this.samples.map(s => s.id));
     for (const id of this.usedSampleIds()) {
       if (!known.has(id)) throw new Error(`una clip o un dispositivo usa il sample ${id}, che non è nel progetto`);

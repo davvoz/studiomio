@@ -1,9 +1,10 @@
 /* Cosa si può modulare sulla traccia di una clip, per i menu dell'editor delle modulazioni:
  * il mixer (volume e pan), lo strumento e gli effetti, con i loro parametri numerici. */
 import type { DeviceId } from '../../core/id';
-import type { DeviceType } from '../../devices/device-type';
+import { paramSpec, type DeviceType } from '../../devices/device-type';
 import { effectType, instrumentType } from '../../devices/registry';
 import { INSTRUMENT_DEVICE, scaleKindOf, type ModScaleKind, type ModTarget } from '../../model/envelope';
+import { chainItems, macroName, macroParam, rackName, type DeviceKey, type Rack } from '../../model/rack';
 import { MidiTrack, type Track } from '../../model/track';
 
 export interface TargetParam {
@@ -19,7 +20,7 @@ export interface TargetSection {
 
 /** Un dispositivo della traccia, con i parametri che si possono modulare. */
 export interface TargetDevice {
-  /** "mixer", "instrument" o l'id dell'effetto. */
+  /** "mixer", "instrument", l'id dell'effetto o quello del rack. */
   readonly key: string;
   readonly label: string;
   readonly sections: readonly TargetSection[];
@@ -50,25 +51,44 @@ function deviceTargets(key: string, label: string, type: DeviceType | undefined)
   return { key, label, sections };
 }
 
-/** I dispositivi della traccia, nell'ordine in cui il suono li attraversa (il mixer per primo). */
+/** I dispositivi della traccia, nell'ordine in cui il suono li attraversa (il mixer per primo);
+ *  un rack viene prima dei suoi dispositivi, con le sue macro. */
 export function targetDevices(track: Track): TargetDevice[] {
+  const types = new Map<DeviceKey, { type: DeviceType | undefined; name: string }>();
+  if (track instanceof MidiTrack) types.set(INSTRUMENT_DEVICE, { type: instrumentType(track.instrument.type), name: track.instrument.type });
+  for (const e of track.effects) types.set(e.id, { type: effectType(e.type), name: e.type });
   const out: TargetDevice[] = [MIXER];
-  if (track instanceof MidiTrack) {
-    const type = instrumentType(track.instrument.type);
-    const d = deviceTargets(INSTRUMENT_DEVICE, type?.label ?? track.instrument.type, type);
-    if (d) out.push(d);
-  }
   const seen = new Map<string, number>();
-  for (const e of track.effects) {
-    const type = effectType(e.type);
+  const device = (key: DeviceKey) => {
+    const { type, name } = types.get(key)!;
     // due effetti dello stesso tipo: "Delay", "Delay 2"
-    const n = (seen.get(e.type) ?? 0) + 1;
-    seen.set(e.type, n);
-    const d = deviceTargets(e.id, `${type?.label ?? e.type}${n > 1 ? ` ${n}` : ''}`, type);
+    const n = (seen.get(name) ?? 0) + 1;
+    seen.set(name, n);
+    const d = deviceTargets(key, `${type?.label ?? name}${n > 1 ? ` ${n}` : ''}`, type);
     if (d) out.push(d);
+  };
+  for (const item of chainItems(track.chainKeys, track.racks)) {
+    if (item.kind === 'device') device(item.key);
+    else {
+      out.push(rackTargets(item.rack, (k, param) => { const t = types.get(k)?.type; return t && paramSpec(t, param)?.label; }));
+      item.rack.devices.forEach(device);
+    }
   }
   return out;
 }
+
+/** Le macro di un rack (si modulano come i parametri: spostano tutti quelli mappati). */
+const rackTargets = (rack: Rack, label: (device: DeviceKey, param: string) => string | undefined): TargetDevice => ({
+  key: rack.id,
+  label: rackName(rack),
+  sections: [{
+    label: 'Macro',
+    params: rack.macros.map((m, i) => ({
+      target: { kind: 'device', device: rack.id, param: macroParam(i) } as ModTarget,
+      label: macroName(m, i, x => label(x.device, x.param)),
+    })),
+  }],
+});
 
 /** Il dispositivo che contiene il bersaglio. */
 export const deviceKeyOf = (t: ModTarget): string => (t.kind === 'mixer' ? 'mixer' : t.device);

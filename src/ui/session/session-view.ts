@@ -5,10 +5,11 @@
 import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
+import { groupSlotState } from '../../engine/session';
 import { LAUNCH_QUANTA } from '../../model/launch';
 import type { Clip } from '../../model/clip';
 import type { ChainOwner, Scene } from '../../model/project';
-import type { Track } from '../../model/track';
+import { GroupTrack, type Track } from '../../model/track';
 import { slotRef, type ClipRef } from '../../store/clip-ref';
 import { copySlotClip, pasteToSlot, type Clipboard } from '../../store/clipboard';
 import { removeTrack, renameTrack, setLaunchQuantization, type TrackKind } from '../../store/edits';
@@ -23,7 +24,8 @@ import { renameInline } from '../inline-rename';
 import { bindKeys, type Binding } from '../keymap';
 import type { MeterBoard } from '../meters/meter-board';
 import { addEffectItems } from '../mixer-controls';
-import type { UiState } from '../ui-state';
+import { groupMenuItems, newTrackHereItems, toggleFold } from '../track-groups';
+import { clickTrack, type UiState } from '../ui-state';
 import { MasterStripView, TrackStrip } from './mixer-strip';
 
 export interface SessionViewDeps {
@@ -209,30 +211,31 @@ export class SessionView {
   }
 
   moveSelection(dx: number, dy: number): void {
-    const p = this.deps.store.project, s = this.selected;
-    if (!p.tracks.length) return;
-    const col = s ? p.tracks.findIndex(t => t.id === s.track) : 0;
-    const c = Math.max(0, Math.min(p.tracks.length - 1, col + dx));
+    const p = this.deps.store.project, s = this.selected, tracks = p.visibleTracks;
+    if (!tracks.length) return;
+    const col = s ? Math.max(0, tracks.findIndex(t => t.id === s.track)) : 0;
+    const c = Math.max(0, Math.min(tracks.length - 1, col + dx));
     const slot = Math.max(0, Math.min(p.scenes.length - 1, (s?.slot ?? 0) + (s ? dy : 0)));
-    this.select({ track: p.tracks[c].id, slot });
+    this.select({ track: tracks[c].id, slot });
   }
 
   // ---------------------------------------------------------------- disegno
 
+  /** Le colonne sono le tracce che si vedono: un gruppo chiuso nasconde quelle delle sue tracce. */
   private render(): void {
-    const p = this.deps.store.project;
-    const T = p.tracks.length, S = p.scenes.length;
+    const p = this.deps.store.project, tracks = p.visibleTracks;
+    const T = tracks.length, S = p.scenes.length;
     // lo spazio che avanza sta prima del master, che resta sul bordo destro
     this.grid.style.gridTemplateColumns = `repeat(${T}, var(--session-col)) minmax(0, 1fr) var(--session-master)`;
     this.grid.style.gridTemplateRows = `auto repeat(${S}, var(--session-row)) auto 1fr auto`;
     if (this.quantize.value !== p.launchQuantization) this.quantize.value = p.launchQuantization;
-    if (this.selected && !(p.track(this.selected.track) && this.selected.slot < S)) this.selected = null;
+    if (this.selected && !(tracks.some(t => t.id === this.selected!.track) && this.selected.slot < S)) this.selected = null;
     for (const c of this.cells) c.remove();
     this.slots.clear();
     this.stops.clear();
     this.heads.clear();
     const cells: HTMLElement[] = [];
-    p.tracks.forEach((t, i) => {
+    tracks.forEach((t, i) => {
       const col = i + 1;
       cells.push(place(this.head(t), row.head, col));
       t.slots.forEach((clip, s) => cells.push(place(this.slot(t, s, clip), row.scene(s), col)));
@@ -253,18 +256,18 @@ export class SessionView {
     this.refreshState();
   }
 
-  /** La traccia scelta: intestazione, slot e striscia del mixer della sua colonna. */
+  /** Le tracce scelte: intestazione, slot e striscia del mixer delle loro colonne. */
   private highlightTrack(): void {
-    const id = this.deps.ui.track;
-    for (const [t, head] of this.heads) head.classList.toggle('selected', t === id);
-    for (const cell of this.slots.values()) cell.classList.toggle('track-selected', cell.dataset.track === id);
-    for (const [t, strip] of this.strips) strip.element.classList.toggle('selected', t === id);
+    const chosen = this.deps.ui.selectedTracks;
+    for (const [t, head] of this.heads) head.classList.toggle('selected', chosen.has(t));
+    for (const cell of this.slots.values()) cell.classList.toggle('track-selected', chosen.has(cell.dataset.track as TrackId));
+    for (const [t, strip] of this.strips) strip.element.classList.toggle('selected', chosen.has(t));
   }
 
   /** Il riquadro sopra gli slot che copre; quando si sposta, lo si porta in vista. */
   private placeRing(): void {
     const r = this.deps.ui.sessionRing, p = this.deps.store.project;
-    const T = p.tracks.length, S = p.scenes.length;
+    const T = p.visibleTracks.length, S = p.scenes.length;
     this.ring.hidden = !r || r.track >= T || r.scene >= S;
     if (!r || this.ring.hidden) return;
     place(this.ring, row.scene(r.scene), r.track + 1);
@@ -277,20 +280,20 @@ export class SessionView {
 
   /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano. */
   private renderStrips(T: number, S: number): void {
-    const p = this.deps.store.project;
-    const alive = new Set(p.tracks.map(t => t.id));
+    const p = this.deps.store.project, tracks = p.visibleTracks;
+    const alive = new Set(tracks.map(t => t.id));
     for (const [id, strip] of this.strips) {
       if (alive.has(id)) continue;
       strip.dispose();
       strip.element.remove();
       this.strips.delete(id);
     }
-    p.tracks.forEach((t, i) => {
+    tracks.forEach((t, i) => {
       let strip = this.strips.get(t.id);
       if (!strip) {
         strip = new TrackStrip(t.id, this.deps.store, this.deps, this.deps.meters);
         const id = t.id;
-        strip.element.addEventListener('pointerdown', () => this.deps.ui.selectTrack(id));
+        strip.element.addEventListener('pointerdown', e => this.clickTrack(id, e));
         this.strips.set(t.id, strip);
         this.grid.append(strip.element);
       }
@@ -301,12 +304,31 @@ export class SessionView {
     place(this.master.element, row.mixer(S), T + 2);
   }
 
+  private clickTrack(id: TrackId, e: MouseEvent): void {
+    clickTrack(this.deps.ui, id, e, () => this.deps.store.project.visibleTracks.map(t => t.id));
+  }
+
   private head(t: Track): HTMLElement {
+    const p = this.deps.store.project;
     const name = el('span', { className: 'session-track-name', textContent: t.name });
     const head = el('div', { className: 'session-head', title: `${t.name}: un clic apre strumento ed effetti, doppio clic rinomina` }, name);
     head.style.setProperty('--color', t.color);
-    head.onpointerdown = () => this.deps.ui.selectTrack(t.id);
-    head.onclick = () => this.deps.openDevices(t.id);
+    if (t instanceof GroupTrack) {
+      head.classList.add('group');
+      head.prepend(el('button', {
+        className: 'fold', textContent: t.folded ? '▸' : '▾', title: t.folded ? 'Apri il gruppo' : 'Chiudi il gruppo: nasconde le colonne delle sue tracce',
+        onclick: (e: MouseEvent) => { e.stopPropagation(); toggleFold(this.deps.store, t); },
+      }));
+    }
+    const group = t.group ? p.track(t.group) : undefined;
+    if (group) {
+      head.classList.add('in-group');
+      head.style.setProperty('--group-color', group.color);
+    }
+    head.onpointerdown = e => this.clickTrack(t.id, e);
+    head.onclick = e => {
+      if (!e.shiftKey && !e.ctrlKey && !e.metaKey) this.deps.openDevices(t.id);
+    };
     head.ondblclick = e => {
       e.stopPropagation();
       renameInline(name, n => this.apply(renameTrack(t.id, n)));
@@ -318,10 +340,11 @@ export class SessionView {
         ...addEffectItems(this.deps.store, t.id, () => this.deps.openDevices(t.id)),
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameTrack(t.id, n))) },
         SEPARATOR,
-        { label: 'Elimina traccia', run: () => this.apply(removeTrack(t.id)) },
+        ...groupMenuItems(this.deps.store, this.deps.ui, t),
         SEPARATOR,
-        { label: 'Nuova traccia audio', run: () => this.deps.addTrack('audio') },
-        { label: 'Nuova traccia MIDI', run: () => this.deps.addTrack('midi') },
+        { label: t instanceof GroupTrack ? 'Elimina il gruppo e le sue tracce' : 'Elimina traccia', run: () => this.apply(removeTrack(t.id)) },
+        SEPARATOR,
+        ...newTrackHereItems(this.deps.store, t),
       ]);
     };
     this.heads.set(t.id, head);
@@ -329,6 +352,7 @@ export class SessionView {
   }
 
   private slot(t: Track, s: number, clip: Clip | null): HTMLElement {
+    if (t instanceof GroupTrack) return this.groupSlot(t, s);
     const cell = el('div', { className: clip ? 'slot filled' : 'slot' });
     cell.dataset.track = t.id;
     cell.dataset.slot = String(s);
@@ -342,6 +366,22 @@ export class SessionView {
     } else {
       cell.append(el('button', { className: 'slot-stop', textContent: '■', title: 'Ferma la traccia', onclick: () => this.deps.engine.stopTrack(t.id) }));
     }
+    if (this.selected?.track === t.id && this.selected.slot === s) cell.classList.add('selected');
+    this.slots.set(slotKey(t.id, s), cell);
+    return cell;
+  }
+
+  /** Lo slot di un gruppo, come in Live: se almeno una sua traccia ha una clip nella riga, ▶
+   *  lancia la riga delle sue tracce (quelle senza clip lì si fermano); se no ■ le ferma. */
+  private groupSlot(t: GroupTrack, s: number): HTMLElement {
+    const clips = this.deps.store.project.soundingTracks(t.id).some(m => m.slots[s]);
+    const cell = el('div', { className: clips ? 'slot group-slot has-clips' : 'slot group-slot' });
+    cell.style.setProperty('--color', t.color);
+    cell.dataset.track = t.id;
+    cell.dataset.slot = String(s);
+    cell.append(clips
+      ? el('button', { className: 'launch', textContent: '▶', title: 'Lancia la riga delle tracce del gruppo', onclick: () => this.deps.engine.launchSlot(t.id, s) })
+      : el('button', { className: 'slot-stop', textContent: '■', title: 'Ferma le tracce del gruppo', onclick: () => this.deps.engine.stopTrack(t.id) }));
     if (this.selected?.track === t.id && this.selected.slot === s) cell.classList.add('selected');
     this.slots.set(slotKey(t.id, s), cell);
     return cell;
@@ -381,15 +421,19 @@ export class SessionView {
   private refreshState(): void {
     if (this.element.hidden) return;
     const { engine, store } = this.deps;
-    for (const t of store.project.tracks) {
+    const p = store.project;
+    for (const t of p.visibleTracks) {
+      // di un gruppo: le sue tracce insieme, e riga per riga
       const st = engine.sessionState(t);
       const queued = st.queued && typeof st.queued === 'object' ? st.queued.slot : -1;
+      const members = t instanceof GroupTrack ? p.soundingTracks(t.id).map(m => [m, engine.sessionState(m)] as const) : null;
       t.slots.forEach((clip, s) => {
         const cell = this.slots.get(slotKey(t.id, s));
         if (!cell) return;
-        const playing = st.playing?.slot === s;
+        const group = members && groupSlotState(members, s);
+        const playing = group ? group.playing : st.playing?.slot === s;
         cell.classList.toggle('playing', playing);
-        cell.classList.toggle('queued', queued === s);
+        cell.classList.toggle('queued', group ? group.queued : queued === s);
         const bar = cell.querySelector<HTMLElement>('.progress');
         if (bar) bar.style.transform = `scaleX(${playing && clip ? clipProgress(clip, st.playing!.elapsed) : 0})`;
       });
@@ -425,7 +469,7 @@ export class SessionView {
       if ((e.target as HTMLElement).closest('button')) return;
       const ref = this.slotAt(e.target);
       const track = ref && this.deps.store.project.track(ref.track);
-      if (!ref || !track || track.slots[ref.slot]) return;
+      if (!ref || !track || track.slots[ref.slot] || track instanceof GroupTrack) return;
       if (track.kind !== 'midi') return this.deps.say('Trascina qui un file audio per metterlo nello slot.');
       this.apply(newSlotMidiClip(ref));
       this.openSlot(ref);
@@ -481,6 +525,12 @@ export class SessionView {
 
   private slotMenu(ref: SlotRef, target: HTMLElement): MenuItem[] {
     const p = this.deps.store.project, track = p.track(ref.track)!, clip = track.slots[ref.slot];
+    if (track instanceof GroupTrack) {
+      return [
+        { label: 'Lancia la riga del gruppo', shortcut: 'Invio', run: () => this.deps.engine.launchSlot(track.id, ref.slot) },
+        { label: 'Ferma le tracce del gruppo', run: () => this.deps.engine.stopTrack(track.id) },
+      ];
+    }
     if (!clip) {
       return [
         ...(track.kind === 'midi' ? [{ label: 'Nuova clip MIDI', shortcut: 'doppio clic', run: () => { this.apply(newSlotMidiClip(ref)); this.openSlot(ref); } }] : []),

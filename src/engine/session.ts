@@ -178,6 +178,35 @@ export class Session {
   }
 }
 
+/** Lo stato di un gruppo dalle sue tracce: suona la clip della prima che suona, è in coda ciò
+ *  che una aspetta (una clip prima dello stop), segue l'arrangement se lo seguono tutte. */
+export function mergedState(states: readonly TrackSessionState[]): TrackSessionState {
+  const clip = states.find(s => typeof s.queued === 'object' && s.queued)?.queued;
+  return {
+    playing: states.find(s => s.playing)?.playing ?? null,
+    queued: clip ?? (states.some(s => s.queued === 'stop') ? 'stop' : states.some(s => s.queued === 'arrangement') ? 'arrangement' : null),
+    followsArrangement: states.every(s => s.followsArrangement),
+  };
+}
+
+/** Uno slot di un gruppo, dalle tracce del gruppo nella stessa riga. */
+export interface GroupSlotState {
+  /** Almeno una traccia ha una clip nella riga (lo slot ha ▶). */
+  readonly clips: boolean;
+  /** Almeno una suona la sua clip della riga. */
+  readonly playing: boolean;
+  /** Almeno una aspetta il prossimo confine per lanciare la sua clip della riga. */
+  readonly queued: boolean;
+}
+
+export function groupSlotState(members: readonly (readonly [Track, TrackSessionState])[], slot: number): GroupSlotState {
+  return {
+    clips: members.some(([t]) => t.slots[slot]),
+    playing: members.some(([, s]) => s.playing?.slot === slot),
+    queued: members.some(([, s]) => typeof s.queued === 'object' && s.queued?.slot === slot),
+  };
+}
+
 /** La clip `id` negli slot della traccia (null se non c'è più). */
 export function slotClip(track: Track, id: ClipId): Clip | null {
   return track.slots.find(c => c?.id === id) ?? null;

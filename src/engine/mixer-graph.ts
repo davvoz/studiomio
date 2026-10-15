@@ -5,10 +5,19 @@ import { EffectChain, type Effect, type EffectHost } from './effect-chain';
 import type { Meter, MeterHost, MeterReading } from './meters';
 import { dbToGain, type AudioGraph, type AudioNodeLike, type AudioParamLike, type ConstantSourceNodeLike, type GainNodeLike, type PannerNodeLike } from './audio-graph';
 
-/** Tracce che si sentono: con almeno un solo attivo solo quelle in solo, mai quelle in mute. */
+/** I canali aperti: mai quelli in mute; con almeno un solo attivo, come in Live, quelli in solo,
+ *  quelli dentro un gruppo in solo e i gruppi che contengono una traccia in solo (il suo suono
+ *  passa di lì). Il mute di un gruppo zittisce le sue tracce perché passano dal suo canale. */
 export function audibleTracks(tracks: readonly Track[]): Set<TrackId> {
-  const soloing = tracks.some(t => t.mixer.solo);
-  return new Set(tracks.filter(t => !t.mixer.mute && (!soloing || t.mixer.solo)).map(t => t.id));
+  const byId = new Map(tracks.map(t => [t.id, t]));
+  const groupsOf = (t: Track): Track[] => {
+    const out: Track[] = [];
+    for (let g = t.group ? byId.get(t.group) : undefined; g; g = g.group ? byId.get(g.group) : undefined) out.push(g);
+    return out;
+  };
+  const soloed = tracks.filter(t => t.mixer.solo);
+  const open = new Set(soloed.flatMap(t => [t, ...groupsOf(t)]).map(t => t.id));
+  return new Set(tracks.filter(t => !t.mixer.mute && (!soloed.length || open.has(t.id) || groupsOf(t).some(g => g.mixer.solo))).map(t => t.id));
 }
 
 /** Tempo di assestamento dei controlli, per evitare scatti udibili. */
@@ -33,7 +42,8 @@ function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): v
 export type MixerModulation = 'volume' | 'pan';
 
 /** Canale del mixer di una traccia: effetti → volume → modulazione del volume → pan → mute/solo
- *  → misuratore → master. La modulazione del pan è una sorgente costante sommata al pan. */
+ *  → misuratore → uscita (il master, o il canale del gruppo che contiene la traccia). La
+ *  modulazione del pan è una sorgente costante sommata al pan. */
 class ChannelStrip {
   readonly input: GainNodeLike;
   readonly chain: EffectChain;
@@ -43,8 +53,10 @@ class ChannelStrip {
   private readonly panOffset: ConstantSourceNodeLike;
   private readonly gate: GainNodeLike;
   private applied: { mixer: MixerSettings; audible: boolean } | null = null;
+  private output: AudioNodeLike;
 
   constructor(private readonly graph: AudioGraph, effects: EffectHost, output: AudioNodeLike, readonly meter: Meter | null) {
+    this.output = output;
     this.input = graph.createGain();
     this.fader = graph.createGain();
     this.modGain = graph.createGain();
@@ -71,6 +83,15 @@ class ChannelStrip {
     this.applied = { mixer, audible };
   }
 
+  /** Manda il canale altrove (una traccia entrata in un gruppo o uscita). */
+  route(output: AudioNodeLike): void {
+    if (output === this.output) return;
+    const last = this.meter?.output ?? this.gate;
+    last.disconnect();
+    last.connect(output);
+    this.output = output;
+  }
+
   /** Il parametro su cui va la modulazione: guadagno (1 = neutro) o spostamento del pan (0). */
   modulation(param: MixerModulation): AudioParamLike {
     return param === 'volume' ? this.modGain.gain : this.panOffset.offset;
@@ -85,8 +106,9 @@ class ChannelStrip {
 
 /** Il mixer nel grafo audio: un canale per traccia e il master, allineati al progetto.
  *  Le tracce si sommano nel bus del master, che passa per i suoi effetti e poi per il suo
- *  volume: bus → effetti del master → `master` → misuratore → uscita. Con `meters` ogni
- *  canale ha il suo misuratore di livello (nell'export non servono). */
+ *  volume: bus → effetti del master → `master` → misuratore → uscita. Le tracce di un gruppo
+ *  si sommano invece nel canale del gruppo, che esce nel master (o nel gruppo che lo contiene).
+ *  Con `meters` ogni canale ha il suo misuratore di livello (nell'export non servono). */
 export class MixerGraph {
   /** Dopo gli effetti del master: il metronomo entra qui, così gli effetti non lo toccano. */
   readonly master: GainNodeLike;
@@ -142,6 +164,8 @@ export class MixerGraph {
     }
     for (const t of project.tracks) {
       const strip = this.strip(t.id);
+      // il gruppo viene prima delle sue tracce: il suo canale c'è già
+      strip.route(t.group ? this.strip(t.group).input : this.bus);
       strip.apply(t.mixer, audible.has(t.id));
       strip.chain.sync(t.effects, project.tempo.bpm);
     }

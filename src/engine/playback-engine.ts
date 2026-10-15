@@ -2,9 +2,11 @@ import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { DeviceId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { INSTRUMENT_DEVICE, type ModTarget } from '../model/envelope';
+import { mappingSpec, mappingTravel } from '../devices/rack-params';
 import { launchQuantumBeats } from '../model/launch';
+import { findRack, macroIndex, type Rack } from '../model/rack';
 import type { ChainOwner, Project } from '../model/project';
-import type { AudioTrack, MidiTrack, Track } from '../model/track';
+import { GroupTrack, type AudioTrack, type MidiTrack, type Track } from '../model/track';
 import type { AudioGraph } from './audio-graph';
 import type { EffectHost, EffectMonitor } from './effect-chain';
 import type { MeterHost, MeterReading } from './meters';
@@ -14,11 +16,11 @@ import { AudioTrackPlayer } from './players/audio-track-player';
 import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
-import { audioParamSink, TrackModulator, type ModSink } from './modulation';
+import { audioParamSink, scaledSinks, TrackModulator, type ModSink } from './modulation';
 import { NoteActivity } from './note-activity';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
 import { Scheduler, type ScheduledSource } from './scheduler';
-import { Session, slotClip, type TrackSessionState } from './session';
+import { mergedState, Session, slotClip, type TrackSessionState } from './session';
 
 /** Servizi di cui i player hanno bisogno. */
 export interface EngineServices {
@@ -140,24 +142,27 @@ export class PlaybackEngine {
   // ---------------------------------------------------------------- session
 
   /** Lancia la clip dello slot (slot vuoto: ferma la traccia) al prossimo confine della
-   *  quantizzazione; a trasporto fermo lo fa partire, e la clip con lui. */
+   *  quantizzazione; a trasporto fermo lo fa partire, e la clip con lui. Lo slot di un gruppo
+   *  lancia la riga delle sue tracce, come una scena ristretta al gruppo. */
   launchSlot(track: TrackId, slot: number): void {
     this.launch([[track, slot]]);
   }
 
   /** Lancia una scena: in ogni traccia la clip della riga, e dove lo slot è vuoto lo stop. */
   launchScene(index: number): void {
-    this.launch(this.project?.tracks.map(t => [t.id, index] as const) ?? []);
+    this.launch(this.project?.tracks.filter(t => !(t instanceof GroupTrack)).map(t => [t.id, index] as const) ?? []);
   }
 
-  /** Ferma la clip della traccia al prossimo confine (la traccia resta muta, come in Live); a
-   *  trasporto fermo, la clip che suonava allo stop non ripartirà con il play. */
+  /** Ferma la clip della traccia (di un gruppo: delle sue tracce) al prossimo confine (la
+   *  traccia resta muta, come in Live); a trasporto fermo, la clip che suonava allo stop non
+   *  ripartirà con il play. */
   stopTrack(track: TrackId): void {
+    const tracks = this.project?.soundingTracks(track).map(t => t.id) ?? [track];
     if (!this.playing) {
-      if (this.session.forget([track])) this.events.emit('session');
+      if (this.session.forget(tracks)) this.events.emit('session');
       return;
     }
-    this.switchTracks([track], at => this.session.stop(track, at));
+    this.switchTracks(tracks, (at, id) => this.session.stop(id, at));
   }
 
   /** Ferma tutte le clip della session (le tracce che seguono la timeline continuano); a
@@ -183,8 +188,11 @@ export class PlaybackEngine {
     this.events.emit('session');
   }
 
+  /** Cosa suona la traccia nella session; per un gruppo, le sue tracce insieme (vedi `mergedState`). */
   sessionState(track: Track): TrackSessionState {
-    return this.session.state(track, this.clock);
+    const clock = this.clock;
+    if (track instanceof GroupTrack && this.project) return mergedState(this.project.soundingTracks(track.id).map(t => this.session.state(t, clock)));
+    return this.session.state(track, clock);
   }
 
   /** Vero se qualche traccia non segue la timeline (si accende "Torna all'arrangement"). */
@@ -212,7 +220,8 @@ export class PlaybackEngine {
   private launch(items: readonly (readonly [TrackId, number])[]): void {
     const p = this.project;
     if (!p) return;
-    const clips = items.map(([id, slot]) => [id, p.track(id)?.slots[slot] ?? null] as const);
+    // lo slot di un gruppo vale per le sue tracce
+    const clips = items.flatMap(([id, slot]) => p.soundingTracks(id).map(t => [t.id, t.slots[slot] ?? null] as const));
     if (this.playing) {
       this.switchTracks(clips.map(([id]) => id), (at, id) => {
         const clip = clips.find(([t]) => t === id)![1];
@@ -340,13 +349,26 @@ export class PlaybackEngine {
     this.modulators.get(id)?.cut(time);
   }
 
-  /** Dove va una modulazione della traccia: il canale del mixer, lo strumento o un effetto. */
+  /** Dove va una modulazione della traccia: il canale del mixer, lo strumento, un effetto o la
+   *  macro di un rack (che muove i parametri mappati). */
   private modSink(track: TrackId, target: ModTarget): ModSink | null {
     if (target.kind === 'mixer') return audioParamSink(this.mixer.modulation(track, target.param));
+    const rack = findRack(this.project?.track(track)?.racks ?? [], target.device as DeviceId);
+    if (rack) return this.macroSink(track, rack, macroIndex(target.param));
     const device = target.device === INSTRUMENT_DEVICE
       ? this.players.get(track)?.player.instrumentModulation?.()
       : this.mixer.effect(track, target.device)?.modulation;
     return device?.sink(target.param) ?? null;
+  }
+
+  private macroSink(track: TrackId, rack: Rack, index: number): ModSink | null {
+    const macro = rack.macros[index], project = this.project;
+    if (!macro || !project) return null;
+    return scaledSinks(macro.mappings.flatMap(m => {
+      const spec = mappingSpec(project, track, m);
+      const sink = spec && this.modSink(track, { kind: 'device', device: m.device, param: m.param });
+      return sink ? [{ sink, scale: mappingTravel(spec, m) }] : [];
+    }));
   }
 
   private *sources(): Iterable<ScheduledSource> {
@@ -361,6 +383,8 @@ export class PlaybackEngine {
     const present = new Set<TrackId>();
     const prevTracks = this.previousTracks;
     for (const t of project.tracks) {
+      // un gruppo non suona clip: è solo un canale del mixer
+      if (t instanceof GroupTrack) continue;
       present.add(t.id);
       const entry = this.players.get(t.id);
       const mod = this.modulators.get(t.id);

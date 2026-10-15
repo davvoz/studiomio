@@ -41,6 +41,7 @@ export class DevicePanel {
       el('div', { className: 'device-section-title', textContent: section.label }),
       el('div', { className: 'device-controls' }, ...section.params.map(spec => {
         const control = controlFor(spec, values[spec.id], (v, final) => options.onParam(spec.id, v, final));
+        control.element.dataset.param = spec.id;
         this.controls.set(spec.id, { spec, control });
         return control.element;
       }))));

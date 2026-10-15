@@ -3,9 +3,10 @@ import { sequentialIds, type TrackId } from '../../src/core/id';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
 import { PlaybackEngine } from '../../src/engine/playback-engine';
 import { clipSegmentsBetween } from '../../src/engine/segments';
+import { groupSlotState } from '../../src/engine/session';
 import { MidiClip, type Note } from '../../src/model/midi-clip';
 import { Project } from '../../src/model/project';
-import { addMidiClip, addTrack, resizePlacement, setLaunchQuantization, setLoopRegion, setSlot, updateClip } from '../../src/store/edits';
+import { addMidiClip, addTrack, groupTracks, resizePlacement, setLaunchQuantization, setLoopRegion, setSlot, updateClip } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 import { FakeEffects, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
 
@@ -213,6 +214,37 @@ describe('session: lancio delle clip', () => {
     const [first] = r.played(0, 72);
     expect(first[1]).toBeGreaterThan(0.6);
     expect(first[1]).toBeLessThan(0.85); // entro l'anticipo della programmazione
+  });
+});
+
+describe('session: gruppi', () => {
+  it('lo slot di un gruppo lancia la riga delle sue tracce (come una scena), lo stop le ferma', () => {
+    const r = rig();
+    const [a, b] = [r.t(0), r.t(1)];
+    r.store.apply(groupTracks([a, b]));
+    const group = r.store.project.tracks[0];
+    r.engine.play(0);
+    r.runUntil(0.3);
+    r.engine.launchSlot(group.id, 1);
+    r.runUntil(2.2);
+    expect(r.played(0, 72)).toEqual([[72, 2.05]]);
+    expect(r.played(1)).toEqual([[45, 0.05]]); // la traccia b non ha clip nella riga: si ferma
+    expect(r.engine.sessionState(group)).toMatchObject({ playing: { slot: 1 }, followsArrangement: false });
+    expect(r.engine.takenTracks.has(a) && !r.engine.takenTracks.has(group.id)).toBe(true);
+    const members = r.store.project.soundingTracks(group.id).map(t => [t, r.engine.sessionState(t)] as const);
+    expect(groupSlotState(members, 0)).toEqual({ clips: true, playing: false, queued: false });
+    expect(groupSlotState(members, 1)).toEqual({ clips: true, playing: true, queued: false });
+    r.engine.stopTrack(group.id);
+    expect(r.engine.sessionState(group).queued).toBe('stop');
+    r.runUntil(4.2);
+    expect(r.engine.sessionState(group).playing).toBeNull();
+  });
+
+  it('una scena non tocca i gruppi: solo le tracce', () => {
+    const r = rig();
+    r.store.apply(groupTracks([r.t(0)]));
+    r.engine.launchScene(0);
+    expect(r.engine.takenTracks.has(r.store.project.tracks[0].id)).toBe(false);
   });
 });
 

@@ -104,7 +104,7 @@ export class MoveClipsGesture implements Gesture {
 
   paint(g: CanvasRenderingContext2D, geo: TimelineGeometry): void {
     const project = this.host.store.project;
-    const index = new Map(project.tracks.map((t, i) => [t.id, i]));
+    const index = new Map(project.visibleTracks.map((t, i) => [t.id, i]));
     for (const m of this.plan) {
       const pl = project.track(m.track)?.placement(m.id);
       if (pl) paintGhost(g, geo, index.get(m.to)!, m.start, m.start + pl.length, pl.clip.color);

@@ -74,15 +74,45 @@ export const PORT_NAME = /apc\s*40\s*mk\s*(ii|2)/i;
 
 const AKAI = 0x47;
 const APC40_MK2 = 0x29;
-const ALL_DEVICES = 0x7f;
 
 /** Modi del controller: generico (i LED li gestisce da sé) o Ableton Live (li gestisce il programma). */
 export const MODE = { generic: 0x40, ableton: 0x41, alternateAbleton: 0x42 } as const;
 
-/** Il messaggio di presentazione: mette il controller nel modo dato. Gli ultimi tre byte sono
- *  la versione del programma (solo informativa). */
-export const introduction = (mode: number = MODE.ableton): number[] =>
-  [0xf0, AKAI, ALL_DEVICES, APC40_MK2, 0x60, 0x00, 0x04, mode, 0x01, 0x00, 0x00, 0xf7];
+// L'avvio come lo fa Live (script _APC/APC.py): richiesta d'identità; dalla risposta il device
+// ID; presentazione con quel device ID; poi la "dongle challenge" e, alla sua risposta, i LED.
+
+/** La richiesta d'identità, come la manda Live. */
+export const IDENTITY_REQUEST: readonly number[] = [0xf0, 0x7e, 0x00, 0x06, 0x01, 0xf7];
+
+/** Il device ID dalla risposta d'identità di un APC40 mkII (F0 7E <id> 06 02 47 29 …), o null
+ *  se il messaggio non lo è. Live lo prende dal byte 13. */
+export function identityDeviceId(data: ArrayLike<number>): number | null {
+  if (data.length < 14 || data[0] !== 0xf0 || data[1] !== 0x7e || data[3] !== 0x06 || data[4] !== 0x02) return null;
+  return data[5] === AKAI && data[6] === APC40_MK2 ? data[13] : null;
+}
+
+/** La versione che ci si presenta: quella di Live 11, come fa lo script. */
+const HOST_VERSION = [11, 0, 0] as const;
+
+/** Il messaggio di presentazione: mette il controller nel modo dato. */
+export const introduction = (mode: number = MODE.ableton, device = 0): number[] =>
+  [0xf0, AKAI, device, APC40_MK2, 0x60, 0x00, 0x04, mode, ...HOST_VERSION, 0xf7];
+
+/** La "dongle challenge" che Live manda dopo la presentazione: due numeri, 8 nibble ciascuno.
+ *  Live controlla la risposta con un algoritmo suo; a noi basta che lo scambio avvenga. */
+export function dongleChallenge(device: number, a: number, b: number): number[] {
+  const nibbles = (n: number) => Array.from({ length: 8 }, (_, i) => (n >> (4 * (7 - i))) & 0x0f);
+  return [0xf0, AKAI, device, APC40_MK2, 0x50, 0x00, 0x10, ...nibbles(a), ...nibbles(b), 0xf7];
+}
+
+/** Vero se è la risposta del controller alla challenge (… 51 00 10 …). */
+export const isDongleResponse = (data: ArrayLike<number>): boolean =>
+  data.length >= 7 && data[0] === 0xf0 && data[1] === AKAI && data[3] === APC40_MK2 && data[4] === 0x51;
+
+/** I pulsanti a un colore (select, solo, activator, transport…): acceso è 127, come in Live. */
+export const ON = 127;
+/** Gli stop delle tracce hanno la loro scala: 1 acceso, 2 lampeggia (lo fa il controller). */
+export const STOP_LED = { off: 0, on: 1, blink: 2 } as const;
 
 /** Nota del pad in colonna `col` (0 = sinistra) e riga `row` (0 = in alto). */
 export const padNote = (col: number, row: number): number => NOTE.clipGrid + (SCENES - 1 - row) * TRACKS + col;
@@ -152,8 +182,27 @@ export const COLOR = {
   red: 5,
   amber: 9,
   green: 21,
-  greenDim: 22,
 } as const;
+
+/** Come anima un pad RGB, come fa Live (pushbase/colors.py): il primo colore sul canale 0, il
+ *  secondo sul canale dell'animazione, e l'alternanza la fa il controller (a mano lo si ingolfa
+ *  fino a bloccarlo). Canali 6..10 pulsa, 11..15 lampeggia, per velocità 4, 6, 12, 24, 48. */
+export const ANIMATION = { pulse: 6, blink: 11 } as const;
+const SPEEDS = [4, 6, 12, 24, 48] as const;
+
+/** Lo stato di un LED RGB in un numero solo: colore, e per le animazioni secondo colore e canale. */
+export const rgbLed = (color: number, animation?: { kind: number; color: number; speed: (typeof SPEEDS)[number] }): number =>
+  animation ? color + 128 * animation.color + 16384 * (animation.kind + SPEEDS.indexOf(animation.speed)) : color;
+
+/** I messaggi di un LED: uno (colore fisso o pulsante a un colore) o due (animazione). */
+export function ledMessages(status: number, note: number, value: number): number[][] {
+  const channel2 = value >> 14;
+  if (!channel2) return [[status, note, value & 0x7f]];
+  return [[status, note, value & 0x7f], [(status & 0xf0) | channel2, note, (value >> 7) & 0x7f]];
+}
+
+/** In coda, come in Live: lampeggia tra verde e spento (Blink(GREEN, BLACK, 24): canale 14). */
+export const TRIGGERED = (color: number) => rgbLed(color, { kind: ANIMATION.blink, color: 0, speed: 24 });
 
 const rgb = (c: number) => [(c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff] as const;
 

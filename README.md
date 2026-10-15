@@ -43,10 +43,11 @@ Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una vo
 src/
   core/                id tipizzati, eventi, tempo musicale (battiti, tempo, metro)
   model/               il progetto, immutabile
-    project.ts         radice: tracce, scene, sample, tempo, loop, master (volume ed effetti), quantizzazione del lancio
+    project.ts         radice: tracce (e i loro gruppi), scene, sample, tempo, loop, master (volume ed effetti), quantizzazione del lancio
     launch.ts          i passi della quantizzazione del lancio (1/16 … 4 battute)
     effect-list.ts     operazioni su una catena di effetti, per tracce e master (funzioni pure)
-    track.ts           Track → AudioTrack, MidiTrack (mixer, timeline, slot della session, strumento)
+    rack.ts            i rack: gruppi di dispositivi di seguito con 8 macro e le loro mappature (funzioni pure)
+    track.ts           Track → AudioTrack, MidiTrack, GroupTrack (mixer, timeline, slot della session, strumento, gruppo)
     clip.ts            Clip → AudioClip (sample + warp), MidiClip (note); ogni clip ha le sue modulazioni
     envelope.ts        modulazioni delle clip: bersagli, scale, punti, valore nel tempo della clip
     note-edits.ts      operazioni del piano roll sulle note (funzioni pure)
@@ -90,7 +91,8 @@ src/
     apc40/apc40.ts     l'APC40 sulla session: lancio, riquadro rosso, mixer, dispositivi, trasporto, LED
   ui/
     timeline/          arrangement: geometria, disegno su canvas, gesti, pianificazione
-    track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume, livello)
+    track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume, livello; rientro e ▸/▾ dei gruppi)
+    track-groups.ts    i gruppi dall'interfaccia: Ctrl+G, Ctrl+Maiusc+G, voci dei menu delle tracce
     session/           la session view: griglia di slot e scene, mixer in fondo alle colonne
     master-strip.ts    la riga del master
     meters/            misuratori: scala dei dB, balistica, un ciclo di disegno per tutti
@@ -101,6 +103,7 @@ src/
     piano-roll/        editor delle note: tastiera, griglia, velocity, gesti, pannello
     envelopes/         l'editor delle modulazioni: menu dei bersagli e corsia con la curva (piano roll ed editor audio)
     device/            catena dei dispositivi: un pannello per dispositivo, controlli generati dai parametri;
+                       rack-panel.ts il pannello di un rack (macro, Map, minimo e massimo delle mappature);
                        displays.ts registra i pannelli grafici (eq/: grafico con spettro e curva;
                        drums/: griglia dei pad; drive/: curva, spettro e forme)
     dom.ts             creazione degli elementi
@@ -110,6 +113,7 @@ src/
     params.ts          descrizione dei parametri (da cui nascono controlli, default, validazione)
     device-type.ts     un tipo di dispositivo: sezioni di parametri e preset
     registry.ts        gli strumenti e gli effetti disponibili
+    rack-params.ts     i parametri di un dispositivo della catena per chiave, e il valore che gli dà una macro
     rates.ts           le velocità a tempo delle modulazioni (8 battute … 1/32)
     instruments/analog/  il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
     instruments/neuro/   il synth Neuro dei bassi reese: descrizione e preset (neuro.ts), suono (neuro-core.ts)
@@ -204,7 +208,7 @@ Ableton mode). Un altro programma che tiene aperto l'APC40 (Live) lo blocca: uno
 
 | Sull'APC40 | In studiomio |
 |---|---|
-| Griglia 8×5 | le clip del **riquadro rosso** della session: colore della clip, verde che pulsa = suona, verde che lampeggia = in coda (a tempo); un pad su uno slot vuoto ferma la traccia |
+| Griglia 8×5 | le clip del **riquadro rosso** della session: colore della clip, verde fisso = suona, verde che lampeggia = in coda (il lampeggio lo fa l'APC da sé, come con Live); un pad su uno slot vuoto ferma la traccia |
 | Frecce · Shift+frecce · Bank | spostano il riquadro di 1 · di una pagina (8 tracce, 5 scene) · Bank acceso: sempre di una pagina |
 | Shift + griglia | mappa dei blocchi 8×5 (bianco: il riquadro, verde: suona, ambra: ci sono clip); un pad porta lì il riquadro |
 | Scene Launch · Clip Stop · Stop All Clips | lancia la riga · ferma la traccia (lampeggia se lo stop è in coda) · ferma tutte le clip |
@@ -212,14 +216,59 @@ Ableton mode). Un altro programma che tiene aperto l'APC40 (Live) lo blocca: uno
 | Activator · Solo | mute (acceso = la traccia suona) · solo |
 | Fader · Master | volume come in Live (0 dB all'85% della corsa, +6 dB in cima, in fondo silenzio) |
 | Manopole in alto | pan (Pan acceso) |
-| Device Control (8 manopole) | i parametri del dispositivo scelto, evidenziato in blu nel pannello; Device ◂ ▸ cambia dispositivo, Bank ◂ ▸ passa ai parametri successivi (nella barra di stato: quali sono), Device On/Off accende e spegne l'effetto, Device Lock blocca le manopole su quel dispositivo |
+| Device Control (8 manopole) | i parametri del dispositivo scelto, evidenziato in blu nel pannello (su un rack: le sue 8 macro; il rack viene prima dei suoi dispositivi); Device ◂ ▸ cambia dispositivo, Bank ◂ ▸ passa ai parametri successivi (nella barra di stato: quali sono), Device On/Off accende e spegne l'effetto, Device Lock blocca le manopole su quel dispositivo |
 | Clip/Device View · Detail View | passa dai dispositivi alla clip della traccia · mostra o nasconde l'area in basso |
 | Play · Shift+Play · Metronome | play/stop · stop e torna all'inizio · metronomo |
 | Tempo · Shift+Tempo · Tap Tempo | ±1 BPM · ±0,1 BPM · il tempo dai colpi |
 
-Fader e manopole sono un solo passo di annullamento per ogni movimento. Non ci sono ancora
+Fader e manopole sono un solo passo di annullamento per ogni movimento. Un parametro mappato su
+una macro non si muove dalla sua manopola: lo muove la macro. Non ci sono ancora
 (il pulsante lo dice nella barra di stato): Record Arm e registrazione, mandate (Sends, User),
 crossfader, cue e nudge.
+
+## Gruppi di tracce
+
+Come i Group Track di Live: un gruppo raccoglie delle tracce (anche altri gruppi) e le loro
+uscite si sommano nel suo canale, con i suoi effetti, il suo volume, pan, mute e solo, che poi
+va nel master (o nel gruppo che lo contiene). Un gruppo non ha clip.
+
+| | |
+|---|---|
+| Clic · Maiusc+clic · Ctrl+clic sull'intestazione (o sulla testa della colonna) | sceglie la traccia · tutte fino a lì · aggiunge o toglie dalla scelta |
+| Ctrl+G (o tasto destro: "Raggruppa") | raggruppa le tracce scelte: il gruppo prende il posto della prima, le altre lo seguono |
+| Ctrl+Maiusc+G (o tasto destro: "Separa il gruppo") | toglie il gruppo (quello scelto o quello della traccia scelta); le tracce restano |
+| ▾ / ▸ | chiude o apre il gruppo: chiuso, le sue tracce non si vedono (timeline, session, APC40) ma suonano |
+| Tasto destro su una traccia · su un gruppo | "Nuova traccia … qui sotto" (nello stesso gruppo) · anche "nel gruppo" |
+| × su un gruppo · "Elimina il gruppo e le sue tracce" | elimina il gruppo con tutto ciò che contiene (Ctrl+Z lo riporta) |
+| File audio trascinati su un gruppo | vanno in una traccia nuova in fondo al gruppo |
+
+Nella timeline la corsia del gruppo mostra in piccolo le clip delle sue tracce, una striscia per
+traccia; le clip non si posano sul gruppo. Nella session lo slot di un gruppo ha ▶ se almeno una
+sua traccia ha una clip in quella riga: lancia la riga delle sue tracce, come una scena ristretta
+al gruppo (quelle senza clip lì si fermano); ■ sotto la colonna le ferma tutte. Solo e mute come
+in Live: il solo di una traccia lascia passare il suo gruppo (e zittisce le altre), il solo del
+gruppo vale per tutte le sue tracce, il mute del gruppo le zittisce. Aperto o chiuso si salva con
+il progetto ed è un passo di annullamento.
+
+## Rack e macro
+
+Come l'Instrument Rack e l'Audio Effect Rack di Live, con una catena sola (niente catene parallele):
+
+| | |
+|---|---|
+| Clic sul nome di un dispositivo · Maiusc+clic | lo sceglie · sceglie tutti quelli fino a lì |
+| Ctrl+G (o tasto destro sull'intestazione) | raggruppa i dispositivi scelti in un rack (con lo strumento è un Instrument Rack) |
+| Ctrl+Maiusc+G · ⊟ | separa il rack: i dispositivi restano, macro e mappature spariscono |
+| ◂ ▸ di un dispositivo | dentro il rack lo sposta; dal bordo del rack ne esce, accanto a un rack ci entra |
+| ◂ ▸ · + · × del rack | sposta il rack intero · aggiunge un effetto in fondo al rack · elimina il rack con i suoi effetti |
+| Map, poi clic su una macro, poi clic su un parametro | mappa il parametro sulla macro (una macro ne muove quanti si vuole, un parametro va su una macro sola) |
+| Tasto destro su un parametro | "Mappa su Macro N" · "Togli dalla macro" |
+| Map acceso, macro scelta | le sue mappature, con Min e Max (al contrario se Min > Max), "+ Parametro" per i pannelli grafici (EQ, Drive, Drum Machine) |
+| Tasto destro su una macro | rinomina (senza nome prende quello del primo parametro mappato) |
+
+Le macro vanno da 0 a 127; la prima mappatura di una macro le dà la posizione del parametro, così
+non salta niente. Un parametro mappato si vede attenuato con il numero della macro e non si muove a
+mano. Anche le modulazioni delle clip possono muovere una macro (il rack è nei bersagli).
 
 ## Editor delle clip audio
 

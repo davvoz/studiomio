@@ -68,10 +68,11 @@ export type Hit =
 /** Larghezza della zona dei bordi di una clip, che li ridimensiona. */
 const EDGE_PX = 6;
 
+/** Le righe della timeline sono le tracce che si vedono (`Project.visibleTracks`). */
 export function hitTest(project: Project, geo: TimelineGeometry, x: number, y: number): Hit {
   const beat = geo.xToBeat(x);
   const index = geo.trackIndexAt(y);
-  const track = project.tracks[index];
+  const track = project.visibleTracks[index];
   if (!track) return { kind: 'empty', beat };
   const placement = track.arrangement.find(p => p.start <= beat && placementEnd(p) > beat);
   if (!placement) return { kind: 'lane', trackIndex: index, track: track.id, beat };
@@ -85,6 +86,6 @@ export function hitTest(project: Project, geo: TimelineGeometry, x: number, y: n
 export function placementsInBox(project: Project, b0: Beats, b1: Beats, i0: number, i1: number) {
   const [lo, hi] = [Math.min(b0, b1), Math.max(b0, b1)];
   const [t0, t1] = [Math.max(0, Math.min(i0, i1)), Math.max(i0, i1)];
-  return project.tracks.slice(t0, t1 + 1).flatMap(t =>
+  return project.visibleTracks.slice(t0, t1 + 1).flatMap(t =>
     t.arrangement.filter(p => p.start < hi && placementEnd(p) > lo).map(p => ({ track: t.id, id: p.id })));
 }

@@ -15,6 +15,8 @@ import { Project } from '../../src/model/project';
 import { ProjectCodec } from '../../src/persistence/project-codec';
 import { addEffect, addMidiClip, addTrack, resizePlacement, setSlot, updateClip } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
+import { groupDevices, mapMacro, setMappingRange } from '../../src/store/rack-edits';
+import { macroParam } from '../../src/model/rack';
 import { paintStep, simplify } from '../../src/ui/envelopes/envelope-lane';
 import { FakeEffects, FakeGraph, FakeInstruments, type FakeParam } from '../helpers/fake-audio';
 
@@ -190,6 +192,24 @@ describe('modulazioni nel motore', () => {
     expect(replay(synth, 0, r.at(2))).toBeCloseTo(0.2, 4);
     const delay = r.effects.created[0].modulation.events.filter(e => e.param === 'feedback');
     expect(replay(delay, 0, r.at(1))).toBe(-0.5);
+  });
+
+  it('una curva su una macro sposta i parametri mappati, ciascuno della sua parte di corsa', () => {
+    const r = rig();
+    r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
+    const fx = r.store.project.tracks[0].effects[0].id;
+    r.store.apply(groupDevices(r.t(0), [INSTRUMENT_DEVICE, fx]));
+    const rack = r.store.project.tracks[0].racks[0].id;
+    r.store.apply(mapMacro(r.t(0), rack, 0, INSTRUMENT_DEVICE, 'cutoff'));
+    r.store.apply(mapMacro(r.t(0), rack, 0, fx, 'mix'));
+    r.store.apply(setMappingRange(r.t(0), fx, 'mix', { min: 100, max: 50 })); // metà corsa, al contrario
+    r.editClip(c => c.withEnvelope({ kind: 'device', device: rack, param: macroParam(0) }, pts([0, 0], [4, 0.4])));
+    r.engine.play(0);
+    r.runUntil(2);
+    const synth = r.instruments.created[0].modulation.events.filter(e => e.param === 'cutoff');
+    expect(replay(synth, 0, r.at(2))).toBeCloseTo(0.2, 4);
+    const delay = r.effects.created[0].modulation.events.filter(e => e.param === 'mix');
+    expect(replay(delay, 0, r.at(2))).toBeCloseTo(-0.1, 4);
   });
 
   it('una clip lanciata al posto di un\'altra: il pan torna neutro al confine; lo stop riporta tutto neutro', () => {

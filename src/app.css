@@ -45,9 +45,13 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .header-scroll { overflow: hidden; position: relative; }
 .header {
   display: flex; flex-direction: column; justify-content: center; gap: 5px;
-  padding: 0 21px 0 12px; border-bottom: 1px solid #0006; position: relative;
+  padding: 0 21px 0 calc(12px + var(--depth, 0) * 12px); border-bottom: 1px solid #0006; position: relative;
 }
-.header::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 3px; width: 5px; background: var(--color); border-radius: 0 3px 3px 0; }
+.header::before { content: ''; position: absolute; left: calc(var(--depth, 0) * 12px); top: 2px; bottom: 3px; width: 5px; background: var(--color); border-radius: 0 3px 3px 0; }
+/* gruppi: il gruppo ha lo sfondo nel suo colore; le sue tracce rientrano, con il suo colore a sinistra */
+.header.group { background: color-mix(in srgb, var(--color) 9%, var(--panel)); }
+.header.in-group { border-left: 3px solid var(--group-color); }
+.header .fold { padding: 0 2px; border: none; background: none; color: var(--text); font-size: 12px; line-height: 1; cursor: pointer; }
 /* la traccia scelta: sfondo nel suo colore, come la sua corsia sulla timeline */
 .header.selected { background: color-mix(in srgb, var(--color) 18%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color) 55%, transparent); }
 .header.selected::before { width: 7px; }
@@ -132,6 +136,39 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 3px; }
 .device-controls { display: flex; gap: 6px; align-items: flex-start; }
 .device-empty { align-self: center; padding: 0 12px; }
+.device-name { cursor: pointer; border-radius: 4px; }
+.device-panel.selected, .rack-panel.selected { border-color: var(--accent); }
+.device-panel.selected .device-name, .rack-panel.selected .device-name { background: var(--accent); color: #141414; }
+
+/* rack: il pannello delle macro e i suoi dispositivi in una cornice */
+.rack { --macro: #b48cff; flex: none; display: flex; gap: 8px; padding: 5px; border: 1px solid #3d3650; border-radius: 10px; background: #1a1820; }
+.rack-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #221f2b; border: 1px solid #3d3650; border-radius: 8px; padding: 6px 8px 8px; }
+.rack-panel.controlled { border-color: #4c88ff; box-shadow: 0 0 0 1px #4c88ff; }
+.rack-panel .map.on { background: var(--macro); border-color: var(--macro); color: #141414; }
+.rack-body { display: flex; gap: 10px; min-height: 0; flex: 1; }
+.rack-macros { display: grid; grid-template-columns: repeat(4, auto); gap: 6px 4px; align-content: start; }
+.rack-macros .knob-value { stroke: var(--macro); }
+.rack-macros .macro:not(.used) .knob-label { opacity: .6; }
+.rack.mapping .macro { cursor: pointer; border-radius: 6px; }
+.rack.mapping .macro.chosen { background: color-mix(in srgb, var(--macro) 28%, transparent); outline: 1px solid var(--macro); }
+.rack-mappings { display: flex; flex-direction: column; gap: 4px; width: 300px; overflow-y: auto; font-size: 12px; }
+.rack-mappings-head { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--macro); }
+.rack-mapping { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 2px; background: var(--panel-2); border-radius: 6px; padding: 2px 6px; }
+.rack-mapping-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rack-mapping .knob { width: 56px; }
+.rack-mapping .knob-face { width: 30px; height: 30px; }
+.rack-folded { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 8px; font-size: 12px; }
+
+/* parametri mappati su una macro: li muove la macro, non la mano */
+[data-param].mapped { position: relative; cursor: default; }
+[data-param].mapped .knob-value { stroke: var(--macro, #b48cff); }
+[data-param].mapped .knob-face, [data-param].mapped .choice-buttons, [data-param].mapped select { opacity: .55; }
+[data-param].mapped::after {
+  content: 'M' attr(data-macro); position: absolute; top: -2px; right: 2px; font-size: 9px; font-weight: 700;
+  color: #141414; background: var(--macro, #b48cff); border-radius: 3px; padding: 0 3px; line-height: 13px;
+}
+.device-panel.mappable [data-param] { outline: 1px dashed color-mix(in srgb, var(--macro) 60%, transparent); border-radius: 6px; cursor: pointer; }
+.device-panel.mappable [data-param].chosen { outline: 1px solid var(--macro); background: color-mix(in srgb, var(--macro) 20%, transparent); }
 .inactive { opacity: .3; }
 .choice select { font-size: 12px; padding: 2px 4px; margin-top: 8px; }
 .header .controls .fx { padding: 1px 6px; font-size: 11px; }
@@ -151,7 +188,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .context-menu {
   position: fixed; z-index: 100; min-width: 210px; padding: 4px; outline: none;
   background: #23272e; border: 1px solid #3a3f47; border-radius: 7px; box-shadow: 0 8px 28px #000a;
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; max-height: calc(100vh - 8px); overflow-y: auto;
 }
 .context-menu .item {
   display: grid; grid-template-columns: 16px 1fr auto; gap: 6px; align-items: center; text-align: left;
@@ -229,6 +266,12 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .session-head.selected { background: color-mix(in srgb, var(--color) 30%, var(--panel)); color: #fff; }
 .session-head.taken::after { content: ' ●'; color: #e5a33a; font-size: 9px; vertical-align: middle; }
 .session-head .rename { width: 100%; padding: 0 3px; font-size: 12px; }
+.session-head.group { background: color-mix(in srgb, var(--color) 16%, var(--panel)); }
+.session-head.in-group { box-shadow: inset 0 -2px 0 var(--group-color); }
+.session-head .fold { padding: 0 4px 0 0; border: none; background: none; color: var(--text); font-size: 11px; cursor: pointer; }
+/* lo slot di un gruppo: ▶ lancia la riga delle sue tracce */
+.slot.group-slot { background: color-mix(in srgb, var(--color) 10%, #16181b); }
+.slot.group-slot.has-clips { background: color-mix(in srgb, var(--color) 32%, #16181b); }
 .master-head { --color: var(--text); right: 0; z-index: 3; cursor: default; }
 .slot {
   position: relative; display: flex; align-items: center; gap: 5px; padding: 0 5px; overflow: hidden; user-select: none;

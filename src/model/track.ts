@@ -5,7 +5,9 @@ import { AudioClip } from './audio-clip';
 import type { Clip, Color } from './clip';
 import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings, type InstrumentSettings } from './device';
 import type { EffectList } from './effect-list';
+import { INSTRUMENT_DEVICE } from './envelope';
 import { MidiClip } from './midi-clip';
+import { NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
 
 export interface MixerSettings {
   readonly volumeDb: number;
@@ -28,6 +30,10 @@ export interface TrackProps<C extends Clip> {
   readonly slots: readonly (C | null)[];
   /** Catena degli effetti, nell'ordine in cui il suono li attraversa. */
   readonly effects: readonly EffectSettings[];
+  /** I rack che raggruppano dispositivi della catena (assenti: nessuno). */
+  readonly racks?: RackList;
+  /** Il gruppo che contiene la traccia (assente: nessuno, esce nel master). */
+  readonly group?: TrackId;
 }
 
 /** Una traccia: mixer, clip sulla timeline e slot della session. Ogni tipo di traccia
@@ -56,6 +62,16 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
   get arrangement(): lane.Lane<C> { return this.props.arrangement; }
   get slots(): readonly (C | null)[] { return this.props.slots; }
   get effects(): readonly EffectSettings[] { return this.props.effects; }
+  get racks(): RackList { return this.props.racks ?? NO_RACKS; }
+  /** Il gruppo che contiene la traccia, o null: il suono esce nel suo canale invece che nel master. */
+  get group(): TrackId | null { return this.props.group ?? null; }
+
+  /** I dispositivi della catena nell'ordine del suono: lo strumento (se c'è) e gli effetti. */
+  get chainKeys(): readonly DeviceKey[] { return this.keysFor(this.effects); }
+
+  protected keysFor(effects: EffectList): DeviceKey[] {
+    return effects.map(e => e.id);
+  }
 
   /** Tutti i dispositivi della traccia: lo strumento (se c'è) e gli effetti. */
   get devices(): readonly DeviceSettings[] { return this.effects; }
@@ -80,6 +96,12 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.with({ mixer: { ...this.mixer, ...patch } } as Partial<P>);
   }
 
+  /** Mette la traccia in un gruppo (null: fuori). Le regole dei gruppi le controlla il progetto. */
+  withGroup(group: TrackId | null): this {
+    if (group === this.group) return this;
+    return this.with({ group: group ?? undefined } as Partial<P>);
+  }
+
   placing(placement: lane.Placement, ids: IdFactory): this {
     return this.withLane(lane.place(this.arrangement, this.checked(placement), ids));
   }
@@ -96,9 +118,17 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.withLane(lane.split(this.arrangement, id, at, ids));
   }
 
-  /** Sostituisce la catena degli effetti (le operazioni sono in `effect-list`). */
+  /** Sostituisce la catena degli effetti (le operazioni sono in `effect-list`); gli effetti tolti
+   *  escono dai loro rack. */
   withEffects(effects: EffectList): this {
-    return effects === this.effects ? this : this.with({ effects } as Partial<P>);
+    return this.withChain(effects, pruneRacks(this.keysFor(effects), this.racks));
+  }
+
+  /** Effetti e rack insieme (es. uno spostamento che cambia ordine e gruppi). Le regole dei rack
+   *  le controlla il progetto. */
+  withChain(effects: EffectList, racks: RackList): this {
+    if (effects === this.effects && racks === this.racks) return this;
+    return this.with({ effects, racks: racks.length ? racks : undefined } as Partial<P>);
   }
 
   withSlot(index: number, clip: Clip | null): this {
@@ -190,11 +220,48 @@ export class MidiTrack extends Track<MidiClip, MidiTrackProps> {
 
   override get devices(): readonly DeviceSettings[] { return [this.instrument, ...this.effects]; }
 
+  protected override keysFor(effects: EffectList): DeviceKey[] {
+    return [INSTRUMENT_DEVICE, ...super.keysFor(effects)];
+  }
+
   withInstrument(instrument: InstrumentSettings): this {
     return this.with({ instrument });
   }
 
   accepts(clip: Clip): clip is MidiClip {
     return clip instanceof MidiClip;
+  }
+}
+
+export interface GroupTrackProps extends TrackProps<never> {
+  /** Chiuso: le sue tracce non si vedono (timeline e session), ma suonano. */
+  readonly folded?: boolean;
+}
+
+/** Traccia di gruppo, come in Live: non ha clip; le tracce del gruppo (che nel progetto la
+ *  seguono) escono nel suo canale, con i suoi effetti, il suo volume e il suo mute. */
+export class GroupTrack extends Track<never, GroupTrackProps> {
+  readonly kind = 'group';
+
+  static create(props: GroupTrackProps): GroupTrack {
+    return new GroupTrack(props);
+  }
+
+  static empty(id: TrackId, name: string, color: Color, sceneCount: number): GroupTrack {
+    return new GroupTrack(emptyProps(id, name, color, sceneCount));
+  }
+
+  protected create(props: GroupTrackProps): this {
+    return new GroupTrack(props) as this;
+  }
+
+  get folded(): boolean { return this.props.folded ?? false; }
+
+  withFolded(folded: boolean): this {
+    return folded === this.folded ? this : this.with({ folded: folded || undefined });
+  }
+
+  accepts(_clip: Clip): _clip is never {
+    return false;
   }
 }

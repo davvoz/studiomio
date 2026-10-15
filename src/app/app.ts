@@ -23,6 +23,7 @@ import { resolveSelection } from '../ui/timeline/planning';
 import { MasterStrip } from '../ui/master-strip';
 import { SessionView } from '../ui/session/session-view';
 import { MeterBoard } from '../ui/meters/meter-board';
+import { groupSelectedTracks, ungroupSelectedTrack } from '../ui/track-groups';
 import { TrackHeaders } from '../ui/track-headers';
 import { TransportBar, type FileCommands } from '../ui/transport-bar';
 import { UiState } from '../ui/ui-state';
@@ -85,6 +86,7 @@ export class App implements Commands, FileCommands, TimelineActions {
         };
       },
       importSample: file => this.session.importSampleFile(file),
+      say: t => this.say(t),
     });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
@@ -121,11 +123,15 @@ export class App implements Commands, FileCommands, TimelineActions {
 
     this.session.on('message', t => this.say(t));
     this.session.on('change', () => transport.render());
-    // le clip eliminate escono dalla selezione, la traccia eliminata non è più quella scelta
+    // le clip eliminate escono dalla selezione, la traccia eliminata non è più quella scelta;
+    // una traccia nascosta in un gruppo chiuso passa la scelta al gruppo che si vede
     this.store.onChange(p => {
       const alive = new Set(p.tracks.flatMap(t => t.arrangement.map(x => x.id)));
       if ([...this.ui.selection].some(id => !alive.has(id))) this.ui.select([...this.ui.selection].filter(id => alive.has(id)));
       if (this.ui.track && !p.track(this.ui.track)) this.ui.selectTrack(null);
+      else if (this.ui.track && !p.visibleTracks.some(t => t.id === this.ui.track)) {
+        this.ui.selectTrack(p.groupsOf(this.ui.track).filter(g => g.folded).at(-1)?.id ?? null);
+      }
     });
     bindKeys(document, this, KEYMAP);
     this.say('Trascina dei file audio sulla timeline o premi "Demo". Ctrl+rotella per lo zoom, Alt per trascinare senza griglia.');
@@ -180,7 +186,7 @@ export class App implements Commands, FileCommands, TimelineActions {
   paste(): void {
     const copied = this.clipboard.clips;
     if (!copied) return this.say(this.clipboard.notes ? 'Negli appunti ci sono delle note: incollale nel piano roll.' : 'Gli appunti sono vuoti.');
-    const index = this.store.project.tracks.findIndex(t => t.id === copied.sourceTrack);
+    const index = this.store.project.visibleTracks.findIndex(t => t.id === copied.sourceTrack);
     this.pasteAt(Math.max(0, index), this.audio.engine.position);
   }
 
@@ -245,6 +251,14 @@ export class App implements Commands, FileCommands, TimelineActions {
 
   toggleView(): void {
     this.showView(this.sessionView.isVisible ? 'arrangement' : 'session');
+  }
+
+  groupTracks(): void {
+    if (!groupSelectedTracks(this.store, this.ui)) this.say('Scegli le tracce da raggruppare (Maiusc o Ctrl+clic sulle intestazioni per sceglierne più di una).');
+  }
+
+  ungroupTracks(): void {
+    if (!ungroupSelectedTrack(this.store, this.ui)) this.say('Scegli un gruppo (o una sua traccia) da separare.');
   }
 
   /** Mostra la timeline o la session (al posto l'una dell'altra, come in Live). */

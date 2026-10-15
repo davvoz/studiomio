@@ -20,19 +20,21 @@ export function snappedDelta(start: Beats, rawDelta: Beats, step: Beats | null):
   return (step ? snapTo(target, step) : target) - start;
 }
 
-/** Dove vanno le clip selezionate spostandole di `deltaBeats` e `deltaTracks`. Se una
- *  traccia di arrivo non esiste o non accetta la clip, le clip restano sulle loro tracce. */
+/** Dove vanno le clip selezionate spostandole di `deltaBeats` e `deltaTracks` righe (le tracce
+ *  che si vedono). Se una traccia di arrivo non esiste o non accetta la clip (un gruppo non ne
+ *  accetta), le clip restano sulle loro tracce. */
 export function planMove(project: Project, refs: readonly PlacementRef[], deltaBeats: Beats, deltaTracks: number, copy: boolean): Relocation[] {
-  const index = new Map(project.tracks.map((t, i) => [t.id, i]));
-  const items = refs.map(r => ({ r, pl: findPlacement(project, r)! })).filter(x => x.pl);
+  const rows = project.visibleTracks;
+  const index = new Map(rows.map((t, i) => [t.id, i]));
+  const items = refs.map(r => ({ r, pl: findPlacement(project, r)! })).filter(x => x.pl && index.has(x.r.track));
   const fits = (dt: number) => items.every(({ r, pl }) => {
-    const target = project.tracks[index.get(r.track)! + dt];
+    const target = rows[index.get(r.track)! + dt];
     return target !== undefined && target.accepts(pl.clip);
   });
   const dt = deltaTracks !== 0 && fits(deltaTracks) ? deltaTracks : 0;
   return items.map(({ r, pl }) => ({
     ...r, copy,
-    to: project.tracks[index.get(r.track)! + dt].id,
+    to: rows[index.get(r.track)! + dt].id,
     start: Math.max(0, pl.start + deltaBeats),
   }));
 }

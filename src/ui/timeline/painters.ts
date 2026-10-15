@@ -8,6 +8,7 @@ import { AudioClip } from '../../model/audio-clip';
 import type { Clip } from '../../model/clip';
 import { MidiClip } from '../../model/midi-clip';
 import type { LoopRegion, Project } from '../../model/project';
+import { GroupTrack } from '../../model/track';
 import { contentToSeconds } from '../clip-editor/clip-geometry';
 import type { Peaks } from '../waveform';
 import type { TimelineGeometry } from './geometry';
@@ -33,8 +34,8 @@ export interface LanePaint {
   readonly hidden: ReadonlySet<PlacementId>;
   /** Tracce prese dalla session: la loro timeline non suona e si mostra spenta. */
   readonly taken: ReadonlySet<TrackId>;
-  /** La traccia scelta: la sua corsia si colora appena. */
-  readonly selectedTrack: TrackId | null;
+  /** Le tracce scelte: la loro corsia si colora appena. */
+  readonly selectedTracks: ReadonlySet<TrackId>;
 }
 
 /** Contenuto di un tipo di clip dentro il suo rettangolo: un pittore per tipo. */
@@ -46,29 +47,33 @@ const contentPainters: Readonly<Record<string, ContentPainter>> = {
   midi: (g, pl, box, lp) => paintNotes(g, pl as Placement<MidiClip>, box, lp),
 };
 
+/** Le corsie sono le tracce che si vedono: quelle di un gruppo chiuso no, il gruppo sì (con il
+ *  riassunto delle loro clip). */
 export function paintLanes(g: CanvasRenderingContext2D, lp: LanePaint): void {
   const { project, geo, width, height } = lp;
+  const rows = project.visibleTracks;
   g.fillStyle = COLORS.bg;
   g.fillRect(0, 0, width, height);
-  project.tracks.forEach((t, i) => {
+  rows.forEach((t, i) => {
     const y = geo.trackTop(i);
     if (y > height || y + geo.trackHeight < 0) return;
     if (i % 2) {
       g.fillStyle = COLORS.laneAlt;
       g.fillRect(0, y, width, geo.trackHeight);
     }
-    if (t.id === lp.selectedTrack) {
-      g.fillStyle = withAlpha(t.color, 0.1);
+    if (t instanceof GroupTrack || lp.selectedTracks.has(t.id)) {
+      g.fillStyle = withAlpha(t.color, lp.selectedTracks.has(t.id) ? 0.1 : 0.05);
       g.fillRect(0, y, width, geo.trackHeight);
     }
   });
   paintLoopShade(g, project.loop, geo, height);
   paintGrid(g, geo, project.signature, lp.grid, width, height);
-  project.tracks.forEach((t, i) => {
+  rows.forEach((t, i) => {
     const y = geo.trackTop(i);
     if (y > height || y + geo.trackHeight < 0) return;
     g.fillStyle = 'rgba(0,0,0,0.35)';
     g.fillRect(0, y + geo.trackHeight - 1, width, 1);
+    if (t instanceof GroupTrack) paintGroupLane(g, t, i, lp);
     for (const pl of t.arrangement) {
       if (lp.hidden.has(pl.id)) continue;
       paintClip(g, pl, i, lp, lp.selection.has(pl.id));
@@ -76,6 +81,24 @@ export function paintLanes(g: CanvasRenderingContext2D, lp: LanePaint): void {
     if (lp.taken.has(t.id)) {
       g.fillStyle = 'rgba(18, 20, 23, 0.62)';
       g.fillRect(0, y, width, geo.trackHeight - 1);
+    }
+  });
+}
+
+/** La corsia di un gruppo, come in Live: le clip delle sue tracce in piccolo, una striscia per
+ *  traccia, nel loro colore. */
+function paintGroupLane(g: CanvasRenderingContext2D, group: GroupTrack, index: number, lp: LanePaint): void {
+  const members = lp.project.soundingTracks(group.id);
+  if (!members.length) return;
+  const box = clipBox(lp.geo, index, 0, 0);
+  const band = Math.max(1, Math.min(8, (box.h - 4) / members.length));
+  const top = box.y + (box.h - band * members.length) / 2;
+  members.forEach((m, k) => {
+    for (const pl of m.arrangement) {
+      const x0 = lp.geo.beatToX(pl.start), x1 = lp.geo.beatToX(placementEnd(pl));
+      if (x1 < 0 || x0 > lp.width) continue;
+      g.fillStyle = withAlpha(pl.clip.color, lp.taken.has(m.id) ? 0.3 : 0.8);
+      g.fillRect(x0, top + k * band, Math.max(1, x1 - x0 - 1), Math.max(1, band - 1));
     }
   });
 }

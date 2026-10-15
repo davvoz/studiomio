@@ -10,11 +10,14 @@ import {
   newEffect, withParam, withParams, withPreset, withSample, type EffectSettings, type InstrumentSettings, type ParamValues,
 } from '../model/device';
 import * as chain from '../model/effect-list';
+import { INSTRUMENT_DEVICE } from '../model/envelope';
 import { MidiClip } from '../model/midi-clip';
 import type { ChainOwner, LoopRegion } from '../model/project';
 import type { SampleRef } from '../model/sample';
-import { AudioTrack, MidiTrack, type MixerSettings, type Track } from '../model/track';
+import { withoutMappingsOf } from '../model/rack';
+import { AudioTrack, GroupTrack, MidiTrack, type MixerSettings, type Track } from '../model/track';
 import { edit, type Edit } from './project-store';
+import { reapplyMacros } from './rack-edits';
 
 // ------------------------------------------------------------------ progetto
 
@@ -37,15 +40,41 @@ const trackFactories = {
 
 export type TrackKind = keyof typeof trackFactories;
 
-export const addTrack = (kind: TrackKind, index?: number): Edit =>
+/** Dove va una traccia nuova: subito dopo una traccia (e ciò che contiene), nel suo stesso
+ *  gruppo, oppure in fondo a un gruppo. Senza: in fondo al progetto. */
+export type TrackPlace = { readonly after: TrackId } | { readonly inGroup: TrackId };
+
+export const addTrack = (kind: TrackKind, place?: TrackPlace): Edit =>
   edit(`Nuova traccia ${trackFactories[kind].label}`, (p, { ids }) => {
     const { label, create } = trackFactories[kind];
     const n = p.tracks.filter(t => t.kind === kind).length + 1;
     const track = create(ids.next('track'), `${n} ${label}`, paletteColor(p.tracks.length), p.scenes.length);
-    return p.addingTrack(track, index);
+    if (!place) return p.addingTrack(track);
+    const [at, group] = 'after' in place ? [place.after, p.track(place.after)?.group ?? null] : [place.inGroup, place.inGroup];
+    return p.addingTrack(track.withGroup(group), p.blockEnd(at));
   });
 
-export const removeTrack = (id: TrackId): Edit => edit('Elimina traccia', p => p.removingTrack(id));
+export const removeTrack = (id: TrackId): Edit =>
+  edit('Elimina traccia', p => p.removingTrack(id));
+
+// ------------------------------------------------------------------ gruppi
+
+/** Raggruppa le tracce in un gruppo nuovo (Ctrl+G), che prende il posto della prima. */
+export const groupTracks = (ids: Iterable<TrackId>): Edit =>
+  edit('Raggruppa tracce', (p, { ids: f }) => {
+    const n = p.tracks.filter(t => t instanceof GroupTrack).length + 1;
+    return p.groupingTracks(ids, GroupTrack.empty(f.next('track'), `${n} Gruppo`, paletteColor(p.tracks.length), p.scenes.length));
+  });
+
+/** Toglie il gruppo, le sue tracce restano (Ctrl+Maiusc+G). */
+export const ungroupTracks = (group: TrackId): Edit => edit('Separa gruppo', p => p.ungroupingTrack(group));
+
+/** Chiude o apre un gruppo: chiuso, le sue tracce non si vedono ma suonano. */
+export const setGroupFolded = (group: TrackId, folded: boolean): Edit =>
+  edit(folded ? 'Chiudi gruppo' : 'Apri gruppo', p => p.updatingTrack(group, t => {
+    if (!(t instanceof GroupTrack)) throw new TypeError(`la traccia ${t.name} non è un gruppo`);
+    return t.withFolded(folded);
+  }));
 
 export const moveTrack = (id: TrackId, toIndex: number): Edit => edit('Sposta traccia', p => p.movingTrack(id, toIndex));
 
@@ -67,8 +96,13 @@ const updatingInstrument = (label: string, id: TrackId, fn: (s: InstrumentSettin
     return t.withInstrument(fn(t.instrument));
   }));
 
+/** Cambia lo strumento; se è di un altro tipo, le macro che lo muovevano lo lasciano. */
 export const setInstrument = (id: TrackId, settings: InstrumentSettings): Edit =>
-  updatingInstrument('Strumento', id, () => settings);
+  edit('Strumento', p => p.updatingTrack(id, t => {
+    if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
+    const racks = settings.type === t.instrument.type ? t.racks : withoutMappingsOf(t.racks, INSTRUMENT_DEVICE);
+    return t.withInstrument(settings).withChain(t.effects, racks);
+  }));
 
 export const setInstrumentParam = (id: TrackId, param: string, value: number): Edit =>
   updatingInstrument('Parametro dello strumento', id, s => withParam(s, param, value));
@@ -94,9 +128,10 @@ export const setInstrumentSamples = (id: TrackId, changes: Readonly<Record<strin
     });
   });
 
-/** Carica un preset: i parametri tornano ai predefiniti del tipo più quelli del preset. */
+/** Carica un preset: i parametri tornano ai predefiniti del tipo più quelli del preset (quelli
+ *  mappati su una macro restano dove la macro li tiene). */
 export const loadPreset = (id: TrackId, name: string, params: ParamValues): Edit =>
-  updatingInstrument(`Preset ${name}`, id, s => withPreset(s, name, params));
+  edit(`Preset ${name}`, (p, ctx) => reapplyMacros(updatingInstrument('', id, s => withPreset(s, name, params)).apply(p, ctx), id));
 
 // ------------------------------------------------------------------ effetti
 // Valgono per la catena di una traccia e per quella del master (`owner`).
@@ -124,7 +159,7 @@ export const setEffectParams = (owner: ChainOwner, id: DeviceId, values: ParamVa
   updatingEffect("Parametri dell'effetto", owner, id, e => withParams(e, values));
 
 export const loadEffectPreset = (owner: ChainOwner, id: DeviceId, name: string, params: ParamValues): Edit =>
-  updatingEffect(`Preset ${name}`, owner, id, e => withPreset(e, name, params));
+  edit(`Preset ${name}`, p => reapplyMacros(p.updatingEffects(owner, list => chain.update(list, id, e => withPreset(e, name, params))), owner));
 
 // ------------------------------------------------------------------ sample e clip
 

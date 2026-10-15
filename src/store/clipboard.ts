@@ -50,10 +50,11 @@ export class Clipboard {
 
 // ------------------------------------------------------------------ clip
 
+/** Le posizioni delle tracce sono quelle delle righe della timeline (le tracce che si vedono). */
 export function copyClips(project: Project, refs: readonly PlacementRef[]): CopiedClips | null {
   const found = refs.flatMap(r => {
     const pl = findPlacement(project, r);
-    const index = project.tracks.findIndex(t => t.id === r.track);
+    const index = project.visibleTracks.findIndex(t => t.id === r.track);
     return pl && index >= 0 ? [{ pl, index }] : [];
   });
   if (!found.length) return null;
@@ -63,7 +64,7 @@ export function copyClips(project: Project, refs: readonly PlacementRef[]): Copi
     kind: 'clips',
     items: found.map(({ pl, index }) => ({ trackOffset: index - top, placement: { ...pl, start: pl.start - start } })),
     span: Math.max(...found.map(f => placementEnd(f.pl))) - start,
-    sourceTrack: project.tracks[top].id,
+    sourceTrack: project.visibleTracks[top].id,
   };
 }
 
@@ -71,7 +72,7 @@ export function copyClips(project: Project, refs: readonly PlacementRef[]): Copi
  *  Le clip che finirebbero su una traccia che non c'è o di un altro tipo vengono saltate. */
 export const pasteClips = (content: CopiedClips, firstTrack: number, at: Beats): Edit =>
   edit('Incolla', (project, { ids }) => content.items.reduce((p, { trackOffset, placement }) => {
-    const track = p.tracks[firstTrack + trackOffset];
+    const track = p.visibleTracks[firstTrack + trackOffset];
     if (!track?.accepts(placement.clip)) return p;
     const placed: Placement = {
       ...placement, id: ids.next('placement'), clip: placement.clip.withId(ids.next('clip')), start: Math.max(0, at + placement.start),

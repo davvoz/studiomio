@@ -76,10 +76,10 @@ export class ProjectSession {
       if (slot + i >= this.store.project.scenes.length) break;
       try {
         const sample = await this.loadFile(file);
-        const before = this.store.project.tracks.length;
+        const before = this.store.project;
         this.store.apply(importSampleToSlot(sample, track, slot + i));
-        // la prima clip può aver creato una traccia nuova: le altre vanno lì sotto
-        if (this.store.project.tracks.length > before) track = this.store.project.tracks.at(-1)!.id;
+        // la prima clip può aver creato una traccia nuova (in fondo, o in fondo al gruppo): le altre vanno lì sotto
+        track = this.store.project.tracks.find(t => !before.track(t.id))?.id ?? track;
         this.say(`Importato "${file.name}" nella session.`);
       } catch (e) {
         this.say(`Impossibile importare "${file.name}": ${e instanceof Error ? e.message : e}`);

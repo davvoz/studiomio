@@ -40,6 +40,16 @@ export function audioParamSink(param: AudioParamLike): ModSink {
   };
 }
 
+/** Una modulazione che ne muove altre, ognuna in scala: una macro sposta i parametri mappati
+ *  della parte di corsa che la macro dà a ciascuno. */
+export function scaledSinks(targets: readonly { readonly sink: ModSink; readonly scale: number }[]): ModSink {
+  return {
+    set: (v, t) => { for (const x of targets) x.sink.set(v * x.scale, t); },
+    ramp: (v, t) => { for (const x of targets) x.sink.ramp(v * x.scale, t); },
+    hold: t => { for (const x of targets) x.sink.hold(t); },
+  };
+}
+
 /** Come il valore di una curva arriva al bersaglio. `curved`: la mappa non è una retta, quindi
  *  le rampe si spezzano in tratti brevi per seguire la curva disegnata. */
 const OUTPUT: { readonly [K in ModScaleKind]: { readonly map: (v: number) => number; readonly curved: boolean } } = {

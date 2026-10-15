@@ -27,6 +27,7 @@ export class UiState {
   private _geometry = new TimelineGeometry();
   private _selection: ReadonlySet<PlacementId> = new Set();
   private _track: TrackId | null = null;
+  private _tracks: ReadonlySet<TrackId> = new Set();
   private _snap = true;
   private _ring: SessionRing | null = null;
   private _controlled: ControlledDevice | null = null;
@@ -36,6 +37,8 @@ export class UiState {
   get selection(): ReadonlySet<PlacementId> { return this._selection; }
   /** La traccia scelta: evidenziata nell'arrangement e nella session. */
   get track(): TrackId | null { return this._track; }
+  /** Le tracce scelte (Maiusc e Ctrl+clic ne aggiungono, Ctrl+G le raggruppa); c'è sempre `track`. */
+  get selectedTracks(): ReadonlySet<TrackId> { return this._tracks; }
   get snap(): boolean { return this._snap; }
   /** Il riquadro del controller collegato, o null se non ce n'è. */
   get sessionRing(): SessionRing | null { return this._ring; }
@@ -62,8 +65,25 @@ export class UiState {
   }
 
   selectTrack(id: TrackId | null): void {
-    if (id === this._track) return;
+    if (id === this._track && this._tracks.size === (id ? 1 : 0)) return;
     this._track = id;
+    this._tracks = new Set(id ? [id] : []);
+    this.events.emit('change');
+  }
+
+  /** Maiusc+clic: le tracce da quella scelta fino a `id`, nell'ordine `order` (quella scelta
+   *  resta il punto fermo). Ctrl+clic: aggiunge o toglie `id`. */
+  extendTrackSelection(id: TrackId, mode: 'range' | 'toggle', order: readonly TrackId[]): void {
+    const from = this._track ? order.indexOf(this._track) : -1, to = order.indexOf(id);
+    if (mode === 'range' && from >= 0 && to >= 0) {
+      this._tracks = new Set(order.slice(Math.min(from, to), Math.max(from, to) + 1));
+    } else if (this._tracks.has(id) && this._tracks.size > 1) {
+      this._tracks = new Set([...this._tracks].filter(t => t !== id));
+      if (this._track === id) this._track = [...this._tracks].at(-1)!;
+    } else {
+      this._tracks = new Set([...this._tracks, id]);
+      this._track = id;
+    }
     this.events.emit('change');
   }
 
@@ -85,4 +105,14 @@ export class UiState {
     this._controlled = d;
     this.events.emit('change');
   }
+}
+
+/** Un clic su una traccia (intestazione, colonna della session): la sceglie; con Maiusc o Ctrl
+ *  allarga la scelta. `order` dà l'ordine delle tracce che si vedono. Il tasto destro su una
+ *  traccia già scelta lascia la scelta com'è (il menu vale per tutte). */
+export function clickTrack(ui: UiState, id: TrackId, e: MouseEvent, order: () => readonly TrackId[]): void {
+  if (e.button === 2 && ui.selectedTracks.has(id)) return;
+  if (e.shiftKey) ui.extendTrackSelection(id, 'range', order());
+  else if (e.ctrlKey || e.metaKey) ui.extendTrackSelection(id, 'toggle', order());
+  else ui.selectTrack(id);
 }

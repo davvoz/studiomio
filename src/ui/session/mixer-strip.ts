@@ -5,7 +5,7 @@ import type { TrackId } from '../../core/id';
 import type { NumberParam } from '../../devices/params';
 import { instrumentType } from '../../devices/registry';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
-import { MidiTrack, type Track } from '../../model/track';
+import { GroupTrack, MidiTrack, type Track } from '../../model/track';
 import { setMasterMixer, setMixer } from '../../store/edits';
 import type { ProjectStore } from '../../store/project-store';
 import { controlFor, type ParamControl } from '../device/controls';
@@ -62,7 +62,7 @@ export class TrackStrip {
     if (t === this.shown) return;
     this.shown = t;
     this.element.style.setProperty('--color', t.color);
-    this.badge.textContent = t instanceof MidiTrack ? instrumentType(t.instrument.type)?.label ?? t.instrument.type : 'Audio';
+    this.badge.textContent = t instanceof MidiTrack ? instrumentType(t.instrument.type)?.label ?? t.instrument.type : t instanceof GroupTrack ? 'Gruppo' : 'Audio';
     setFxCount(this.fx, t.effects.length);
     this.pan.set(Math.round(t.mixer.pan * 50));
     setVolume(this.volume, t.mixer.volumeDb);

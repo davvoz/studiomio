@@ -6,7 +6,7 @@ import { AudioClip } from '../model/audio-clip';
 import { paletteColor } from '../model/colors';
 import type { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
-import { AudioTrack } from '../model/track';
+import { AudioTrack, GroupTrack } from '../model/track';
 import { edit, type Edit } from './project-store';
 
 /** Una clip posata, indicata dalla sua traccia. */
@@ -73,7 +73,8 @@ export const importSample = (sample: SampleRef, target: TrackId | null, start: B
     let trackId = target && next.track(target)?.kind === 'audio' ? target : null;
     if (!trackId) {
       const t = AudioTrack.empty(ids.next('track'), sample.name, paletteColor(next.tracks.length), next.scenes.length);
-      next = next.addingTrack(t);
+      // su un gruppo la traccia nuova va in fondo al gruppo
+      next = target && next.track(target) instanceof GroupTrack ? next.addingTrack(t.withGroup(target), next.blockEnd(target)) : next.addingTrack(t);
       trackId = t.id;
     }
     const color = next.track(trackId)!.color;

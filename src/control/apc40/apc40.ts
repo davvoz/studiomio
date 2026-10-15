@@ -10,20 +10,23 @@ import type { Beats } from '../../core/music-time';
 import { MAX_BPM, MIN_BPM } from '../../core/music-time';
 import { paramsOf, resolveParams, type DeviceType } from '../../devices/device-type';
 import { paramFromUnit, paramToUnit, type ParamSpec } from '../../devices/params';
+import { mappingSpec } from '../../devices/rack-params';
 import { effectType, instrumentType } from '../../devices/registry';
-import type { TrackSessionState } from '../../engine/session';
+import { groupSlotState, type TrackSessionState } from '../../engine/session';
 import type { DeviceSettings } from '../../model/device';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
-import { MidiTrack, type Track } from '../../model/track';
+import { chainItems, MACRO_MAX, macroName, macroOf, macroParam, rackName, type DeviceKey, type Rack } from '../../model/rack';
+import { GroupTrack, MidiTrack, type Track } from '../../model/track';
 import { slotRef, type ClipRef } from '../../store/clip-ref';
 import {
   setEffectEnabled, setEffectParam, setInstrumentParam, setMasterMixer, setMixer, setTempo,
 } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
+import { setMacro } from '../../store/rack-edits';
 import type { ControlledDevice, SessionRing, UiState } from '../../ui/ui-state';
 import {
-  CC, COLOR, faderToDb, introduction, knobToPan, MODE, NOTE, padAt, padNote, paletteIndex, panToKnob, relative, RING,
-  SCENES, TRACKS,
+  CC, COLOR, dongleChallenge, faderToDb, IDENTITY_REQUEST, identityDeviceId, introduction, isDongleResponse, knobToPan, ledMessages,
+  MODE, NOTE, ON, padAt, padNote, paletteIndex, panToKnob, relative, RING, SCENES, STOP_LED, TRACKS, TRIGGERED,
 } from './protocol';
 
 /** Ciò che il controller usa del motore (PlaybackEngine lo è già). */
@@ -56,14 +59,16 @@ export interface SurfaceHost {
   say(text: string): void;
 }
 
-/** Il dispositivo di una catena, come lo vedono le manopole. */
+/** Il dispositivo di una catena, come lo vedono le manopole. Un rack è un dispositivo con 8
+ *  parametri, le sue macro, e viene prima dei suoi dispositivi (come in Live). */
 interface ChainDevice {
-  /** "instrument" per lo strumento, altrimenti l'id dell'effetto. */
+  /** "instrument" per lo strumento, altrimenti l'id dell'effetto o del rack. */
   readonly key: string;
   readonly type: DeviceType;
   readonly settings: DeviceSettings;
   /** Solo gli effetti si spengono. */
   readonly enabled: boolean | null;
+  readonly rack?: Rack;
 }
 
 /** Il dispositivo che le manopole muovono adesso, con i suoi parametri. */
@@ -92,6 +97,13 @@ const TOUCH_MS = 300;
 /** Messaggi al massimo per giro: l'APC40 mkII elabora il MIDI lentamente, a raffiche si
  *  blocca. Ciò che avanza parte al giro dopo. */
 const MAX_SEND = 32;
+/** Quanto si aspetta ogni risposta dell'avvio (identità, challenge) prima di andare avanti lo stesso. */
+const HANDSHAKE_MS = 1000;
+/** Live manda la challenge due dei suoi giri (100 ms) dopo la presentazione. */
+const CHALLENGE_DELAY_MS = 200;
+
+/** L'avvio, come in Live: si chiede l'identità, ci si presenta, si fa la challenge, poi si lavora. */
+type Phase = 'identity' | 'challenge' | 'ready';
 
 const NOT_YET: Readonly<Record<number, string>> = {
   [NOTE.recordArm]: 'Record arm', [NOTE.record]: 'La registrazione', [NOTE.session]: 'La registrazione nella session',
@@ -120,8 +132,16 @@ export class Apc40 {
   /** Quando ogni manopola è stata girata l'ultima volta. */
   private readonly touched = new Map<string, number>();
   private failed = false;
+  /** Spento: alle manopole non si manda niente (né valori né tipo dell'anello). Per capire se
+   *  un controller si blocca per i messaggi delle manopole. */
+  knobFeedback = true;
   /** Scollegato: non si manda più niente. */
   private stopped = false;
+  private phase: Phase = 'identity';
+  private phaseAt = 0;
+  private challengeSent = false;
+  /** Il device ID del controller, dalla sua risposta d'identità (Live fa lo stesso). */
+  private device = 0;
 
   constructor(
     private readonly host: SurfaceHost,
@@ -129,13 +149,47 @@ export class Apc40 {
     private readonly now: () => number = () => performance.now(),
   ) {}
 
-  /** Il controller è appena stato collegato: Ableton mode, riquadro in alto a sinistra, tutti i LED. */
+  /** Il controller è appena stato collegato: gli si chiede chi è (vedi `handshake`). */
   start(): void {
     this.stopped = false;
-    this.out(introduction(MODE.ableton));
-    this.settleUntil = this.now() + SETTLE_MS;
     this.sent.clear();
     this.touched.clear();
+    this.phase = 'identity';
+    this.phaseAt = this.now();
+    this.out([...IDENTITY_REQUEST]);
+  }
+
+  /** Vero quando l'avvio è finito e il controller lavora. */
+  get ready(): boolean {
+    return this.phase === 'ready';
+  }
+
+  /** Avanza l'avvio: presentazione (Ableton mode) col device ID avuto, challenge, poi i LED. Se
+   *  una risposta non arriva si va avanti lo stesso. */
+  private handshake(data: ArrayLike<number> | null): void {
+    const now = this.now();
+    if (this.phase === 'identity') {
+      const id = data ? identityDeviceId(data) : null;
+      if (id === null && now - this.phaseAt < HANDSHAKE_MS) return;
+      this.device = id ?? 0;
+      this.out(introduction(MODE.ableton, this.device));
+      this.phase = 'challenge';
+      this.phaseAt = now;
+      this.challengeSent = false;
+      return;
+    }
+    if (this.phase !== 'challenge') return;
+    if (!this.challengeSent) {
+      if (now - this.phaseAt < CHALLENGE_DELAY_MS) return;
+      const random = (lo: number, hi: number) => lo + Math.floor(Math.random() * (hi - lo));
+      this.out(dongleChallenge(this.device, random(0, 2_000_000), random(2_000_001, 4_000_000)));
+      this.challengeSent = true;
+      this.phaseAt = now;
+      return;
+    }
+    if (!(data && isDongleResponse(data)) && now - this.phaseAt < HANDSHAKE_MS) return;
+    this.phase = 'ready';
+    this.settleUntil = now + SETTLE_MS;
     const ring = this.host.ui.sessionRing;
     this.setRing(ring?.track ?? 0, ring?.scene ?? 0);
     this.refresh();
@@ -146,7 +200,7 @@ export class Apc40 {
     this.stopped = true;
     for (const [key, value] of this.sent) if (value !== 0) this.send(key, 0);
     this.sent.clear();
-    this.out(introduction(MODE.generic));
+    this.out(introduction(MODE.generic, this.device));
     this.host.ui.setSessionRing(null);
     this.host.ui.setControlledDevice(null);
   }
@@ -154,6 +208,7 @@ export class Apc40 {
   /** Un giro: applica fader e manopole arrivati, chiude le modifiche continue ferme, aggiorna i LED. */
   tick(): void {
     if (this.stopped) return;
+    if (!this.ready) return this.handshake(null);
     try {
       this.flush();
       if (this.merging && this.now() - this.lastMove > MERGE_IDLE_MS) {
@@ -175,6 +230,8 @@ export class Apc40 {
   /** Un messaggio MIDI dal controller. */
   receive(data: ArrayLike<number>): void {
     if (this.stopped) return;
+    if (data[0] === 0xf0) return this.handshake(data);
+    if (!this.ready) return; // come Live: i controlli lavorano dopo l'avvio
     const [status, number, value = 0] = Array.from(data);
     const kind = status & 0xf0, channel = status & 0x0f;
     try {
@@ -249,7 +306,7 @@ export class Apc40 {
   /** Shift + griglia: ogni pad è un blocco di 8 tracce × 5 scene; premerlo ci porta il riquadro. */
   private jumpToBlock(col: number, row: number): void {
     const p = this.project;
-    if (col * TRACKS >= p.tracks.length || row * SCENES >= p.scenes.length) return;
+    if (col * TRACKS >= p.visibleTracks.length || row * SCENES >= p.scenes.length) return;
     this.setRing(col * TRACKS, row * SCENES);
   }
 
@@ -389,9 +446,14 @@ export class Apc40 {
       this.touch(cc, value);
       if (!c || !spec) return;
       const v = paramFromUnit(spec, value / 127);
-      const edit = c.device.key === INSTRUMENT_KEY
-        ? setInstrumentParam(c.owner as TrackId, spec.id, v)
-        : setEffectParam(c.owner, c.device.key as DeviceId, spec.id, v);
+      const { rack, key } = c.device;
+      const macro = rack ? null : macroOf(this.project.racksOf(c.owner), key as DeviceKey, spec.id);
+      if (macro) return this.host.say(`APC40: ${spec.label} lo muove la macro ${macro.index + 1} di ${rackName(macro.rack)}.`);
+      const edit = rack
+        ? setMacro(c.owner, rack.id, rack.macros.findIndex((_, i) => macroParam(i) === spec.id), v)
+        : key === INSTRUMENT_KEY
+          ? setInstrumentParam(c.owner as TrackId, spec.id, v)
+          : setEffectParam(c.owner, key as DeviceId, spec.id, v);
       this.later(`param-${c.owner}-${c.device.key}-${spec.id}`, () => this.move(edit, `apc-param-${c.owner}-${c.device.key}-${spec.id}`));
     }
     // crossfader e livello del cue: studiomio non li ha ancora
@@ -445,8 +507,9 @@ export class Apc40 {
     return this.host.ui.sessionRing ?? { track: 0, scene: 0, width: TRACKS, height: SCENES };
   }
 
+  /** Le colonne sono quelle della session: le tracce che si vedono (un gruppo chiuso è una colonna sola). */
   private trackAt(col: number): Track | undefined {
-    return col < TRACKS ? this.project.tracks[this.ring.track + col] : undefined;
+    return col < TRACKS ? this.project.visibleTracks[this.ring.track + col] : undefined;
   }
 
   private moveRing(dx: number, dy: number): void {
@@ -457,7 +520,7 @@ export class Apc40 {
   private setRing(track: number, scene: number): void {
     const p = this.project;
     this.host.ui.setSessionRing({
-      track: clamp(track, 0, Math.max(0, p.tracks.length - TRACKS)),
+      track: clamp(track, 0, Math.max(0, p.visibleTracks.length - TRACKS)),
       scene: clamp(scene, 0, Math.max(0, p.scenes.length - SCENES)),
       width: TRACKS, height: SCENES,
     });
@@ -477,11 +540,10 @@ export class Apc40 {
     this.setRing(r.track, r.scene); // tracce o scene tolte: il riquadro rientra
     const ring = this.ring;
     const leds = new Map<string, number>();
-    const note = (n: number, v: number | boolean, channel = 0) => leds.set(noteKey(n, channel), typeof v === 'boolean' ? Number(v) : v);
-    const beats = engine.playing ? engine.position : (this.now() / 60_000) * p.tempo.bpm;
-    const blink = frac(beats * 2) < 0.5, pulse = frac(beats) < 0.5;
+    // acceso = 127 come in Live; i lampeggi li fa il controller (niente traffico a tempo da qui)
+    const note = (n: number, v: number | boolean, channel = 0) => leds.set(noteKey(n, channel), typeof v === 'boolean' ? (v ? ON : 0) : v);
 
-    const tracks = Array.from({ length: TRACKS }, (_, c) => p.tracks[ring.track + c]);
+    const tracks = Array.from({ length: TRACKS }, (_, c) => p.visibleTracks[ring.track + c]);
     const states = tracks.map(t => (t ? engine.sessionState(t) : null));
     const queuedSlot = (st: TrackSessionState | null) => (st?.queued && typeof st.queued === 'object' ? st.queued.slot : -1);
 
@@ -490,20 +552,20 @@ export class Apc40 {
       for (let col = 0; col < TRACKS; col++) {
         note(padNote(col, row), this.shift
           ? this.overviewColor(p, col, row, ring)
-          : this.padColor(tracks[col], states[col], ring.scene + row, blink, pulse));
+          : this.padColor(tracks[col], states[col], ring.scene + row));
       }
     }
-    // scene: accese se la riga ha clip, lampeggiano se qualcosa della riga è in coda
+    // scene (pulsanti RGB): verdi se la riga ha clip, lampeggiano se qualcosa della riga è in coda
     for (let i = 0; i < SCENES; i++) {
       const s = ring.scene + i;
       const row = s < p.scenes.length ? p.tracks.map(t => t.slots[s]) : [];
       const queued = p.tracks.some(t => t.slots[s] && queuedSlot(engine.sessionState(t)) === s);
-      note(NOTE.sceneLaunch + i, queued ? blink : row.some(c => c));
+      note(NOTE.sceneLaunch + i, queued ? TRIGGERED(COLOR.green) : row.some(c => c) ? COLOR.green : COLOR.off);
     }
     // per traccia
     tracks.forEach((t, c) => {
       const st = states[c];
-      note(NOTE.clipStop, st?.queued === 'stop' ? blink : !!st?.playing, c);
+      note(NOTE.clipStop, st?.queued === 'stop' ? STOP_LED.blink : st?.playing ? STOP_LED.on : STOP_LED.off, c);
       note(NOTE.trackSelect, !!t && !this.masterSelected && t.id === ui.track, c);
       note(NOTE.activator, !!t && !t.mixer.mute, c);
       note(NOTE.solo, !!t?.mixer.solo, c);
@@ -520,7 +582,7 @@ export class Apc40 {
     note(NOTE.up, ring.scene > 0);
     note(NOTE.down, ring.scene + SCENES < p.scenes.length);
     note(NOTE.left, ring.track > 0);
-    note(NOTE.right, ring.track + TRACKS < p.tracks.length);
+    note(NOTE.right, ring.track + TRACKS < p.visibleTracks.length);
     note(NOTE.bank, this.bankMode);
     note(NOTE.pan, true);
     note(NOTE.sends, false);
@@ -552,18 +614,25 @@ export class Apc40 {
     let budget = MAX_SEND;
     for (const [key, value] of leds) {
       if (this.sent.get(key) === value || now - (this.touched.get(key) ?? -Infinity) < TOUCH_MS) continue;
+      if (!this.knobFeedback && key.startsWith('c:')) continue;
       if (budget-- <= 0) break;
       this.send(key, value);
     }
   }
 
-  /** Il pad di uno slot: in coda lampeggia verde, quella che suona pulsa verde, le altre clip
-   *  hanno il loro colore, gli slot vuoti sono spenti. */
-  private padColor(track: Track | undefined, st: TrackSessionState | null, scene: number, blink: boolean, pulse: boolean): number {
+  /** Il pad di uno slot, come in Live: quella che suona è verde fisso, quella in coda lampeggia
+   *  verde, le altre clip hanno il loro colore, gli slot vuoti sono spenti. */
+  private padColor(track: Track | undefined, st: TrackSessionState | null, scene: number): number {
     if (!track || !st || scene >= track.slots.length) return COLOR.off;
+    if (track instanceof GroupTrack) {
+      // lo slot di un gruppo: dalle sue tracce, nel colore del gruppo
+      const members = this.project.soundingTracks(track.id).map(t => [t, this.host.engine.sessionState(t)] as const);
+      const g = groupSlotState(members, scene);
+      return g.queued ? TRIGGERED(COLOR.green) : g.playing ? COLOR.green : g.clips ? paletteIndex(track.color) : COLOR.off;
+    }
     const clip = track.slots[scene];
-    if (st.queued && typeof st.queued === 'object' && st.queued.slot === scene) return blink ? COLOR.green : COLOR.off;
-    if (st.playing?.slot === scene) return pulse ? COLOR.green : COLOR.greenDim;
+    if (st.queued && typeof st.queued === 'object' && st.queued.slot === scene) return TRIGGERED(COLOR.green);
+    if (st.playing?.slot === scene) return COLOR.green;
     return clip ? paletteIndex(clip.color) : COLOR.off;
   }
 
@@ -571,42 +640,55 @@ export class Apc40 {
    *  ambra se ci sono clip, appena acceso se è vuoto. */
   private overviewColor(p: Project, col: number, row: number, ring: SessionRing): number {
     const t0 = col * TRACKS, s0 = row * SCENES;
-    if (t0 >= p.tracks.length || s0 >= p.scenes.length) return COLOR.off;
+    if (t0 >= p.visibleTracks.length || s0 >= p.scenes.length) return COLOR.off;
     if (ring.track >= t0 && ring.track < t0 + TRACKS && ring.scene >= s0 && ring.scene < s0 + SCENES) return COLOR.white;
-    const tracks = p.tracks.slice(t0, t0 + TRACKS);
+    const tracks = p.visibleTracks.slice(t0, t0 + TRACKS).flatMap(t => p.soundingTracks(t.id));
     const inBlock = (s: number) => s >= s0 && s < s0 + SCENES;
     if (tracks.some(t => { const pl = this.host.engine.sessionState(t).playing; return pl && inBlock(pl.slot); })) return COLOR.green;
     if (tracks.some(t => t.slots.some((c, s) => c && inBlock(s)))) return COLOR.amber;
     return COLOR.dim;
   }
 
+  /** Un LED: un messaggio, o due per un'animazione (vedi rgbLed). */
   private send(key: string, value: number): void {
     const [kind, channel, number] = key.split(':');
-    this.out([(kind === 'n' ? 0x90 : 0xb0) | Number(channel), Number(number), value]);
+    for (const m of ledMessages((kind === 'n' ? 0x90 : 0xb0) | Number(channel), Number(number), value)) this.out(m);
     this.sent.set(key, value);
   }
 }
 
-/** I dispositivi di una catena, nell'ordine in cui il suono li attraversa. */
+/** I dispositivi di una catena, nell'ordine in cui il suono li attraversa; ogni rack prima dei suoi. */
 export function chainOf(p: Project, owner: ChainOwner): ChainDevice[] {
-  const devices: ChainDevice[] = [];
+  const devices = new Map<DeviceKey, ChainDevice>();
   if (owner !== MASTER) {
     const track = p.track(owner);
-    if (!track) return devices;
+    if (!track) return [];
     const instrument = track instanceof MidiTrack ? instrumentType(track.instrument.type) : undefined;
-    if (track instanceof MidiTrack && instrument) devices.push({ key: INSTRUMENT_KEY, type: instrument, settings: track.instrument, enabled: null });
+    if (track instanceof MidiTrack && instrument) devices.set(INSTRUMENT_KEY, { key: INSTRUMENT_KEY, type: instrument, settings: track.instrument, enabled: null });
   }
   for (const e of p.effectsOf(owner)) {
     const type = effectType(e.type);
-    if (type) devices.push({ key: e.id, type, settings: e, enabled: e.enabled });
+    if (type) devices.set(e.id, { key: e.id, type, settings: e, enabled: e.enabled });
   }
-  return devices;
+  const one = (k: DeviceKey) => devices.get(k) ?? [];
+  return chainItems(p.chainKeys(owner), p.racksOf(owner))
+    .flatMap(item => (item.kind === 'device' ? one(item.key) : [rackDevice(p, owner, item.rack), ...item.rack.devices.flatMap(one)]));
+}
+
+/** Un rack come dispositivo per le manopole: le 8 macro sono i suoi parametri. */
+function rackDevice(p: Project, owner: ChainOwner, rack: Rack): ChainDevice {
+  const params = rack.macros.map((m, i) => ({
+    kind: 'number' as const, id: macroParam(i), min: 0, max: MACRO_MAX, default: 0,
+    label: macroName(m, i, x => mappingSpec(p, owner, x)?.label),
+  }));
+  const type: DeviceType = { type: 'rack', label: rackName(rack), sections: [{ label: 'Macro', params }], presets: [] };
+  const settings: DeviceSettings = { type: 'rack', preset: null, params: Object.fromEntries(rack.macros.map((m, i) => [macroParam(i), m.value])) };
+  return { key: rack.id, type, settings, enabled: null, rack };
 }
 
 const noteKey = (note: number, channel: number) => `n:${channel}:${note}`;
 const ccKey = (cc: number, channel = 0) => `c:${channel}:${cc}`;
 const bankKey = (owner: ChainOwner, device: string) => `${owner}/${device}`;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const frac = (x: number) => x - Math.floor(x);
 /** I parametri con lo zero nel mezzo (pan, guadagni ±) hanno l'anello che parte dal centro. */
 const bipolar = (p: ParamSpec) => p.kind === 'number' && p.min < 0 && p.max > 0;

@@ -6,7 +6,7 @@ import { DrumCore } from '../../src/devices/instruments/drums/drums-core';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
 import { sampleAt } from '../../src/model/device';
 import type { MidiTrack } from '../../src/model/track';
-import { ProjectCodec } from '../../src/persistence/project-codec';
+import { PROJECT_VERSION, ProjectCodec } from '../../src/persistence/project-codec';
 import { setInstrument, setInstrumentSamples } from '../../src/store/edits';
 import { sampleRef, setup } from '../helpers/fixtures';
 
@@ -201,7 +201,7 @@ describe('sample nei dispositivi: modifiche e salvataggio', () => {
     store.apply(setInstrumentSamples(track(0), { p1: kick }, modelDefaults(0, MODEL.sample)));
     const codec = new ProjectCodec();
     const json = JSON.parse(codec.stringify(store.project));
-    expect(json.version).toBe(7);
+    expect(json.version).toBe(PROJECT_VERSION);
     const back = codec.parse(codec.stringify(store.project));
     expect((back.tracks[0] as MidiTrack).instrument).toEqual(instrument());
     const old = { ...json, version: 6, tracks: json.tracks.map((t: { instrument: object }) => ({ ...t, instrument: { type: 'drums', preset: 'Init', params: {} } })) };

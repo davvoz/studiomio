@@ -5,9 +5,14 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import { Apc40, type SurfaceHost } from './apc40/apc40';
 import { PORT_NAME } from './apc40/protocol';
+import { IDENTITY_REQUEST, Liveness } from './liveness';
 
 /** Ogni quanto si aggiornano i LED (lampeggi a tempo) e si applicano fader e manopole. */
 const TICK_MS = 30;
+/** Ogni quanto si controlla che il controller parli ancora. */
+const WATCH_MS = 500;
+/** Quante volte si riaprono le porte di un controller muto prima di arrendersi. */
+const MAX_REVIVALS = 2;
 
 type SurfaceEvents = { change: [] };
 
@@ -19,7 +24,8 @@ interface Connection {
   readonly output: MIDIOutput;
   /** Gli id delle porte, per capire se sono cambiate. */
   readonly ports: string;
-  readonly stopTimer: () => void;
+  readonly liveness: Liveness;
+  readonly stopTimers: () => void;
 }
 
 /** Un messaggio MIDI in esadecimale, per il monitor. */
@@ -33,6 +39,16 @@ export class ControlSurfaces {
   private rescan = false;
   /** Monitor MIDI: dalla console, `studiomio.surfaces.log = true` stampa ogni messaggio. */
   log = false;
+  private feedback = true;
+  /** Dalla console, `studiomio.surfaces.watchdog = true`: dopo un po' di silenzio si chiede al
+   *  controller chi è, per accorgersi se si è bloccato. Spento di serie: Live non lo fa, e un
+   *  APC40 mkII alimentato solo dall'USB si è bloccato anche con queste sole richieste. */
+  watchdog = false;
+  /** Volte di fila in cui si sono riaperte le porte perché il controller non rispondeva. */
+  private revivals = 0;
+  private gaveUp = false;
+  /** Il controller ha già risposto alla richiesta d'identità (vale anche dopo aver riaperto le porte). */
+  private answersIdentity = false;
   private readonly events = new Emitter<SurfaceEvents>();
 
   constructor(private readonly host: SurfaceHost) {}
@@ -49,6 +65,17 @@ export class ControlSurfaces {
   /** Il nome del controller collegato, o null. */
   get connected(): string | null {
     return this.apc ? this.apc.output.name ?? 'APC40 mkII' : null;
+  }
+
+  /** Dalla console, `studiomio.surfaces.knobFeedback = false`: alle manopole non si manda più
+   *  niente (anelli di LED fermi). Per capire se è quel traffico a bloccare il controller. */
+  get knobFeedback(): boolean {
+    return this.feedback;
+  }
+
+  set knobFeedback(on: boolean) {
+    this.feedback = on;
+    if (this.apc) this.apc.controller.knobFeedback = on;
   }
 
   /** Le porte MIDI che il browser vede (per capire cosa non va dalla console). */
@@ -109,6 +136,7 @@ export class ControlSurfaces {
         try { output.send(data); } catch { /* staccato proprio adesso */ }
       });
       // si ascoltano tutte le porte d'ingresso dell'APC; una occupata da un altro programma non blocca le altre
+      const liveness = new Liveness(performance.now(), this.answersIdentity);
       const opened: MIDIInput[] = [];
       for (const input of inputs) {
         try {
@@ -116,6 +144,8 @@ export class ControlSurfaces {
           input.onmidimessage = e => {
             if (!e.data) return;
             if (this.log) console.log(`MIDI ← ${input.name} [${input.id}]: ${hex(e.data)}`);
+            liveness.heard(performance.now(), e.data);
+            this.recovered();
             controller.receive(e.data);
           };
           opened.push(input);
@@ -124,11 +154,17 @@ export class ControlSurfaces {
         }
       }
       if (!opened.length) throw new Error("nessuna porta d'ingresso si apre");
-      const id = setInterval(() => controller.tick(), TICK_MS);
-      this.apc = { controller, inputs: opened, output, ports, stopTimer: () => clearInterval(id) };
-      controller.start();
+      controller.knobFeedback = this.feedback;
+      const tick = setInterval(() => controller.tick(), TICK_MS);
+      const watch = setInterval(() => this.watch(connection), WATCH_MS);
+      const connection: Connection = {
+        controller, inputs: opened, output, ports, liveness,
+        stopTimers: () => { clearInterval(tick); clearInterval(watch); },
+      };
+      this.apc = connection;
+      controller.start(); // chiede l'identità: la risposta fa partire l'avvio (e dice che il controller la conosce)
       console.info('Controller collegato', { output: `${output.name} [${output.id}]`, inputs: opened.map(p => `${p.name} [${p.id}]`) });
-      this.host.say(`${output.name ?? 'APC40 mkII'} collegato: la griglia suona il riquadro rosso della session.`);
+      if (!this.revivals) this.host.say(`${output.name ?? 'APC40 mkII'} collegato: la griglia suona il riquadro rosso della session.`);
     } catch (e) {
       this.host.say(`Controller: non riesco ad aprire ${output.name ?? "l'APC40"} (lo sta usando un altro programma?). ${e instanceof Error ? e.message : ''}`);
     } finally {
@@ -144,11 +180,54 @@ export class ControlSurfaces {
   private disconnect(): void {
     const c = this.apc;
     if (!c) return;
-    this.apc = null;
-    c.stopTimer();
-    for (const input of c.inputs) input.onmidimessage = null;
+    this.drop(c);
     c.controller.stop();
     this.host.say('APC40 scollegato.');
     this.events.emit('change');
+  }
+
+  /** Smette di ascoltare e di aggiornare il controller (senza mandargli niente). */
+  private drop(c: Connection): void {
+    if (this.apc === c) this.apc = null;
+    this.answersIdentity ||= c.liveness.watching;
+    c.stopTimers();
+    for (const input of c.inputs) input.onmidimessage = null;
+  }
+
+  /** Il controller parla ancora? Se non risponde più, si chiudono e riaprono le porte: se era
+   *  il collegamento MIDI a essersi incantato basta questo; se è il controller, va riacceso. */
+  private watch(c: Connection): void {
+    if (!this.watchdog) return;
+    const action = c.liveness.check(performance.now());
+    if (action === 'ping') {
+      if (this.log) console.log(`MIDI → ${hex(IDENTITY_REQUEST)} (richiesta d'identità)`);
+      try { c.output.send(IDENTITY_REQUEST); } catch { /* staccato */ }
+      return;
+    }
+    if (action !== 'silent' || this.gaveUp) return;
+    if (this.revivals >= MAX_REVIVALS) {
+      this.gaveUp = true;
+      console.warn(`Controller: ${c.output.name} non risponde nemmeno riaprendo le porte`);
+      this.host.say(`${c.output.name ?? "L'APC40"} non risponde più: spegnilo e riaccendilo, si ricollega da solo.`);
+      return;
+    }
+    this.revivals++;
+    console.warn(`Controller: ${c.output.name} non risponde, riapro le porte (tentativo ${this.revivals})`);
+    void this.reopen(c);
+  }
+
+  private async reopen(c: Connection): Promise<void> {
+    this.drop(c);
+    await Promise.allSettled([...c.inputs.map(p => p.close()), c.output.close()]);
+    await this.scan();
+  }
+
+  /** È arrivato qualcosa: se il controller era muto, è tornato. */
+  private recovered(): void {
+    if (!this.revivals && !this.gaveUp) return;
+    console.info(`Controller: risponde di nuovo (dopo ${this.revivals} riaperture delle porte)`);
+    this.host.say(`${this.apc?.output.name ?? 'APC40'} ripreso.`);
+    this.revivals = 0;
+    this.gaveUp = false;
   }
 }

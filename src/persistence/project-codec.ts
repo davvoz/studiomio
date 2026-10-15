@@ -4,14 +4,15 @@ import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import { DEFAULT_LAUNCH_QUANTUM } from '../model/launch';
 import { Project } from '../model/project';
+import type { DeviceKey, Macro, Rack, RackList } from '../model/rack';
 import type { SampleRef } from '../model/sample';
 import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
-import { AudioTrack, MidiTrack, type MixerSettings, type Track, type TrackProps } from '../model/track';
+import { AudioTrack, GroupTrack, MidiTrack, type MixerSettings, type Track, type TrackProps } from '../model/track';
 import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 7;
+export const PROJECT_VERSION = 9;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -39,6 +40,12 @@ export const defaultTrackTypes: readonly TrackType[] = [
     encodeExtra: t => ({ instrument: encodeInstrument((t as MidiTrack).instrument) }),
     accepts: probe(MidiTrack.empty(asId('probe'), '', '', 0)),
   },
+  {
+    kind: 'group',
+    create: (props, r) => GroupTrack.create({ ...(props as TrackProps<never>), folded: r.has('folded') && r.bool('folded') }),
+    encodeExtra: (t): JsonObject => ((t as GroupTrack).folded ? { folded: true } : {}),
+    accepts: probe(GroupTrack.empty(asId('probe'), '', '', 0)),
+  },
 ];
 
 /** Aggiornamenti del formato: la voce N porta un file dalla versione N alla N+1. */
@@ -59,6 +66,10 @@ const migrations: Record<number, Migration> = {
   5: json => json,
   // 6 → 7: i dispositivi possono suonare sample del progetto (campo facoltativo)
   6: json => json,
+  // 7 → 8: le catene possono avere dei rack con le macro (campo facoltativo)
+  7: json => json,
+  // 8 → 9: le tracce possono stare in un gruppo (campo facoltativo, e il tipo "group")
+  8: json => json,
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
@@ -91,17 +102,20 @@ export class ProjectCodec {
       loop: { enabled: p.loop.enabled, start: p.loop.start, end: p.loop.end },
       master: encodeMixer(p.master),
       masterEffects: p.masterEffects.map(encodeEffect),
+      ...encodeRacks('masterRacks', p.masterRacks),
       launchQuantization: p.launchQuantization,
       scenes: p.scenes.map(s => ({ id: s.id, name: s.name })),
       samples: p.samples.map(encodeSample),
       tracks: p.tracks.map(t => ({
         kind: t.kind, id: t.id, name: t.name, color: t.color,
+        ...(t.group ? { group: t.group } : {}),
         mixer: encodeMixer(t.mixer),
         arrangement: t.arrangement.map(pl => ({
           id: pl.id, start: pl.start, length: pl.length, offset: pl.offset, clip: this.encodeClip(pl.clip),
         })),
         slots: t.slots.map(c => (c ? this.encodeClip(c) : null)),
         effects: t.effects.map(encodeEffect),
+        ...encodeRacks('racks', t.racks),
         ...this.trackType(t.kind).encodeExtra(t),
       })),
     };
@@ -121,6 +135,7 @@ export class ProjectCodec {
         loop: { enabled: loop.bool('enabled'), start: loop.num('start'), end: loop.num('end') },
         master: decodeMixer(r.get('master')),
         masterEffects: r.array('masterEffects').map(decodeEffect),
+        masterRacks: decodeRacks(r, 'masterRacks'),
         launchQuantization: r.str('launchQuantization'),
         scenes: r.array('scenes').map(s => ({ id: asId(s.str('id')), name: s.str('name') })),
         samples: r.array('samples').map(decodeSample),
@@ -159,10 +174,12 @@ export class ProjectCodec {
     }));
     return type.create({
       id: asId(r.str('id')), name: r.str('name'), color: r.str('color'),
+      group: r.has('group') ? asId<'track'>(r.str('group')) : undefined,
       mixer: decodeMixer(r.get('mixer')),
       arrangement: arrangement.sort((a, b) => a.start - b.start),
       slots: r.array('slots').map(s => (s.raw === null ? null : clipFor(s))),
       effects: r.array('effects').map(decodeEffect),
+      racks: decodeRacks(r, 'racks'),
     }, r);
   }
 
@@ -223,3 +240,25 @@ const decodeInstrument = (r: JsonReader): DeviceSettings => {
 const encodeEffect = (e: EffectSettings): JsonObject => ({ id: e.id, enabled: e.enabled, ...encodeInstrument(e) });
 
 const decodeEffect = (r: JsonReader): EffectSettings => ({ id: asId(r.str('id')), enabled: r.bool('enabled'), ...decodeInstrument(r) });
+
+/** I rack si scrivono solo se ci sono. */
+const encodeRacks = (field: string, racks: RackList): JsonObject => (racks.length ? {
+  [field]: racks.map(rk => ({
+    id: rk.id, name: rk.name, devices: [...rk.devices],
+    macros: rk.macros.map(m => ({ name: m.name, value: m.value, mappings: m.mappings.map(x => ({ ...x })) })),
+  })),
+} : {});
+
+const decodeRacks = (r: JsonReader, field: string): RackList | undefined =>
+  (r.has(field) ? r.array(field).map(decodeRack) : undefined);
+
+const decodeRack = (r: JsonReader): Rack => ({
+  id: asId(r.str('id')),
+  name: r.nullable('name', n => n.asString()),
+  devices: r.array('devices').map(d => d.asString() as DeviceKey),
+  macros: r.array('macros').map((m): Macro => ({
+    name: m.nullable('name', n => n.asString()),
+    value: m.num('value'),
+    mappings: m.array('mappings').map(x => ({ device: x.str('device') as DeviceKey, param: x.str('param'), min: x.num('min'), max: x.num('max') })),
+  })),
+});

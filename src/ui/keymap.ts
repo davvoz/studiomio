@@ -19,6 +19,9 @@ export interface Commands {
   open(): void;
   /** Passa da arrangement a session e viceversa. */
   toggleView(): void;
+  /** Raggruppa le tracce scelte (Ctrl+G) · separa il gruppo scelto (Ctrl+Maiusc+G). */
+  groupTracks(): void;
+  ungroupTracks(): void;
 }
 
 export interface Binding<C = Commands> {
@@ -53,6 +56,8 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: '-', run: c => c.zoom(0.8) },
   { key: 's', ctrl: true, run: c => c.save() },
   { key: 'o', ctrl: true, run: c => c.open() },
+  { key: 'g', ctrl: true, run: c => c.groupTracks() },
+  { key: 'g', ctrl: true, shift: true, run: c => c.ungroupTracks() },
 ];
 
 /** Campi in cui si scrive: lì tutti i tasti sono loro. */

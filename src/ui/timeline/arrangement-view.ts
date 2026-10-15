@@ -123,7 +123,7 @@ export class ArrangementView implements GestureHost {
       paintRuler(this.ruler.g, project, this.geo, this.ruler.width, this.ruler.height, grid);
       paintLanes(this.lanes.g, {
         project, geo: this.geo, width: this.lanes.width, height: this.lanes.height, grid,
-        selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTrack: this.ui.track,
+        selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTracks: this.ui.selectedTracks,
         peaks: (c: AudioClip) => this.deps.peaks.get(c.sample),
       });
     }
@@ -227,7 +227,7 @@ export class ArrangementView implements GestureHost {
         return;
       }
       const dx = e.shiftKey ? e.deltaY : e.deltaX, dy = e.shiftKey ? 0 : e.deltaY;
-      const maxY = Math.max(0, this.store.project.tracks.length * g.trackHeight - this.lanes.height + 40);
+      const maxY = Math.max(0, this.store.project.visibleTracks.length * g.trackHeight - this.lanes.height + 40);
       this.ui.setGeometry(g.scrolled(g.scrollBeat + dx / g.pxPerBeat, Math.min(maxY, g.scrollY + dy)));
     }, { passive: false });
   }
@@ -245,7 +245,7 @@ export class ArrangementView implements GestureHost {
       if (!files.length) return;
       const r = el.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
-      const track = this.store.project.tracks[this.geo.trackIndexAt(y)];
+      const track = this.store.project.visibleTracks[this.geo.trackIndexAt(y)];
       const step = gridStep(this.geo.pxPerBeat, this.store.project.signature);
       this.deps.dropFiles(files, track?.id ?? null, Math.max(0, snapTo(this.geo.xToBeat(x), step)));
     });

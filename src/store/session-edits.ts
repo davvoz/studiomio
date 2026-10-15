@@ -7,7 +7,7 @@ import { paletteColor } from '../model/colors';
 import { MidiClip } from '../model/midi-clip';
 import type { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
-import { AudioTrack, type Track } from '../model/track';
+import { AudioTrack, GroupTrack, type Track } from '../model/track';
 import { edit, type Edit } from './project-store';
 
 export interface SlotRef {
@@ -73,7 +73,8 @@ export const importSampleToSlot = (sample: SampleRef, target: TrackId | null, sl
     let track = target && next.track(target)?.kind === 'audio' ? target : null;
     if (!track) {
       const t = AudioTrack.empty(ids.next('track'), sample.name, paletteColor(next.tracks.length), next.scenes.length);
-      next = next.addingTrack(t);
+      // su un gruppo la traccia nuova va in fondo al gruppo
+      next = target && next.track(target) instanceof GroupTrack ? next.addingTrack(t.withGroup(target), next.blockEnd(target)) : next.addingTrack(t);
       track = t.id;
     }
     const clip = looping(AudioClip.fromSample(ids.next('clip'), sample, next.track(track)!.color));
