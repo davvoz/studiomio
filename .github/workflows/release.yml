@@ -42,6 +42,14 @@ jobs:
 
       - run: npm run build
       - run: npm run electron:build
-      - run: npx electron-builder --win --publish always
+      - run: npx electron-builder --win --publish never
+
+      # la release si crea in un colpo solo con tutti i file: electron-builder li caricava in
+      # parallelo e ne creava due per tag (o una a metà, senza latest.yml per gli aggiornamenti)
+      - shell: bash
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" --title "$v" \
+            "release/studiomio-setup-$v.exe" "release/studiomio-setup-$v.exe.blockmap" release/latest.yml
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
