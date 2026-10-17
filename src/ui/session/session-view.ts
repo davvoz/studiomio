@@ -114,6 +114,9 @@ export class SessionView {
   private readonly heads = new Map<TrackId, HTMLElement>();
   private selected: SlotRef | null = null;
   private drag: SlotDrag | null = null;
+  /** Il selettore dei file audio da mettere in uno slot (lo slot è `pickFor`). */
+  private readonly picker = el<HTMLInputElement>('input', { type: 'file', accept: 'audio/*', multiple: true, hidden: true });
+  private pickFor: SlotRef | null = null;
 
   constructor(private readonly deps: SessionViewDeps) {
     const { store } = deps;
@@ -126,9 +129,15 @@ export class SessionView {
       el('button', { textContent: '+ Audio', title: 'Nuova traccia audio', onclick: () => deps.addTrack('audio') }),
       el('button', { textContent: '+ MIDI', title: 'Nuova traccia MIDI', onclick: () => deps.addTrack('midi') }),
       this.mixerToggle,
-      el('span', { className: 'muted', textContent: 'Tab: arrangement · doppio clic su uno slot MIDI: clip nuova · trascina (Ctrl copia)' }));
+      el('span', { className: 'muted', textContent: 'Tab: arrangement · doppio clic su uno slot vuoto: clip MIDI nuova o audio da importare · trascina (Ctrl copia)' }));
+    this.picker.onchange = () => {
+      const files = [...(this.picker.files ?? [])], ref = this.pickFor;
+      this.picker.value = '';
+      this.pickFor = null;
+      if (files.length && ref) this.deps.importToSlot(files, ref.track, ref.slot);
+    };
     this.grid.append(this.master.element);
-    this.element.append(toolbar, this.scroll);
+    this.element.append(toolbar, this.scroll, this.picker);
     this.showMixer(readPref(MIXER_PREF) !== 'off');
     // lo slot portato in vista (frecce) non deve finire sotto le intestazioni o sotto il mixer
     new ResizeObserver(() => this.padScroll()).observe(this.master.element);
@@ -218,6 +227,12 @@ export class SessionView {
     if (!s) return;
     if (!content) return this.deps.say('Negli appunti non ci sono clip.');
     this.apply(pasteToSlot(content, s.track, s.slot));
+  }
+
+  /** Sceglie dei file audio da mettere nello slot `ref` (e in quelli sotto, se sono più d'uno). */
+  importAudioTo(ref: SlotRef): void {
+    this.pickFor = ref;
+    this.picker.click();
   }
 
   moveSelection(dx: number, dy: number): void {
@@ -374,6 +389,7 @@ export class SessionView {
         el('span', { className: 'clip-name', textContent: clip.name }),
         el('div', { className: 'progress' }));
     } else {
+      if (t.kind === 'audio') cell.title = 'Doppio clic: importa un file audio in questo slot (o trascinalo qui)';
       cell.append(el('button', { className: 'slot-stop', textContent: '■', title: 'Ferma la traccia', onclick: () => this.deps.engine.stopTrack(t.id) }));
     }
     if (this.selected?.track === t.id && this.selected.slot === s) cell.classList.add('selected');
@@ -481,7 +497,7 @@ export class SessionView {
       const ref = this.slotAt(e.target);
       const track = ref && this.deps.store.project.track(ref.track);
       if (!ref || !track || track.slots[ref.slot] || track instanceof GroupTrack) return;
-      if (track.kind !== 'midi') return this.deps.say('Trascina qui un file audio per metterlo nello slot.');
+      if (track.kind !== 'midi') return this.importAudioTo(ref);
       this.apply(newSlotMidiClip(ref));
       this.openSlot(ref);
     });
@@ -544,7 +560,9 @@ export class SessionView {
     }
     if (!clip) {
       return [
-        ...(track.kind === 'midi' ? [{ label: 'Nuova clip MIDI', shortcut: 'doppio clic', run: () => { this.apply(newSlotMidiClip(ref)); this.openSlot(ref); } }] : []),
+        track.kind === 'midi'
+          ? { label: 'Nuova clip MIDI', shortcut: 'doppio clic', run: () => { this.apply(newSlotMidiClip(ref)); this.openSlot(ref); } }
+          : { label: 'Importa audio…', shortcut: 'doppio clic', run: () => this.importAudioTo(ref) },
         { label: 'Incolla', shortcut: KEY.paste, disabled: !this.deps.clipboard.clips, run: () => this.pasteSelected() },
         { label: 'Ferma la traccia', run: () => this.deps.engine.stopTrack(ref.track) },
       ];

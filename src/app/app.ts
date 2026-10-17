@@ -295,7 +295,13 @@ export class App implements Commands, FileCommands, TimelineActions {
   save(): void { this.run(() => this.session.save()); }
   saveAs(): void { this.run(() => this.session.saveAs()); }
 
+  /** Nella session i file vanno nello slot scelto (o in una traccia nuova dalla prima scena),
+   *  nella timeline al cursore. */
   importFiles(files: File[]): void {
+    if (this.sessionView.isVisible) {
+      const s = this.sessionView.selection;
+      return this.run(() => this.session.importFilesToSlots(files, s?.track ?? null, s?.slot ?? 0));
+    }
     this.run(() => this.session.importFiles(files, null, this.audio.engine.position));
   }
 
