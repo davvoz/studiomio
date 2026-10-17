@@ -16,6 +16,10 @@ export interface DevicePanelOptions {
   readonly onPreset: (preset: Preset) => void;
   /** Un pannello grafico (es. l'EQ) al posto delle manopole generate. */
   readonly display?: DeviceDisplay;
+  /** Il pannello parte compresso (solo l'intestazione, in verticale). */
+  readonly folded?: boolean;
+  /** Il pannello compresso o riaperto (▾/▸ o doppio clic sull'intestazione). */
+  readonly onFold?: (folded: boolean) => void;
 }
 
 /** Oltre queste sezioni le schede vanno su due righe che scorrono in orizzontale (come la
@@ -29,6 +33,7 @@ export class DevicePanel {
   readonly element = el('div', { className: 'device-panel' });
   private readonly controls = new Map<string, { spec: ParamSpec; control: ParamControl }>();
   private readonly presets = el<HTMLSelectElement>('select', { className: 'preset', title: 'Preset' });
+  private readonly fold = el<HTMLButtonElement>('button', { className: 'mini fold' });
 
   constructor(private readonly options: DevicePanelOptions) {
     const { type, settings } = options;
@@ -44,11 +49,34 @@ export class DevicePanel {
         this.controls.set(spec.id, { spec, control });
         return control.element;
       }))));
-    this.element.append(
-      el('div', { className: 'device-panel-head' },
-        ...(options.before ?? []), el('span', { className: 'device-name', textContent: type.label }), this.presets, ...(options.after ?? [])),
+    const head = el('div', { className: 'device-panel-head' },
+      ...(options.onFold ? [this.fold] : []), ...(options.before ?? []),
+      el('span', { className: 'device-name', textContent: type.label }), this.presets, ...(options.after ?? []));
+    if (options.onFold) {
+      const toggle = () => {
+        const folded = !this.folded;
+        this.setFolded(folded);
+        options.onFold!(folded);
+      };
+      this.fold.onclick = toggle;
+      // doppio clic sul fondo dell'intestazione, come in Live
+      head.ondblclick = e => { if (e.target === head) toggle(); };
+    }
+    this.element.append(head,
       el('div', { className: !options.display && sections.length > GRID_SECTIONS ? 'device-sections grid' : 'device-sections' }, ...sections));
+    this.setFolded(!!options.folded);
     this.update(settings);
+  }
+
+  get folded(): boolean {
+    return this.element.classList.contains('folded');
+  }
+
+  /** Compresso: resta l'intestazione, in verticale, con il nome e l'accensione. */
+  setFolded(folded: boolean): void {
+    this.element.classList.toggle('folded', folded);
+    this.fold.textContent = folded ? '▸' : '▾';
+    this.fold.title = folded ? 'Mostra il dispositivo' : 'Comprimi il dispositivo';
   }
 
   /** Valori, parametri attivi, preset e acceso/spento dalle impostazioni attuali. */

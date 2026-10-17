@@ -4,6 +4,7 @@ import { app, BrowserWindow, dialog, protocol, session, shell } from 'electron';
 import updater from 'electron-updater';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
+import { releaseNotesText } from './release-notes.js';
 
 const { autoUpdater } = updater;
 
@@ -84,12 +85,16 @@ function createWindow(): BrowserWindow {
 /** Cerca una nuova versione all'avvio: la scarica in background e propone di riavviare. */
 function checkForUpdates(win: BrowserWindow): void {
   if (!app.isPackaged) return;
-  autoUpdater.on('update-downloaded', async ({ version }) => {
+  // le novità di tutte le versioni saltate, non solo dell'ultima
+  autoUpdater.fullChangelog = true;
+  autoUpdater.on('update-downloaded', async ({ version, releaseNotes }) => {
+    const notes = releaseNotesText(releaseNotes);
+    const install = 'Riavvia ora per installarla, oppure verrà installata quando chiudi l\'app.';
     const { response } = await dialog.showMessageBox(win, {
       type: 'info',
       title: 'Aggiornamento disponibile',
       message: `La versione ${version} di studiomio è pronta.`,
-      detail: 'Riavvia ora per installarla, oppure verrà installata quando chiudi l\'app.',
+      detail: notes ? `${notes}\n\n${install}` : install,
       buttons: ['Riavvia ora', 'Più tardi'],
       defaultId: 0,
       cancelId: 1,

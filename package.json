@@ -19,7 +19,9 @@
     "wasm:test": "wasm-pack build crates/dsp --target nodejs --out-dir ../../tests/wasm-pkg --out-name studiomio_dsp --release",
     "electron:build": "tsc -p electron/tsconfig.json",
     "app": "npm run build && npm run electron:build && electron .",
-    "dist": "npm run build && npm run electron:build && electron-builder --win --publish never"
+    "dist": "npm run build && npm run electron:build && electron-builder --win --publish never",
+    "preversion": "node scripts/changelog.mjs check",
+    "version": "node scripts/changelog.mjs release && git add CHANGELOG.md"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"

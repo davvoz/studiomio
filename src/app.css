@@ -122,12 +122,28 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-head [hidden] { display: none; }
 .device-title { font-weight: 600; margin-right: auto; padding-left: 9px; border-left: 4px solid var(--color, var(--accent)); }
 .device-head .close { padding: 2px 9px; }
-.device-chain { display: flex; gap: 10px; padding: 8px 10px; overflow: auto hidden; flex: 1; min-height: 0; align-items: stretch; }
-.device-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #1f2328; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 8px; }
+.device-chain {
+  display: flex; gap: 10px; padding: 8px 10px; overflow: auto hidden; flex: 1; min-height: 0; align-items: stretch;
+  scrollbar-width: thin; scrollbar-color: #3a4048 transparent;
+}
+.device-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #1f2328; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px 8px; transition: border-color .12s; }
+.device-panel:hover { border-color: #3a4048; }
 .device-panel.controlled { border-color: #4c88ff; box-shadow: 0 0 0 1px #4c88ff; }
 .device-panel.instrument-panel .device-sections { max-width: 1100px; }
 .device-panel.off .device-sections, .device-panel.off .device-name { opacity: .35; }
-.device-panel-head { display: flex; align-items: center; gap: 5px; }
+.device-panel.off .device-panel-head { background: #212429; }
+/* compresso: una striscia verticale con il nome, come in Live */
+.device-panel.folded { width: 36px; padding: 0; }
+.device-panel.folded .device-sections { display: none; }
+.device-panel.folded .device-panel-head { flex: 1; flex-direction: column; gap: 6px; margin: 0; padding: 5px 0; border: 0; border-radius: 7px; }
+.device-panel.folded .device-panel-head > :not(.fold, .power, .device-name) { display: none; }
+.device-panel.folded .device-name { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; margin: 0; padding: 6px 2px; }
+.device-panel-head {
+  display: flex; align-items: center; gap: 5px; margin: 0 -8px; padding: 5px 8px;
+  background: #262b32; border-bottom: 1px solid var(--line); border-radius: 7px 7px 0 0;
+}
+.device-panel-head .fold { color: var(--muted); padding: 0 5px; border-color: transparent; background: none; }
+.device-panel-head .fold:hover { color: var(--text); }
 .device-panel-head select { padding: 1px 4px; font-size: 12px; }
 .device-name { font-weight: 600; margin-right: auto; padding: 0 4px; }
 .device-panel-head .mini { padding: 0 7px; font-size: 12px; line-height: 1.6; }
@@ -146,7 +162,8 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 
 /* rack: il pannello delle macro e i suoi dispositivi in una cornice */
 .rack { --macro: #b48cff; flex: none; display: flex; gap: 8px; padding: 5px; border: 1px solid #3d3650; border-radius: 10px; background: #1a1820; }
-.rack-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #221f2b; border: 1px solid #3d3650; border-radius: 8px; padding: 6px 8px 8px; }
+.rack-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #221f2b; border: 1px solid #3d3650; border-radius: 8px; padding: 0 8px 8px; }
+.rack-panel .device-panel-head { background: #2a2636; border-color: #3d3650; }
 .rack-panel.controlled { border-color: #4c88ff; box-shadow: 0 0 0 1px #4c88ff; }
 .rack-panel .map.on { background: var(--macro); border-color: var(--macro); color: #141414; }
 .rack-body { display: flex; gap: 10px; min-height: 0; flex: 1; }

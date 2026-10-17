@@ -45,11 +45,13 @@ jobs:
       - run: npx electron-builder --win --publish never
 
       # la release si crea in un colpo solo con tutti i file: electron-builder li caricava in
-      # parallelo e ne creava due per tag (o una a metà, senza latest.yml per gli aggiornamenti)
+      # parallelo e ne creava due per tag (o una a metà, senza latest.yml per gli aggiornamenti).
+      # Il testo è la sezione della versione nel CHANGELOG.md.
       - shell: bash
         run: |
           v="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" --title "$v" \
+          node scripts/changelog.mjs notes "$v" > release-notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$v" --notes-file release-notes.md \
             "release/studiomio-setup-$v.exe" "release/studiomio-setup-$v.exe.blockmap" release/latest.yml
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

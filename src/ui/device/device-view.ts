@@ -79,6 +79,10 @@ export class DeviceView {
   private anchor: DeviceKey | null = null;
   /** I rack con i dispositivi nascosti. */
   private readonly folded = new Set<DeviceId>();
+  /** I dispositivi compressi, per catena ("proprietario/chiave"). */
+  private readonly foldedDevices = new Set<string>();
+  /** Di chi era la catena costruita l'ultima volta: un'altra catena parte dall'inizio. */
+  private builtOwner: ChainOwner | null = null;
   /** "Map" acceso su un rack, con la macro scelta (null: nessuna). */
   private mapMode: { readonly rack: DeviceId; readonly macro: number | null } | null = null;
 
@@ -89,8 +93,11 @@ export class DeviceView {
       const r = add.getBoundingClientRect();
       this.chooseEffect(r.left, r.bottom + 2);
     };
+    const foldAll = el<HTMLButtonElement>('button', {
+      textContent: '⇤⇥', title: 'Comprimi tutti i dispositivi (o riaprili, se sono già tutti compressi)', onclick: () => this.foldAll(),
+    });
     const close = el<HTMLButtonElement>('button', { className: 'close', textContent: '×', title: 'Chiudi (Esc)', onclick: () => this.close() });
-    this.element.append(el('div', { className: 'device-head' }, this.backButton, this.title, add, close), this.chain);
+    this.element.append(el('div', { className: 'device-head' }, this.backButton, this.title, foldAll, add, close), this.chain);
     this.element.addEventListener('keydown', e => {
       if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
@@ -124,7 +131,7 @@ export class DeviceView {
     this.builtFor = '';
     this.element.hidden = false;
     this.sync();
-    this.element.focus();
+    this.element.focus({ preventScroll: true });
     return true;
   }
 
@@ -133,10 +140,54 @@ export class DeviceView {
     this.element.hidden = true;
   }
 
-  /** Segna il dispositivo che un controller muove (null: nessuno). */
+  /** Segna il dispositivo che un controller muove (null: nessuno); se cambia, la catena scorre
+   *  fino a mostrarlo. */
   markControlled(device: ControlledDevice | null): void {
+    const moved = device?.owner !== this.controlled?.owner || device?.device !== this.controlled?.device;
     this.controlled = device;
     this.showControlled();
+    if (moved) this.revealControlled();
+  }
+
+  private revealControlled(): void {
+    const c = this.controlled;
+    if (!c || c.owner !== this.owner) return;
+    const panel = this.panels.get(c.device) ?? this.rackPanels.get(c.device as DeviceId);
+    if (panel) this.reveal(panel.element);
+  }
+
+  /** Scorre la catena (e solo lei, non l'area che la contiene) quanto basta a mostrare `element`;
+   *  se è più largo della catena se ne vede l'inizio. */
+  private reveal(element: HTMLElement): void {
+    const view = this.chain.getBoundingClientRect();
+    const r = element.getBoundingClientRect();
+    const pad = 10;
+    if (r.right > view.right - pad) this.chain.scrollLeft += Math.min(r.right - view.right + pad, r.left - view.left - pad);
+    else if (r.left < view.left + pad) this.chain.scrollLeft += r.left - view.left - pad;
+  }
+
+  /** Comprime tutti i dispositivi della catena, o li riapre se lo sono già. */
+  private foldAll(): void {
+    const owner = this.owner;
+    if (!owner) return;
+    const fold = [...this.panels.values()].some(p => !p.folded);
+    for (const [key, panel] of this.panels) {
+      panel.setFolded(fold);
+      this.setDeviceFolded(owner, key, fold);
+    }
+  }
+
+  private setDeviceFolded(owner: ChainOwner, key: string, folded: boolean): void {
+    if (folded) this.foldedDevices.add(`${owner}/${key}`);
+    else this.foldedDevices.delete(`${owner}/${key}`);
+  }
+
+  /** Le opzioni di un pannello per comprimerlo, ricordando la scelta. */
+  private foldOptions(owner: ChainOwner, key: string) {
+    return {
+      folded: this.foldedDevices.has(`${owner}/${key}`),
+      onFold: (folded: boolean) => this.setDeviceFolded(owner, key, folded),
+    };
   }
 
   private showControlled(): void {
@@ -179,7 +230,9 @@ export class DeviceView {
 
   /** Pannelli nuovi quando cambia la forma della catena (effetti aggiunti, tolti, spostati, rack). */
   private build(owner: ChainOwner, { track, effects, racks }: ChainSource, shape: string): void {
-    const scroll = this.chain.scrollLeft;
+    const sameOwner = owner === this.builtOwner;
+    this.builtOwner = owner;
+    const scroll = sameOwner ? this.chain.scrollLeft : 0;
     const known = new Set(this.panels.keys());
     this.builtFor = shape;
     this.panels.clear();
@@ -211,9 +264,12 @@ export class DeviceView {
     this.showControlled();
     this.showSelection();
     this.showMapped(racks);
+    // un'altra catena parte dall'inizio, o dal dispositivo che il controller muove
+    if (!sameOwner) this.revealControlled();
     // un effetto appena aggiunto si vede subito, anche in fondo a una catena lunga
-    const added = known.size ? effects.filter(e => !known.has(e.id)).at(-1) : undefined;
-    if (added) this.panels.get(added.id)?.element.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    const added = sameOwner && known.size ? effects.filter(e => !known.has(e.id)).at(-1) : undefined;
+    const panel = added && this.panels.get(added.id);
+    if (panel) this.reveal(panel.element);
   }
 
   private update({ track, effects, racks }: ChainSource): void {
@@ -434,7 +490,7 @@ export class DeviceView {
       },
     });
     const panel = new DevicePanel({
-      type, settings: track.instrument, before: [select], after: [test], display,
+      type, settings: track.instrument, before: [select], after: [test], display, ...this.foldOptions(track.id, INSTRUMENT),
       onParam: (id, v, final) => this.param(setInstrumentParam(track.id, id, v), `param-${track.id}-${id}`, final),
       onPreset: p => {
         store.apply(loadPreset(track.id, p.name, p.params));
@@ -465,7 +521,7 @@ export class DeviceView {
       playedNotes: () => [],
     });
     const panel = new DevicePanel({
-      type, settings: e, before: [power], display,
+      type, settings: e, before: [power], display, ...this.foldOptions(owner, id),
       after: [
         button('◂', 'Sposta prima (dal bordo di un rack ne esce, accanto a un rack ci entra)', () => store.apply(moveDevice(owner, id, -1)), !canMove(-1)),
         button('▸', 'Sposta dopo (dal bordo di un rack ne esce, accanto a un rack ci entra)', () => store.apply(moveDevice(owner, id, 1)), !canMove(1)),
