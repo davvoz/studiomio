@@ -1,61 +1,65 @@
 # Changelog
 
-Le novità di ogni versione di studiomio. Le voci nuove si scrivono sotto "Non rilasciato":
-`release.bat` le assegna alla versione che pubblica e la build le mette nella release su GitHub.
-Sezioni: Novità, Modifiche, Correzioni.
+What's new in each version of studiomio. New entries go under "Unreleased": `release.bat`
+assigns them to the version it publishes and the build puts them in the GitHub release.
+Sections: Added, Changed, Fixed.
 
-## [Non rilasciato]
+## [Unreleased]
+
+### Changed
+- Release notes are now written in English.
 
 ## [0.1.8] - 2026-10-17
 
-### Novità
-- I dispositivi della catena si comprimono in una striscia verticale con il nome (▾/▸ o doppio
-  clic sull'intestazione), come in Live.
+### Added
+- Devices in the chain can be folded into a vertical strip showing their name (▾/▸ or double
+  click on the header), like in Live.
+- The update dialog shows what's new, including the versions you skipped.
 
 ## [0.1.7] - 2026-10-17
 
-### Novità
-- Reverse delle clip audio: il suono, la forma d'onda e i transienti si girano insieme, anche
-  nell'export del mix.
+### Added
+- Reverse for audio clips: sound, waveform and transients are flipped together, in the mix export
+  too.
 
 ## [0.1.6] - 2026-10-17
 
-### Correzioni
-- Gli aggiornamenti automatici tornano a funzionare: la release 0.1.5 era stata pubblicata senza
-  il file che li annuncia.
+### Fixed
+- Automatic updates work again: release 0.1.5 had been published without the file that announces
+  them.
 
 ## [0.1.5] - 2026-10-17
 
-### Correzioni
-- Correzioni alla build della release, senza cambiamenti nell'app.
+### Fixed
+- Fixes to the release build, no changes to the app.
 
 ## [0.1.4] - 2026-10-17
 
-### Novità
-- Import dell'audio direttamente negli slot vuoti della session: doppio clic o "Importa audio…"
-  sullo slot; il pulsante Importa, con la session aperta, usa lo slot scelto.
+### Added
+- Import audio straight into empty session slots: double click or "Importa audio…" on the slot;
+  with the session open, the Import button uses the selected slot.
 
 ## [0.1.3] - 2026-10-17
 
-### Novità
-- La versione dell'app si vede nella barra di stato.
+### Added
+- The app version is shown in the status bar.
 
 ## [0.1.2] - 2026-10-17
 
-### Novità
-- Le macro dei rack si mappano anche sui controlli dell'EQ.
+### Added
+- Rack macros can be mapped to EQ controls too.
 
 ## [0.1.1] - 2026-10-17
 
-Prima release installabile per Windows, con aggiornamenti automatici dalle release su GitHub.
+First installable release for Windows, with automatic updates from the GitHub releases.
 
-### Novità
-- Arrangement view e session view come in Live: clip e scene lanciate a tempo, mixer, master con
-  i suoi effetti, misuratori di livello.
-- Warp delle clip audio con editor (warp marker, transienti, Auto-Warp, loop) e piano roll per le
-  clip MIDI; modulazioni di volume, pan e parametri dentro le clip.
-- Strumenti: Analog (con unison e modo Legato alla 303), Neuro per i bassi, Drum Machine con pad
-  sintetizzati o sample.
-- Effetti: EQ a 8 bande, Delay, Drive, Compressore, Limiter, Riverbero, Multibanda (OTT),
-  Phaser/Flanger, Stereo; raggruppamento delle tracce; controllo dall'APC40.
-- Progetti salvati in una cartella con annulla/ripeti ed export del mix.
+### Added
+- Arrangement view and session view like in Live: clips and scenes launched in time, mixer, master
+  with its own effects, level meters.
+- Audio clip warping with an editor (warp markers, transients, Auto-Warp, loop) and a piano roll
+  for MIDI clips; volume, pan and parameter modulations inside clips.
+- Instruments: Analog (with unison and 303-style Legato mode), Neuro for basses, Drum Machine with
+  synthesized or sampled pads.
+- Effects: 8-band EQ, Delay, Drive, Compressor, Limiter, Reverb, Multiband (OTT), Phaser/Flanger,
+  Stereo; track grouping; APC40 control.
+- Projects saved in a folder, with undo/redo and mix export.

@@ -1,6 +1,6 @@
 // Il CHANGELOG.md nelle release:
-//   node scripts/changelog.mjs check          "Non rilasciato" deve avere almeno una voce
-//   node scripts/changelog.mjs release        le voci di "Non rilasciato" vanno alla versione
+//   node scripts/changelog.mjs check          "Unreleased" deve avere almeno una voce
+//   node scripts/changelog.mjs release        le voci di "Unreleased" vanno alla versione
 //                                             di package.json, con la data di oggi
 //   node scripts/changelog.mjs notes 0.1.8    stampa le voci di quella versione (testo della
 //                                             release su GitHub)
@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const FILE = new URL('../CHANGELOG.md', import.meta.url);
-const UNRELEASED = 'Non rilasciato';
+const UNRELEASED = 'Unreleased';
 
 const [command, arg] = process.argv.slice(2);
 const lines = readFileSync(FILE, 'utf8').split(/\r?\n/);
