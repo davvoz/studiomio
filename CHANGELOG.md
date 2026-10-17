@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-17
+
 ### Changed
 - Release notes are now written in English.
 
