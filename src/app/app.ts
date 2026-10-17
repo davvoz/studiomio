@@ -53,7 +53,8 @@ export class App implements Commands, FileCommands, TimelineActions {
   private readonly transport: TransportBar;
   /** I controller MIDI (l'APC40 mkII sulla session). */
   readonly surfaces: ControlSurfaces;
-  private readonly status = Object.assign(document.createElement('footer'), { className: 'status' });
+  private readonly status = Object.assign(document.createElement('span'), { className: 'status-text' });
+  private readonly statusBar = Object.assign(document.createElement('footer'), { className: 'status' });
 
   constructor(root: HTMLElement) {
     this.arrangement = new ArrangementView({
@@ -108,7 +109,8 @@ export class App implements Commands, FileCommands, TimelineActions {
     main.append(headers.element, this.arrangement.element, master.header, master.lane);
     const views = Object.assign(document.createElement('div'), { className: 'views' });
     views.append(main, this.sessionView.element);
-    root.append(transport.element, views, this.bottom.element, this.status);
+    this.statusBar.append(this.status, Object.assign(document.createElement('span'), { className: 'version', textContent: `v${__APP_VERSION__}` }));
+    root.append(transport.element, views, this.bottom.element, this.statusBar);
     const viewButton = (text: string, title: string, run: () => void) => Object.assign(document.createElement('button'), { textContent: text, title, onclick: run });
     this.viewButtons = {
       arrangement: viewButton('☰ Arr.', 'Arrangement: la timeline (Tab)', () => this.showView('arrangement')),

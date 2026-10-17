@@ -6,3 +6,5 @@ tests/wasm-pkg/
 *.log
 dist-electron/
 release/
+# lo script per pubblicare le release resta solo in locale
+release.bat
