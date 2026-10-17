@@ -22,6 +22,8 @@ npm run dev        # http://localhost:5173 – l'app (Chrome o Edge: servono per
 | `npm run typecheck` | controllo dei tipi |
 | `npm run build` | build di produzione in `dist/` |
 | `npm run wasm` / `wasm:test` | compila il crate Rust per il browser / per i test |
+| `npm run app` | l'app in Electron, come la vedranno gli utenti |
+| `npm run dist` | installer Windows in `release/` (`studiomio-setup-<versione>.exe`) |
 
 Per usare gli algoritmi WebAssembly nell'app: `VITE_DSP_WASM=1 npm run dev`.
 
@@ -36,6 +38,30 @@ browser).
 Requisiti: Node 22+, Rust (`rustup target add wasm32-unknown-unknown`) e `wasm-pack`.
 Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una volta
 `npm run wasm` e `npm run wasm:test` (servono anche per i test e la build).
+
+## App per Windows
+
+La stessa app, installabile: Electron porta con sé il suo Chromium, quindi memoria condivisa,
+MIDI (APC40) e cartelle dei progetti funzionano senza browser, senza server e senza rete.
+`src/` non sa di girare in Electron: tutto sta in `electron/main.ts`, che serve `dist/` da un
+protocollo interno (`app://studiomio`, con le intestazioni COOP/COEP), concede i permessi solo
+all'app e controlla gli aggiornamenti. F12 apre gli strumenti per sviluppatori.
+
+Per rilasciare una versione:
+
+```sh
+npm version minor          # 0.1.0 → 0.2.0: commit e tag v0.2.0 (patch / minor / major)
+git push --follow-tags
+```
+
+Il tag avvia `.github/workflows/release.yml`: su Windows compila WebAssembly, lancia i test,
+costruisce l'installer e lo pubblica nelle Releases del repository insieme a `latest.yml`. Le app
+installate leggono `latest.yml` all'avvio, scaricano la nuova versione in background e propongono
+di riavviare (altrimenti si installa alla chiusura). Senza rete l'app funziona come sempre.
+
+L'installer non è firmato: alla prima installazione Windows mostra "Windows ha protetto il PC"
+→ "Ulteriori informazioni" → "Esegui comunque". Gli aggiornamenti non lo chiedono più.
+L'icona è `build/icon.png` (512×512).
 
 ## Struttura
 

@@ -1,0 +1,35 @@
+# Installer Windows di studiomio (npm run dist → release/).
+appId: it.davvoz.studiomio
+productName: studiomio
+copyright: Copyright © 2026 David
+
+directories:
+  buildResources: build   # icon.png
+  output: release
+
+# Nel pacchetto vanno solo l'app compilata e il processo principale; il banco di prova no.
+files:
+  - dist/**
+  - "!dist/bench.html"
+  - "!dist/assets/bench-*"
+  - dist-electron/**
+  - package.json
+
+win:
+  target: nsis
+  artifactName: studiomio-setup-${version}.${ext}
+
+# Installazione per l'utente, senza domande né permessi di amministratore.
+nsis:
+  oneClick: true
+  perMachine: false
+  shortcutName: studiomio
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+
+# Gli aggiornamenti si scaricano dalle release del repository.
+publish:
+  provider: github
+  owner: davvoz
+  repo: studiomio
+  releaseType: release

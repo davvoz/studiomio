@@ -4,3 +4,5 @@ target/
 src/dsp/wasm/pkg/
 tests/wasm-pkg/
 *.log
+dist-electron/
+release/

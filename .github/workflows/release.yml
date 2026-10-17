@@ -1,0 +1,44 @@
+# Pubblica una release quando si fa il push di un tag di versione:
+#   npm version minor        (0.1.0 → 0.2.0: commit + tag v0.2.0)
+#   git push --follow-tags
+# Le app installate la trovano al prossimo avvio e propongono l'aggiornamento.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # per creare la release e caricare l'installer
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - run: npm ci
+      - run: npm run wasm
+      - run: npm run wasm:test
+
+      # una release con i test rotti non deve arrivare agli utenti
+      - run: npm test
+
+      - run: npm run build
+      - run: npm run electron:build
+      - run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

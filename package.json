@@ -1,8 +1,12 @@
 {
   "name": "studiomio",
+  "productName": "studiomio",
   "private": true,
   "version": "0.1.0",
+  "description": "DAW con warp in stile Ableton Live",
+  "author": "David <ing.casaert@gmail.com>",
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && vite build",
@@ -12,11 +16,19 @@
     "test:watch": "vitest",
     "bench": "cross-env BENCH=1 vitest run --silent=false --reporter=verbose",
     "wasm": "wasm-pack build crates/dsp --target web --out-dir ../../src/dsp/wasm/pkg --out-name studiomio_dsp --release",
-    "wasm:test": "wasm-pack build crates/dsp --target nodejs --out-dir ../../tests/wasm-pkg --out-name studiomio_dsp --release"
+    "wasm:test": "wasm-pack build crates/dsp --target nodejs --out-dir ../../tests/wasm-pkg --out-name studiomio_dsp --release",
+    "electron:build": "tsc -p electron/tsconfig.json",
+    "app": "npm run build && npm run electron:build && electron .",
+    "dist": "npm run build && npm run electron:build && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "cross-env": "^10.1.0",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"
