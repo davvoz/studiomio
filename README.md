@@ -6,6 +6,19 @@ strumenti (un synth e una drum machine) ed effetti in AudioWorklet, mixer con mi
 
 Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
+## Scarica
+
+[![Scarica per Windows](https://img.shields.io/github/v/release/davvoz/studiomio?label=Scarica%20per%20Windows&style=for-the-badge&color=ff9d2e)](https://github.com/davvoz/studiomio/releases/latest)
+
+1. Apri l'[ultima versione](https://github.com/davvoz/studiomio/releases/latest) e scarica
+   `studiomio-setup-<versione>.exe` (sotto "Assets").
+2. Avvialo: si installa da solo, senza domande, con le icone sul desktop e nel menu Start.
+3. Alla prima installazione Windows può mostrare "Windows ha protetto il PC": clicca
+   "Ulteriori informazioni" → "Esegui comunque" (l'installer non è firmato digitalmente).
+
+Gli aggiornamenti arrivano da soli: quando esce una nuova versione, studiomio la scarica e propone
+di riavviare. Serve Windows 10 o 11 a 64 bit; l'APC40 mkII funziona appena collegato.
+
 ## Avvio
 
 ```sh
@@ -59,9 +72,8 @@ costruisce l'installer e lo pubblica nelle Releases del repository insieme a `la
 installate leggono `latest.yml` all'avvio, scaricano la nuova versione in background e propongono
 di riavviare (altrimenti si installa alla chiusura). Senza rete l'app funziona come sempre.
 
-L'installer non è firmato: alla prima installazione Windows mostra "Windows ha protetto il PC"
-→ "Ulteriori informazioni" → "Esegui comunque". Gli aggiornamenti non lo chiedono più.
-L'icona è `build/icon.png` (512×512).
+L'installer non è firmato (vedi sopra: Scarica); gli aggiornamenti non mostrano l'avviso di
+Windows. L'icona è `build/icon.png` (512×512).
 
 ## Struttura
 
