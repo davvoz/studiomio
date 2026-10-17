@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-18
+
 ### Added
 - Wavetable: a new wavetable synth, like Live's. Two oscillators each read a table (Basic, PWM,
   Harmonics, Sync, Fold, FM, Vocal, Organ, Digital) at a position you can sweep with the
