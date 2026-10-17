@@ -18,7 +18,7 @@ function richProject() {
     .withMarkers(c.warp.markers.withMarkerAt(1.3).markers.withMarkerBeat(1, 2.75))
     .withWarp({ mode: 'beats' })
     .withWarpOptions('beats', { preserve: 0.25, loop: 'pingpong' })
-    .withTranspose(-3).withDetune(12).withGain(-4.5)));
+    .withTranspose(-3).withDetune(12).withGain(-4.5).withReversed(true, 4)));
   store.apply(addMidiClip(track(1), 8, 4));
   const midiId = store.project.tracks[1].arrangement[0].id;
   store.apply(updateClip<MidiClip>('note', track(1), midiId, c => c.addingNotes(
@@ -42,6 +42,8 @@ describe('ProjectCodec', () => {
     expect(audio.warp.mode).toBe('beats');
     expect(audio.warp.options.beats).toEqual({ preserve: 0.25, loop: 'pingpong', envelope: 100 });
     expect(audio.warp.markers.equals((p.tracks[0].arrangement[0].clip as AudioClip).warp.markers)).toBe(true);
+    expect(audio.gainDb).toBe(-4.5);
+    expect(audio.reversed).toBe(true);
     expect((back.tracks[1].slots[2] as MidiClip).notes).toHaveLength(2);
   });
 
@@ -92,5 +94,11 @@ describe('ProjectCodec', () => {
     const p = codec.decode(json);
     expect((p.tracks[1] as MidiTrack).instrument).toEqual(DEFAULT_INSTRUMENT);
     expect(p.tracks[0]).not.toHaveProperty('instrument');
+  });
+
+  it('le clip salvate prima del reverse si aprono dritte', () => {
+    const json = JSON.parse(codec.stringify(richProject()));
+    delete json.tracks[0].arrangement[0].clip.reversed;
+    expect((codec.decode(json).tracks[0].arrangement[0].clip as AudioClip).reversed).toBe(false);
   });
 });

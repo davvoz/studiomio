@@ -164,6 +164,13 @@ export class WarpMarkers {
     return WarpMarkers.of([{ t: 0, b: b0 }, { t: duration, b: b0 + (duration * bpm) / 60 }], bpm);
   }
 
+  /** La mappa per il sample rovesciato: il secondo `t` diventa `duration − t` e il battito `b`
+   *  diventa `axis − b`, così il battito `axis − b` suona l'audio che prima suonava in `b`. */
+  mirrored(duration: Seconds, axis: Beats): WarpMarkers {
+    const ms = this.markers.length >= 2 ? this.markers : [{ t: 0, b: this.beatOf(0) }, { t: duration, b: this.beatOf(duration) }];
+    return WarpMarkers.of(ms.map(m => ({ t: duration - m.t, b: axis - m.b })), this.baseBpm);
+  }
+
   equals(o: WarpMarkers): boolean {
     return o.baseBpm === this.baseBpm && o.markers.length === this.markers.length
       && o.markers.every((m, i) => m.t === this.markers[i].t && m.b === this.markers[i].b);

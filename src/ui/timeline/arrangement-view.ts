@@ -124,7 +124,7 @@ export class ArrangementView implements GestureHost {
       paintLanes(this.lanes.g, {
         project, geo: this.geo, width: this.lanes.width, height: this.lanes.height, grid,
         selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTracks: this.ui.selectedTracks,
-        peaks: (c: AudioClip) => this.deps.peaks.get(c.sample),
+        peaks: (c: AudioClip) => this.deps.peaks.get(c.sample, c.reversed),
       });
     }
     const o = this.overlay;

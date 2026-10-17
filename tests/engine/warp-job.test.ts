@@ -56,6 +56,26 @@ describe('dalla clip al lavoro di warp', () => {
     expect(out[0].length).toBe(Math.round(audio.channels[0].length * 120 / 96));
   });
 
+  it('reverse: il lavoro legge il sample al contrario, con i transienti specchiati', () => {
+    const r = clip.withReversed(true, 4);
+    const { job } = clipRender(r, sample, new Tempo(120));
+    expect(job.reverse).toBe(true);
+    expect(job.points).toEqual([[0, 0], [176400, 176400]]);
+    const sr = 44100, transients = sample.analysis!.transients;
+    expect(job.settings).toMatchObject({ transients: transients.map(t => (4 - t) * sr).reverse() });
+    // le clip dritte non cambiano chiave di render
+    expect(clipRender(clip, sample, new Tempo(120)).job).not.toHaveProperty('reverse');
+  });
+
+  it('il renderer rovescia l\'audio', () => {
+    const ramp = Float32Array.from({ length: 1000 }, (_, i) => i / 1000);
+    const job = { points: [[0, 0], [1000, 1000]] as [number, number][], outLength: 1000, transpose: 0, settings: { mode: 'repitch' as const } };
+    const out = new WarpRenderer().render({ channels: [ramp], sampleRate: 44100 }, { ...job, reverse: true });
+    expect(out[0][0]).toBeCloseTo(0.999, 3);
+    expect(out[0][999]).toBeCloseTo(0, 3);
+    expect(ramp[0]).toBe(0); // il sample non si tocca
+  });
+
   it('rifiuta clip senza warp o con il sample sbagliato', () => {
     expect(() => clipRender(clip.withWarp({ enabled: false }), sample, new Tempo(120))).toThrow(/non usa il warp/);
     expect(() => clipRender(clip, sampleRef(ids), new Tempo(120))).toThrow(/sample/);

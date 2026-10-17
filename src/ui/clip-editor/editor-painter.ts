@@ -1,4 +1,5 @@
 import type { Beats, Seconds, TempoMap, TimeSignature } from '../../core/music-time';
+import { dbToGain } from '../../engine/audio-graph';
 import type { AudioClip } from '../../model/audio-clip';
 import type { Peaks } from '../waveform';
 import { COLORS, withAlpha } from '../timeline/painters';
@@ -70,7 +71,8 @@ function paintWave(p: EditorPaint, top: number): void {
   const { g, axis, width, height, clip, peaks } = p;
   if (!peaks) return;
   const toSeconds = contentToSeconds(clip, p.tempo);
-  const mid = top + (height - top) / 2, amp = (height - top) / 2 - 4;
+  // l'altezza segue il gain della clip, come la si sente
+  const mid = top + (height - top) / 2, amp = (height - top) / 2 - 4, gain = dbToGain(clip.gainDb);
   g.fillStyle = C.center;
   g.fillRect(0, Math.round(mid), width, 1);
   for (let x = 0; x < width; x++) {
@@ -79,7 +81,7 @@ function paintWave(p: EditorPaint, top: number): void {
     if (lo === 0 && hi === 0) continue;
     const inside = b1 > clip.region.start && b0 < clip.region.end;
     g.fillStyle = inside ? C.wave : C.waveOut;
-    const y0 = mid - Math.min(1, hi) * amp, y1 = mid - Math.max(-1, lo) * amp;
+    const y0 = mid - Math.min(1, hi * gain) * amp, y1 = mid - Math.max(-1, lo * gain) * amp;
     g.fillRect(x, y0, 1, Math.max(1, y1 - y0));
   }
 }

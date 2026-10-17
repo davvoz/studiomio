@@ -75,10 +75,12 @@ export class ClipAudio implements PlayableProvider {
     if (!audio) return null;
     if (!clip.warp.enabled) {
       // senza warp: il sample com'è, alla sua velocità (il transpose cambia la velocità)
-      let buffer = this.raw.get(clip.sample);
+      const key = clip.reversed ? `${clip.sample}|reverse` : clip.sample;
+      let buffer = this.raw.get(key);
       if (!buffer) {
-        buffer = toAudioBuffer(this.graph, audio.channels, audio.sampleRate);
-        this.raw.set(clip.sample, buffer);
+        const channels = clip.reversed ? audio.channels.map(c => c.slice().reverse()) : audio.channels;
+        buffer = toAudioBuffer(this.graph, channels, audio.sampleRate);
+        this.raw.set(key, buffer);
       }
       return { buffer, startBeat: 0, rate: Math.pow(2, clip.pitch / 12) };
     }

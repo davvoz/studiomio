@@ -1,6 +1,6 @@
 import type { Seconds } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
-import { AudioClip } from '../../model/audio-clip';
+import { AudioClip, clipTimes } from '../../model/audio-clip';
 import { sampleDuration, type SampleRef } from '../../model/sample';
 import { autoWarp, followTempo } from '../../model/warp-tools';
 import { findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
@@ -50,7 +50,8 @@ export class ClipEditor implements EditorHost {
 
   constructor(private readonly deps: ClipEditorDeps) {
     this.panel = new ClipPanel({
-      commit: (label, fn) => this.commit(label, fn),
+      commit: (label, fn, mergeKey) => this.commit(label, fn, mergeKey),
+      endMerge: () => deps.store.endMerge(),
       autoWarp: () => this.autoWarp(),
       followTempo: () => void this.followTempo(),
       quantize: () => this.quantize(),
@@ -125,19 +126,21 @@ export class ClipEditor implements EditorHost {
     return t ? sampleDuration(t.sample) : 0;
   }
 
+  /** I transienti dell'analisi nei secondi della clip (specchiati se è al contrario). */
   transients(): readonly Seconds[] {
-    return this.target()?.sample.analysis?.transients ?? [];
+    const t = this.target();
+    return t ? clipTimes(t.clip, t.sample.analysis?.transients ?? [], sampleDuration(t.sample)) : [];
   }
 
   snapStep(p: Pointer): number | null {
     return p.alt ? null : gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10);
   }
 
-  commit(label: string, fn: (c: AudioClip) => AudioClip): void {
+  commit(label: string, fn: (c: AudioClip) => AudioClip, mergeKey?: string): void {
     const ref = this.ref;
     if (!ref || !this.target()) return;
     try {
-      this.deps.store.apply(updateClipAt<AudioClip>(label, ref, fn));
+      this.deps.store.apply(updateClipAt<AudioClip>(label, ref, fn), { mergeKey });
     } catch (e) {
       this.deps.say(`${label}: ${e instanceof Error ? e.message : e}`);
     }
@@ -169,7 +172,7 @@ export class ClipEditor implements EditorHost {
     const t = this.target();
     const a = t?.sample.analysis;
     if (!t || !a) return this.deps.say('Il sample non è stato analizzato.');
-    this.commit('Auto-Warp', c => c.withMarkers(autoWarp(a.tempo, a.transients, sampleDuration(t.sample))).withWarp({ enabled: true }));
+    this.commit('Auto-Warp', c => c.withMarkers(autoWarp(a.tempo, this.transients(), sampleDuration(t.sample))).withWarp({ enabled: true }));
     this.deps.say(`Auto-Warp: ${a.tempo.toFixed(2)} BPM.`);
   }
 
@@ -177,9 +180,9 @@ export class ClipEditor implements EditorHost {
     const t = this.target();
     const a = t?.sample.analysis;
     if (!t || !a) return this.deps.say('Il sample non è stato analizzato.');
-    const sr = t.sample.sampleRate;
-    const beats = (await this.deps.trackBeats(t.sample, a.tempo)).map(i => i / sr);
-    const markers = followTempo(beats, a.transients, a.tempo, sampleDuration(t.sample), this.deps.store.project.signature.beatsPerBar);
+    const sr = t.sample.sampleRate, duration = sampleDuration(t.sample);
+    const beats = clipTimes(t.clip, (await this.deps.trackBeats(t.sample, a.tempo)).map(i => i / sr), duration);
+    const markers = followTempo(beats, clipTimes(t.clip, a.transients, duration), a.tempo, duration, this.deps.store.project.signature.beatsPerBar);
     if (!markers) return this.deps.say('Non ho trovato abbastanza battiti: prova Auto-Warp.');
     this.commit('Segui tempo', c => c.withMarkers(markers).withWarp({ enabled: true }));
     this.deps.say(`Segui tempo: ${markers.length} marker.`);
@@ -235,7 +238,7 @@ export class ClipEditor implements EditorHost {
         paintEditor({
           g: this.surface.g, width: this.surface.width, height: this.surface.height, axis: this._axis,
           clip, duration: sampleDuration(t.sample), transients: this.transients(),
-          peaks: this.deps.peaks.get(t.sample.id), tempo: project.tempo, signature: project.signature,
+          peaks: this.deps.peaks.get(t.sample.id, clip.reversed), tempo: project.tempo, signature: project.signature,
           grid: gridStep(this._axis.pxPerBeat, project.signature, 10), selectedMarker: this.selected, hoverTransient: this.hover,
           playhead: playheadIn(t.found, engine),
         });
@@ -349,6 +352,7 @@ export class ClipEditor implements EditorHost {
       { label: 'Azzera i warp marker', disabled: !warp, run: () => this.commit('Azzera warp marker', c => c.withMarkers(c.warp.markers.cleared(this.duration()))) },
       SEPARATOR,
       { label: warp ? 'Spegni il warp' : 'Accendi il warp', run: () => this.commit(warp ? 'Warp spento' : 'Warp attivo', c => c.withWarp({ enabled: !warp })) },
+      { label: clip.reversed ? 'Togli il reverse' : 'Reverse', run: () => this.commit(clip.reversed ? 'Reverse spento' : 'Reverse', c => c.withReversed(!clip.reversed, this.duration())) },
     ];
     if (hit.kind === 'marker') {
       const i = hit.index;

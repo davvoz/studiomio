@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { asId, sequentialIds } from '../../src/core/id';
-import { AudioClip } from '../../src/model/audio-clip';
+import { AudioClip, clipTimes } from '../../src/model/audio-clip';
 import { fullRange } from '../../src/model/clip';
 import { MidiClip } from '../../src/model/midi-clip';
+import { WarpMarkers } from '../../src/model/warp-markers';
 import { sampleRef } from '../helpers/fixtures';
 
 const midi = (loop: boolean) => MidiClip.create({
@@ -61,6 +62,47 @@ describe('AudioClip', () => {
     expect(c.withTranspose(3).withDetune(25).pitch).toBe(3.25);
     const t = c.withWarpOptions('texture', { flux: 55 }).withWarp({ mode: 'beats' }).withWarp({ mode: 'texture' });
     expect(t.warp.options.texture).toEqual({ grainMs: 80, flux: 55 });
+  });
+
+  it('il volume della clip è limitato', () => {
+    const ids = sequentialIds();
+    const c = AudioClip.fromSample(ids.next('clip'), sampleRef(ids), '#f00');
+    expect(c.withGain(-6).gainDb).toBe(-6);
+    expect(c.withGain(40).gainDb).toBe(24);
+    expect(c.withGain(-200).gainDb).toBe(-70);
+  });
+
+  it('reverse: lo stesso tratto di audio suona sugli stessi battiti, specchiato', () => {
+    const ids = sequentialIds();
+    // 4 s a 120 BPM, primo colpo a 0.25 s; la clip suona [1, 5)
+    const c = AudioClip.fromSample(ids.next('clip'), sampleRef(ids), '#f00')
+      .withMarkers(WarpMarkers.straight(120, 4, 0.25)).withRegion({ start: 1, end: 5 });
+    const r = c.withReversed(true, 4);
+    expect(r.reversed).toBe(true);
+    expect(r.region).toEqual(c.region);
+    // il battito b della clip dritta suona il secondo t; quella al contrario lo suona in 6 − b,
+    // e nel sample rovesciato quel secondo è 4 − t
+    for (const b of [1, 2.5, 4, 5]) expect(r.warp.markers.timeOf(6 - b)).toBeCloseTo(4 - c.warp.markers.timeOf(b), 9);
+    expect(r.warp.markers.globalBpm).toBeCloseTo(120, 9);
+    const back = r.withReversed(false, 4);
+    expect(back.reversed).toBe(false);
+    for (const b of [-1, 0, 3, 7.5]) expect(back.warp.markers.timeOf(b)).toBeCloseTo(c.warp.markers.timeOf(b), 9);
+    expect(r.withReversed(true, 4)).toBe(r);
+  });
+
+  it('reverse con il loop: si specchia attorno al loop', () => {
+    const ids = sequentialIds();
+    const c = AudioClip.fromSample(ids.next('clip'), sampleRef(ids), '#f00').withLoop({ enabled: true, start: 2, end: 4 });
+    const r = c.withReversed(true, 4);
+    expect(r.loop).toEqual(c.loop);
+    expect(r.warp.markers.timeOf(2)).toBeCloseTo(4 - c.warp.markers.timeOf(4), 9);
+  });
+
+  it('i transienti visti da una clip al contrario sono specchiati e in ordine', () => {
+    const ids = sequentialIds();
+    const c = AudioClip.fromSample(ids.next('clip'), sampleRef(ids), '#f00');
+    expect(clipTimes(c, [0.5, 1, 3], 4)).toEqual([0.5, 1, 3]);
+    expect(clipTimes(c.withReversed(true, 4), [0.5, 1, 3], 4)).toEqual([1, 3, 3.5]);
   });
 });
 

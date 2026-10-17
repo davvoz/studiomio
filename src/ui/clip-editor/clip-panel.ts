@@ -1,5 +1,5 @@
 import type { WarpMode } from '../../dsp/stretch/stretcher';
-import type { AudioClip, WarpOptions } from '../../model/audio-clip';
+import { GAIN_MAX_DB, GAIN_MIN_DB, type AudioClip, type WarpOptions } from '../../model/audio-clip';
 import { sampleDuration, type SampleRef } from '../../model/sample';
 import { scaleTempo } from '../../model/warp-tools';
 import { el } from '../dom';
@@ -44,7 +44,9 @@ const MODE_LABEL: { readonly [M in WarpMode]: string } = {
 };
 
 export interface PanelActions {
-  commit(label: string, fn: (c: AudioClip) => AudioClip): void;
+  /** Con `mergeKey` le modifiche continue (es. un cursore trascinato) sono un passo solo. */
+  commit(label: string, fn: (c: AudioClip) => AudioClip, mergeKey?: string): void;
+  endMerge(): void;
   autoWarp(): void;
   followTempo(): void;
   quantize(): void;
@@ -53,7 +55,7 @@ export interface PanelActions {
 
 const row = (label: string, ...controls: Node[]) => el('label', { className: 'row' }, el('span', { textContent: label }), ...controls);
 
-/** Pannello a sinistra dell'editor: warp, modalità e opzioni, tempo, intonazione e volume. */
+/** Pannello a sinistra dell'editor: volume e reverse, warp, modalità e opzioni, tempo e intonazione. */
 export class ClipPanel {
   readonly element = el('div', { className: 'clip-panel' });
   private clip: AudioClip | null = null;
@@ -70,7 +72,9 @@ export class ClipPanel {
   private readonly bpmLabel = el('span');
   private readonly transpose = el<HTMLInputElement>('input', { type: 'number', min: '-48', max: '48', step: '1' });
   private readonly detune = el<HTMLInputElement>('input', { type: 'number', min: '-50', max: '50', step: '1' });
-  private readonly gain = el<HTMLInputElement>('input', { type: 'number', min: '-70', max: '24', step: '0.5' });
+  private readonly gain = el<HTMLInputElement>('input', { type: 'number', min: String(GAIN_MIN_DB), max: String(GAIN_MAX_DB), step: '0.5' });
+  private readonly gainSlider = el<HTMLInputElement>('input', { type: 'range', min: String(GAIN_MIN_DB), max: String(GAIN_MAX_DB), step: '0.5', title: 'Volume della clip (doppio clic: 0 dB)' });
+  private readonly reverse = el<HTMLButtonElement>('button', { textContent: 'Reverse', title: 'Suona la clip al contrario' });
   private readonly warpOnly: HTMLElement[] = [];
   private readonly origin: HTMLButtonElement;
 
@@ -88,12 +92,19 @@ export class ClipPanel {
     };
     this.transpose.onchange = () => commit('Transpose', c => c.withTranspose(Number(this.transpose.value)));
     this.detune.onchange = () => commit('Detune', c => c.withDetune(Number(this.detune.value)));
-    this.gain.onchange = () => commit('Gain della clip', c => c.withGain(Number(this.gain.value)));
+    this.gain.onchange = () => commit('Volume della clip', c => c.withGain(Number(this.gain.value)));
+    this.gainSlider.oninput = () => commit('Volume della clip', c => c.withGain(Number(this.gainSlider.value)), 'clip-gain');
+    this.gainSlider.onchange = () => actions.endMerge();
+    this.gainSlider.ondblclick = () => commit('Volume della clip', c => c.withGain(0));
+    this.reverse.onclick = () => {
+      const on = !this.clip?.reversed;
+      commit(on ? 'Reverse' : 'Reverse spento', c => c.withReversed(on, this.duration));
+    };
     this.origin = button('1.1.1 qui', 'Il marker selezionato diventa l\'inizio della battuta 1', () => {
       const i = this.selectedMarker;
       if (i >= 0) commit('Imposta 1.1.1', c => c.withMarkers(c.warp.markers.withOrigin(c.warp.markers.markers[i].t)));
     });
-    for (const input of [this.name, this.bpm, this.transpose, this.detune, this.gain]) {
+    for (const input of [this.name, this.bpm, this.transpose, this.detune, this.gain, this.gainSlider]) {
       input.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') input.blur(); };
     }
 
@@ -114,9 +125,11 @@ export class ClipPanel {
     this.element.append(
       el('div', { className: 'panel-head' }, this.name, el('button', { className: 'close', textContent: '×', title: 'Chiudi (Esc)', onclick: () => actions.close() })),
       this.info,
+      el('div', { className: 'clip-gain' }, el('span', { textContent: 'Volume dB' }), this.gainSlider, this.gain),
+      el('div', { className: 'buttons' }, this.reverse),
       row('Warp', this.warp),
       modeRow, this.options, tempoRow, tempoTools, warpTools,
-      row('Transpose st', this.transpose), row('Detune ct', this.detune), row('Gain dB', this.gain),
+      row('Transpose st', this.transpose), row('Detune ct', this.detune),
     );
   }
 
@@ -138,6 +151,8 @@ export class ClipPanel {
     set(this.transpose, String(clip.transpose));
     set(this.detune, String(clip.detune));
     set(this.gain, String(clip.gainDb));
+    set(this.gainSlider, String(clip.gainDb));
+    this.reverse.classList.toggle('on', clip.reversed);
     this.origin.disabled = !segment;
     for (const e of this.warpOnly) e.hidden = !clip.warp.enabled;
     this.renderOptions(clip);

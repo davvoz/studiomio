@@ -15,7 +15,11 @@ export interface WarpJob {
   /** Semitoni (con i centesimi come decimali). Ignorato dagli algoritmi che cambiano già l'intonazione. */
   readonly transpose: number;
   readonly settings: StretchSettings;
+  /** Il sample si legge al contrario: i punti della mappa sono nel sample rovesciato. */
+  readonly reverse?: boolean;
 }
+
+const reversed = (channels: readonly Float32Array[]): Float32Array[] => channels.map(c => c.slice().reverse());
 
 export const defaultStretchers = (): StretcherTable => ({
   repitch: new RepitchStretcher(),
@@ -30,7 +34,8 @@ export const defaultStretchers = (): StretcherTable => ({
 export class WarpRenderer {
   constructor(private readonly stretchers: StretcherTable = defaultStretchers()) {}
 
-  render({ channels, sampleRate }: AudioData, job: WarpJob): Float32Array[] {
+  render(audio: AudioData, job: WarpJob): Float32Array[] {
+    const { sampleRate } = audio, channels = job.reverse ? reversed(audio.channels) : audio.channels;
     const stretcher = this.stretcherFor(job.settings);
     const ratio = stretcher.shiftsPitch ? 1 : Math.pow(2, job.transpose / 12);
     const map = new TimeMap(job.points).scaleOutput(ratio);

@@ -15,7 +15,11 @@ const FACTOR = 8;
 /** Picchi della forma d'onda (mono) a più risoluzioni, per disegnarla velocemente a
  *  qualunque zoom senza rileggere tutti i campioni. */
 export class Peaks {
-  private constructor(private readonly levels: readonly Level[], readonly sampleRate: number, readonly length: number) {}
+  private constructor(
+    private readonly levels: readonly Level[], readonly sampleRate: number, readonly length: number,
+    /** Letti al contrario: il secondo `t` è il secondo `durata − t` del sample. */
+    private readonly flipped = false,
+  ) {}
 
   static from({ channels, sampleRate }: AudioData): Peaks {
     const n = channels[0].length;
@@ -51,8 +55,17 @@ export class Peaks {
     return new Peaks(levels, sampleRate, n);
   }
 
+  /** Gli stessi picchi per il sample rovesciato (condividono i dati). */
+  reversed(): Peaks {
+    return new Peaks(this.levels, this.sampleRate, this.length, !this.flipped);
+  }
+
   /** Minimo e massimo tra i secondi `t0` e `t1` (0 fuori dal sample). */
   range(t0: Seconds, t1: Seconds): [number, number] {
+    if (this.flipped) {
+      const d = this.length / this.sampleRate;
+      [t0, t1] = [d - t1, d - t0];
+    }
     const a = Math.max(0, Math.floor(Math.min(t0, t1) * this.sampleRate));
     const b = Math.min(this.length, Math.ceil(Math.max(t0, t1) * this.sampleRate));
     if (b <= a) return [0, 0];
@@ -70,18 +83,20 @@ export class Peaks {
 
 /** Picchi per sample, calcolati alla prima richiesta. */
 export class PeakStore {
-  private readonly peaks = new Map<SampleId, Peaks>();
+  private readonly peaks = new Map<SampleId, { readonly forward: Peaks; readonly reversed: Peaks }>();
 
   constructor(private readonly audio: (id: SampleId) => AudioData | undefined) {}
 
-  get(id: SampleId): Peaks | null {
+  /** I picchi del sample, letti al contrario se `reversed` (per le clip al contrario). */
+  get(id: SampleId, reversed = false): Peaks | null {
     let p = this.peaks.get(id);
     if (!p) {
       const data = this.audio(id);
       if (!data) return null;
-      p = Peaks.from(data);
+      const forward = Peaks.from(data);
+      p = { forward, reversed: forward.reversed() };
       this.peaks.set(id, p);
     }
-    return p;
+    return reversed ? p.reversed : p.forward;
   }
 }

@@ -1,5 +1,5 @@
 import type { ClipId, SampleId } from '../core/id';
-import type { Beats } from '../core/music-time';
+import type { Beats, Seconds } from '../core/music-time';
 import type { BeatsLoopMode, WarpMode } from '../dsp/stretch/stretcher';
 import { Clip, fullRange, type ClipProps, type Color } from './clip';
 import { sampleDuration, type SampleRef } from './sample';
@@ -43,7 +43,20 @@ export interface AudioClipProps extends ClipProps {
   readonly transpose: number;
   /** Centesimi, −50..50 */
   readonly detune: number;
+  /** Volume della clip, indipendente dal mixer: GAIN_MIN_DB..GAIN_MAX_DB */
   readonly gainDb: number;
+  /** Suona il sample al contrario. I secondi della clip (marker, transienti) sono quelli
+   *  del sample rovesciato: il secondo `t` è il secondo `durata − t` del file. */
+  readonly reversed: boolean;
+}
+
+export const GAIN_MIN_DB = -70;
+export const GAIN_MAX_DB = 24;
+
+/** I secondi del sample (es. i transienti dell'analisi) come li vede la clip: specchiati e
+ *  riordinati se la clip è al contrario. */
+export function clipTimes(clip: AudioClip, times: readonly Seconds[], duration: Seconds): readonly Seconds[] {
+  return clip.reversed ? times.map(t => duration - t).reverse() : times;
 }
 
 /** Clip che suona (una parte di) un sample, adattata al tempo del progetto dal warp. */
@@ -63,7 +76,7 @@ export class AudioClip extends Clip<AudioClipProps> {
       ...fullRange(0, markers.beatOf(sampleDuration(sample))),
       sample: sample.id,
       warp: { enabled: true, mode: 'complex', markers, options: DEFAULT_WARP_OPTIONS },
-      transpose: 0, detune: 0, gainDb: 0,
+      transpose: 0, detune: 0, gainDb: 0, reversed: false,
     });
   }
 
@@ -76,6 +89,7 @@ export class AudioClip extends Clip<AudioClipProps> {
   get transpose(): number { return this.props.transpose; }
   get detune(): number { return this.props.detune; }
   get gainDb(): number { return this.props.gainDb; }
+  get reversed(): boolean { return this.props.reversed; }
 
   /** Trasposizione totale in semitoni (centesimi come decimali). */
   get pitch(): number {
@@ -103,6 +117,16 @@ export class AudioClip extends Clip<AudioClipProps> {
   }
 
   withGain(db: number): AudioClip {
-    return this.with({ gainDb: db });
+    return this.with({ gainDb: Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, db)) });
+  }
+
+  /** Al contrario (o di nuovo dritta). Regione e loop restano dove sono e i marker si
+   *  specchiano attorno alla parte che suona (il loop, se attivo): si sente lo stesso tratto
+   *  di audio, rovesciato. Rovesciare due volte riporta la clip com'era. */
+  withReversed(reversed: boolean, duration: Seconds): AudioClip {
+    if (reversed === this.reversed) return this;
+    const { region, loop } = this;
+    const axis = loop.enabled ? loop.start + loop.end : region.start + region.end;
+    return this.with({ reversed, warp: { ...this.warp, markers: this.warp.markers.mirrored(duration, axis) } });
   }
 }

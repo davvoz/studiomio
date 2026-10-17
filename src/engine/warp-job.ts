@@ -2,7 +2,7 @@ import type { Beats, TempoMap } from '../core/music-time';
 import type { MapPoint } from '../dsp/time-map';
 import type { SettingsOf, WarpMode } from '../dsp/stretch/stretcher';
 import type { WarpJob } from '../dsp/stretch/warp-renderer';
-import type { AudioClip, WarpOptions } from '../model/audio-clip';
+import { clipTimes, type AudioClip, type WarpOptions } from '../model/audio-clip';
 import { sampleDuration, type SampleRef } from '../model/sample';
 import type { WarpMarkers } from '../model/warp-markers';
 
@@ -64,7 +64,7 @@ export function clipRender(clip: AudioClip, sample: SampleRef, tempo: TempoMap):
   };
   const settings = settingsFor[clip.warp.mode]({
     options: clip.warp.options,
-    transients: (sample.analysis?.transients ?? []).map(t => t * sr),
+    transients: clipTimes(clip, sample.analysis?.transients ?? [], duration).map(t => t * sr),
     gridSlices,
   });
   return {
@@ -73,6 +73,8 @@ export function clipRender(clip: AudioClip, sample: SampleRef, tempo: TempoMap):
       outLength: Math.max(1, Math.round(points[points.length - 1][0])),
       transpose: clip.pitch,
       settings,
+      // solo se serve: le clip dritte tengono la chiave di render di sempre
+      ...(clip.reversed ? { reverse: true } : {}),
     },
     startBeat,
   };

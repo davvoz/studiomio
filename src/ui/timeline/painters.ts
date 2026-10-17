@@ -2,6 +2,7 @@
  * righello, loop, testina e anteprime dei gesti. */
 import type { PlacementId, TrackId } from '../../core/id';
 import type { Beats, TimeSignature } from '../../core/music-time';
+import { dbToGain } from '../../engine/audio-graph';
 import { placementSegments } from '../../engine/segments';
 import { placementEnd, type Placement } from '../../model/arrangement';
 import { AudioClip } from '../../model/audio-clip';
@@ -172,7 +173,8 @@ function paintWaveform(g: CanvasRenderingContext2D, pl: Placement<AudioClip>, bo
   const peaks = lp.peaks(pl.clip);
   if (!peaks) return;
   const { geo, project } = lp;
-  const clip = pl.clip, mid = body.y + body.h / 2, amp = body.h / 2 - 1;
+  // l'altezza segue il gain della clip, come la si sente
+  const clip = pl.clip, mid = body.y + body.h / 2, amp = body.h / 2 - 1, gain = dbToGain(clip.gainDb);
   const toSeconds = contentToSeconds(clip, project.tempo);
   for (const s of placementSegments(pl)) {
     const xa = Math.max(0, Math.floor(geo.beatToX(s.start))), xb = Math.min(lp.width, Math.ceil(geo.beatToX(s.end)));
@@ -180,7 +182,7 @@ function paintWaveform(g: CanvasRenderingContext2D, pl: Placement<AudioClip>, bo
       const b0 = Math.max(s.start, geo.xToBeat(x)), b1 = Math.min(s.end, geo.xToBeat(x + 1));
       if (b1 <= b0) continue;
       const [lo, hi] = peaks.range(toSeconds(s.contentStart + b0 - s.start), toSeconds(s.contentStart + b1 - s.start));
-      const y0 = mid - Math.min(1, hi) * amp, y1 = mid - Math.max(-1, lo) * amp;
+      const y0 = mid - Math.min(1, hi * gain) * amp, y1 = mid - Math.max(-1, lo * gain) * amp;
       g.fillRect(x, y0, 1, Math.max(1, y1 - y0));
     }
   }

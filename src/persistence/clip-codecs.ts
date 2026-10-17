@@ -94,7 +94,7 @@ export const audioClipCodec: ClipCodec<AudioClip> = {
       markers: c.warp.markers.markers.map(m => [m.t, m.b]),
       options: encodeWarpOptions(c.warp.options),
     },
-    transpose: c.transpose, detune: c.detune, gainDb: c.gainDb,
+    transpose: c.transpose, detune: c.detune, gainDb: c.gainDb, reversed: c.reversed,
   }),
   decode: r => {
     const warp = r.get('warp');
@@ -112,6 +112,8 @@ export const audioClipCodec: ClipCodec<AudioClip> = {
         options: decodeWarpOptions(warp.get('options')),
       },
       transpose: r.num('transpose'), detune: r.num('detune'), gainDb: r.num('gainDb'),
+      // i progetti salvati prima del reverse non hanno il campo
+      reversed: r.has('reversed') && r.bool('reversed'),
     }));
   },
 };
