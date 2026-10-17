@@ -6,6 +6,8 @@ Sezioni: Novità, Modifiche, Correzioni.
 
 ## [Non rilasciato]
 
+## [0.1.8] - 2026-10-17
+
 ### Novità
 - I dispositivi della catena si comprimono in una striscia verticale con il nome (▾/▸ o doppio
   clic sull'intestazione), come in Live.
