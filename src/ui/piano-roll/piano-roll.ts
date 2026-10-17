@@ -9,7 +9,7 @@ import {
 } from '../../model/note-edits';
 import { MidiTrack } from '../../model/track';
 import { copyNotes, pasteNotes, type Clipboard } from '../../store/clipboard';
-import { findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
+import { findClip, scaleMidiClipAt, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
 import { BeatAxis, playheadIn, seekBeatOf } from '../clip-editor/clip-geometry';
 import { bindKeys, type Binding } from '../keymap';
@@ -96,6 +96,7 @@ export class PianoRoll implements RollHost {
       toggleDraw: () => this.toggleDraw(),
       quantize: () => this.quantize(),
       transpose: n => this.transpose(n),
+      scaleTime: f => this.scaleTime(f),
       openInstrument: () => { const t = this.target(); if (t) deps.openInstrument(t.track.id); },
       close: () => this.close(),
     });
@@ -297,6 +298,18 @@ export class PianoRoll implements RollHost {
     const change = moveNotes(c.notes, sel, 0, semitones);
     this.commitNotes('Trasponi note', this._selection.size ? change : { ...change, selected: [] });
     if (this._selection.size === 1) this.audition([...this._selection][0].pitch, 100);
+  }
+
+  /** :2 o ×2: la clip intera (note, loop, modulazioni) dura la metà o il doppio. */
+  scaleTime(factor: number): void {
+    const ref = this.ref;
+    if (!ref || !this.target()) return;
+    const label = factor > 1 ? 'Durata ×2' : 'Durata :2';
+    try {
+      this.deps.store.apply(scaleMidiClipAt(label, ref, factor));
+    } catch (e) {
+      this.deps.say(`${label}: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   /** Sposta le note selezionate di un passo di griglia. */

@@ -12,10 +12,11 @@ import { STEREO } from './effects/stereo/stereo';
 import { ANALOG } from './instruments/analog/analog';
 import { DRUMS } from './instruments/drums/drums';
 import { NEURO } from './instruments/neuro/neuro';
+import { WAVETABLE } from './instruments/wavetable/wavetable';
 
 /** Gli strumenti disponibili (lato interfaccia). Il motore DSP di ciascuno è registrato con
  *  lo stesso nome in worklet/cores.ts. */
-export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, NEURO, DRUMS];
+export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, NEURO, DRUMS];
 
 /** Gli effetti disponibili, come sopra. */
 export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, PHASER, DELAY, REVERB, STEREO, LIMITER];

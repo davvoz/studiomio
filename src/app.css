@@ -392,4 +392,9 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drive-shape { display: flex; align-items: center; gap: 5px; padding: 2px 8px 2px 4px; font-size: 11.5px; color: var(--muted); }
 .drive-shape.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); color: var(--text); border-color: var(--accent); }
 .drive-shape-icon { width: 26px; height: 18px; display: block; }
+/* Wavetable: le sezioni su due righe come un synth grande, gli oscillatori alti quanto due */
+.device-panel.instrument-panel .device-sections:has(> .wt-display) { max-width: none; }
+.wt-display { display: grid; grid-auto-flow: column; grid-template-rows: auto auto; justify-content: start; align-items: start; gap: 6px; }
+.wt-osc { grid-row: span 2; align-self: stretch; display: flex; flex-direction: column; }
+.wt-view { display: block; width: 100%; min-width: 300px; flex: 1 1 0; height: 0; min-height: 80px; margin: 2px 0 5px; border-radius: 6px; border: 1px solid var(--line); cursor: ns-resize; touch-action: none; }
 .drive-controls { display: flex; align-items: flex-start; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; }

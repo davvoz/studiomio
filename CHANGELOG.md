@@ -6,6 +6,15 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Wavetable: a new wavetable synth, like Live's. Two oscillators each read a table (Basic, PWM,
+  Harmonics, Sync, Fold, FM, Vocal, Organ, Digital) at a position you can sweep with the
+  modulation envelope and two LFOs; sub, unison with position spread, filter, poly/mono/legato
+  with glide, 28 presets with matched loudness. High notes stay free of aliasing. The panel draws
+  both tables and you drag them to move the position.
+- Piano roll: :2 and ×2 buttons, like on audio clips, halve or double the whole MIDI clip (notes,
+  loop and clip envelopes); on the timeline the clip gets shorter or longer from its start.
+
 ## [0.1.9] - 2026-10-17
 
 ### Changed

@@ -7,6 +7,7 @@
  * qui niente Web Audio, così si prova anche in Node. */
 import { dbToGain, midiToHz, type InstrumentCore } from '../../dsp/core';
 import { Adsr } from '../../dsp/envelope';
+import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
 import { LFO_TABLE, WAVE_TABLE, type Wave } from '../../dsp/oscillators';
 import { Svf } from '../../dsp/svf';
 import { VoicePool, type PolyVoice } from '../../dsp/voice-pool';
@@ -85,6 +86,11 @@ class Settings {
     this.ampEnv = { attack: v('attack', 0.003), decay: v('decay', 0.4), sustain: v('sustain', 80) / 100, release: v('release', 0.2) };
   }
 
+  /** A una voce, se le note sovrapposte scivolano (per MonoPlayer). */
+  get legato(): boolean {
+    return this.voiceMode === VOICE_MODE.legato;
+  }
+
   /** La velocità dell'LFO in Hz, a tempo o libera. */
   get lfoHz(): number {
     return this.lfoTempo ? this.bpm / 60 / this.lfoBeats : this.lfoRate;
@@ -99,7 +105,7 @@ class Settings {
 /** La posizione della copia `k` di `n` nel ventaglio: da −1 a +1 (0 se è sola). */
 const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
 
-class AnalogVoice implements PolyVoice {
+class AnalogVoice implements PolyVoice, MonoVoice {
   private readonly amp: Adsr;
   private readonly fenv: Adsr;
   private readonly filter: Svf;
@@ -272,56 +278,6 @@ class AnalogVoice implements PolyVoice {
       + ACCENT_OCTAVES * this.accentEnv;
     this.filter.set(s.cutoff * Math.pow(2, octaves), s.resonance, s.filterType);
     if (s.unison > 1) this.filterR.set(s.cutoff * Math.pow(2, octaves), s.resonance, s.filterType);
-  }
-}
-
-interface HeldNote {
-  readonly id: number;
-  readonly pitch: number;
-  readonly velocity: number;
-}
-
-/** Una voce sola, come un synth monofonico: le note tenute stanno in una pila e suona
- *  l'ultima; quando la si lascia torna quella sotto. In Legato una nota che arriva mentre
- *  un'altra è tenuta scivola senza ripartire; in Mono riparte sempre, con il glide dalla nota
- *  di prima. */
-class MonoPlayer {
-  private held: HeldNote[] = [];
-  /** Se la voce ha già suonato qualcosa (da lì parte il glide in Mono). */
-  private played = false;
-
-  constructor(private readonly voice: AnalogVoice, private readonly s: Settings) {}
-
-  noteOn(id: number, pitch: number, velocity: number): void {
-    const tied = this.held.length > 0 && this.voice.active && !this.voice.releasing;
-    this.held.push({ id, pitch, velocity });
-    this.play(pitch, velocity, tied);
-  }
-
-  noteOff(id: number): void {
-    const i = this.held.findIndex(n => n.id === id);
-    if (i < 0) return;
-    const wasPlaying = i === this.held.length - 1;
-    this.held.splice(i, 1);
-    if (!wasPlaying) return;
-    const back = this.held.at(-1);
-    if (back) this.play(back.pitch, back.velocity, true);
-    else this.voice.release();
-  }
-
-  silence(): void {
-    this.held = [];
-    this.played = false;
-    this.voice.kill();
-  }
-
-  private play(pitch: number, velocity: number, tied: boolean): void {
-    if (tied && this.s.voiceMode === VOICE_MODE.legato) this.voice.slide(pitch, velocity);
-    else {
-      const glide = this.s.glide > 0 && this.played && (tied || this.s.voiceMode === VOICE_MODE.mono);
-      this.voice.start(pitch, velocity, glide ? this.voice.currentPitch : null);
-    }
-    this.played = true;
   }
 }
 

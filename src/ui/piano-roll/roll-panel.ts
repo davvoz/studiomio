@@ -6,6 +6,8 @@ export interface RollPanelActions {
   toggleDraw(): void;
   quantize(): void;
   transpose(semitones: number): void;
+  /** Moltiplica la durata della clip (2: il doppio, 0.5: la metà). */
+  scaleTime(factor: number): void;
   openInstrument(): void;
   close(): void;
 }
@@ -31,6 +33,9 @@ export class RollPanel {
       el('div', { className: 'buttons' },
         this.draw,
         button('Quantizza', 'Inizi delle note sulla griglia (Q); senza selezione tutte le note', () => actions.quantize())),
+      el('div', { className: 'buttons' },
+        button(':2', 'Durata dimezzata: note e clip vanno al doppio della velocità', () => actions.scaleTime(0.5)),
+        button('×2', 'Durata doppia: note e clip vanno a metà velocità', () => actions.scaleTime(2))),
       el('div', { className: 'buttons' },
         button('−8va', 'Un\'ottava sotto (Maiusc+↓)', () => actions.transpose(-12)),
         button('−1', 'Un semitono sotto (↓)', () => actions.transpose(-1)),

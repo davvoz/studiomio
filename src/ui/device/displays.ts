@@ -8,6 +8,7 @@ import type { SampleRef } from '../../model/sample';
 import { DriveDisplay } from './drive/drive-display';
 import { DrumDisplay } from './drums/drum-display';
 import { EqDisplay } from './eq/eq-display';
+import { WavetableDisplay } from './wavetable/wavetable-display';
 
 /** Lo spettro del suono che entra in un effetto e di quello che esce, in dB per banda di
  *  frequenza (come AnalyserNode.getFloatFrequencyData). */
@@ -65,4 +66,5 @@ export const DEVICE_DISPLAYS: Readonly<Record<string, DisplayFactory>> = {
   eq: ctx => new EqDisplay(ctx),
   drive: ctx => new DriveDisplay(ctx),
   drums: ctx => new DrumDisplay(ctx),
+  wavetable: ctx => new WavetableDisplay(ctx),
 };

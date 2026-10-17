@@ -6,7 +6,8 @@ import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import type { Project } from '../model/project';
 import type { Track } from '../model/track';
-import { updateClip } from './edits';
+import type { MidiClip } from '../model/midi-clip';
+import { scaleMidiPlacement, updateClip } from './edits';
 import type { Edit } from './project-store';
 import { updateSlotClip } from './session-edits';
 
@@ -56,6 +57,13 @@ export function findClip(project: Project, ref: ClipRef): FoundClip | null {
 
 /** Modifica il contenuto della clip, dovunque stia. */
 export const updateClipAt = <C extends Clip>(label: string, ref: ClipRef, fn: (c: C) => Clip): Edit => locator(ref).update(label, ref, fn);
+
+/** Moltiplica il tempo di una clip MIDI (×2, :2): sulla timeline cambia anche la sua durata,
+ *  nella session solo il contenuto. */
+export const scaleMidiClipAt = (label: string, ref: ClipRef, factor: number): Edit =>
+  ref.kind === 'placement'
+    ? scaleMidiPlacement(label, ref.track, ref.placement, factor)
+    : updateSlotClip<MidiClip>(label, ref.track, ref.clip, c => c.scaledTime(factor));
 
 const idOf = (r: ClipRef): string => (r.kind === 'placement' ? r.placement : r.clip);
 

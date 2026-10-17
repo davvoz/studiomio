@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { asId } from '../../src/core/id';
 import { MidiClip } from '../../src/model/midi-clip';
 import { ProjectCodec } from '../../src/persistence/project-codec';
-import { findClip, placementRef, slotRef, updateClipAt } from '../../src/store/clip-ref';
+import { findClip, placementRef, scaleMidiClipAt, slotRef, updateClipAt } from '../../src/store/clip-ref';
 import { copySlotClip, pasteClips, pasteToSlot } from '../../src/store/clipboard';
 import { addMidiClip, setLaunchQuantization } from '../../src/store/edits';
 import {
@@ -125,6 +126,48 @@ describe('ClipRef: la stessa clip, sulla timeline o in uno slot', () => {
     // la clip dello slot si trova per id anche se le scene si spostano
     store.apply(insertScene(0));
     expect(findClip(store.project, inSlot)?.clip.name).toBe('Slot');
+  });
+});
+
+describe('MIDI :2 e ×2', () => {
+  const notes = [{ pitch: 60, start: 1, duration: 0.5, velocity: 100 }, { pitch: 64, start: 2.5, duration: 1, velocity: 90 }];
+
+  it('scala note, regione, loop e modulazioni', () => {
+    const clip = MidiClip.create({
+      id: asId('clip-1'), name: 'm', color: '#fff', notes,
+      region: { start: 0, end: 4 }, loop: { enabled: true, start: 0, end: 4 },
+      envelopes: [{ target: { kind: 'mixer', param: 'volume' }, points: [{ beat: 0, value: 1 }, { beat: 3, value: 0.5 }] }],
+    });
+    const twice = clip.scaledTime(2);
+    expect(twice.notes.map(n => [n.start, n.duration, n.pitch, n.velocity])).toEqual([[2, 1, 60, 100], [5, 2, 64, 90]]);
+    expect(twice.region).toEqual({ start: 0, end: 8 });
+    expect(twice.loop).toEqual({ enabled: true, start: 0, end: 8 });
+    expect(twice.envelopes[0].points.map(p => p.beat)).toEqual([0, 6]);
+    // :2 dopo ×2 torna com'era
+    expect(twice.scaledTime(0.5).notes).toEqual(clip.notes);
+    expect(() => clip.scaledTime(0)).toThrow();
+  });
+
+  it('sulla timeline cambia anche la durata della clip; nella session solo il contenuto; si annulla', () => {
+    const { store, track } = setup({ midi: 1 });
+    store.apply(addMidiClip(track(0), 8, 4));
+    store.apply(newSlotMidiClip({ track: track(0), slot: 0 }));
+    const pl = store.project.tracks[0].arrangement[0], slotClip = store.project.tracks[0].slots[0]!;
+    const onTimeline = placementRef(track(0), pl.id), inSlot = slotRef(track(0), slotClip.id);
+    store.apply(updateClipAt<MidiClip>('n', onTimeline, c => c.withNotes(notes)));
+
+    store.apply(scaleMidiClipAt('Durata ×2', onTimeline, 2));
+    const scaled = store.project.tracks[0].arrangement[0];
+    expect([scaled.start, scaled.length]).toEqual([8, 8]);
+    expect((scaled.clip as MidiClip).notes.map(n => n.start)).toEqual([2, 5]);
+
+    store.apply(scaleMidiClipAt('Durata :2', inSlot, 0.5));
+    const half = store.project.tracks[0].slots[0]!;
+    expect([half.region.end, half.loop.end]).toEqual([slotClip.region.end / 2, slotClip.loop.end / 2]);
+
+    store.undo();
+    store.undo();
+    expect(store.project.tracks[0].arrangement[0].length).toBe(4);
   });
 });
 

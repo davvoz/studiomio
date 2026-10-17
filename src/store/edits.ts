@@ -219,6 +219,13 @@ export const duplicatePlacement = (trackId: TrackId, id: PlacementId): Edit =>
 export const updateClip = <C extends Clip>(label: string, trackId: TrackId, id: PlacementId, fn: (c: C) => Clip): Edit =>
   edit(label, (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => ({ ...pl, clip: fn(pl.clip as C) }), ids)));
 
+/** Scala il tempo di una clip MIDI posata (vedi MidiClip.scaledTime) e con lei la sua durata
+ *  sulla timeline: l'inizio resta fermo, la clip si allunga o si accorcia. */
+export const scaleMidiPlacement = (label: string, trackId: TrackId, id: PlacementId, factor: number): Edit =>
+  edit(label, (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => ({
+    ...pl, clip: (pl.clip as unknown as MidiClip).scaledTime(factor), length: pl.length * factor, offset: pl.offset * factor,
+  }), ids)));
+
 // ------------------------------------------------------------------ session
 
 export const setSlot = (trackId: TrackId, sceneIndex: number, clip: Clip | null): Edit =>

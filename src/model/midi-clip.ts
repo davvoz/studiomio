@@ -66,6 +66,21 @@ export class MidiClip extends Clip<MidiClipProps> {
     return this.withNotes(this.notes.map(fn));
   }
 
+  /** Il tempo della clip moltiplicato per `factor` (×2: tutto dura il doppio, come a metà
+   *  velocità; ×0.5: il contrario): note, regione, loop e modulazioni. */
+  scaledTime(factor: number): MidiClip {
+    if (!(factor > 0)) throw new RangeError(`fattore non valido: ${factor}`);
+    const at = (b: Beats) => b * factor;
+    return this.with({
+      notes: this.notes.map(n => ({ ...n, start: at(n.start), duration: at(n.duration) })),
+      region: { start: at(this.region.start), end: at(this.region.end) },
+      loop: { ...this.loop, start: at(this.loop.start), end: at(this.loop.end) },
+      ...(this.props.envelopes && {
+        envelopes: this.envelopes.map(e => ({ ...e, points: e.points.map(p => ({ ...p, beat: at(p.beat) })) })),
+      }),
+    });
+  }
+
   /** Traspone tutte le note, lasciando fuori quelle che uscirebbero da 0..127. */
   transposed(semitones: number): MidiClip {
     return this.withNotes(this.notes

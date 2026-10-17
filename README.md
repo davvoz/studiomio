@@ -2,7 +2,7 @@
 
 DAW nel browser con warp in stile Ableton Live: arrangement (timeline) e session view con il
 lancio delle clip, clip audio con warp, clip MIDI con piano roll, modulazioni delle clip,
-strumenti (un synth e una drum machine) ed effetti in AudioWorklet, mixer con misuratori di livello.
+strumenti (tre synth e una drum machine) ed effetti in AudioWorklet, mixer con misuratori di livello.
 
 Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
@@ -143,7 +143,8 @@ src/
     device/            catena dei dispositivi: un pannello per dispositivo, controlli generati dai parametri;
                        rack-panel.ts il pannello di un rack (macro, Map, minimo e massimo delle mappature);
                        displays.ts registra i pannelli grafici (eq/: grafico con spettro e curva;
-                       drums/: griglia dei pad; drive/: curva, spettro e forme)
+                       drums/: griglia dei pad; drive/: curva, spettro e forme;
+                       wavetable/: le tabelle d'onda disegnate, con la posizione da trascinare)
     dom.ts             creazione degli elementi
     bottom-panel.ts    l'area in basso, una vista alla volta
     waveform.ts        picchi della forma d'onda a più risoluzioni
@@ -155,6 +156,7 @@ src/
     rates.ts           le velocità a tempo delle modulazioni (8 battute … 1/32)
     instruments/analog/  il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
     instruments/neuro/   il synth Neuro dei bassi reese: descrizione e preset (neuro.ts), suono (neuro-core.ts)
+    instruments/wavetable/  il synth Wavetable: descrizione e preset (wavetable.ts), tabelle d'onda (tables.ts), suono (wavetable-core.ts)
     instruments/drums/   la Drum Machine: pad, modelli e kit (drums.ts), suono (drums-core.ts)
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
     effects/phaser/    il Phaser (anche flanger): descrizione e preset (phaser.ts), suono (phaser-core.ts)
@@ -162,7 +164,7 @@ src/
     effects/drive/     il Drive: descrizione e preset (drive.ts), curve e primitive (drive-math.ts), suono (drive-core.ts)
     effects/clipper/   il Clipper: descrizione e preset (clipper.ts), suono (clipper-core.ts)
     effects/stereo/    lo Stereo (larghezza e bassi mono): descrizione (stereo.ts), suono (stereo-core.ts)
-    dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, rumore, polifonia, sovracampionamento; interfacce dei motori
+    dsp/               mattoni: oscillatori PolyBLEP, ADSR, filtro SVF, rumore, polifonia, voce sola (mono-player.ts), sovracampionamento; interfacce dei motori
     worklet/           i processori AudioWorklet (strumenti, effetti, misuratori), coda delle note, bypass, motori per tipo;
                        mod-timeline.ts applica le modulazioni ai parametri
   dsp/                 motore audio: funzioni pure, nessuna dipendenza dal DOM
@@ -341,6 +343,7 @@ Doppio clic su una clip MIDI (sulla timeline, doppio clic su una traccia MIDI vu
 | Tastiera a sinistra | suona le note con lo strumento della traccia; con la Drum Machine ci sono i nomi dei pad al posto dei tasti |
 | ↑ ↓ (Maiusc: ottava) · ← → · Q · Ctrl+D · Ctrl+A · Canc | trasponi · sposta di un passo · quantizza · duplica · seleziona tutto · elimina |
 | Clic nel vuoto · Ctrl+X / C / V | punto d'inserimento (linea bianca) · taglia, copia, incolla lì (poi il punto va alla fine delle note incollate) |
+| :2 · ×2 (nel pannello) | la clip intera (note, loop, modulazioni) dura la metà o il doppio, come :2 e ×2 delle clip audio; sulla timeline la clip si accorcia o si allunga dal suo inizio |
 | Tasto destro | menu: su una nota (taglia, copia, incolla, duplica, quantizza, ottava, elimina), nel vuoto (incolla qui, seleziona tutto, modo disegno) |
 | Rotella · Maiusc+rotella · Ctrl+rotella · Alt+rotella | scorri le altezze · scorri il tempo · zoom del tempo · altezza delle righe |
 
@@ -424,6 +427,29 @@ doppio della frequenza di campionamento (FM, fold e distorsione non si ripiegano
 e torna giù con il filtro a mezza banda. Preset: Reese, Reese parlante, Neuro ringhio, Colpo
 neuro, Sub pulito. Gli strumenti ricevono il tempo del progetto come gli effetti. Costo
 misurato: 3.4 % di un core con tre copie e il formante, 4.2 % con sette.
+
+**Wavetable**: il synth a tabelle d'onda, come Wavetable di Live. Due oscillatori leggono ognuno
+una **tabella** (Base: seno → triangolo → dente di sega → quadra; PWM; Armoniche: un dente di sega
+con il filtro che si apre; Sync; Fold; FM; Vocale: le vocali A E I O U; Organo: i tiranti che si
+aprono; Digitale: un seno a scalini) e la **Posizione** sceglie dove leggerla, sfumando fra le 16
+forme della tabella. Le tabelle sono generate nel codice e salvate in una versione per ottava con
+sempre meno armoniche: ogni nota legge quella che non ha nulla sopra Nyquist, così anche le note
+acute non fanno aliasing. Poi il **Sub** (un seno a una o due ottave sotto), l'**Unison** (fino a
+7 copie scordate e aperte nello stereo; con **Posizioni** le copie leggono anche forme diverse
+della tabella), il filtro (passa-basso/banda/alto con key track), l'inviluppo del volume e
+l'**inviluppo di modulazione** verso due destinazioni, due **LFO** (a tempo o in Hz, che ripartono a
+ogni nota o liberi) verso una destinazione ciascuno: Posizione A, B o tutte e due, Cutoff,
+Risonanza, Pitch, Livello B, Volume. Posizioni, livello di B e volume modulati arrivano in rampa
+campione per campione, senza graffi. La voce come Analog: Poli (16 voci), Mono o Legato con il
+glide. Il pannello disegna le due tabelle una forma dietro l'altra, con quella che suona in
+evidenza: trascinarle in verticale sposta la posizione (Maiusc per la regolazione fine). 28 preset:
+Init; bassi (Basso sync, Basso reese, Basso FM growl, Basso 808, Basso acido, Wobble, Basso wobble
+lento); lead (Lead FM, Lead sync urlante, Lead quadra, Supersaw); pad (Pad che respira, Coro
+vocale, Pad ripiegato, Atmosfera digitale, Archi); tastiere, campane e pluck (Pluck digitale,
+Pluck armonico, Campane FM, Arpa di vetro, Keys digitali, Gocce S&H); ottoni e organi (Ottoni,
+Organo, Organo rock); ritmici ed effetti (Gate trance, Salita). I volumi sono pareggiati. Costo
+misurato: 6 % di un core per quattro note a sette copie con due oscillatori, 15 % per sedici note
+di Supersaw.
 
 **Drum Machine**: 16 pad sulle note da C1 (36) a D#2 (51), come il Drum Rack di Live, con il
 kit di partenza sulla mappa General MIDI (36 cassa, 38 rullante, 42 hi-hat chiuso, 46 aperto…),
