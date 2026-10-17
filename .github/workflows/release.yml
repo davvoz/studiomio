@@ -32,10 +32,12 @@ jobs:
 
       - run: npm ci
       - run: npm run wasm
-      - run: npm run wasm:test
-
-      # una release con i test rotti non deve arrivare agli utenti
-      - run: npm test
+      # una release con i test rotti non deve arrivare agli utenti; un fix urgente può saltarli
+      # con "[skip tests]" nel messaggio del commit di versione (release.bat patch notest)
+      - if: ${{ !contains(github.event.head_commit.message, '[skip tests]') }}
+        run: npm run wasm:test
+      - if: ${{ !contains(github.event.head_commit.message, '[skip tests]') }}
+        run: npm test
 
       - run: npm run build
       - run: npm run electron:build
