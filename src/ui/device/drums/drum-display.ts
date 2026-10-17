@@ -155,6 +155,7 @@ export class DrumDisplay implements DeviceDisplay {
     for (const id of [...this.padControls.keys()]) if (/^p\d+/.test(id)) this.padControls.delete(id);
     this.controls.replaceChildren(...PAD_CONTROLS.map(k => this.control(paramSpec(this.ctx.type, padParam(i, k))!)));
     this.refresh();
+    this.ctx.controlsChanged();
   }
 
   private control(spec: ParamSpec): HTMLElement {

@@ -3,7 +3,7 @@ import type { SampleRef } from '../../model/sample';
 import { paramSpec, resolveParams } from '../../devices/device-type';
 import { deviceTypeAt } from '../../devices/rack-params';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
-import { DEFAULT_INSTRUMENT, type EffectSettings } from '../../model/device';
+import { DEFAULT_INSTRUMENT, type EffectSettings, type ParamValues } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
 import {
@@ -323,19 +323,25 @@ export class DeviceView {
   /** I parametri mappati: attenuati, con il numero della macro; con "Map" acceso si vedono quelli
    *  che si possono mappare e quelli della macro scelta. */
   private showMapped(racks: RackList): void {
+    for (const key of this.panels.keys()) this.markMapped(key as DeviceKey, racks);
+  }
+
+  /** I segni delle macro su un pannello (anche quando un pannello grafico rifà i suoi controlli). */
+  private markMapped(key: DeviceKey, racks?: RackList): void {
+    const panel = this.panels.get(key);
+    if (!panel || !this.owner) return;
+    racks ??= this.deps.store.project.racksOf(this.owner);
     const map = this.mapMode;
-    for (const [key, panel] of this.panels) {
-      const rack = rackOf(racks, key as DeviceKey);
-      panel.element.classList.toggle('mappable', !!map && map.macro !== null && rack?.id === map.rack);
-      for (const e of panel.element.querySelectorAll<HTMLElement>('[data-param]')) {
-        const found = macroOf(racks, key as DeviceKey, e.dataset.param!);
-        e.classList.toggle('mapped', !!found);
-        e.classList.toggle('chosen', !!found && !!map && found.rack.id === map.rack && found.index === map.macro);
-        if (found) {
-          e.dataset.macro = String(found.index + 1);
-          e.title = `Lo muove la macro ${found.index + 1} del rack (tasto destro per toglierlo)`;
-        } else delete e.dataset.macro;
-      }
+    const rack = rackOf(racks, key);
+    panel.element.classList.toggle('mappable', !!map && map.macro !== null && rack?.id === map.rack);
+    for (const e of panel.element.querySelectorAll<HTMLElement>('[data-param]')) {
+      const found = macroOf(racks, key, e.dataset.param!);
+      e.classList.toggle('mapped', !!found);
+      e.classList.toggle('chosen', !!found && !!map && found.rack.id === map.rack && found.index === map.macro);
+      if (found) {
+        e.dataset.macro = String(found.index + 1);
+        e.title = `Lo muove la macro ${found.index + 1} del rack (tasto destro per toglierlo)`;
+      } else delete e.dataset.macro;
     }
   }
 
@@ -412,7 +418,9 @@ export class DeviceView {
     const test = el<HTMLButtonElement>('button', { className: 'mini', textContent: '♪', title: 'Suona una nota di prova', onclick: () => audition(track.id, testPitch()) });
     const display = DEVICE_DISPLAYS[type.type]?.({
       type, settings: track.instrument, sampleRate: this.deps.sampleRate,
-      setParams: (values, final) => this.param(setInstrumentParams(track.id, values), `param-${track.id}-${Object.keys(values).sort().join(',')}`, final),
+      setParams: (values, final) => this.displayParams(track.id, INSTRUMENT, values, final,
+        v => setInstrumentParams(track.id, v), `param-${track.id}`),
+      controlsChanged: () => this.markMapped(INSTRUMENT),
       openSpectrum: () => NO_SPECTRUM,
       audition: (pitch, velocity) => audition(track.id, pitch, velocity),
       playedNotes: this.deps.playedNotes(track.id),
@@ -450,7 +458,8 @@ export class DeviceView {
     power.classList.add('power');
     const display = DEVICE_DISPLAYS[e.type]?.({
       type, settings: e, sampleRate: this.deps.sampleRate,
-      setParams: (values, final) => this.param(setEffectParams(owner, id, values), `fx-${id}-${Object.keys(values).sort().join(',')}`, final),
+      setParams: (values, final) => this.displayParams(owner, id, values, final, v => setEffectParams(owner, id, v), `fx-${id}`),
+      controlsChanged: () => this.markMapped(id),
       openSpectrum: () => this.deps.spectrum(owner, id),
       audition: () => {},
       playedNotes: () => [],
@@ -468,6 +477,17 @@ export class DeviceView {
     panel.update(e, e.enabled);
     this.panels.set(id, panel);
     return panel.element;
+  }
+
+  /** I parametri da un pannello grafico (es. un punto dell'EQ trascinato): quelli mappati su una
+   *  macro non si toccano, come le loro manopole. */
+  private displayParams(owner: ChainOwner, key: DeviceKey, values: ParamValues, final: boolean,
+    edit: (values: ParamValues) => Edit, mergeKey: string): void {
+    const racks = this.deps.store.project.racksOf(owner);
+    const free = Object.fromEntries(Object.entries(values).filter(([param]) => !macroOf(racks, key, param)));
+    const ids = Object.keys(free).sort();
+    if (ids.length) this.param(edit(free), `${mergeKey}-${ids.join(',')}`, final);
+    else if (final) this.deps.store.endMerge();
   }
 
   /** Una manopola trascinata è un solo passo di annullamento. */

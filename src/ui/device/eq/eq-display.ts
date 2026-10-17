@@ -136,6 +136,7 @@ export class EqDisplay implements DeviceDisplay {
       ...BAND_CONTROLS.map(k => make(this.spec(i, k))),
       el('div', { className: 'eq-sep' }),
       make(paramSpec(this.ctx.type, 'output')!));
+    this.ctx.controlsChanged();
   }
 
   // ---------------------------------------------------------------- gesti sul grafico

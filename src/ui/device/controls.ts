@@ -151,8 +151,13 @@ const MAKERS: { readonly [K in ParamSpec['kind']]: (spec: Extract<ParamSpec, { k
   choice: (s, v, c) => (s.options.length > MAX_BUTTONS ? new ChoiceMenu(s, v, c) : new Choice(s, v, c)),
 };
 
-export const controlFor = (spec: ParamSpec, value: number, onChange: ParamChange): ParamControl =>
-  (MAKERS[spec.kind] as (s: ParamSpec, v: number, c: ParamChange) => ParamControl)(spec, value, onChange);
+/** Il controllo porta l'id del parametro in `data-param`: da lì la catena lo mappa sulle macro
+ *  (anche nei pannelli grafici). */
+export function controlFor(spec: ParamSpec, value: number, onChange: ParamChange): ParamControl {
+  const control = (MAKERS[spec.kind] as (s: ParamSpec, v: number, c: ParamChange) => ParamControl)(spec, value, onChange);
+  control.element.dataset.param = spec.id;
+  return control;
+}
 
 /** Attenua un controllo che con i valori attuali non conta (es. i ms con il delay a tempo). */
 export const setActive = (control: ParamControl, active: boolean): void => {

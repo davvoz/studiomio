@@ -34,8 +34,12 @@ export interface DisplayContext {
   readonly type: DeviceType;
   readonly settings: DeviceSettings;
   readonly sampleRate: number;
-  /** Cambia uno o più parametri; `final` alla fine del gesto chiude il passo di annullamento. */
+  /** Cambia uno o più parametri; `final` alla fine del gesto chiude il passo di annullamento.
+   *  I parametri mappati su una macro restano come sono (li muove la macro). */
   setParams(values: ParamValues, final: boolean): void;
+  /** Da chiamare quando il pannello rifà i suoi controlli (es. un'altra banda): la catena
+   *  rimette i segni delle macro. */
+  controlsChanged(): void;
   /** Lo spettro dell'effetto (si stacca con `dispose`); per gli strumenti è sempre vuoto. */
   openSpectrum(): SpectrumTap;
   /** Suona subito una nota con lo strumento (per gli effetti non fa nulla). */
