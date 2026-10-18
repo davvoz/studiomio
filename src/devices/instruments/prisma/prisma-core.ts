@@ -434,6 +434,10 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     this.src[SRC.random] = hash01(note * 7 + 3);
     this.src[SRC.gate] = 1;
     this.age = 0;
+    // le fonti fanno il primo passo degli inviluppi prima che la matrice li regoli: partono dalle
+    // manopole (una voce mai usata, se no, farebbe tutto l'attacco al primo passo)
+    this.val.set(s.base);
+    this.shapeEnvs();
     for (const e of this.envs) e.trigger();
     this.countdown = 0;
   }
@@ -805,6 +809,12 @@ class PrismaVoice implements PolyVoice, MonoVoice {
       const cutoff = val[d.cutoff] * Math.pow(2, (s.filterKey[f] * (this.pitch - 60)) / 12);
       this.filters[f].set(s.filterType[f], cutoff, val[d.res] / 100, val[d.drive] / 100, val[d.variation] / 100, val[d.mix] / 100);
     }
+    this.shapeEnvs();
+  }
+
+  /** I tempi e le curve degli inviluppi dai valori (modulati) delle loro manopole. */
+  private shapeEnvs(): void {
+    const { s, val } = this;
     for (let n = 0; n < ENVS; n++) {
       if (n && !s.used[SRC.env1 + n]) continue;
       const d = ENV_DEST[n], shape = this.shapes[n], curves = s.curves[n];

@@ -266,6 +266,11 @@ describe('Prisma: modulazioni', () => {
     expect(amplitudeAt(left, f, 9600, 9600)).toBeGreaterThan(0.9);
   });
 
+  it('un inviluppo lento sale nel suo tempo anche alla prima nota di una voce', () => {
+    const { left } = play({ ...BARE, aLevel: 0, e2A: 0.5, e2S: 100, ...mods([SRC.env2, 'aLevel', 100]) }, 57, 0.6);
+    expect(rms(left, 0, 960)).toBeLessThan(0.1 * rms(left, 24000, 28800));
+  });
+
   it('la velocity sul volume rende più forti le note forti; l\'aux scala la modulazione', () => {
     const p = { ...BARE, volume: -20, ...mods([SRC.velocity, 'volume', 40]) };
     const soft = rms(play(p, 57, 0.3, 0.3, 20).left, 4800), loud = rms(play(p, 57, 0.3, 0.3, 127).left, 4800);
