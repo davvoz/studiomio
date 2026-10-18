@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-18
+
 ### Added
 - Piano roll: Fold (F, or the Fold button), like Live's: only the rows of the pitches that have
   notes are shown. The rows follow the notes as you edit them.
