@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-18
+
 ### Fixed
 - Drum Machine: the pad editor no longer spills out of the device panel; the panel widens to
   fit it.
