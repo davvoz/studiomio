@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-18
+
 ### Fixed
 - Device controls no longer spill out of their panel, in the chain or inside a rack (the EQ
   band row, the Analog oscillators, the Drive). Choices with three or four buttons now take two
