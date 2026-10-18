@@ -2,7 +2,7 @@ import type { IdFactory, ProjectId, SampleId, SceneId, TrackId } from '../core/i
 import { Tempo, TimeSignature, type Beats } from '../core/music-time';
 import { AudioClip } from './audio-clip';
 import type { Color } from './clip';
-import { deviceSampleIds, type DeviceSettings } from './device';
+import { deviceSampleIds, withSidechain, type DeviceSettings } from './device';
 import type { EffectList } from './effect-list';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
 import { checkRacks, NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
@@ -188,10 +188,19 @@ export class Project {
     return this.with({ tracks }).validated();
   }
 
-  /** Toglie la traccia; un gruppo se ne va con tutte le sue tracce. */
+  /** Toglie la traccia; un gruppo se ne va con tutte le sue tracce. Gli effetti che le
+   *  ascoltavano (sidechain) tornano ad ascoltare il proprio ingresso. */
   removingTrack(id: TrackId): Project {
     const gone = new Set(this.trackBlock(this.requireTrack(id).id).map(t => t.id));
-    return this.with({ tracks: this.tracks.filter(t => !gone.has(t.id)) });
+    const unkeyed = (list: EffectList): EffectList => (list.some(e => e.sidechain && gone.has(e.sidechain))
+      ? list.map(e => (e.sidechain && gone.has(e.sidechain) ? withSidechain(e, null) : e)) : list);
+    return this.with({
+      tracks: this.tracks.filter(t => !gone.has(t.id)).map(t => {
+        const effects = unkeyed(t.effects);
+        return effects === t.effects ? t : t.withEffects(effects);
+      }),
+      masterEffects: unkeyed(this.masterEffects),
+    });
   }
 
   /** Sposta la traccia (un gruppo con le sue tracce) in `toIndex` tra le tracce che restano;

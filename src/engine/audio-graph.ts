@@ -14,7 +14,8 @@ export interface AudioParamLike {
 
 export interface AudioNodeLike {
   connect(destination: AudioNodeLike): unknown;
-  disconnect(): void;
+  /** Senza destinazione stacca tutte le uscite; con, solo quella (errore se non è collegata). */
+  disconnect(destination?: AudioNodeLike): void;
 }
 
 export interface GainNodeLike extends AudioNodeLike {

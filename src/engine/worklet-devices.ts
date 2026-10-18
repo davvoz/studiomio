@@ -203,12 +203,14 @@ const fullEffectParams = (s: EffectSettings) => {
 /** Un effetto: un AudioWorkletNode del processore degli effetti tra due nodi fissi, così si
  *  può collegare subito (passa il suono diretto finché il modulo non è pronto). In mezzo c'è
  *  `post`, il punto da cui ascoltare il suono elaborato:
- *  input → processore → post → output. */
+ *  input → processore → post → output. I tipi con il sidechain hanno anche `sidechain`, un nodo
+ *  fisso che va nel secondo ingresso del processore. */
 class WorkletEffect implements Effect {
   readonly type: string;
   readonly input: GainNode;
   readonly output: GainNode;
   private readonly post: GainNode;
+  readonly sidechain: GainNode | undefined;
   readonly monitor: EffectMonitor;
   readonly modulation = workletModulation(m => this.send(m));
   private node: AudioWorkletNode | null = null;
@@ -223,6 +225,7 @@ class WorkletEffect implements Effect {
     this.input = ctx.createGain();
     this.post = ctx.createGain();
     this.output = ctx.createGain();
+    this.sidechain = effectType(settings.type)?.sidechain ? ctx.createGain() : undefined;
     this.post.connect(this.output);
     this.monitor = { pre: this.input, post: this.post };
     // suono diretto finché il processore non c'è
@@ -236,6 +239,7 @@ class WorkletEffect implements Effect {
     this.settings = settings;
     if (settings.params !== prev.params) this.send({ type: 'params', params: fullEffectParams(settings) });
     if (settings.enabled !== prev.enabled) this.send({ type: 'enabled', enabled: settings.enabled });
+    if (!settings.sidechain !== !prev.sidechain) this.send({ type: 'keyed', keyed: !!settings.sidechain });
   }
 
   setTempo(bpm: number): void {
@@ -248,19 +252,23 @@ class WorkletEffect implements Effect {
     this.send({ type: 'dispose' });
     this.node?.disconnect();
     for (const n of [this.input, this.post, this.output]) n.disconnect();
+    this.sidechain?.disconnect();
   }
 
   private build(): void {
     if (this.disposed) return;
     const s = this.settings;
-    const processorOptions: EffectProcessorOptions = { type: s.type, params: fullEffectParams(s), enabled: s.enabled, bpm: this.bpm };
+    const processorOptions: EffectProcessorOptions = {
+      type: s.type, params: fullEffectParams(s), enabled: s.enabled, bpm: this.bpm, keyed: !!s.sidechain,
+    };
     this.node = new AudioWorkletNode(this.ctx, EFFECT_PROCESSOR, {
-      numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2],
+      numberOfInputs: this.sidechain ? 2 : 1, numberOfOutputs: 1, outputChannelCount: [2],
       channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions,
     });
     // solo il collegamento diretto: quelli verso lo spettro restano
     this.input.disconnect(this.post);
     this.input.connect(this.node);
+    this.sidechain?.connect(this.node, 0, 1);
     this.node.connect(this.post);
   }
 

@@ -3,7 +3,7 @@
  * "delay") e i valori dei parametri. Il modello non conosce i tipi: i parametri non salvati
  * prendono il valore predefinito del tipo quando il dispositivo suona, così un parametro
  * aggiunto in futuro non cambia il suono dei progetti esistenti. */
-import type { DeviceId, SampleId } from '../core/id';
+import type { DeviceId, SampleId, TrackId } from '../core/id';
 
 export type ParamValues = Readonly<Record<string, number>>;
 
@@ -27,6 +27,9 @@ export interface EffectSettings extends DeviceSettings {
   readonly id: DeviceId;
   /** Spento = il suono passa senza effetto (bypass). */
   readonly enabled: boolean;
+  /** La traccia che il rilevatore ascolta al posto del suono che passa (sidechain), per gli
+   *  effetti che lo accettano. Assente: ascolta il proprio ingresso. */
+  readonly sidechain?: TrackId;
 }
 
 export const DEFAULT_INSTRUMENT: InstrumentSettings = { type: 'analog', preset: 'Init', params: {} };
@@ -42,6 +45,12 @@ export const withParams = <S extends DeviceSettings>(s: S, values: ParamValues):
 
 export const withPreset = <S extends DeviceSettings>(s: S, name: string, params: ParamValues): S =>
   ({ ...s, preset: name, params: { ...params } });
+
+/** Il rilevatore ascolta la traccia `source` (null: di nuovo il proprio ingresso). */
+export function withSidechain(e: EffectSettings, source: TrackId | null): EffectSettings {
+  const { sidechain: _old, ...rest } = e;
+  return source ? { ...rest, sidechain: source } : rest;
+}
 
 /** Il sample al posto `slot`, o null se vuoto. */
 export const sampleAt = (s: DeviceSettings, slot: string): SampleId | null => s.samples?.[slot] ?? null;

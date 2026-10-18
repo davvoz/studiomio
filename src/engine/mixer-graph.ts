@@ -1,5 +1,6 @@
 import type { DeviceId, TrackId } from '../core/id';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
+import { sidechainLinks } from '../model/sidechain';
 import type { MixerSettings, Track } from '../model/track';
 import { EffectChain, type Effect, type EffectHost } from './effect-chain';
 import type { Meter, MeterHost, MeterReading } from './meters';
@@ -41,12 +42,22 @@ function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): v
 /** Le modulazioni del canale: volume (un guadagno dopo il fader) e pan (un valore sommato al pan). */
 export type MixerModulation = 'volume' | 'pan';
 
-/** Canale del mixer di una traccia: effetti → volume → modulazione del volume → pan → mute/solo
- *  → misuratore → uscita (il master, o il canale del gruppo che contiene la traccia). La
- *  modulazione del pan è una sorgente costante sommata al pan. */
+/** Stacca `from` da `to`. Un nodo già staccato del tutto (un canale tolto) dà errore: va bene così. */
+function unlink(from: AudioNodeLike, to: AudioNodeLike): void {
+  try {
+    from.disconnect(to);
+  } catch { /* non erano più collegati */ }
+}
+
+/** Canale del mixer di una traccia: effetti → `tap` → volume → modulazione del volume → pan →
+ *  mute/solo → misuratore → uscita (il master, o il canale del gruppo che contiene la traccia).
+ *  Da `tap` si prende il suono per il sidechain degli altri canali. La modulazione del pan è
+ *  una sorgente costante sommata al pan. */
 class ChannelStrip {
   readonly input: GainNodeLike;
   readonly chain: EffectChain;
+  /** Il suono dopo gli effetti e prima del volume: quello che ascolta il sidechain. */
+  readonly tap: GainNodeLike;
   private readonly fader: GainNodeLike;
   private readonly modGain: GainNodeLike;
   private readonly panner: PannerNodeLike;
@@ -58,6 +69,7 @@ class ChannelStrip {
   constructor(private readonly graph: AudioGraph, effects: EffectHost, output: AudioNodeLike, readonly meter: Meter | null) {
     this.output = output;
     this.input = graph.createGain();
+    this.tap = graph.createGain();
     this.fader = graph.createGain();
     this.modGain = graph.createGain();
     this.panner = graph.createStereoPanner();
@@ -67,7 +79,8 @@ class ChannelStrip {
     this.panOffset.start();
     this.gate = graph.createGain();
     // gli effetti stanno prima del volume, come in Live; il misuratore dopo: si vede ciò che si sente
-    this.chain = new EffectChain(graph, effects, this.input, this.fader);
+    this.chain = new EffectChain(graph, effects, this.input, this.tap);
+    this.tap.connect(this.fader);
     this.fader.connect(this.modGain);
     this.modGain.connect(this.panner);
     this.panner.connect(this.gate);
@@ -99,16 +112,24 @@ class ChannelStrip {
 
   dispose(): void {
     this.chain.dispose();
-    for (const n of [this.fader, this.modGain, this.panner, this.panOffset, this.gate]) n.disconnect();
+    for (const n of [this.tap, this.fader, this.modGain, this.panner, this.panOffset, this.gate]) n.disconnect();
     this.meter?.dispose();
   }
+}
+
+/** Un collegamento del sidechain nel grafo: il `tap` di un canale nel `sidechain` di un effetto. */
+interface KeyWire {
+  readonly from: AudioNodeLike;
+  readonly to: AudioNodeLike;
 }
 
 /** Il mixer nel grafo audio: un canale per traccia e il master, allineati al progetto.
  *  Le tracce si sommano nel bus del master, che passa per i suoi effetti e poi per il suo
  *  volume: bus → effetti del master → `master` → misuratore → uscita. Le tracce di un gruppo
  *  si sommano invece nel canale del gruppo, che esce nel master (o nel gruppo che lo contiene).
- *  Con `meters` ogni canale ha il suo misuratore di livello (nell'export non servono). */
+ *  Il sidechain porta il suono di un canale nel rilevatore di un effetto di un altro (vedi
+ *  model/sidechain.ts). Con `meters` ogni canale ha il suo misuratore di livello (nell'export
+ *  non servono). */
 export class MixerGraph {
   /** Dopo gli effetti del master: il metronomo entra qui, così gli effetti non lo toccano. */
   readonly master: GainNodeLike;
@@ -116,6 +137,8 @@ export class MixerGraph {
   private readonly masterChain: EffectChain;
   private readonly masterMeter: Meter | null;
   private readonly strips = new Map<TrackId, ChannelStrip>();
+  /** I collegamenti del sidechain fatti, per effetto ("proprietario/id"). */
+  private wires = new Map<string, KeyWire>();
   private masterSettings: MixerSettings | null = null;
 
   constructor(
@@ -176,6 +199,21 @@ export class MixerGraph {
       setParam(this.master.gain, m.mute ? 0 : dbToGain(m.volumeDb), this.graph.currentTime, this.masterSettings === null);
       this.masterSettings = m;
     }
+    this.syncSidechains(project);
+  }
+
+  /** Collega e stacca solo i sidechain cambiati (anche quando un effetto è stato ricreato). */
+  private syncSidechains(project: Project): void {
+    const next = new Map<string, KeyWire>();
+    for (const link of sidechainLinks(project)) {
+      const to = this.effect(link.owner, link.device)?.sidechain;
+      const from = this.strips.get(link.source)?.tap;
+      if (to && from) next.set(`${link.owner}/${link.device}`, { from, to });
+    }
+    const same = (a: KeyWire | undefined, b: KeyWire | undefined) => !!a && !!b && a.from === b.from && a.to === b.to;
+    for (const [key, wire] of this.wires) if (!same(wire, next.get(key))) unlink(wire.from, wire.to);
+    for (const [key, wire] of next) if (!same(wire, this.wires.get(key))) wire.from.connect(wire.to);
+    this.wires = next;
   }
 
   private strip(id: TrackId): ChannelStrip {

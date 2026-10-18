@@ -6,6 +6,15 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Compressor sidechain: the new Sidechain card picks a track for the detector to listen to
+  instead of the sound going through, like the kick that makes the bass pump. The detector
+  hears that track after its effects and before its volume, so a muted kick still works as a
+  trigger; the Detector high-pass filters it. Only tracks that would not loop back are offered
+  (not the track itself, nor the group it is in). Deleting the track it listens to brings the
+  compressor back to listening to itself. Existing projects sound exactly as before; projects
+  saved with this version cannot be opened by older ones.
+
 ## [0.2.1] - 2026-10-18
 
 ### Added

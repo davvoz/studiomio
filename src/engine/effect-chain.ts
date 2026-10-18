@@ -16,6 +16,8 @@ export interface Effect {
   readonly input: AudioNodeLike;
   readonly output: AudioNodeLike;
   readonly monitor?: EffectMonitor;
+  /** Per i tipi con il sidechain: dove entra il suono che il rilevatore ascolta. */
+  readonly sidechain?: AudioNodeLike;
   /** I parametri che le clip possono modulare. */
   readonly modulation?: DeviceModulation;
   /** Nuove impostazioni dello stesso tipo (parametri, acceso/spento). */

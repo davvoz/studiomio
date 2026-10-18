@@ -1,3 +1,4 @@
+import { effectType } from '../../src/devices/registry';
 import type { Instrument, InstrumentHost } from '../../src/engine/players/instrument';
 import type { Effect, EffectHost } from '../../src/engine/effect-chain';
 import type { Meter, MeterHost, MeterReading } from '../../src/engine/meters';
@@ -37,7 +38,17 @@ export class FakeNode implements AudioNodeLike {
   connected = true;
   constructor(readonly kind: string) {}
   connect(d: AudioNodeLike) { this.outputs.push(d); return d; }
-  disconnect() { this.connected = false; this.outputs.length = 0; }
+  /** Come Web Audio: con una destinazione stacca solo quella, ed è un errore se non è collegata. */
+  disconnect(d?: AudioNodeLike) {
+    if (!d) {
+      this.connected = false;
+      this.outputs.length = 0;
+      return;
+    }
+    const i = this.outputs.indexOf(d);
+    if (i < 0) throw new Error('InvalidAccessError: non collegati');
+    this.outputs.splice(i, 1);
+  }
 }
 
 export class FakeGain extends FakeNode implements GainNodeLike {
@@ -150,18 +161,22 @@ export class FakeInstruments implements InstrumentHost {
   }
 }
 
-/** Effetto finto: registra aggiornamenti e tempo; ingresso e uscita sono nodi finti. */
+/** Effetto finto: registra aggiornamenti e tempo; ingresso e uscita sono nodi finti (e il
+ *  sidechain, per i tipi che lo accettano). */
 export class FakeEffect implements Effect {
   readonly input = new FakeGain();
   readonly output = new FakeGain();
+  readonly sidechain: FakeGain | undefined;
   readonly updates: EffectSettings[] = [];
   readonly tempos: number[] = [];
   readonly modulation = new FakeModulation();
   disposed = false;
-  constructor(readonly type: string, readonly settings: EffectSettings, readonly bpm: number) {}
+  constructor(readonly type: string, readonly settings: EffectSettings, readonly bpm: number) {
+    this.sidechain = effectType(type)?.sidechain ? new FakeGain() : undefined;
+  }
   update(s: EffectSettings) { this.updates.push(s); }
   setTempo(bpm: number) { this.tempos.push(bpm); }
-  dispose() { this.disposed = true; this.input.disconnect(); this.output.disconnect(); }
+  dispose() { this.disposed = true; this.input.disconnect(); this.output.disconnect(); this.sidechain?.disconnect(); }
 }
 
 export class FakeEffects implements EffectHost {

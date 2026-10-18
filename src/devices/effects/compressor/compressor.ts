@@ -1,7 +1,8 @@
 /* "Compressore": abbassa il volume quando il suono supera la soglia, di quanto dice il
  * rapporto, con ginocchio morbido. Per tenere insieme un bus (colla), dare punch a una
  * batteria (attacco lento: il colpo passa, il corpo si schiaccia) o, con il mix, comprimere in
- * parallelo. Il passa-alto sul rilevatore evita che i bassi lo facciano pompare. Qui c'è la
+ * parallelo. Il passa-alto sul rilevatore evita che i bassi lo facciano pompare. Con il
+ * sidechain il rilevatore ascolta un'altra traccia: la cassa che abbassa il basso. Qui c'è la
  * descrizione; il suono è in compressor-core.ts, la curva (comune a suono e disegno) in
  * compressor-math.ts. */
 import type { DeviceType } from '../../device-type';
@@ -18,6 +19,7 @@ const choice = (id: string, label: string, options: readonly string[], def = 0):
 export const COMPRESSOR: DeviceType = {
   type: 'compressor',
   label: 'Compressore',
+  sidechain: true,
   sections: [
     {
       label: 'Curva',

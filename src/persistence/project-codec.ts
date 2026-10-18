@@ -12,7 +12,7 @@ import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 9;
+export const PROJECT_VERSION = 10;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -70,6 +70,8 @@ const migrations: Record<number, Migration> = {
   7: json => json,
   // 8 → 9: le tracce possono stare in un gruppo (campo facoltativo, e il tipo "group")
   8: json => json,
+  // 9 → 10: un effetto può ascoltare un'altra traccia, il sidechain (campo facoltativo)
+  9: json => json,
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
@@ -237,9 +239,14 @@ const decodeInstrument = (r: JsonReader): DeviceSettings => {
   };
 };
 
-const encodeEffect = (e: EffectSettings): JsonObject => ({ id: e.id, enabled: e.enabled, ...encodeInstrument(e) });
+const encodeEffect = (e: EffectSettings): JsonObject => ({
+  id: e.id, enabled: e.enabled, ...encodeInstrument(e), ...(e.sidechain ? { sidechain: e.sidechain } : {}),
+});
 
-const decodeEffect = (r: JsonReader): EffectSettings => ({ id: asId(r.str('id')), enabled: r.bool('enabled'), ...decodeInstrument(r) });
+const decodeEffect = (r: JsonReader): EffectSettings => ({
+  id: asId(r.str('id')), enabled: r.bool('enabled'), ...decodeInstrument(r),
+  ...(r.has('sidechain') ? { sidechain: asId<'track'>(r.str('sidechain')) } : {}),
+});
 
 /** I rack si scrivono solo se ci sono. */
 const encodeRacks = (field: string, racks: RackList): JsonObject => (racks.length ? {

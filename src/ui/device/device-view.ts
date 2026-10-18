@@ -14,7 +14,7 @@ import { MidiTrack, type Track } from '../../model/track';
 import type { ControlledDevice } from '../ui-state';
 import {
   addEffect, loadEffectPreset, loadPreset, removeEffect, setEffectEnabled, setEffectParam,
-  setEffectParams, setInstrument, setInstrumentParam, setInstrumentParams, setInstrumentSamples,
+  setEffectParams, setEffectSidechain, setInstrument, setInstrumentParam, setInstrumentParams, setInstrumentSamples,
 } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { addEffectToRack, groupDevices, mapMacro, moveDevice, ungroupRack, unmapParam } from '../../store/rack-edits';
@@ -23,6 +23,7 @@ import { el } from '../dom';
 import { DevicePanel } from './device-panel';
 import { DEVICE_DISPLAYS, NO_SPECTRUM, type SpectrumTap } from './displays';
 import { RackPanel } from './rack-panel';
+import { SidechainPicker } from './sidechain-picker';
 
 export interface DeviceViewDeps {
   readonly store: ProjectStore;
@@ -69,6 +70,7 @@ export class DeviceView {
   private builtFor = '';
   private readonly panels = new Map<string, DevicePanel>();
   private readonly rackPanels = new Map<DeviceId, RackPanel>();
+  private readonly sidechains = new Map<DeviceId, SidechainPicker>();
   private readonly title = el('span', { className: 'device-title' });
   private readonly backButton = el<HTMLButtonElement>('button', { textContent: '◂ Note', title: 'Torna al piano roll' });
   private readonly chain = el('div', { className: 'device-chain' });
@@ -237,6 +239,7 @@ export class DeviceView {
     this.builtFor = shape;
     this.panels.clear();
     this.rackPanels.clear();
+    this.sidechains.clear();
     const project = this.deps.store.project;
     const order = project.chainKeys(owner);
     if (this.mapMode && !racks.some(r => r.id === this.mapMode!.rack)) this.mapMode = null;
@@ -275,6 +278,7 @@ export class DeviceView {
   private update({ track, effects, racks }: ChainSource): void {
     if (track instanceof MidiTrack) this.panels.get(INSTRUMENT)?.update(track.instrument);
     for (const e of effects) this.panels.get(e.id)?.update(e, e.enabled);
+    if (this.owner) for (const e of effects) this.sidechains.get(e.id)?.update(this.deps.store.project, this.owner, e);
     for (const r of racks) this.rackPanels.get(r.id)?.update(r);
   }
 
@@ -520,8 +524,13 @@ export class DeviceView {
       audition: () => {},
       playedNotes: () => [],
     });
+    const sidechain = type.sidechain ? new SidechainPicker(source => store.apply(setEffectSidechain(owner, id, source))) : null;
+    if (sidechain) {
+      sidechain.update(store.project, owner, e);
+      this.sidechains.set(id, sidechain);
+    }
     const panel = new DevicePanel({
-      type, settings: e, before: [power], display, ...this.foldOptions(owner, id),
+      type, settings: e, before: [power], display, extra: sidechain ? [sidechain.element] : [], ...this.foldOptions(owner, id),
       after: [
         button('◂', 'Sposta prima (dal bordo di un rack ne esce, accanto a un rack ci entra)', () => store.apply(moveDevice(owner, id, -1)), !canMove(-1)),
         button('▸', 'Sposta dopo (dal bordo di un rack ne esce, accanto a un rack ci entra)', () => store.apply(moveDevice(owner, id, 1)), !canMove(1)),

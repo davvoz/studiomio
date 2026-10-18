@@ -7,7 +7,7 @@ import { AudioClip } from '../model/audio-clip';
 import type { Clip } from '../model/clip';
 import { paletteColor } from '../model/colors';
 import {
-  newEffect, withParam, withParams, withPreset, withSample, type EffectSettings, type InstrumentSettings, type ParamValues,
+  newEffect, withParam, withParams, withPreset, withSample, withSidechain, type EffectSettings, type InstrumentSettings, type ParamValues,
 } from '../model/device';
 import * as chain from '../model/effect-list';
 import { INSTRUMENT_DEVICE } from '../model/envelope';
@@ -157,6 +157,10 @@ export const setEffectParam = (owner: ChainOwner, id: DeviceId, param: string, v
 
 export const setEffectParams = (owner: ChainOwner, id: DeviceId, values: ParamValues): Edit =>
   updatingEffect("Parametri dell'effetto", owner, id, e => withParams(e, values));
+
+/** Il rilevatore dell'effetto ascolta la traccia `source` (null: di nuovo il proprio ingresso). */
+export const setEffectSidechain = (owner: ChainOwner, id: DeviceId, source: TrackId | null): Edit =>
+  updatingEffect(source ? 'Sidechain' : 'Togli il sidechain', owner, id, e => withSidechain(e, source));
 
 export const loadEffectPreset = (owner: ChainOwner, id: DeviceId, name: string, params: ParamValues): Edit =>
   edit(`Preset ${name}`, p => reapplyMacros(p.updatingEffects(owner, list => chain.update(list, id, e => withPreset(e, name, params))), owner));

@@ -48,6 +48,8 @@ export interface EffectProcessorOptions {
   readonly params: Readonly<Record<string, number>>;
   readonly enabled: boolean;
   readonly bpm: number;
+  /** Il rilevatore ascolta il secondo ingresso (sidechain) invece del primo. */
+  readonly keyed: boolean;
 }
 
 export type EffectMessage =
@@ -55,6 +57,8 @@ export type EffectMessage =
   | ModMessage
   | { readonly type: 'enabled'; readonly enabled: boolean }
   | { readonly type: 'tempo'; readonly bpm: number }
+  /** Il rilevatore passa al secondo ingresso (sidechain) o torna al primo. */
+  | { readonly type: 'keyed'; readonly keyed: boolean }
   | { readonly type: 'dispose' };
 
 export const METER_PROCESSOR = 'studiomio-meter';

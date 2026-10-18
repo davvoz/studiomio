@@ -16,6 +16,8 @@ export interface DevicePanelOptions {
   readonly onPreset: (preset: Preset) => void;
   /** Un pannello grafico (es. l'EQ) al posto delle manopole generate. */
   readonly display?: DeviceDisplay;
+  /** Schede in più, dopo quelle dei parametri (es. il sidechain del compressore). */
+  readonly extra?: readonly HTMLElement[];
   /** Il pannello parte compresso (solo l'intestazione, in verticale). */
   readonly folded?: boolean;
   /** Il pannello compresso o riaperto (▾/▸ o doppio clic sull'intestazione). */
@@ -49,6 +51,7 @@ export class DevicePanel {
         this.controls.set(spec.id, { spec, control });
         return control.element;
       }))));
+    sections.push(...(options.extra ?? []));
     const head = el('div', { className: 'device-panel-head' },
       ...(options.onFold ? [this.fold] : []), ...(options.before ?? []),
       el('span', { className: 'device-name', textContent: type.label }), this.presets, ...(options.after ?? []));

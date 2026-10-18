@@ -4,9 +4,12 @@
  *   ingresso ─┬──────────────────────────── × guadagno ─┬─ mix con il dry → uscita
  *             └─ passa-alto → livello (picco o RMS) → dB → curva → riduzione levigata ─┘
  *
+ * Con il sidechain il rilevatore (la riga di sotto) ascolta la chiave, un'altra traccia, invece
+ * dell'ingresso; senza, la chiave è l'ingresso stesso e i conti sono gli stessi di sempre.
+ *
  * La riduzione si leviga in dB con attacco e rilascio separati, come i compressori da studio.
  * Gira nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
-import { dbToGain, type EffectCore } from '../../dsp/core';
+import { dbToGain, type EffectCore, type KeyedEffect } from '../../dsp/core';
 import { DETECTOR } from './compressor';
 import { autoMakeup, curveDb, type Curve } from './compressor-math';
 
@@ -18,7 +21,7 @@ const LOG_TO_DB = 20 / Math.LN10;
 
 const coef = (seconds: number, sampleRate: number) => Math.exp(-1 / Math.max(1, seconds * sampleRate));
 
-export class CompressorCore implements EffectCore {
+export class CompressorCore implements EffectCore, KeyedEffect {
   private curve: Curve = { threshold: -18, ratio: 4, knee: 6 };
   private attackK = 0;
   private releaseK = 0;
@@ -39,6 +42,9 @@ export class CompressorCore implements EffectCore {
   private readonly smoothK: number;
   /** Prima del primo blocco i valori non scorrono: partono da quelli giusti. */
   private fresh = true;
+  /** Il suono che il rilevatore ascolta (null: l'ingresso). */
+  private keyL: Float32Array | null = null;
+  private keyR: Float32Array | null = null;
   /** La riduzione più forte dall'ultima lettura (per i misuratori e i test). */
   maxReduction = 0;
 
@@ -65,19 +71,25 @@ export class CompressorCore implements EffectCore {
 
   setTempo(): void {}
 
+  setKey(left: Float32Array | null, right: Float32Array | null): void {
+    this.keyL = left;
+    this.keyR = right ?? left;
+  }
+
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     const { curve, attackK, releaseK, hpK, rmsK, rms, smoothK } = this;
     let { hpL, hpR, prevL, prevR, power, reduction, makeup, mix } = this;
     const targetMakeup = this.targetMakeup, targetMix = this.targetMix;
+    const keyL = this.keyL ?? inL, keyR = this.keyR ?? inR;
     this.fresh = false;
     let maxReduction = this.maxReduction;
     for (let i = 0; i < n; i++) {
-      const l = inL[i], r = inR[i];
+      const l = inL[i], r = inR[i], kl = keyL[i], kr = keyR[i];
       // passa-alto a un polo sul rilevatore (non sul suono)
-      hpL = hpK * (hpL + l - prevL);
-      hpR = hpK * (hpR + r - prevR);
-      prevL = l;
-      prevR = r;
+      hpL = hpK * (hpL + kl - prevL);
+      hpR = hpK * (hpR + kr - prevR);
+      prevL = kl;
+      prevR = kr;
       let level: number;
       if (rms) {
         power = rmsK * power + (1 - rmsK) * (hpL * hpL + hpR * hpR) * 0.5;

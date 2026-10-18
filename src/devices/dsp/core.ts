@@ -42,6 +42,15 @@ export interface EffectCore {
 
 export type EffectFactory = (sampleRate: number) => EffectCore;
 
+/** Un effetto con il rilevatore che può ascoltare un altro suono (sidechain). */
+export interface KeyedEffect {
+  /** Il suono che il rilevatore ascolta nel prossimo `process` (stessa lunghezza dell'ingresso);
+   *  null: torna ad ascoltare l'ingresso. */
+  setKey(left: Float32Array | null, right: Float32Array | null): void;
+}
+
+export const isKeyed = (core: object): core is KeyedEffect => typeof (core as Partial<KeyedEffect>).setKey === 'function';
+
 export const midiToHz = (pitch: number): number => 440 * Math.pow(2, (pitch - 69) / 12);
 
 export const dbToGain = (db: number): number => Math.pow(10, db / 20);
