@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-18
+
 ### Added
 - Your own presets: the ★ button in the header of every instrument and effect saves its
   current settings as a preset, available in every project under "I miei preset" at the top of
