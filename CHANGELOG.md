@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- Device controls no longer spill out of their panel, in the chain or inside a rack (the EQ
+  band row, the Analog oscillators, the Drive). Choices with three or four buttons now take two
+  columns, so they are never taller than a knob; the EQ and Drive graphs take the height that is
+  left above their controls. If a device ever needs more room, the panel grows and the chain
+  scrolls instead.
+
 ## [0.2.2] - 2026-10-18
 
 ### Added

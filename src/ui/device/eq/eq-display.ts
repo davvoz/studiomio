@@ -76,6 +76,8 @@ export class EqDisplay implements DeviceDisplay {
     this.bindGraph();
     this.update(ctx.settings, true);
     this.select(Math.max(0, this.bands.findIndex(b => b.on)), true);
+    // il grafico prende l'altezza che resta nel pannello: si ridisegna quando cambia
+    new ResizeObserver(() => { this.dirty = true; }).observe(this.canvas);
     requestAnimationFrame(this.frame);
   }
 

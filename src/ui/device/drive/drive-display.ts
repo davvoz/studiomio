@@ -77,6 +77,10 @@ export class DriveDisplay implements DeviceDisplay {
       el('div', { className: 'drive-shapes' }, ...this.shapeButtons),
       el('div', { className: 'drive-controls' }, ...groups));
     this.update(ctx.settings, true);
+    // i grafici prendono l'altezza che resta nel pannello: si ridisegnano quando cambia
+    const resized = new ResizeObserver(() => { this.dirty = true; });
+    resized.observe(this.curve);
+    resized.observe(this.spectrum);
     requestAnimationFrame(() => this.icons());
     requestAnimationFrame(this.frame);
   }
