@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-18
+
 ### Added
 - Compressor sidechain: the new Sidechain card picks a track for the detector to listen to
   instead of the sound going through, like the kick that makes the bass pump. The detector
