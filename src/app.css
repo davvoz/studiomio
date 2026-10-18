@@ -382,6 +382,8 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .back-to-arrangement { min-width: 34px; }
 
 /* Drum Machine: griglia dei pad e controlli del pad scelto */
+/* l'editor del pad non va a capo: il pannello si allarga quanto serve invece di farlo uscire */
+.device-panel.instrument-panel .device-sections:has(> .drum-display) { max-width: none; }
 .drum-display { display: flex; gap: 10px; align-items: flex-start; }
 .drum-pads { display: grid; grid-template-columns: repeat(4, 76px); grid-auto-rows: 52px; gap: 4px; flex: none; }
 .drum-pad {
