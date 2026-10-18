@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-19
+
 ### Added
 - Crop for audio clips, as in Live: the "Crop" button in the clip editor (or right-click on
   the waveform) keeps only the loop, or the region when the loop is off. That part of the sample
