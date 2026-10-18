@@ -1,9 +1,11 @@
-// Processo principale di Electron: apre la finestra dell'app, serve i file di `dist/` e
-// controlla gli aggiornamenti su GitHub Releases. L'app vera e propria (src/) non cambia.
-import { app, BrowserWindow, dialog, protocol, session, shell } from 'electron';
+// Processo principale di Electron: apre la finestra dell'app, serve i file di `dist/`, tiene i
+// file dei preset dell'utente e controlla gli aggiornamenti su GitHub Releases. L'app vera e
+// propria (src/) non cambia.
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type IpcMainInvokeEvent } from 'electron';
 import updater from 'electron-updater';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
+import { loadPresets, removePreset, savePreset, type StoredPreset } from './presets.js';
 import { releaseNotesText } from './release-notes.js';
 
 const { autoUpdater } = updater;
@@ -57,6 +59,7 @@ function createWindow(): BrowserWindow {
     show: false,
     backgroundColor: '#121417',
     autoHideMenuBar: true,
+    webPreferences: { preload: join(import.meta.dirname, 'preload.cjs') },
   });
   win.removeMenu();
   win.once('ready-to-show', () => {
@@ -80,6 +83,35 @@ function createWindow(): BrowserWindow {
 
   void win.loadURL(`${ORIGIN}/index.html`);
   return win;
+}
+
+/** I preset dell'utente: file in Documenti, così restano anche se si disinstalla l'app o se ne
+ *  cancellano i dati, e si copiano a mano su un altro computer. */
+function handlePresets(): void {
+  const root = join(app.getPath('documents'), 'studiomio', 'Preset');
+  const text = (v: unknown): string => {
+    if (typeof v !== 'string' || !v) throw new TypeError('testo atteso');
+    return v;
+  };
+  const preset = (v: unknown): StoredPreset => {
+    const { type, name, params } = (v ?? {}) as Record<string, unknown>;
+    if (!params || typeof params !== 'object') throw new TypeError('parametri attesi');
+    return { type: text(type), name: text(name), params: params as Record<string, number> };
+  };
+  // risponde solo all'app, non a pagine d'altra origine
+  const handle = (channel: string, run: (...args: unknown[]) => Promise<unknown>) =>
+    ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+      if (!event.senderFrame?.url.startsWith(ORIGIN)) throw new Error('origine non permessa');
+      return run(...args);
+    });
+  handle('presets:load', () => loadPresets(root));
+  handle('presets:save', (folder, p) => savePreset(root, text(folder), preset(p)));
+  handle('presets:remove', (type, name) => removePreset(root, text(type), text(name)));
+  handle('presets:reveal', async () => {
+    await mkdir(root, { recursive: true });
+    const error = await shell.openPath(root);
+    if (error) throw new Error(error);
+  });
 }
 
 /** Cerca una nuova versione all'avvio: la scarica in background e propone di riavviare. */
@@ -119,6 +151,7 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     protocol.handle(SCHEME, serve);
+    handlePresets();
     // MIDI (APC40), cartelle dei progetti e il resto: concessi solo all'app stessa.
     const ours = (url: string) => url.startsWith(ORIGIN);
     session.defaultSession.setPermissionRequestHandler((wc, _permission, callback) => callback(ours(wc.getURL())));

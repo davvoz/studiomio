@@ -6,6 +6,14 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Your own presets: the ★ button in the header of every instrument and effect saves its
+  current settings as a preset, available in every project under "I miei preset" at the top of
+  the preset menu. Right-click the header to update or delete the preset you're using, or to
+  open the presets folder. Each preset is a file in Documents\studiomio\Preset, so presets
+  survive uninstalling the app and can be copied to another computer or shared. Drum Machine
+  samples aren't part of a preset.
+
 ## [0.3.2] - 2026-10-18
 
 ### Fixed

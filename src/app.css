@@ -151,6 +151,9 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-panel-head .fold { color: var(--muted); padding: 0 5px; border-color: transparent; background: none; }
 .device-panel-head .fold:hover { color: var(--text); }
 .device-panel-head select { padding: 1px 4px; font-size: 12px; }
+.device-panel-head .rename { width: 140px; padding: 1px 4px; font-size: 12px; }
+.device-panel-head .save-preset { color: var(--muted); }
+.device-panel-head .save-preset:hover { color: var(--text); }
 .device-name { font-weight: 600; margin-right: auto; padding: 0 4px; }
 .device-panel-head .mini { padding: 0 7px; font-size: 12px; line-height: 1.6; }
 .device-panel-head .power { color: var(--muted); }

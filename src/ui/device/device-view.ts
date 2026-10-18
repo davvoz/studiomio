@@ -332,9 +332,11 @@ export class DeviceView {
       ev.preventDefault();
       const keys = this.selection.includes(key) ? this.selection : [key];
       const rack = rackOf(this.deps.store.project.racksOf(owner), key);
+      const presets = panel.presetMenu();
       showContextMenu(ev.clientX, ev.clientY, [
         { label: 'Raggruppa in un rack', shortcut: 'Ctrl+G', disabled: !!rack, run: () => this.groupSelection(keys) },
         { label: 'Separa il rack', shortcut: 'Ctrl+Maiusc+G', disabled: !rack, run: () => rack && this.guard(ungroupRack(owner, rack.id)) },
+        ...(presets.length ? [SEPARATOR, ...presets] : []),
       ]);
     });
     const paramOf = (target: EventTarget | null) => (target as HTMLElement | null)?.closest<HTMLElement>('[data-param]')?.dataset.param;
@@ -513,6 +515,8 @@ export class DeviceView {
         store.apply(loadPreset(track.id, p.name, p.params));
         audition(track.id, testPitch());
       },
+      onPresetSaved: p => store.apply(loadPreset(track.id, p.name, p.params)),
+      say: this.deps.say,
     });
     panel.element.classList.add('instrument-panel');
     this.panels.set(INSTRUMENT, panel);
@@ -551,6 +555,8 @@ export class DeviceView {
       ],
       onParam: (param, v, final) => this.param(setEffectParam(owner, id, param, v), `fx-${id}-${param}`, final),
       onPreset: p => store.apply(loadEffectPreset(owner, id, p.name, p.params)),
+      onPresetSaved: p => store.apply(loadEffectPreset(owner, id, p.name, p.params)),
+      say: this.deps.say,
     });
     panel.update(e, e.enabled);
     this.panels.set(id, panel);
