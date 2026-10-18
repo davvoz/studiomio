@@ -246,5 +246,164 @@ function build(): Preset[] {
         ...mods([SRC.env2, 'tune', 45], [SRC.env2, 'aWarpAmt', 50]),
       },
     },
+    // ---- movimento: inviluppi, LFO e matrice spinti
+    {
+      // Env 3 apre tutto in quattro secondi; quattro LFO liberi a velocità diverse, e il più lento
+      // cambia la velocità del primo
+      name: 'Pad che respira',
+      params: {
+        aTable: T.Armoniche, aPos: 30, aUnison: 6, aDetune: 12, aWidth: 100, bOn: 1, bTable: T.Formanti, bPos: 20, bUnison: 4, bDetune: 10,
+        bLevel: 45, f1Type: FILTER.lp24, f1Cutoff: 900, f1Res: 25, e1A: 1.5, e1D: 3, e1S: 85, e1R: 3, e3A: 4, e3D: 6, e3S: 60, e3R: 4, e3Ac: -30,
+        l1Shape: LFO_SHAPE.smoothRandom, l1Div: R['2 battute'], l1Trig: LFO_TRIG.free, l2Shape: LFO_SHAPE.triangle, l2Div: R['4 battute'],
+        l2Trig: LFO_TRIG.free, l3Div: R['8 battute'], l3Trig: LFO_TRIG.free, l4Sync: LFO_SYNC.hz, l4Rate: 0.25, l4Trig: LFO_TRIG.free, volume: -12,
+        ...mods(
+          [SRC.env3, 'f1Cutoff', 35], [SRC.env3, 'f1Res', 15], [SRC.env3, 'aDetune', 20], [SRC.lfo1, 'aPos', 30, { bi: true }],
+          [SRC.lfo2, 'bPos', 45, { bi: true }], [SRC.lfo3, 'f1Cutoff', 12, { bi: true }], [SRC.lfo3, 'l1Rate', 25, { bi: true }],
+          [SRC.lfo4, 'aPan', 40, { bi: true }], [SRC.lfo4, 'bPan', -40, { bi: true }], [SRC.velocity, 'e3A', -20],
+        ),
+      },
+    },
+    {
+      // tenendo la nota Env 3 fa correre il wobble da 1/4 verso 1/16
+      name: 'Wobble che accelera',
+      params: {
+        aTable: T.Growl, aPos: 20, aWarp: WARP.bendBoth, aWarpAmt: 10, bOn: 1, bTable: T.Base, bPos: 67, bOct: -1, bLevel: 50, subOn: 1,
+        subLevel: 60, voiceMode: VOICE_MODE.mono, glide: 30, f1Type: FILTER.lp24, f1Cutoff: 300, f1Res: 40, f1Drive: 40, e1R: 0.08,
+        e3A: 3, e3S: 100, e3Ac: -30, l1Shape: LFO_SHAPE.sine, l1Div: R['1/4'], l2Shape: LFO_SHAPE.sampleHold, l2Div: R['1/16'], volume: -12,
+        ...mods(
+          [SRC.lfo1, 'f1Cutoff', 45], [SRC.lfo1, 'aPos', 50], [SRC.lfo1, 'aWarpAmt', 35], [SRC.env3, 'l1Rate', 18], [SRC.env3, 'f1Res', 20],
+          [SRC.lfo2, 'bFine', 15, { bi: true }], [SRC.velocity, 'f1Cutoff', 10],
+        ),
+      },
+    },
+    {
+      // LFO 1 a scalini è la sequenza delle altezze (in 1 battuta), LFO 2 è il pluck di ogni passo
+      name: 'Arpeggio disegnato',
+      params: {
+        aTable: T.Armoniche, aPos: 45, aUnison: 3, aDetune: 10, aLevel: 25, f1Type: FILTER.lp24, f1Cutoff: 1400, f1Res: 30, e1A: 0.002, e1R: 0.3,
+        l1Div: R['1 battuta'], ...drawn(1, steps([0, 12, 7, 19, 12, 24, 7, 12].map(st => st / 24))),
+        l2Div: R['1/8'], ...drawn(2, [[0, 1, 60], [0.7, 0.1], [1, 0]]),
+        l3Shape: LFO_SHAPE.triangle, l3Div: R['2 battute'], l3Trig: LFO_TRIG.free, volume: -11,
+        ...mods(
+          [SRC.lfo1, 'tune', 50], [SRC.lfo2, 'f1Cutoff', 40], [SRC.lfo2, 'aLevel', 70], [SRC.lfo3, 'aPos', 30, { bi: true }],
+          [SRC.velocity, 'f1Cutoff', 15],
+        ),
+      },
+    },
+    {
+      // quattro inviluppi per un colpo solo: filtro, blip di pitch, FM; velocity e nota cambiano i tempi
+      name: 'Pluck elastico',
+      params: {
+        aTable: T.FM, aPos: 20, aWarp: WARP.fm, aWarpAmt: 0, bOn: 1, bTable: T.Base, bPos: 0, bOct: 1, bLevel: 0, f1Type: FILTER.lp24,
+        f1Cutoff: 400, f1Res: 35, f1Key: 40, e1A: 0.001, e1D: 0.9, e1S: 0, e1R: 0.5, e1Dc: 50, e2A: 0.001, e2D: 0.18, e2Dc: 75,
+        e3A: 0.001, e3D: 0.04, e3Dc: 80, e4A: 0.001, e4D: 0.45, e4Dc: 40, volume: -10,
+        ...mods(
+          [SRC.env2, 'f1Cutoff', 45], [SRC.env2, 'f1Cutoff', 20, { aux: SRC.velocity }], [SRC.env3, 'tune', 3], [SRC.env4, 'aWarpAmt', 45],
+          [SRC.velocity, 'e1D', 15], [SRC.note, 'e2D', -25, { bi: true }], [SRC.random, 'aPan', 30, { bi: true }],
+        ),
+      },
+    },
+    {
+      // il vibrato arriva tardi e accelera (Env 3 sulla velocità dell'LFO); Macro 1 lo allarga
+      name: 'Lead espressivo',
+      params: {
+        aUnison: 3, aDetune: 12, bOn: 1, bTable: T.Base, bPos: 100, bFine: 7, bLevel: 45, voiceMode: VOICE_MODE.legato, glide: 60,
+        f1Type: FILTER.ladder, f1Cutoff: 900, f1Res: 30, f1Drive: 25, f1Key: 40, e1A: 0.01, e1R: 0.3, e2A: 0.08, e2D: 0.8, e2S: 35,
+        e3A: 2.5, e3S: 100, l1Shape: LFO_SHAPE.sine, l1Sync: LFO_SYNC.hz, l1Rate: 5, l1Delay: 0.35, l1Rise: 0.8,
+        l2Shape: LFO_SHAPE.triangle, l2Sync: LFO_SYNC.hz, l2Rate: 3.5, l2Delay: 0.6, l2Rise: 1, volume: -8,
+        ...mods(
+          [SRC.env2, 'f1Cutoff', 40], [SRC.velocity, 'f1Cutoff', 20], [SRC.velocity, 'e2A', -25], [SRC.lfo1, 'tune', 1, { bi: true }],
+          [SRC.lfo1, 'tune', 2, { bi: true, aux: SRC.macro1 }], [SRC.env3, 'l1Rate', 8], [SRC.lfo2, 'f1Cutoff', 8, { bi: true }],
+        ),
+      },
+    },
+    {
+      // quattro LFO a tempo che non si incontrano mai: terzine, sedicesimi, quarti puntati, mezze
+      name: 'Poliritmo',
+      params: {
+        aTable: T.Digitale, aPos: 30, aUnison: 4, aDetune: 18, aWidth: 90, aLevel: 20, bOn: 1, bTable: T.Pulsar, bPos: 40, bLevel: 50,
+        f1Type: FILTER.lp24, f1Cutoff: 1500, f1Res: 40, e1A: 0.003, e1R: 0.4, l1Shape: LFO_SHAPE.sine, l1Div: R['1/8T'],
+        l2Div: R['1/16'], ...drawn(2, [[0, 1, 30], [0.6, 0.2], [1, 0]]), l3Shape: LFO_SHAPE.sawDown, l3Div: R['1/4.'],
+        l4Shape: LFO_SHAPE.triangle, l4Div: R['1/2'], volume: -14,
+        ...mods(
+          [SRC.lfo1, 'f1Cutoff', 35], [SRC.lfo2, 'aLevel', 70], [SRC.lfo3, 'aPos', 40], [SRC.lfo3, 'bLevel', -40],
+          [SRC.lfo4, 'bPos', 50, { bi: true }], [SRC.lfo4, 'aPan', 50, { bi: true }], [SRC.lfo4, 'bPan', -50, { bi: true }],
+        ),
+      },
+    },
+    {
+      // tutto a caso: un S&H lento cambia la velocità degli altri due
+      name: 'Glitch S&H',
+      params: {
+        aTable: T.Pulsar, aPos: 50, aWarp: WARP.quantize, aWarpAmt: 20, bOn: 1, bTable: T.Digitale, bPos: 30, bLevel: 40,
+        f1Type: FILTER.lp24, f1Cutoff: 2500, f1Res: 35, e1A: 0.002, e1R: 0.2, l1Shape: LFO_SHAPE.sampleHold, l1Div: R['1/16'],
+        l2Shape: LFO_SHAPE.sampleHold, l2Div: R['1/32'], l3Shape: LFO_SHAPE.sampleHold, l3Div: R['1/4'], l4Shape: LFO_SHAPE.square,
+        l4Div: R['1/16'], volume: -12,
+        ...mods(
+          [SRC.lfo1, 'aPos', 60], [SRC.lfo1, 'f1Cutoff', 30, { bi: true }], [SRC.lfo2, 'aWarpAmt', 50], [SRC.lfo2, 'bPos', 40],
+          [SRC.lfo3, 'l1Rate', 25, { bi: true }], [SRC.lfo3, 'l2Rate', 20, { bi: true }], [SRC.lfo4, 'aLevel', -60],
+          [SRC.random, 'aPan', 50, { bi: true }],
+        ),
+      },
+    },
+    {
+      // un LFO "una volta" fa cadere il pitch di due ottave in 2 battute e rallenta il tremolio
+      name: 'Caduta libera',
+      params: {
+        aTable: T.Sync, aPos: 40, aWarp: WARP.sync, aWarpAmt: 20, aUnison: 5, aDetune: 20, aWidth: 100, nOn: 1, nType: 1, nLevel: 20,
+        f1Type: FILTER.lp24, f1Cutoff: 5000, f1Res: 30, e1A: 0.005, e1R: 1.5, l1Div: R['2 battute'], l1Trig: LFO_TRIG.once,
+        ...drawn(1, [[0, 1, 50], [1, 0]]), l2Shape: LFO_SHAPE.sine, l2Sync: LFO_SYNC.hz, l2Rate: 3, volume: -13,
+        ...mods(
+          [SRC.lfo1, 'tune', 50], [SRC.lfo1, 'f1Cutoff', 40], [SRC.lfo1, 'aWarpAmt', 50], [SRC.lfo1, 'l2Rate', 30],
+          [SRC.lfo2, 'aPos', 30, { bi: true }], [SRC.lfo1, 'nLevel', 40],
+        ),
+      },
+    },
+    {
+      // Env 2 il filtro, Env 3 il morso dell'FM dal sub, Env 4 il colpo di pitch
+      name: 'Basso a quattro inviluppi',
+      params: {
+        aWarp: WARP.subFm, aWarpAmt: 0, subOn: 1, subLevel: 55, voiceMode: VOICE_MODE.mono, glide: 15, f1Type: FILTER.ladder, f1Cutoff: 180,
+        f1Res: 45, f1Drive: 45, f1Key: 30, e1A: 0.001, e1D: 0.6, e1S: 70, e1R: 0.08, e2A: 0.001, e2D: 0.25, e2S: 15, e2Dc: 70,
+        e3A: 0.001, e3D: 0.12, e3Dc: 80, e4A: 0.001, e4D: 0.03, l1Shape: LFO_SHAPE.sine, l1Div: R['1/16'], volume: -5,
+        ...mods(
+          [SRC.env2, 'f1Cutoff', 50, { curve: 30 }], [SRC.env2, 'f1Res', -15], [SRC.env3, 'aWarpAmt', 45],
+          [SRC.env3, 'aWarpAmt', 20, { aux: SRC.velocity }], [SRC.env4, 'tune', 6], [SRC.velocity, 'f1Cutoff', 15],
+          [SRC.lfo1, 'f1Cutoff', 15, { bi: true, aux: SRC.macro1 }],
+        ),
+      },
+    },
+    {
+      // Macro 1 trasforma il suono, Macro 2 dà profondità all'LFO, Macro 3 la sua velocità,
+      // Macro 4 accende il S&H
+      name: 'Metamorfosi a macro',
+      params: {
+        aTable: T.Formanti, aPos: 0, aUnison: 5, aDetune: 14, bOn: 1, bTable: T.Metallo, bPos: 0, bLevel: 50, f1Type: FILTER.lp24,
+        f1Cutoff: 1500, f1Res: 20, e1A: 0.3, e1D: 1, e1S: 80, e1R: 1.2, e2A: 0.6, e2D: 1.5, e2S: 30, macro1: 35, macro2: 40,
+        l1Shape: LFO_SHAPE.triangle, l1Div: R['1/2'], l1Trig: LFO_TRIG.free, l2Shape: LFO_SHAPE.sampleHold, l2Div: R['1/16'], volume: -11,
+        ...mods(
+          [SRC.macro1, 'aPos', 80], [SRC.macro1, 'bPos', 70], [SRC.macro1, 'f1Cutoff', 30], [SRC.macro1, 'aDetune', 25],
+          [SRC.lfo1, 'aPos', 30, { bi: true, aux: SRC.macro2 }], [SRC.lfo1, 'f1Cutoff', 20, { bi: true, aux: SRC.macro2 }],
+          [SRC.macro3, 'l1Rate', 30], [SRC.lfo2, 'aPan', 60, { bi: true, aux: SRC.macro4 }], [SRC.lfo2, 'bPos', 40, { aux: SRC.macro4 }],
+          [SRC.env2, 'f1Cutoff', 20],
+        ),
+      },
+    },
+    {
+      // un LFO "una volta" disegnato come inviluppo a più tappe: sale, ricade, torna su
+      name: 'Inviluppo disegnato',
+      params: {
+        aTable: T.Ottave, aPos: 40, aUnison: 3, aDetune: 10, f1Type: FILTER.lp24, f1Cutoff: 500, f1Res: 30, e1A: 0.002, e1D: 2, e1S: 30,
+        e1R: 0.6, l1Div: R['1/2'], l1Trig: LFO_TRIG.once, ...drawn(1, [[0, 0, 60], [0.05, 1, -30], [0.3, 0.35], [0.5, 0.8, 40], [1, 0.2]]),
+        l2Shape: LFO_SHAPE.sine, l2Sync: LFO_SYNC.hz, l2Rate: 0.5, volume: -9,
+        ...mods([SRC.lfo1, 'f1Cutoff', 50], [SRC.lfo1, 'aPos', 40], [SRC.lfo2, 'aPos', 15, { bi: true }], [SRC.velocity, 'f1Cutoff', 15]),
+      },
+    },
   ];
+}
+
+/** Un LFO a scalini: un valore per passo, tutti lunghi uguali. */
+function steps(values: readonly number[]): [number, number][] {
+  const n = values.length;
+  return values.flatMap((y, k): [number, number][] => [[k / n, y], [(k + 1) / n, y]]);
 }

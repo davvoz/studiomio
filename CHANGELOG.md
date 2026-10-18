@@ -6,6 +6,14 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Prisma: 11 new presets built around movement: envelopes that speed up LFOs, a step
+  sequence drawn in an LFO, polyrhythmic LFOs, sample & hold that changes the speed of other
+  LFOs, one-shot LFOs used as multi-stage envelopes, and macros that set LFO depth through aux.
+
+### Fixed
+- Prisma: the first note played on each voice no longer skips the attack of envelopes 2–4.
+
 ## [0.3.0] - 2026-10-18
 
 ### Added
