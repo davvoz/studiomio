@@ -15,14 +15,22 @@ const SVG = 'http://www.w3.org/2000/svg';
 /** La manopola copre 270°, da −135° (minimo) a +135° (massimo). */
 const SWEEP = 270, R = 15;
 
-function arc(fromDeg: number, toDeg: number): string {
+function arc(fromDeg: number, toDeg: number, r = R): string {
   const pt = (d: number) => {
     const a = ((d - 90) * Math.PI) / 180;
-    return `${20 + R * Math.cos(a)} ${20 + R * Math.sin(a)}`;
+    return `${20 + r * Math.cos(a)} ${20 + r * Math.sin(a)}`;
   };
   const large = toDeg - fromDeg > 180 ? 1 : 0;
-  return `M ${pt(fromDeg)} A ${R} ${R} 0 ${large} 1 ${pt(toDeg)}`;
+  return `M ${pt(fromDeg)} A ${r} ${r} 0 ${large} 1 ${pt(toDeg)}`;
 }
+
+/** Un arco attorno alla manopola fra due posizioni della sua corsa (0…1), a raggio `r` (la
+ *  faccia è 40×40): per esempio l'anello di una modulazione. */
+export const knobArc = (fromUnit: number, toUnit: number, r: number): string => {
+  const deg = (u: number) => -SWEEP / 2 + Math.max(0, Math.min(1, u)) * SWEEP;
+  const a = deg(Math.min(fromUnit, toUnit)), b = deg(Math.max(fromUnit, toUnit));
+  return arc(a, Math.max(a + 0.01, b), r);
+};
 
 function svg(tag: string, attrs: Record<string, string>): SVGElement {
   const e = document.createElementNS(SVG, tag);
@@ -152,9 +160,11 @@ const MAKERS: { readonly [K in ParamSpec['kind']]: (spec: Extract<ParamSpec, { k
 };
 
 /** Il controllo porta l'id del parametro in `data-param`: da lì la catena lo mappa sulle macro
- *  (anche nei pannelli grafici). */
-export function controlFor(spec: ParamSpec, value: number, onChange: ParamChange): ParamControl {
-  const control = (MAKERS[spec.kind] as (s: ParamSpec, v: number, c: ParamChange) => ParamControl)(spec, value, onChange);
+ *  (anche nei pannelli grafici). Con `menu` una scelta è sempre un menu a tendina (dove i
+ *  pulsanti non ci stanno). */
+export function controlFor(spec: ParamSpec, value: number, onChange: ParamChange, options: { readonly menu?: boolean } = {}): ParamControl {
+  const control = options.menu && spec.kind === 'choice' ? new ChoiceMenu(spec, value, onChange)
+    : (MAKERS[spec.kind] as (s: ParamSpec, v: number, c: ParamChange) => ParamControl)(spec, value, onChange);
   control.element.dataset.param = spec.id;
   return control;
 }

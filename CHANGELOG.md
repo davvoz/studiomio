@@ -6,6 +6,34 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Prisma: a big wavetable synth in the style of Serum (without effects). Two wavetable
+  oscillators with warp modes (sync with anti-aliased resets, soft sync, bend, PWM, asymmetry,
+  mirror, flip, quantize, FM/AM/RM from the other oscillator, FM from the sub) and up to 16
+  unison voices each (detune, blend, stereo width, spread across the table, phase and random
+  phase); a sub oscillator; a noise oscillator (white, pink, brown, digital, crackle); two
+  stereo filters (LP 12/24, ladder, HP, BP, notch, peak, comb +/−, formant, phaser) with drive
+  and mix, in series or in parallel, and every source picks its filter or goes direct; four
+  envelopes with hold and curves (the first is the amp); four LFOs you can draw, with grid,
+  curved segments, tempo sync, retrigger/free/one-shot, delay, rise and smoothing; four macros;
+  poly, mono and legato with glide.
+- Prisma's modulation matrix: 16 slots, each with a source (envelopes, LFOs, velocity, note,
+  random, gate, macros), an amount in fraction of the target knob's travel, uni/bipolar, a curve
+  and an aux source that scales it. Drag a source onto almost any knob to modulate it; click a
+  source and Alt+drag on a knob to set its amount; rings around the knobs show where each
+  modulation reaches; right-click a knob to remove its modulations. Slot amounts can be mapped
+  to rack macros and automated from clips.
+- Prisma can use any WAV file as an oscillator's wavetable (Serum-style files with one 2048-sample
+  cycle per frame, a single cycle, or any sound sliced into frames): drop it on the table or use
+  "Importa…". It comes with 25 presets (basses, leads, pads, plucks, keys, rhythmic and FX).
+- Eight new wavetables, also available in Wavetable: Formanti, Spettrale, Additiva, Pulsar,
+  Growl, Metallo, Seno caldo, Ottave.
+
+### Fixed
+- ◂ next to an Instrument Rack that holds only the instrument now moves the effect into the
+  rack, as it does with any other rack; outside a rack an effect still cannot go before the
+  instrument.
+
 ## [0.2.3] - 2026-10-18
 
 ### Fixed

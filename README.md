@@ -2,7 +2,7 @@
 
 DAW nel browser con warp in stile Ableton Live: arrangement (timeline) e session view con il
 lancio delle clip, clip audio con warp, clip MIDI con piano roll, modulazioni delle clip,
-strumenti (tre synth e una drum machine) ed effetti in AudioWorklet, mixer con misuratori di livello.
+strumenti (quattro synth e una drum machine) ed effetti in AudioWorklet, mixer con misuratori di livello.
 
 Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
 
@@ -144,7 +144,8 @@ src/
                        rack-panel.ts il pannello di un rack (macro, Map, minimo e massimo delle mappature);
                        displays.ts registra i pannelli grafici (eq/: grafico con spettro e curva;
                        drums/: griglia dei pad; drive/: curva, spettro e forme;
-                       wavetable/: le tabelle d'onda disegnate, con la posizione da trascinare)
+                       wavetable/: le tabelle d'onda disegnate, con la posizione da trascinare;
+                       prisma/: pagine, fonti da trascinare sulle manopole, editor di inviluppi e LFO, matrice)
     dom.ts             creazione degli elementi
     bottom-panel.ts    l'area in basso, una vista alla volta
     waveform.ts        picchi della forma d'onda a più risoluzioni
@@ -157,6 +158,8 @@ src/
     instruments/analog/  il synth Analog: descrizione e preset (analog.ts), suono (analog-core.ts)
     instruments/neuro/   il synth Neuro dei bassi reese: descrizione e preset (neuro.ts), suono (neuro-core.ts)
     instruments/wavetable/  il synth Wavetable: descrizione e preset (wavetable.ts), tabelle d'onda (tables.ts), suono (wavetable-core.ts)
+    instruments/prisma/  il synth Prisma (tipo Serum): descrizione, fonti e destinazioni (prisma.ts), preset (prisma-presets.ts),
+                       curve e forme degli LFO (shapes.ts), inviluppo (curved-env.ts), filtro (prisma-filter.ts), suono (prisma-core.ts)
     instruments/drums/   la Drum Machine: pad, modelli e kit (drums.ts), suono (drums-core.ts)
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
     effects/phaser/    il Phaser (anche flanger): descrizione e preset (phaser.ts), suono (phaser-core.ts)

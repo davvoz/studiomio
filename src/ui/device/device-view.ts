@@ -1,9 +1,10 @@
-import type { DeviceId, TrackId } from '../../core/id';
+import type { DeviceId, SampleId, TrackId } from '../../core/id';
+import type { SampleData } from '../../devices/dsp/core';
 import type { SampleRef } from '../../model/sample';
 import { paramSpec, resolveParams } from '../../devices/device-type';
 import { deviceTypeAt } from '../../devices/rack-params';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
-import { DEFAULT_INSTRUMENT, type EffectSettings, type ParamValues } from '../../model/device';
+import { DEFAULT_INSTRUMENT, sampleAt, type EffectSettings, type ParamValues } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
 import {
@@ -21,7 +22,7 @@ import { addEffectToRack, groupDevices, mapMacro, moveDevice, ungroupRack, unmap
 import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
 import { DevicePanel } from './device-panel';
-import { DEVICE_DISPLAYS, NO_SPECTRUM, type SpectrumTap } from './displays';
+import { DEVICE_DISPLAYS, NO_SPECTRUM, type DeviceDisplay, type SpectrumTap } from './displays';
 import { RackPanel } from './rack-panel';
 import { SidechainPicker } from './sidechain-picker';
 
@@ -37,6 +38,8 @@ export interface DeviceViewDeps {
   readonly playedNotes: (track: TrackId) => () => readonly number[];
   /** Copia un file audio nel progetto e lo carica nel motore (per i sample degli strumenti). */
   readonly importSample: (file: File) => Promise<SampleRef>;
+  /** I campioni di un sample del progetto già caricato (per i pannelli che lo disegnano). */
+  readonly sampleAudio?: (id: SampleId) => SampleData | undefined;
   /** Un messaggio nella barra di stato (es. perché un raggruppamento non si può fare). */
   readonly say?: (text: string) => void;
 }
@@ -69,6 +72,8 @@ export class DeviceView {
   /** Com'era fatta la catena quando i pannelli sono stati costruiti. */
   private builtFor = '';
   private readonly panels = new Map<string, DevicePanel>();
+  /** I pannelli grafici, per chiave (per le loro voci nel menu dei parametri). */
+  private readonly displays = new Map<string, DeviceDisplay>();
   private readonly rackPanels = new Map<DeviceId, RackPanel>();
   private readonly sidechains = new Map<DeviceId, SidechainPicker>();
   private readonly title = el('span', { className: 'device-title' });
@@ -238,6 +243,7 @@ export class DeviceView {
     const known = new Set(this.panels.keys());
     this.builtFor = shape;
     this.panels.clear();
+    this.displays.clear();
     this.rackPanels.clear();
     this.sidechains.clear();
     const project = this.deps.store.project;
@@ -351,7 +357,8 @@ export class DeviceView {
       if (!param) return;
       e.preventDefault();
       e.stopPropagation();
-      showContextMenu(e.clientX, e.clientY, this.paramMenu(owner, key, param));
+      const extra = this.displays.get(key)?.menuFor?.(param) ?? [];
+      showContextMenu(e.clientX, e.clientY, [...extra, ...(extra.length ? [SEPARATOR] : []), ...this.paramMenu(owner, key, param)]);
     });
   }
 
@@ -491,8 +498,14 @@ export class DeviceView {
           store.apply(setInstrumentSamples(track.id, { [slot]: sample }, values));
         },
         assign: (changes, values) => store.apply(setInstrumentSamples(track.id, changes, values)),
+        audio: slot => {
+          const t = store.project.track(track.id);
+          const id = t instanceof MidiTrack ? sampleAt(t.instrument, slot) : null;
+          return id ? this.deps.sampleAudio?.(id) : undefined;
+        },
       },
     });
+    if (display) this.displays.set(INSTRUMENT, display);
     const panel = new DevicePanel({
       type, settings: track.instrument, before: [select], after: [test], display, ...this.foldOptions(track.id, INSTRUMENT),
       onParam: (id, v, final) => this.param(setInstrumentParam(track.id, id, v), `param-${track.id}-${id}`, final),
@@ -541,6 +554,7 @@ export class DeviceView {
     });
     panel.update(e, e.enabled);
     this.panels.set(id, panel);
+    if (display) this.displays.set(id, display);
     return panel.element;
   }
 

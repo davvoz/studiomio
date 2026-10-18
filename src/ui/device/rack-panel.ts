@@ -166,7 +166,7 @@ export class RackPanel {
       return {
         label: o.deviceLabel(device),
         disabled: !type,
-        run: () => showContextMenu(x, y, (type?.sections ?? []).flatMap(section => section.params.map(spec => ({
+        run: () => showContextMenu(x, y, (type?.sections ?? []).flatMap(section => section.params.filter(spec => !spec.hidden).map(spec => ({
           label: type!.sections.length > 1 ? `${section.label} · ${spec.label}` : spec.label,
           checked: o.rack.macros[index].mappings.some(m => m.device === device && m.param === spec.id),
           run: () => this.apply(mapMacro(o.owner, o.rack.id as DeviceId, index, device, spec.id)),

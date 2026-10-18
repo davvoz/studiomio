@@ -12,6 +12,9 @@ interface ParamBase {
   readonly id: string;
   readonly label: string;
   readonly when?: ParamCondition;
+  /** Un parametro che il dispositivo modifica solo dal suo pannello grafico (es. i punti di un
+   *  LFO disegnato): non va nei menu delle macro e delle modulazioni né sui controller. */
+  readonly hidden?: boolean;
 }
 
 export interface NumberParam extends ParamBase {

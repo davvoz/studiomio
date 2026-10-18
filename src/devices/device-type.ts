@@ -26,6 +26,9 @@ export interface DeviceType {
 
 export const paramsOf = (t: DeviceType): ParamSpec[] => t.sections.flatMap(s => s.params);
 
+/** I parametri che si mostrano fuori dal pannello del dispositivo (menu, controller). */
+export const visibleParamsOf = (t: DeviceType): ParamSpec[] => paramsOf(t).filter(p => !p.hidden);
+
 export const paramSpec = (t: DeviceType, id: string): ParamSpec | undefined => paramsOf(t).find(p => p.id === id);
 
 /** Tutti i parametri del tipo: quelli dati (validati) e, per gli altri, i predefiniti. */

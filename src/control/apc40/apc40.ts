@@ -8,7 +8,7 @@
 import type { DeviceId, TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import { MAX_BPM, MIN_BPM } from '../../core/music-time';
-import { paramsOf, resolveParams, type DeviceType } from '../../devices/device-type';
+import { resolveParams, visibleParamsOf, type DeviceType } from '../../devices/device-type';
 import { paramFromUnit, paramToUnit, type ParamSpec } from '../../devices/params';
 import { mappingSpec } from '../../devices/rack-params';
 import { effectType, instrumentType } from '../../devices/registry';
@@ -418,7 +418,7 @@ export class Apc40 {
 
   private describe(owner: ChainOwner, chain: readonly ChainDevice[], index: number): Controlled {
     const device = chain[index];
-    const all = paramsOf(device.type);
+    const all = visibleParamsOf(device.type);
     const banks = Math.max(1, Math.ceil(all.length / KNOBS));
     const bank = Math.min(this.banks.get(bankKey(owner, device.key)) ?? 0, banks - 1);
     return { owner, chain, index, device, bank, banks, params: all.slice(bank * KNOBS, bank * KNOBS + KNOBS) };

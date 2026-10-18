@@ -3,11 +3,14 @@
  * registra qui con il suo nome, e il pannello la usa al posto delle manopole. */
 import type { SampleId } from '../../core/id';
 import type { DeviceType } from '../../devices/device-type';
+import type { SampleData } from '../../devices/dsp/core';
 import type { DeviceSettings, ParamValues } from '../../model/device';
 import type { SampleRef } from '../../model/sample';
+import type { MenuItem } from '../context-menu';
 import { DriveDisplay } from './drive/drive-display';
 import { DrumDisplay } from './drums/drum-display';
 import { EqDisplay } from './eq/eq-display';
+import { PrismaDisplay } from './prisma/prisma-display';
 import { WavetableDisplay } from './wavetable/wavetable-display';
 
 /** Lo spettro del suono che entra in un effetto e di quello che esce, in dB per banda di
@@ -29,6 +32,8 @@ export interface SampleSlots {
   load(slot: string, file: File, values: ParamValues): Promise<void>;
   /** Sample del progetto (null: tolto) per posto, con i parametri `values`: un passo solo. */
   assign(changes: Readonly<Record<string, SampleId | null>>, values: ParamValues): void;
+  /** I campioni del sample al posto `slot`, se è caricato (per disegnarlo). */
+  audio?(slot: string): SampleData | undefined;
 }
 
 export interface DisplayContext {
@@ -57,6 +62,8 @@ export const NO_SPECTRUM: SpectrumTap = { sampleRate: 48000, binCount: 0, read: 
 export interface DeviceDisplay {
   readonly element: HTMLElement;
   update(settings: DeviceSettings, enabled: boolean): void;
+  /** Voci in più nel menu (tasto destro) di un parametro, prima di quelle delle macro. */
+  menuFor?(param: string): MenuItem[];
 }
 
 export type DisplayFactory = (ctx: DisplayContext) => DeviceDisplay;
@@ -67,4 +74,5 @@ export const DEVICE_DISPLAYS: Readonly<Record<string, DisplayFactory>> = {
   drive: ctx => new DriveDisplay(ctx),
   drums: ctx => new DrumDisplay(ctx),
   wavetable: ctx => new WavetableDisplay(ctx),
+  prisma: ctx => new PrismaDisplay(ctx),
 };

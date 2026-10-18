@@ -110,6 +110,52 @@ export const TABLES: readonly { readonly name: string; readonly shape: Shape }[]
       },
     },
   },
+  // un picco di risonanza che sale lungo le armoniche, dalla prima alla sessantaquattresima
+  {
+    name: 'Formanti',
+    shape: {
+      harmonics: (k, p) => {
+        const center = Math.pow(2, p * 6), width = 0.6 + center * 0.18;
+        return 0.15 / k + 1 / Math.pow(k, 0.3) / (1 + ((k - center) / width) ** 2);
+      },
+    },
+  },
+  // quadra (solo dispari) → dente di sega → quasi solo pari, un'ottava sopra
+  {
+    name: 'Spettrale',
+    shape: {
+      harmonics: (k, p) => {
+        if (k === 1) return 1;
+        const odd = p < 0.5 ? 1 : 1 - (p - 0.5) * 1.9, even = p < 0.5 ? 2 * p : 1;
+        return (k % 2 ? odd : even) / k;
+      },
+    },
+  },
+  // armoniche tutte uguali, sempre di più (da 1 a 64): un ronzio che si apre
+  { name: 'Additiva', shape: { harmonics: (k, p) => (k <= Math.round(Math.pow(2, p * 6)) ? 1 / Math.sqrt(k) : 0) } },
+  // un lampo di seno sempre più breve e più veloce, poi silenzio
+  {
+    name: 'Pulsar',
+    shape: {
+      time: (t, p) => {
+        const duty = lerp(1, 0.15, p);
+        if (t >= duty) return 0;
+        const x = t / duty;
+        return Math.sin(TAU * x * (1 + 4 * p)) * Math.sin(Math.PI * x);
+      },
+    },
+  },
+  // FM a rapporto 2 ripiegata: il ringhio dei bassi
+  {
+    name: 'Growl',
+    shape: { time: (t, p) => Math.sin((Math.PI / 2) * Math.sin(TAU * t + 5 * p * Math.sin(2 * TAU * t)) * (1 + 2.5 * p)) },
+  },
+  // tacche che scorrono nello spettro, come un pettine: suono metallico
+  { name: 'Metallo', shape: { harmonics: (k, p) => Math.abs(Math.sin(k * (0.3 + 2.7 * p))) ** 3 / Math.sqrt(k) } },
+  // un seno saturato sempre di più, fino alla quadra
+  { name: 'Seno caldo', shape: { time: (t, p) => { const d = 1 + 15 * p * p; return Math.tanh(sine(t) * d) / Math.tanh(d); } } },
+  // il dente di sega con le sue ottave sopra che entrano
+  { name: 'Ottave', shape: { time: (t, p) => saw(t) + 0.7 * p * saw((2 * t) % 1) + 0.5 * p * p * saw((4 * t) % 1) } },
 ];
 
 export const TABLE_NAMES = TABLES.map(t => t.name);
@@ -129,25 +175,79 @@ export function wavetable(index: number): Wavetable {
 }
 
 function build(shape: Shape): Wavetable {
-  const n = TABLE_SIZE, fft = Fft.of(n);
-  const out = new Float32Array(FRAMES * LEVELS * STRIDE);
-  const specRe = new Float64Array(n), specIm = new Float64Array(n);
-  const re = new Float64Array(n), im = new Float64Array(n);
-  for (let f = 0; f < FRAMES; f++) {
+  const n = TABLE_SIZE;
+  return buildFrames(FRAMES, (f, re, im, fft) => {
     const p = f / (FRAMES - 1);
-    specRe.fill(0);
-    specIm.fill(0);
     if ('time' in shape) {
-      for (let i = 0; i < n; i++) specRe[i] = shape.time(i / n, p);
-      fft.forward(specRe, specIm);
+      for (let i = 0; i < n; i++) re[i] = shape.time(i / n, p);
+      fft.forward(re, im);
     } else {
       // seno di ampiezza a: −i·a·n/2 sull'armonica, il coniugato sul suo specchio
       for (let k = 1; k < n / 2; k++) {
         const a = shape.harmonics(k, p);
-        specIm[k] = (-a * n) / 2;
-        specIm[n - k] = (a * n) / 2;
+        im[k] = (-a * n) / 2;
+        im[n - k] = (a * n) / 2;
       }
     }
+  });
+}
+
+/** Quante forme al massimo in una tabella importata (le altre si saltano, prese a intervalli). */
+export const MAX_IMPORTED_FRAMES = 64;
+
+/** Una tabella da forme già pronte (es. un file WAV con un periodo ogni TABLE_SIZE campioni):
+ *  ogni forma è un periodo di TABLE_SIZE campioni, e diventa le sue versioni per ottava come le
+ *  tabelle generate. */
+export function tableFromCycles(cycles: readonly ArrayLike<number>[]): Wavetable {
+  return buildFrames(cycles.length, (f, re) => {
+    const c = cycles[f];
+    for (let i = 0; i < TABLE_SIZE; i++) re[i] = c[i] ?? 0;
+  }, true);
+}
+
+/** I periodi di un suono importato come tabella: se è lungo un multiplo di TABLE_SIZE (il
+ *  formato dei file wavetable) uno per pezzo; se è più corto di un periodo, lui stesso
+ *  ricampionato; altrimenti pezzi presi a distanze uguali lungo il suono. Al massimo
+ *  MAX_IMPORTED_FRAMES, i canali sommati. */
+export function cyclesOf(channels: readonly Float32Array[]): Float32Array[] {
+  const length = channels[0]?.length ?? 0;
+  if (!length) return [];
+  const mono = new Float32Array(length);
+  for (const ch of channels) for (let i = 0; i < length; i++) mono[i] += ch[i] / channels.length;
+  if (length <= TABLE_SIZE) {
+    // un periodo solo, allungato (interpolazione lineare, chiusa sul primo campione)
+    const out = new Float32Array(TABLE_SIZE);
+    for (let i = 0; i < TABLE_SIZE; i++) {
+      const x = (i * length) / TABLE_SIZE, j = Math.floor(x), t = x - j;
+      out[i] = mono[j] + ((mono[(j + 1) % length] ?? 0) - mono[j]) * t;
+    }
+    return [out];
+  }
+  const whole = Math.floor(length / TABLE_SIZE);
+  const exact = length % TABLE_SIZE === 0;
+  const count = Math.min(MAX_IMPORTED_FRAMES, exact ? whole : Math.min(whole, 32));
+  const out: Float32Array[] = [];
+  for (let f = 0; f < count; f++) {
+    // a pezzi interi (formato wavetable) o a distanze uguali lungo tutto il suono
+    const index = exact ? Math.round((f * (whole - 1)) / Math.max(1, count - 1)) * TABLE_SIZE
+      : Math.round((f * (length - TABLE_SIZE)) / Math.max(1, count - 1));
+    out.push(mono.slice(index, index + TABLE_SIZE));
+  }
+  return out;
+}
+
+/** Le versioni per ottava di `count` forme: `fill` mette ogni forma nel tempo (in `re`, poi la
+ *  trasforma con `fft`) o direttamente come spettro; con `fromTime` la trasformata la fa qui. */
+function buildFrames(count: number, fill: (frame: number, re: Float64Array, im: Float64Array, fft: Fft) => void, fromTime = false): Wavetable {
+  const n = TABLE_SIZE, fft = Fft.of(n);
+  const out = new Float32Array(Math.max(1, count) * LEVELS * STRIDE);
+  const specRe = new Float64Array(n), specIm = new Float64Array(n);
+  const re = new Float64Array(n), im = new Float64Array(n);
+  for (let f = 0; f < count; f++) {
+    specRe.fill(0);
+    specIm.fill(0);
+    fill(f, specRe, specIm, fft);
+    if (fromTime) fft.forward(specRe, specIm);
     specRe[0] = specIm[0] = specRe[n / 2] = specIm[n / 2] = 0; // niente continua né Nyquist
     let gain = 1;
     for (let l = 0; l < LEVELS; l++) {

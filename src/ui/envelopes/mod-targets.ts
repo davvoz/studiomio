@@ -45,7 +45,7 @@ function deviceTargets(key: string, label: string, type: DeviceType | undefined)
   const sections = type.sections
     .map(s => ({
       label: s.label,
-      params: s.params.filter(p => p.kind === 'number').map(p => ({ target: { kind: 'device', device, param: p.id } as ModTarget, label: p.label })),
+      params: s.params.filter(p => p.kind === 'number' && !p.hidden).map(p => ({ target: { kind: 'device', device, param: p.id } as ModTarget, label: p.label })),
     }))
     .filter(s => s.params.length);
   return { key, label, sections };

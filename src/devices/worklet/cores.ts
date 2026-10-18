@@ -12,6 +12,7 @@ import { StereoCore } from '../effects/stereo/stereo-core';
 import { AnalogCore } from '../instruments/analog/analog-core';
 import { DrumCore } from '../instruments/drums/drums-core';
 import { NeuroCore } from '../instruments/neuro/neuro-core';
+import { PrismaCore } from '../instruments/prisma/prisma-core';
 import { WavetableCore } from '../instruments/wavetable/wavetable-core';
 
 /** I motori DSP degli strumenti, per tipo: aggiungere un synth è aggiungere una riga qui e
@@ -20,6 +21,7 @@ export const INSTRUMENT_CORES: Readonly<Record<string, CoreFactory>> = {
   analog: sampleRate => new AnalogCore(sampleRate),
   drums: sampleRate => new DrumCore(sampleRate),
   neuro: sampleRate => new NeuroCore(sampleRate),
+  prisma: sampleRate => new PrismaCore(sampleRate),
   wavetable: sampleRate => new WavetableCore(sampleRate),
 };
 
