@@ -188,12 +188,14 @@ export function moveDevice(order: readonly DeviceKey[], racks: RackList, key: De
     return { order: swap(order, i, i + dir), racks: updateRack(racks, rack.id, r => ({ ...r, devices: swap(r.devices, at, at + dir) })) };
   }
   const j = i + dir;
-  if (j < 0 || j >= order.length || order[j] === INSTRUMENT_DEVICE) return { order, racks };
+  if (j < 0 || j >= order.length) return { order, racks };
+  // accanto a un rack ci entra, anche a un Instrument Rack con il solo strumento
   const next = rackOf(racks, order[j]);
   if (next) {
     const devices = dir > 0 ? [key, ...next.devices] : [...next.devices, key];
     return { order, racks: updateRack(racks, next.id, r => ({ ...r, devices })) };
   }
+  if (order[j] === INSTRUMENT_DEVICE) return { order, racks };
   return { order: swap(order, i, j), racks };
 }
 

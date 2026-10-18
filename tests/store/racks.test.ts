@@ -53,6 +53,17 @@ describe('rack: gruppi', () => {
     expect(() => r.store.apply(removeRack(r.t, r.racks()[0].id))).toThrow(/strumento/);
   });
 
+  it('◂: un effetto entra in un Instrument Rack con il solo strumento', () => {
+    const r = rig();
+    r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE]));
+    r.store.apply(moveDevice(r.t, r.a, -1));
+    expect([r.order(), r.racks()[0].devices]).toEqual([[INSTRUMENT_DEVICE, r.a, r.b, r.c], [INSTRUMENT_DEVICE, r.a]]);
+    // fuori da un rack, invece, non si passa davanti allo strumento
+    r.store.apply(ungroupRack(r.t, r.racks()[0].id));
+    r.store.apply(moveDevice(r.t, r.a, -1));
+    expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.a, r.b, r.c]);
+  });
+
   it('non si raggruppano dispositivi non di seguito, né dispositivi già in un rack', () => {
     const r = rig();
     expect(() => r.store.apply(groupDevices(r.t, [r.a, r.c]))).toThrow(/di seguito/);
