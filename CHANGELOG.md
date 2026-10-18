@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-18
+
 ### Added
 - Prisma: 11 new presets built around movement: envelopes that speed up LFOs, a step
   sequence drawn in an LFO, polyrhythmic LFOs, sample & hold that changes the speed of other
