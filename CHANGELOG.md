@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-18
+
 ### Added
 - Prisma: a big wavetable synth in the style of Serum (without effects). Two wavetable
   oscillators with warp modes (sync with anti-aliased resets, soft sync, bend, PWM, asymmetry,
