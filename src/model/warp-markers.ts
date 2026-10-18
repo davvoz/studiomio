@@ -171,6 +171,14 @@ export class WarpMarkers {
     return WarpMarkers.of(ms.map(m => ({ t: duration - m.t, b: axis - m.b })), this.baseBpm);
   }
 
+  /** Solo il tratto [from, to] del sample, diventato un file a sé (il crop): i secondi
+   *  ripartono da 0, i battiti restano quelli di prima e su ogni bordo c'è un marker. */
+  cropped(from: Seconds, to: Seconds): WarpMarkers {
+    const inside = this.markers.filter(m => m.t > from && m.t < to);
+    const ms = [{ t: from, b: this.beatOf(from) }, ...inside, { t: to, b: this.beatOf(to) }];
+    return WarpMarkers.of(ms.map(m => ({ t: m.t - from, b: m.b })), this.baseBpm);
+  }
+
   equals(o: WarpMarkers): boolean {
     return o.baseBpm === this.baseBpm && o.markers.length === this.markers.length
       && o.markers.every((m, i) => m.t === this.markers[i].t && m.b === this.markers[i].b);

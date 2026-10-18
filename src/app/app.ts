@@ -1,10 +1,13 @@
 import type { TrackId } from '../core/id';
 import { randomIds } from '../core/id';
-import type { Beats } from '../core/music-time';
+import type { Beats, Seconds } from '../core/music-time';
+import type { SampleRef } from '../model/sample';
 import { ControlSurfaces } from '../control/control-surfaces';
 import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
 import { MASTER, Project, type ChainOwner } from '../model/project';
+import { sceneArrangement } from '../model/scene-export';
+import { foldTail } from '../engine/offline-mix';
 import { addMidiClip, addTrack, setLoopRegion, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
 import { findClip, placementRef, type ClipRef } from '../store/clip-ref';
@@ -66,6 +69,7 @@ export class App implements Commands, FileCommands, TimelineActions {
     this.editor = new ClipEditor({
       store: this.store, engine: this.audio.engine, peaks: this.peaks,
       trackBeats: (sample, bpm) => this.audio.dsp.trackBeats(sample.id, bpm),
+      cropSample: (sample, from, to) => this.cropSample(sample, from, to),
       say: t => this.say(t),
     });
     const audition = (track: TrackId, pitch: number, velocity = 100) => this.run(() => this.audio.audition(track, pitch, velocity));
@@ -100,6 +104,7 @@ export class App implements Commands, FileCommands, TimelineActions {
       openDevices: owner => this.openDevices(owner),
       importToSlot: (files, track, slot) => this.run(() => this.session.importFilesToSlots(files, track, slot)),
       addTrack: kind => this.addTrack(kind),
+      exportScene: index => this.exportScene(index),
       say: t => this.say(t),
     });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
@@ -319,6 +324,32 @@ export class App implements Commands, FileCommands, TimelineActions {
     });
   }
 
+  /** L'audio della scena `index`, lungo quanto serve perché i suoi loop si richiudano. */
+  exportScene(index: number): void {
+    this.run(async () => {
+      const p = this.store.project, scene = p.scenes[index];
+      const plan = scene && sceneArrangement(p, index, this.store.ids, SCENE_MAX_BARS * p.signature.beatsPerBar);
+      if (!plan) return this.say('Niente da esportare: la scena è vuota.');
+      this.say(`Esportazione della scena "${scene.name}"…`);
+      const sr = this.audio.context.sampleRate;
+      // per un loop una coda lunga, che poi torna all'inizio del file
+      const mix = await this.audio.exportMix(0, plan.length, plan.project, plan.loops ? SCENE_LOOP_TAIL : undefined);
+      const out = plan.loops ? foldTail(mix, Math.round(p.tempo.secondsAt(plan.length) * sr)) : mix;
+      download(new Blob([encodeWav(out, sr, 24)], { type: 'audio/wav' }), `${this.session.name} - ${scene.name}.wav`);
+      const bars = plan.length / p.signature.beatsPerBar;
+      this.say(`Scena "${scene.name}" esportata: ${Number.isInteger(bars) ? `${bars} battute` : `${plan.length} battiti`}${plan.loops ? ', in loop' : ''}.`);
+    });
+  }
+
+  /** Il tratto [from, to] di un sample come file nuovo nella cartella del progetto (il crop). */
+  private cropSample(sample: SampleRef, from: Seconds, to: Seconds): Promise<SampleRef> {
+    const data = this.audio.library.get(sample.id);
+    if (!data) throw new Error(`l'audio di "${sample.name}" non è caricato`);
+    const sr = data.sampleRate, a = Math.round(from * sr), b = Math.round(to * sr);
+    const channels = data.channels.map(c => c.slice(a, b));
+    return this.session.addAudio(`${sample.name} crop.wav`, { channels, sampleRate: sr }, new Uint8Array(encodeWav(channels, sr, 24)));
+  }
+
   loadDemo(): void {
     this.run(async () => {
       await this.session.newProject();
@@ -403,6 +434,11 @@ export class App implements Commands, FileCommands, TimelineActions {
     return this.audio.engine.position;
   }
 }
+
+/** Una scena si esporta al massimo per tante battute (se i loop si richiudono solo dopo, basta il più lungo). */
+const SCENE_MAX_BARS = 64;
+/** Secondi di coda calcolati oltre la fine di una scena in loop, poi riportati all'inizio. */
+const SCENE_LOOP_TAIL = 8;
 
 function download(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);

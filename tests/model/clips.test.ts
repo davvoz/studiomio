@@ -4,6 +4,8 @@ import { AudioClip, clipTimes } from '../../src/model/audio-clip';
 import { fullRange } from '../../src/model/clip';
 import { MidiClip } from '../../src/model/midi-clip';
 import { WarpMarkers } from '../../src/model/warp-markers';
+import { Tempo } from '../../src/core/music-time';
+import type { ModTarget } from '../../src/model/envelope';
 import { sampleRef } from '../helpers/fixtures';
 
 const midi = (loop: boolean) => MidiClip.create({
@@ -103,6 +105,54 @@ describe('AudioClip', () => {
     const c = AudioClip.fromSample(ids.next('clip'), sampleRef(ids), '#f00');
     expect(clipTimes(c, [0.5, 1, 3], 4)).toEqual([0.5, 1, 3]);
     expect(clipTimes(c.withReversed(true, 4), [0.5, 1, 3], 4)).toEqual([1, 3, 3.5]);
+  });
+});
+
+describe('AudioClip: crop', () => {
+  const ids = sequentialIds();
+  // 4 s a 120 BPM: il battito b è il secondo b / 2
+  const base = AudioClip.fromSample(ids.next('clip'), sampleRef(ids), '#f00');
+  const other = asId<'sample'>('sample-99');
+
+  it('con il loop tiene il tratto sotto il loop e la clip lo suona sugli stessi battiti', () => {
+    const c = base.withRegion({ start: 1, end: 8 }).withLoop({ enabled: true, start: 2, end: 6 });
+    const crop = c.cropped(4, new Tempo(120))!;
+    expect([crop.fileStart, crop.fileEnd]).toEqual([1, 3]);
+    const r = crop.clip(other);
+    expect(r.sample).toBe(other);
+    expect(r.region).toEqual({ start: 2, end: 6 });
+    expect(r.loop).toEqual({ enabled: true, start: 2, end: 6 });
+    for (const b of [2, 3.5, 6]) expect(r.warp.markers.timeOf(b)).toBeCloseTo(c.warp.markers.timeOf(b) - 1, 9);
+  });
+
+  it('senza loop tiene la regione', () => {
+    const crop = base.withRegion({ start: 1, end: 3 }).cropped(4, new Tempo(120))!;
+    expect([crop.fileStart, crop.fileEnd]).toEqual([0.5, 1.5]);
+    expect(crop.clip(other).loop).toEqual({ enabled: false, start: 1, end: 3 });
+  });
+
+  it('al contrario: il tratto del file è quello specchiato', () => {
+    const c = base.withLoop({ enabled: true, start: 2, end: 4 }).withReversed(true, 4);
+    const crop = c.cropped(4, new Tempo(120))!;
+    const t0 = c.warp.markers.timeOf(2), t1 = c.warp.markers.timeOf(4);
+    expect(crop.fileStart).toBeCloseTo(4 - t1, 9);
+    expect(crop.fileEnd).toBeCloseTo(4 - t0, 9);
+    expect(crop.clip(other).reversed).toBe(true);
+    expect(crop.clip(other).warp.markers.timeOf(2)).toBeCloseTo(0, 9);
+  });
+
+  it('senza warp il file nuovo riparte dal battito 0, modulazioni comprese', () => {
+    const c = base.withWarp({ enabled: false }).withRegion({ start: 2, end: 6 })
+      .withEnvelope({ kind: 'mixer', param: 'volume' } as ModTarget, [{ beat: 3, value: 0.5 }]);
+    const crop = c.cropped(4, new Tempo(60))!; // a 60 BPM il battito b è il secondo b
+    expect([crop.fileStart, crop.fileEnd]).toEqual([2, 4]); // il sample finisce a 4 s
+    const r = crop.clip(other);
+    expect(r.region).toEqual({ start: 0, end: 4 });
+    expect(r.envelopes[0].points[0].beat).toBe(1);
+  });
+
+  it('niente da tenere fuori dal sample', () => {
+    expect(base.withRegion({ start: 10, end: 12 }).cropped(4, new Tempo(120))).toBeNull();
   });
 });
 

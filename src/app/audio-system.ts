@@ -67,10 +67,11 @@ export class AudioSystem {
   }
 
   /** Mixdown di [from, to) del progetto corrente. */
-  exportMix(from: Beats, to: Beats): Promise<Float32Array[]> {
-    return renderMix(this.store.project, from, to, {
+  /** Mixdown di [from, to) del progetto (o di un altro, es. una scena messa sulla timeline). */
+  exportMix(from: Beats, to: Beats, project = this.store.project, tailSeconds?: number): Promise<Float32Array[]> {
+    return renderMix(project, from, to, {
       createGraph: offlineGraph, library: this.library, renders: this.renders, instruments: this.instruments, effects: this.effects,
-    }, this.context.sampleRate);
+    }, this.context.sampleRate, tailSeconds);
   }
 
   dispose(): void {

@@ -6,6 +6,17 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Crop for audio clips, as in Live: the "Crop" button in the clip editor (or right-click on
+  the waveform) keeps only the loop, or the region when the loop is off. That part of the sample
+  becomes a new audio file in the project and the clip plays only that, sounding as before.
+  The original file stays in the project folder, and Undo brings the old clip back.
+- Export a scene as audio: right-click a scene and choose "Esporta audio…" to get a WAV of
+  what plays when you launch it. The length is automatic: long enough for all the scene's loops
+  to come back to the start together (a 4-bar and a 3-bar loop give 12 bars), and at least as
+  long as the longest clip that doesn't loop. When the scene loops, reverb and delay tails
+  wrap around to the start of the file, so it loops without a gap.
+
 ## [0.3.3] - 2026-10-18
 
 ### Added

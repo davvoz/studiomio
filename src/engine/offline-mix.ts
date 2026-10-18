@@ -40,3 +40,13 @@ export async function renderMix(
   const out = await graph.startRendering();
   return Array.from({ length: out.numberOfChannels }, (_, i) => out.getChannelData(i).slice());
 }
+
+/** Un loop di `frames` campioni da un mixdown più lungo: la coda (riverberi, delay) oltre la
+ *  fine si somma all'inizio, come quando il loop si ripete, così riparte senza stacchi. */
+export function foldTail(channels: readonly Float32Array[], frames: number): Float32Array[] {
+  return channels.map(c => {
+    const out = c.slice(0, frames);
+    for (let i = frames; i < c.length; i++) out[i % frames] += c[i];
+    return out;
+  });
+}

@@ -40,6 +40,8 @@ export interface SessionViewDeps {
   /** Importa dei file audio negli slot da `slot` in giù (su una traccia nuova se `track` è null o non è audio). */
   importToSlot(files: File[], track: TrackId | null, slot: number): void;
   addTrack(kind: TrackKind): void;
+  /** Esporta in WAV l'audio della scena di indice `index`. */
+  exportScene(index: number): void;
   say(text: string): void;
 }
 
@@ -436,6 +438,7 @@ export class SessionView {
         { colors: PALETTE, current: scene.color, pick: c => c !== scene.color && this.apply(setSceneColor(scene.id, c)) },
         { label: 'Duplica', run: () => this.apply(duplicateScene(scene.id)) },
         { label: 'Cattura e inserisci scena', shortcut: 'Ctrl+Maiusc+I', run: () => this.captureAndInsertScene(index) },
+        { label: 'Esporta audio…', run: () => this.deps.exportScene(index) },
         { label: 'Inserisci una scena sopra', run: () => this.apply(insertScene(index)) },
         { label: 'Inserisci una scena sotto', run: () => this.apply(insertScene(index + 1)) },
         SEPARATOR,

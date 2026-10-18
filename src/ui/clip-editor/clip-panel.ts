@@ -50,6 +50,8 @@ export interface PanelActions {
   autoWarp(): void;
   followTempo(): void;
   quantize(): void;
+  /** Tiene solo il loop (o la regione) in un file nuovo. */
+  crop(): void;
   close(): void;
 }
 
@@ -126,7 +128,8 @@ export class ClipPanel {
       el('div', { className: 'panel-head' }, this.name, el('button', { className: 'close', textContent: '×', title: 'Chiudi (Esc)', onclick: () => actions.close() })),
       this.info,
       el('div', { className: 'clip-gain' }, el('span', { textContent: 'Volume dB' }), this.gainSlider, this.gain),
-      el('div', { className: 'buttons' }, this.reverse),
+      el('div', { className: 'buttons' }, this.reverse,
+        button('Crop', 'Tiene solo il loop (o la regione, se il loop è spento): il resto del sample sparisce in un file nuovo', () => actions.crop())),
       row('Warp', this.warp),
       modeRow, this.options, tempoRow, tempoTools, warpTools,
       row('Transpose st', this.transpose), row('Detune ct', this.detune),

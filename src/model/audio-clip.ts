@@ -1,5 +1,5 @@
 import type { ClipId, SampleId } from '../core/id';
-import type { Beats, Seconds } from '../core/music-time';
+import type { Beats, Seconds, TempoMap } from '../core/music-time';
 import type { BeatsLoopMode, WarpMode } from '../dsp/stretch/stretcher';
 import { Clip, fullRange, type ClipProps, type Color } from './clip';
 import { sampleDuration, type SampleRef } from './sample';
@@ -57,6 +57,15 @@ export const GAIN_MAX_DB = 24;
  *  riordinati se la clip è al contrario. */
 export function clipTimes(clip: AudioClip, times: readonly Seconds[], duration: Seconds): readonly Seconds[] {
   return clip.reversed ? times.map(t => duration - t).reverse() : times;
+}
+
+/** Il crop di una clip audio, come "Crop" in Live: resta solo la parte che suona. */
+export interface AudioCrop {
+  /** Il tratto da tenere, in secondi del file (mai rovesciati, anche se la clip lo è). */
+  readonly fileStart: Seconds;
+  readonly fileEnd: Seconds;
+  /** La clip che suona il file ritagliato `sample`: si sente come prima. */
+  readonly clip: (sample: SampleId) => AudioClip;
 }
 
 /** Clip che suona (una parte di) un sample, adattata al tempo del progetto dal warp. */
@@ -128,5 +137,33 @@ export class AudioClip extends Clip<AudioClipProps> {
     const { region, loop } = this;
     const axis = loop.enabled ? loop.start + loop.end : region.start + region.end;
     return this.with({ reversed, warp: { ...this.warp, markers: this.warp.markers.mirrored(duration, axis) } });
+  }
+
+  /** Crop del loop (se attivo, altrimenti della regione): il tratto di sample sotto di esso
+   *  diventa un file nuovo e la clip suona solo quello, dall'inizio del loop. Null se il
+   *  tratto cade tutto fuori dal sample. */
+  cropped(duration: Seconds, tempo: TempoMap): AudioCrop | null {
+    const { start, end } = this.loop.enabled ? this.loop : this.region;
+    // battiti e secondi della clip come nel motore: senza warp il sample parte dal battito 0
+    // e scorre al tempo del progetto, alla velocità data dal transpose
+    const warp = this.warp.enabled, rate = Math.pow(2, this.pitch / 12);
+    const toSeconds = (b: Beats) => (warp ? this.warp.markers.timeOf(b) : tempo.secondsAt(b) * rate);
+    const t0 = Math.max(0, toSeconds(start)), t1 = Math.min(duration, toSeconds(end));
+    if (!(t1 - t0 > 1e-3)) return null;
+    // senza warp il file nuovo riparte dal battito 0: tutto scorre indietro di quanto si taglia
+    const shift = warp ? 0 : tempo.beatAt(t0 / rate);
+    const cropped = this.warp.markers.cropped(t0, t1);
+    const markers = shift ? WarpMarkers.of(cropped.markers.map(m => ({ t: m.t, b: m.b - shift })), cropped.baseBpm) : cropped;
+    const envelopes = shift ? this.envelopes.map(e => ({ ...e, points: e.points.map(p => ({ ...p, beat: p.beat - shift })) })) : this.envelopes;
+    const s = start - shift, e = end - shift;
+    return {
+      // nel sample rovesciato il secondo t è il secondo durata − t del file
+      fileStart: this.reversed ? duration - t1 : t0,
+      fileEnd: this.reversed ? duration - t0 : t1,
+      clip: sample => this.with({
+        sample, region: { start: s, end: e }, loop: { enabled: this.loop.enabled, start: s, end: e },
+        warp: { ...this.warp, markers }, envelopes,
+      }),
+    };
   }
 }

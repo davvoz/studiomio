@@ -7,8 +7,9 @@ import type { Clip } from '../model/clip';
 import type { Project } from '../model/project';
 import type { Track } from '../model/track';
 import type { MidiClip } from '../model/midi-clip';
+import type { SampleRef } from '../model/sample';
 import { scaleMidiPlacement, updateClip } from './edits';
-import type { Edit } from './project-store';
+import { edit, type Edit } from './project-store';
 import { updateSlotClip } from './session-edits';
 
 export type ClipRef =
@@ -57,6 +58,13 @@ export function findClip(project: Project, ref: ClipRef): FoundClip | null {
 
 /** Modifica il contenuto della clip, dovunque stia. */
 export const updateClipAt = <C extends Clip>(label: string, ref: ClipRef, fn: (c: C) => Clip): Edit => locator(ref).update(label, ref, fn);
+
+/** Il crop di una clip audio: il file ritagliato entra nel progetto e la clip (già fatta per
+ *  suonarlo) prende il posto della vecchia. */
+export function cropClipAt(ref: ClipRef, sample: SampleRef, cropped: Clip): Edit {
+  const update = updateClipAt('Crop', ref, () => cropped);
+  return edit(update.label, (p, ctx) => update.apply(p.addingSample(sample), ctx));
+}
 
 /** Moltiplica il tempo di una clip MIDI (×2, :2): sulla timeline cambia anche la sua durata,
  *  nella session solo il contenuto. */

@@ -87,4 +87,11 @@ describe('WarpMarkers', () => {
     expect(c.beatOf(0)).toBeCloseTo(irregular.beatOf(0), 12);
     expect(c.globalBpm).toBeCloseTo(irregular.globalBpm, 9);
   });
+
+  it('cropped: i secondi ripartono dal taglio, i battiti restano', () => {
+    const m = WarpMarkers.of([{ t: 0, b: 0 }, { t: 1, b: 2 }, { t: 3, b: 5 }], 120);
+    const c = m.cropped(0.5, 2);
+    expect(c.markers.map(x => x.t)).toEqual([0, 0.5, 1.5]);
+    for (const t of [0.5, 1, 1.7, 2]) expect(c.beatOf(t - 0.5)).toBeCloseTo(m.beatOf(t), 9);
+  });
 });

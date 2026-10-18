@@ -3,7 +3,7 @@ import type { PlaybackEngine } from '../../engine/playback-engine';
 import { AudioClip, clipTimes } from '../../model/audio-clip';
 import { sampleDuration, type SampleRef } from '../../model/sample';
 import { autoWarp, followTempo } from '../../model/warp-tools';
-import { findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
+import { cropClipAt, findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
 import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
 import { addHeightHandle } from '../editor-height';
@@ -24,6 +24,8 @@ export interface ClipEditorDeps {
   readonly peaks: PeakStore;
   /** Battiti (in campioni) seguendo il tempo dato: il beat tracking dei worker DSP. */
   readonly trackBeats: (sample: SampleRef, bpm: number) => Promise<number[]>;
+  /** Il tratto [from, to] (secondi) di un sample come file nuovo del progetto, caricato nel motore. */
+  readonly cropSample: (sample: SampleRef, from: Seconds, to: Seconds) => Promise<SampleRef>;
   readonly say: (text: string) => void;
 }
 
@@ -56,6 +58,7 @@ export class ClipEditor implements EditorHost {
       autoWarp: () => this.autoWarp(),
       followTempo: () => void this.followTempo(),
       quantize: () => this.quantize(),
+      crop: () => void this.crop(),
       close: () => this.close(),
     });
     const editor = this;
@@ -193,6 +196,25 @@ export class ClipEditor implements EditorHost {
   private quantize(): void {
     const step = Math.min(1, gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10));
     this.commit('Quantizza warp marker', c => c.withMarkers(c.warp.markers.quantized(step)));
+  }
+
+  /** Crop: il loop (o la regione) diventa un file a sé e la clip suona solo quello. */
+  private async crop(): Promise<void> {
+    const t = this.target(), ref = this.ref;
+    if (!t || !ref) return;
+    const crop = t.clip.cropped(sampleDuration(t.sample), this.deps.store.project.tempo);
+    if (!crop) return this.deps.say('Crop: la parte da tenere è fuori dal sample.');
+    try {
+      const sample = await this.deps.cropSample(t.sample, crop.fileStart, crop.fileEnd);
+      // il file nuovo intanto è pronto, ma la clip potrebbe essere cambiata (o sparita) nel frattempo
+      if (findClip(this.deps.store.project, ref)?.clip !== t.clip) return this.deps.say('Crop annullato: la clip è cambiata nel frattempo.');
+      this.deps.store.apply(cropClipAt(ref, sample, crop.clip(sample.id)));
+      this.selected = -1;
+      if (this.ref === ref) this.fit();
+      this.deps.say(`Crop: ${(crop.fileEnd - crop.fileStart).toFixed(2)} s in "${sample.name}".`);
+    } catch (e) {
+      this.deps.say(`Crop: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   // ---------------------------------------------------------------- stato
@@ -355,6 +377,7 @@ export class ClipEditor implements EditorHost {
       SEPARATOR,
       { label: warp ? 'Spegni il warp' : 'Accendi il warp', run: () => this.commit(warp ? 'Warp spento' : 'Warp attivo', c => c.withWarp({ enabled: !warp })) },
       { label: clip.reversed ? 'Togli il reverse' : 'Reverse', run: () => this.commit(clip.reversed ? 'Reverse spento' : 'Reverse', c => c.withReversed(!clip.reversed, this.duration())) },
+      { label: clip.loop.enabled ? 'Crop sul loop' : 'Crop sulla regione', run: () => void this.crop() },
     ];
     if (hit.kind === 'marker') {
       const i = hit.index;
