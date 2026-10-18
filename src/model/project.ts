@@ -1,6 +1,7 @@
 import type { IdFactory, ProjectId, SampleId, SceneId, TrackId } from '../core/id';
 import { Tempo, TimeSignature, type Beats } from '../core/music-time';
 import { AudioClip } from './audio-clip';
+import type { Color } from './clip';
 import { deviceSampleIds, type DeviceSettings } from './device';
 import type { EffectList } from './effect-list';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
@@ -11,6 +12,8 @@ import { DEFAULT_MIXER, GroupTrack, type MixerSettings, type Track } from './tra
 export interface Scene {
   readonly id: SceneId;
   readonly name: string;
+  /** Colore scelto dall'utente (assente: la scena non ha colore). */
+  readonly color?: Color;
 }
 
 /** Il master, come proprietario di una catena di effetti accanto alle tracce. */
@@ -297,6 +300,17 @@ export class Project {
 
   renamingScene(id: SceneId, name: string): Project {
     return this.with({ scenes: this.scenes.map(s => (s.id === id ? { ...s, name } : s)) });
+  }
+
+  /** Colora la scena; senza `color` le toglie il colore. */
+  recoloringScene(id: SceneId, color?: Color): Project {
+    return this.with({
+      scenes: this.scenes.map(s => {
+        if (s.id !== id) return s;
+        const { color: _, ...rest } = s;
+        return color ? { ...rest, color } : rest;
+      }),
+    });
   }
 
   // ---------------------------------------------------------------- sample

@@ -8,6 +8,7 @@ import type { PlaybackEngine } from '../../engine/playback-engine';
 import { groupSlotState } from '../../engine/session';
 import { LAUNCH_QUANTA } from '../../model/launch';
 import type { Clip } from '../../model/clip';
+import { PALETTE } from '../../model/colors';
 import type { ChainOwner, Scene } from '../../model/project';
 import { GroupTrack, type Track } from '../../model/track';
 import { slotRef, type ClipRef } from '../../store/clip-ref';
@@ -16,7 +17,7 @@ import { removeTrack, renameTrack, setLaunchQuantization, type TrackKind } from 
 import type { Edit, ProjectStore } from '../../store/project-store';
 import {
   captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, insertScene, moveSlotClip, newSlotMidiClip, renameScene,
-  updateSlotClip, type SlotRef,
+  setSceneColor, updateSlotClip, type SlotRef,
 } from '../../store/session-edits';
 import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
 import { el } from '../dom';
@@ -423,6 +424,8 @@ export class SessionView {
     const name = el('span', { className: 'scene-name', textContent: scene.name });
     const cell = el('div', { className: 'scene' },
       el('button', { className: 'launch', textContent: '▶', title: 'Lancia la scena', onclick: () => this.deps.engine.launchScene(index) }), name);
+    cell.classList.toggle('colored', !!scene.color);
+    if (scene.color) cell.style.setProperty('--scene', scene.color);
     cell.ondblclick = () => renameInline(name, n => this.apply(renameScene(scene.id, n)));
     cell.oncontextmenu = e => {
       e.preventDefault();
@@ -430,6 +433,7 @@ export class SessionView {
       showContextMenu(e.clientX, e.clientY, [
         { label: 'Lancia la scena', run: () => this.deps.engine.launchScene(index) },
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameScene(scene.id, n))) },
+        { colors: PALETTE, current: scene.color, pick: c => c !== scene.color && this.apply(setSceneColor(scene.id, c)) },
         { label: 'Duplica', run: () => this.apply(duplicateScene(scene.id)) },
         { label: 'Cattura e inserisci scena', shortcut: 'Ctrl+Maiusc+I', run: () => this.captureAndInsertScene(index) },
         { label: 'Inserisci una scena sopra', run: () => this.apply(insertScene(index)) },

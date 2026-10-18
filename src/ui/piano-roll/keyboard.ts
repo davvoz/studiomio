@@ -75,9 +75,9 @@ export class RollKeyboard {
     g.rect(0, ROLL.ruler, width, bottom - ROLL.ruler);
     g.clip();
     g.font = '9.5px system-ui, sans-serif';
-    const hi = axis.yToPitch(ROLL.ruler), lo = axis.yToPitch(bottom);
-    if (this.names) this.paintNames(this.names, lo, hi);
-    else for (let p = lo; p <= hi; p++) {
+    const rows = axis.visible(ROLL.ruler, bottom);
+    if (this.names) this.paintNames(this.names, rows);
+    else for (const p of rows) {
       const y = axis.pitchToY(p), h = axis.rowHeight, black = isBlackKey(p);
       // la riga di un tasto nero: il tasto a sinistra, il bianco accanto a destra
       g.fillStyle = '#d9dce2';
@@ -86,7 +86,8 @@ export class RollKeyboard {
       g.fillRect(0, y, black ? width * 0.62 : width, h);
       g.fillStyle = 'rgba(0,0,0,0.35)';
       g.fillRect(0, Math.round(y + h) - 1, width, 1);
-      if (p % 12 === 0 && h >= 9) {
+      // con il Fold le righe non sono in fila: ognuna ha il suo nome
+      if ((axis.folded || p % 12 === 0) && h >= 9) {
         g.fillStyle = p === this.pressed ? '#141414' : '#555b66';
         g.fillText(pitchName(p), width - 26, y + h - 2.5);
       }
@@ -97,11 +98,11 @@ export class RollKeyboard {
   }
 
   /** Righe con nome (i pad): il nome a sinistra, la nota a destra; le altre restano scure. */
-  private paintNames(names: ReadonlyMap<number, string>, lo: number, hi: number): void {
+  private paintNames(names: ReadonlyMap<number, string>, rows: readonly number[]): void {
     const { g, width } = this.surface;
     const axis = this.axis!;
     const h = axis.rowHeight, text = h >= 9;
-    for (let p = lo; p <= hi; p++) {
+    for (const p of rows) {
       const y = axis.pitchToY(p), name = names.get(p);
       g.fillStyle = p === this.pressed ? '#ff9d2e' : name ? '#2a2e35' : '#17191d';
       g.fillRect(0, y, width, h);
@@ -113,7 +114,7 @@ export class RollKeyboard {
         g.fillStyle = p === this.pressed ? '#141414' : '#e8eaee';
         g.fillText(name, 5, baseline, width - 34);
       }
-      if (name || p % 12 === 0) {
+      if (name || axis.folded || p % 12 === 0) {
         g.fillStyle = p === this.pressed ? '#141414' : '#6b717c';
         g.fillText(pitchName(p), width - 26, baseline);
       }

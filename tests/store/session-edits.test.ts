@@ -7,7 +7,7 @@ import { copySlotClip, pasteClips, pasteToSlot } from '../../src/store/clipboard
 import { addMidiClip, setLaunchQuantization } from '../../src/store/edits';
 import {
   captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, importSampleToSlot, insertScene, moveSlotClip, newSlotMidiClip,
-  renameScene,
+  renameScene, setSceneColor,
 } from '../../src/store/session-edits';
 import { setup } from '../helpers/fixtures';
 
@@ -74,6 +74,25 @@ describe('session: clip negli slot', () => {
     expect(store.project.tracks[0].slots[0]).toBeNull();
     store.apply(deleteScene(s0));
     expect(store.project.scenes.map(s => s.name)).toEqual(['6', 'Strofa copia', '2', '3', '4']);
+  });
+
+  it('colore delle scene: si sceglie, si toglie, si annulla, passa alla copia e si salva', () => {
+    const { store } = setup({ midi: 1 });
+    const s0 = store.project.scenes[0].id;
+    expect(store.project.scenes[0].color).toBeUndefined();
+    store.apply(setSceneColor(s0, '#5b8def'));
+    expect(store.project.scenes[0].color).toBe('#5b8def');
+    expect(store.undoLabel).toBe('Colore della scena');
+    store.apply(duplicateScene(s0));
+    expect(store.project.scenes[1].color).toBe('#5b8def');
+    const codec = new ProjectCodec();
+    const back = codec.parse(codec.stringify(store.project));
+    expect(back.scenes.map(s => s.color)).toEqual(['#5b8def', '#5b8def', undefined, undefined, undefined]);
+    expect('color' in JSON.parse(codec.stringify(store.project)).scenes[2]).toBe(false); // senza colore: niente campo
+    store.apply(setSceneColor(s0));
+    expect('color' in store.project.scenes[0]).toBe(false);
+    store.undo();
+    expect(store.project.scenes[0].color).toBe('#5b8def');
   });
 
   it('cattura e inserisci scena: le clip che suonano vanno nella scena nuova, al loro posto restano copie', () => {

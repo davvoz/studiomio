@@ -123,21 +123,51 @@ describe('PlaybackEngine: clip audio', () => {
     expect(r.graph.sources[0].buffer!.duration).toBeCloseTo(4, 3);
   });
 
-  it('cambiare il tempo mentre suona ferma le sorgenti e riprogramma', async () => {
+  it('cambiare il tempo mentre suona non interrompe: il render di prima, poi quello nuovo', async () => {
     const r = await rig();
     r.store.apply(placeSample(r.t(0), r.sample.id, 0));
     await r.ready();
     r.engine.play(0);
     r.runUntil(0.55); // battito 1
     r.store.apply(setTempo(60));
-    expect(r.graph.sources[0].stoppedAt).toBe(-1);
+    // il suono di prima esce in dissolvenza mentre entra il nuovo, dove il trasporto sarà
+    // (0.6 s = battito 1.1): nessun buco
+    const [old, standIn] = r.graph.sources;
+    expect(old.stoppedAt).toBeCloseTo(0.602, 9);
+    // il render nuovo non c'è ancora: il vecchio (a 120 BPM) letto a metà velocità resta a tempo
+    expect(standIn.started!.when).toBeCloseTo(0.6, 6);
+    expect(standIn.started!.offset).toBeCloseTo(0.55, 6); // battito 1.1 a 120 BPM
+    expect(standIn.playbackRate.value).toBe(0.5);
+    expect(standIn.buffer).toBe(old.buffer);
     await r.clips.prepare(r.store.project); // arriva il render al tempo nuovo
     r.engine.refresh();
     const last = starts(r.graph).at(-1)!;
     expect(last.when).toBeCloseTo(0.6, 6);
-    // riparte da dove il trasporto è quando il suono nuovo arriva (0.6 s = battito 1.1), senza
-    // risuonare il pezzo già sentito: battito 1.1 a 60 BPM = 1.1 s nel buffer nuovo
+    // senza risuonare il pezzo già sentito: battito 1.1 a 60 BPM = 1.1 s nel buffer nuovo
     expect(last.offset).toBeCloseTo(1.1, 6);
+    expect(r.graph.sources.at(-1)!.playbackRate.value).toBe(1);
+  });
+
+  it('modificare una clip mentre suona riprogramma solo la sua traccia, senza fermare niente', async () => {
+    const r = await rig();
+    r.store.apply(placeSample(r.t(0), r.sample.id, 0));
+    r.store.apply(addMidiClip(r.t(1), 0, 4));
+    const pl = r.store.project.tracks[1].arrangement[0];
+    const note = (pitch: number, start: number) => ({ pitch, start, duration: 0.5, velocity: 100 });
+    r.store.apply(updateClip<MidiClip>('note', r.t(1), pl.id, c => c.addingNotes(note(60, 0), note(62, 1.2))));
+    await r.ready();
+    r.engine.play(0);
+    r.runUntil(0.55); // battito 1: la prima nota suona, la seconda (0.65 s) è già programmata
+    const synth = r.instruments.created[0];
+    const audioSources = r.graph.sources.length, stops = synth.stops;
+    r.store.apply(updateClip<MidiClip>('nota nuova', r.t(1), pl.id, c => c.addingNotes(note(64, 1.3))));
+    expect(synth.stops).toBe(stops);
+    expect(synth.retakes.map(t => +t.toFixed(9))).toEqual([0.6]);
+    // da 0.6 s le note arrivano di nuovo (una volta sola); quella già partita continua
+    expect(synth.notes.map(n => [n.pitch, +n.when.toFixed(6)])).toEqual([[60, 0.05], [62, 0.65], [64, 0.7]]);
+    // la traccia audio non è stata toccata
+    expect(r.graph.sources).toHaveLength(audioSources);
+    expect(r.graph.sources.every(s => s.stoppedAt === null || s.stoppedAt > 1)).toBe(true);
   });
 
   it('se il render non è pronto la clip parte appena arriva', async () => {

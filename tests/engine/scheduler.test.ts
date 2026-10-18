@@ -9,6 +9,8 @@ class Recorder implements ScheduledSource {
     this.windows.push({ from: w.from, to: w.to, runStart: w.runStart, runEnd: w.runEnd, t0: w.timeAt(w.runStart) });
   }
   stopAll() { this.stops++; }
+  retakes: number[] = [];
+  retake(at: number) { this.retakes.push(at); }
 }
 
 const tempo = new Tempo(120); // 2 battiti al secondo
@@ -50,6 +52,37 @@ describe('Scheduler', () => {
     s.start(5, 0, tempo, { enabled: true, start: 0, end: 4 });
     s.advance(0);
     expect(r.windows).toEqual([{ from: 5, to: 7, runStart: 5, runEnd: Infinity, t0: 0 }]);
+  });
+
+  it('retake: solo le sorgenti indicate riprendono da quell\'istante, anche oltre il giro del loop', () => {
+    const a = new Recorder(), b = new Recorder();
+    const s = new Scheduler(() => [a, b], 0.5);
+    s.start(3, 0, tempo, { enabled: true, start: 1, end: 4 });
+    s.advance(0.4); // programmato fino al battito 1.8 del secondo giro
+    a.windows = [];
+    s.retake(0.25, [a]); // 0.25 s = battito 3.5
+    expect(a.retakes).toEqual([0.25]);
+    expect(b.retakes).toEqual([]);
+    expect(a.windows.map(w => [w.from, w.to, w.runStart, w.runEnd])).toEqual([
+      [3.5, 4, 3.5, 4], // ciò che è in corso riparte da 3.5
+      [1, 1.8, 1, 4],
+    ]);
+    expect(a.windows[1].t0).toBeCloseTo(0.5, 12);
+    expect(b.windows).toHaveLength(2); // le altre non si accorgono di niente
+    expect(a.stops + b.stops).toBe(0);
+  });
+
+  it('resumeAt: tempo nuovo da quell\'istante, senza fermare niente', () => {
+    const r = new Recorder();
+    const s = new Scheduler(() => [r], 0.2);
+    s.start(0, 0, tempo, noLoop);
+    s.advance(0);
+    s.resumeAt(0.1, new Tempo(60), noLoop); // battito 0.2
+    s.advance(0.1);
+    expect(r.retakes).toEqual([0.1]);
+    expect(r.stops).toBe(0);
+    expect(s.positionAt(1.1)).toBeCloseTo(1.2, 12); // un secondo dopo, a 60 BPM: un battito
+    expect(r.windows.at(-1)!.from).toBeCloseTo(0.2, 12);
   });
 
   it('export: tutto l\'intervallo in una finestra; stop ferma le sorgenti', () => {

@@ -6,6 +6,25 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Piano roll: Fold (F, or the Fold button), like Live's: only the rows of the pitches that have
+  notes are shown. The rows follow the notes as you edit them.
+- The clip editors (piano roll and audio) can be made taller or shorter by dragging their top
+  edge; double click resets the height. The height is remembered.
+- Scene colors: right click a scene and pick a color from the row of swatches (the last one
+  removes it). The scene is tinted in the session, duplicates keep the color, and on the APC40
+  the scene launch buttons light up in the scene's color.
+
+### Changed
+- Clearer grid in the clip editors, like Live's: bars, beats and half beats have lines of
+  different strength, every other beat (or bar, zoomed out) is shaded, and the ruler has
+  longer ticks on the beats.
+
+### Fixed
+- Editing while the song plays no longer makes the sound drop out for a moment. Only the edited
+  track is rescheduled, the others are not touched, notes already playing go on and audio clips
+  crossfade. When the tempo changes, warped audio keeps playing in time while it is recomputed.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added

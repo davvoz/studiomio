@@ -65,6 +65,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
         this.core.silence();
       },
       cut: m => this.queue.cutAt(Math.round(m.at * sampleRate)),
+      retake: m => this.queue.dropFrom(Math.round(m.at * sampleRate)),
       ping: m => this.port.postMessage({ type: 'pong', id: m.id }),
       dispose: () => { this.alive = false; },
     });

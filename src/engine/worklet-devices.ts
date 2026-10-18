@@ -94,6 +94,10 @@ class WorkletInstrument implements Instrument {
     this.send({ type: 'cut', at });
   }
 
+  retake(at: number): void {
+    this.send({ type: 'retake', at });
+  }
+
   dispose(): void {
     this.send({ type: 'dispose' });
     this.node?.disconnect();

@@ -15,6 +15,7 @@ import { addEffect, addTrack, setSlot } from '../../src/store/edits';
 import { groupDevices, mapMacro } from '../../src/store/rack-edits';
 import { INSTRUMENT_DEVICE } from '../../src/model/envelope';
 import { ProjectStore } from '../../src/store/project-store';
+import { setSceneColor } from '../../src/store/session-edits';
 import { UiState } from '../../src/ui/ui-state';
 
 /** Le risposte di un APC40 mkII vero (dal monitor MIDI). */
@@ -188,6 +189,16 @@ describe('APC40 sulla session', () => {
     expect(r.led(padNote(1, 0))).toBe(COLOR.off);
     expect(r.led(NOTE.activator, 0)).toBe(ON);
     expect(r.led(NOTE.activator, 5)).toBe(0); // traccia che non c'è
+  });
+
+  it('i pulsanti delle scene con clip prendono il colore della scena (verdi se non ne ha)', () => {
+    const r = rig({ tracks: 2, clips: [[0, 0], [1, 1]] });
+    r.start();
+    r.store.apply(setSceneColor(r.store.project.scenes[1].id, '#ff0000'));
+    r.store.apply(setSceneColor(r.store.project.scenes[2].id, '#0000ff')); // riga vuota: spento
+    expect(r.led(NOTE.sceneLaunch)).toBe(COLOR.green);
+    expect(r.led(NOTE.sceneLaunch + 1)).toBe(COLOR.red);
+    expect(r.led(NOTE.sceneLaunch + 2)).toBe(COLOR.off);
   });
 
   it('manda solo i LED che cambiano, e a piccole raffiche', () => {

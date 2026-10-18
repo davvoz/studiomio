@@ -126,6 +126,12 @@ export class FakeInstrument implements Instrument {
   disposed = false;
   constructor(readonly type: string, readonly bpm = 120) {}
   cut(at: number) { this.cuts.push(at); }
+  readonly retakes: number[] = [];
+  /** Come lo strumento vero: le note da `at` in poi non ci sono più. */
+  retake(at: number) {
+    this.retakes.push(at);
+    this.notes.splice(0, this.notes.length, ...this.notes.filter(n => n.when < at));
+  }
   setTempo(bpm: number) { this.tempos.push(bpm); }
   play(pitch: number, velocity: number, when: number, duration: number) { this.notes.push({ pitch, velocity, when, duration }); }
   update(s: InstrumentSettings) { this.updates.push(s); }

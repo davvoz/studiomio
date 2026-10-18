@@ -45,6 +45,11 @@ export class MidiTrackPlayer implements TrackPlayer {
     this.ctx.notes.cutFrom(at);
   }
 
+  retake(at: number): void {
+    this.instrument.retake(at);
+    this.ctx.notes.cutFrom(at);
+  }
+
   instrumentModulation(): DeviceModulation | null {
     return this.instrument.modulation ?? null;
   }

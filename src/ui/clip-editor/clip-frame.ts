@@ -40,6 +40,8 @@ export type FrameHit =
   | { readonly kind: 'ruler' };
 
 const FLAG_PX = 8, CLICK_PX = 3;
+/** Lunghezza delle tacche del righello per livello (battuta, battito, mezzo, il resto). */
+const TICK_PX = [18, 8, 5, 3];
 
 /** Cosa c'è sotto il puntatore nel righello, o null se il puntatore è più in basso. */
 export function frameHit(axis: BeatAxis, clip: Clip, x: number, y: number): FrameHit | null {
@@ -180,15 +182,40 @@ export const frameCursor: { readonly [K in FrameHit['kind']]: (hit: Extract<Fram
 
 // ------------------------------------------------------------------ disegno
 
-/** Griglia verticale da `top` in giù: battute più marcate dei battiti e delle suddivisioni. */
+/** Intensità delle linee della griglia, come in Live: battuta, battito (il quarto), mezzo
+ *  battito, suddivisioni più fini. */
+const GRID_LINE = ['rgba(255,255,255,0.24)', 'rgba(255,255,255,0.13)', 'rgba(255,255,255,0.075)', 'rgba(255,255,255,0.04)'];
+/** Le fasce alternate, una sì e una no. */
+const GRID_BAND = 'rgba(255,255,255,0.045)';
+
+/** Livello del battito `b` nella griglia: 0 battuta, 1 battito, 2 mezzo battito, 3 il resto. */
+export function beatLevel(b: Beats, beatsPerBar: number): 0 | 1 | 2 | 3 {
+  const on = (step: number) => Math.abs(b / step - Math.round(b / step)) < 1e-6;
+  return on(beatsPerBar) ? 0 : on(1) ? 1 : on(0.5) ? 2 : 3;
+}
+
+/** Larghezza delle fasce alternate per una griglia di passo `grid`: il battito finché la
+ *  griglia lo divide, poi la battuta, poi gruppi di 4 battute. */
+export function gridBand(grid: Beats, beatsPerBar: number): Beats {
+  const bands = [1, beatsPerBar, 4 * beatsPerBar, 16 * beatsPerBar, 64 * beatsPerBar];
+  return bands.find(s => s >= 2 * grid - 1e-9) ?? bands[bands.length - 1];
+}
+
+/** Griglia verticale da `top` in giù, come in Live: fasce alternate (i battiti, o le battute
+ *  da lontano) e linee più marcate per battute, battiti e mezzi battiti. */
 export function paintBeatGrid(
   g: CanvasRenderingContext2D, axis: BeatAxis, width: number, top: number, height: number, grid: Beats, signature: TimeSignature,
 ): void {
-  const bar = signature.beatsPerBar;
-  for (let b = Math.floor(axis.xToBeat(0) / grid) * grid; axis.beatToX(b) < width; b += grid) {
-    const isBar = Math.abs(b / bar - Math.round(b / bar)) < 1e-6;
-    g.fillStyle = isBar ? COLORS.bar : Number.isInteger(b) ? 'rgba(255,255,255,0.08)' : COLORS.grid;
-    g.fillRect(Math.round(axis.beatToX(b)), top, 1, height - top);
+  const bar = signature.beatsPerBar, band = gridBand(grid, bar);
+  g.fillStyle = GRID_BAND;
+  for (let i = Math.floor(axis.xToBeat(0) / band); axis.beatToX(i * band) < width; i++) {
+    if (i % 2 === 0) continue;
+    const x0 = Math.round(axis.beatToX(i * band)), x1 = Math.round(axis.beatToX((i + 1) * band));
+    g.fillRect(x0, top, x1 - x0, height - top);
+  }
+  for (let i = Math.floor(axis.xToBeat(0) / grid); axis.beatToX(i * grid) < width; i++) {
+    g.fillStyle = GRID_LINE[beatLevel(i * grid, bar)];
+    g.fillRect(Math.round(axis.beatToX(i * grid)), top, 1, height - top);
   }
 }
 
@@ -199,8 +226,15 @@ export function paintClipRuler(g: CanvasRenderingContext2D, axis: BeatAxis, widt
   const lx0 = axis.beatToX(clip.loop.start), lx1 = axis.beatToX(clip.loop.end);
   g.fillStyle = clip.loop.enabled ? COLORS.loop : COLORS.loopOff;
   g.fillRect(lx0, 1, lx1 - lx0, FRAME.loopBand - 2);
-  // numeri di battuta (o battuta.tempo se lo zoom lo permette)
+  // tacche sotto i numeri: più lunghe sui battiti che sulle suddivisioni
   const bar = signature.beatsPerBar;
+  const tick = [0.25, 0.5, 1, bar].find(s => s * axis.pxPerBeat >= 6) ?? bar;
+  g.fillStyle = '#4a4f58';
+  for (let i = Math.floor(axis.xToBeat(0) / tick); axis.beatToX(i * tick) < width; i++) {
+    const h = TICK_PX[beatLevel(i * tick, bar)];
+    g.fillRect(Math.round(axis.beatToX(i * tick)), FRAME.ruler - h, 1, h);
+  }
+  // numeri di battuta (o battuta.tempo se lo zoom lo permette)
   const label = [0.25, 1, bar, 2 * bar, 4 * bar, 8 * bar, 16 * bar, 32 * bar].find(s => s * axis.pxPerBeat >= 44) ?? 32 * bar;
   g.font = '10.5px system-ui, sans-serif';
   for (let b = Math.floor(axis.xToBeat(0) / label) * label; axis.beatToX(b) < width; b += label) {

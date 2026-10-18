@@ -4,6 +4,7 @@ import { el } from '../dom';
 export interface RollPanelActions {
   rename(name: string): void;
   toggleDraw(): void;
+  toggleFold(): void;
   quantize(): void;
   transpose(semitones: number): void;
   /** Moltiplica la durata della clip (2: il doppio, 0.5: la metà). */
@@ -19,6 +20,7 @@ export class RollPanel {
   private readonly info = el('div', { className: 'muted small' });
   private readonly instrument: HTMLButtonElement;
   private readonly draw: HTMLButtonElement;
+  private readonly fold: HTMLButtonElement;
 
   constructor(actions: RollPanelActions) {
     const button = (text: string, title: string, onclick: () => void) => el<HTMLButtonElement>('button', { textContent: text, title, onclick });
@@ -26,12 +28,14 @@ export class RollPanel {
     this.name.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') this.name.blur(); };
     this.instrument = el<HTMLButtonElement>('button', { className: 'instrument', title: 'Apri lo strumento della traccia', onclick: () => actions.openInstrument() });
     this.draw = button('✎ Disegna', 'Modo disegno (B): un clic crea una nota, un clic su una nota la toglie', () => actions.toggleDraw());
+    this.fold = button('Fold', 'Fold (F): solo le righe delle note scritte, come in Live', () => actions.toggleFold());
     this.element.append(
       el('div', { className: 'panel-head' }, this.name, el('button', { className: 'close', textContent: '×', title: 'Chiudi (Esc)', onclick: () => actions.close() })),
       this.info,
       el('label', { className: 'row' }, el('span', { textContent: 'Strumento' }), this.instrument),
       el('div', { className: 'buttons' },
         this.draw,
+        this.fold,
         button('Quantizza', 'Inizi delle note sulla griglia (Q); senza selezione tutte le note', () => actions.quantize())),
       el('div', { className: 'buttons' },
         button(':2', 'Durata dimezzata: note e clip vanno al doppio della velocità', () => actions.scaleTime(0.5)),
@@ -46,11 +50,12 @@ export class RollPanel {
     );
   }
 
-  update(clip: MidiClip, instrumentLabel: string, drawMode: boolean, selected: number, barBeats: number): void {
+  update(clip: MidiClip, instrumentLabel: string, drawMode: boolean, folded: boolean, selected: number, barBeats: number): void {
     if (document.activeElement !== this.name) this.name.value = clip.name;
     const bars = (clip.region.end - clip.region.start) / barBeats;
     this.info.textContent = `${+bars.toFixed(2)} battute · ${clip.notes.length} note${selected ? ` · ${selected} selezionate` : ''}`;
     this.instrument.textContent = `${instrumentLabel} ▸`;
     this.draw.classList.toggle('on', drawMode);
+    this.fold.classList.toggle('on', folded);
   }
 }

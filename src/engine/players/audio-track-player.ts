@@ -42,6 +42,10 @@ export class AudioTrackPlayer implements TrackPlayer {
     this.active.cutAt(at);
   }
 
+  retake(at: number): void {
+    this.active.retakeAt(at);
+  }
+
   stopAll(): void {
     this.active.stopAll();
   }
@@ -61,10 +65,9 @@ export class AudioTrackPlayer implements TrackPlayer {
 
   private play({ clip, start, end: stop, contentStart }: Piece<AudioClip>, w: ScheduleWindow): void {
     const playable = this.clips.playable(clip);
-    if (!playable) {
-      this.ctx.missing(); // l'audio arriva: il motore riprogrammerà quando è pronto
-      return;
-    }
+    // l'audio (quello giusto) arriva: il motore riprogrammerà quando è pronto
+    if (!playable || playable.provisional) this.ctx.missing();
+    if (!playable) return;
     const { buffer, rate } = playable;
     let when = timeAtClock(w, start);
     const end = timeAtClock(w, stop);
@@ -94,18 +97,24 @@ export class AudioTrackPlayer implements TrackPlayer {
     src.start(when, offset, duration * rate);
     src.stop(when + duration);
     const ends = when + duration;
+    /** Dissolvenza da `from` a `to`, poi il nodo si ferma; se non era ancora partito non suona. */
+    const fadeOut = (from: number, to: number) => {
+      if (from >= ends) return;
+      if (to > when) {
+        amp.gain.cancelScheduledValues(from);
+        amp.gain.setValueAtTime(g, Math.max(when, from));
+        amp.gain.linearRampToValueAtTime(0, to);
+      }
+      stopQuietly(src, Math.max(to, when));
+    };
     this.active.add(src, () => {
       src.disconnect();
       amp.disconnect();
-    }, at => {
-      if (at >= ends) return;
-      // tagliato prima di partire: non suona; altrimenti una breve dissolvenza fino ad `at`
-      if (at > when) {
-        amp.gain.cancelScheduledValues(at - FADE);
-        amp.gain.setValueAtTime(g, Math.max(when, at - FADE));
-        amp.gain.linearRampToValueAtTime(0, at);
-      }
-      stopQuietly(src, Math.max(at, when));
+    }, {
+      cut: at => fadeOut(at - FADE, at),
+      // il tratto nuovo entra da `at` con la sua dissolvenza e questo esce nello stesso tempo:
+      // una dissolvenza incrociata, senza buchi
+      retake: at => (at <= when ? stopQuietly(src, when) : fadeOut(at, at + FADE)),
     });
   }
 }

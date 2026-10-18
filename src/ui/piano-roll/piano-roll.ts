@@ -12,6 +12,7 @@ import { copyNotes, pasteNotes, type Clipboard } from '../../store/clipboard';
 import { findClip, scaleMidiClipAt, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
 import { BeatAxis, playheadIn, seekBeatOf } from '../clip-editor/clip-geometry';
+import { addHeightHandle } from '../editor-height';
 import { bindKeys, type Binding } from '../keymap';
 import { showContextMenu } from '../context-menu';
 import { Surface } from '../surface';
@@ -19,7 +20,7 @@ import { rollMenu } from './roll-menu';
 import type { Pointer } from '../timeline/gestures';
 import { gridStep } from '../timeline/geometry';
 import { RollKeyboard } from './keyboard';
-import { PitchAxis } from './pitch-axis';
+import { foldRows, PitchAxis, sameRows } from './pitch-axis';
 import { rollCursor, rollGestureFor, rollHit, type RollGesture, type RollHit, type RollHost } from './roll-gestures';
 import { notesBottom, paintRoll, ROLL } from './roll-painter';
 import { RollPanel } from './roll-panel';
@@ -47,6 +48,9 @@ interface Target {
  *  pad, tra queste due (sotto la minima i nomi non si leggono). */
 const NAMED_ROW = { min: 10, max: 16 } as const;
 
+/** Con il Fold le righe si allargano per riempire la vista, fino a questa altezza. */
+const FOLD_ROW_MAX = 20;
+
 /** Comandi da tastiera del piano roll: hanno la precedenza su quelli della timeline. */
 const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
   { key: 'delete', run: r => r.deleteSelected() },
@@ -64,6 +68,7 @@ const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
   { key: 'arrowright', run: r => r.nudge(1) },
   { key: 'q', run: r => r.quantize() },
   { key: 'b', run: r => r.toggleDraw() },
+  { key: 'f', run: r => r.toggleFold() },
   { key: 'escape', run: r => r.escape() },
 ];
 
@@ -88,12 +93,15 @@ export class PianoRoll implements RollHost {
   private names: ReadonlyMap<number, string> | null = null;
   noteLength: Beats = 0.25;
   drawMode = false;
+  /** Fold (come in Live): solo le righe delle altezze che hanno note. Resta tra una clip e l'altra. */
+  folded = false;
 
   constructor(private readonly deps: PianoRollDeps) {
     this.keyboard = new RollKeyboard(pitch => this.audition(pitch, 100));
     this.panel = new RollPanel({
       rename: name => this.commit('Rinomina clip', c => c.withName(name)),
       toggleDraw: () => this.toggleDraw(),
+      toggleFold: () => this.toggleFold(),
       quantize: () => this.quantize(),
       transpose: n => this.transpose(n),
       scaleTime: f => this.scaleTime(f),
@@ -118,11 +126,13 @@ export class PianoRoll implements RollHost {
     const keys = Object.assign(document.createElement('div'), { className: 'roll-keys-wrap' });
     keys.append(this.keyboard.element);
     this.element.append(this.panel.element, keys, wrap, this.mods.side, this.mods.lane.element);
+    addHeightHandle(this.element);
     new ResizeObserver(() => {
       this.surface.resize(wrap.clientWidth, wrap.clientHeight);
       this.keyboard.resize(keys.clientWidth, wrap.clientHeight);
       if (this.fitPending) this.fit();
-      this.setPitches(this._pitches.scrolled(this._pitches.scrollY, this.notesHeight));
+      else if (this.folded) this.fitPitches();
+      else this.setPitches(this._pitches.scrolled(this._pitches.scrollY, this.notesHeight));
     }).observe(wrap);
     this.bind(this.surface.canvas);
     this.keyboard.element.addEventListener('wheel', e => this.wheel(e, 0), { passive: false });
@@ -328,6 +338,12 @@ export class PianoRoll implements RollHost {
     this.sync();
   }
 
+  toggleFold(): void {
+    this.folded = !this.folded;
+    this.fitPitches();
+    this.sync();
+  }
+
   escape(): void {
     if (this._selection.size) this.select([]);
     else this.close();
@@ -368,10 +384,11 @@ export class PianoRoll implements RollHost {
       this.names = names;
       if (hadNames !== (names !== null)) this.fit();
     }
+    this.followFold(t.clip);
     this.keyboard.setNames(this.names);
     this.element.classList.toggle('named-keys', this.names !== null);
     this.mods.sync();
-    this.panel.update(t.clip, label, this.drawMode, this._selection.size, this.deps.store.project.signature.beatsPerBar);
+    this.panel.update(t.clip, label, this.drawMode, this.folded, this._selection.size, this.deps.store.project.signature.beatsPerBar);
     this.invalidate();
   }
 
@@ -389,12 +406,33 @@ export class PianoRoll implements RollHost {
     const c = this.clip();
     if (!c || this.surface.width < 10) return;
     this._axis = BeatAxis.fit(c.region.start, Math.max(c.region.end, c.loop.enabled ? c.loop.end : 0), this.surface.width);
+    this.fitPitches();
+    this.fitPending = false;
+  }
+
+  /** In verticale: con il Fold tutte le righe, alte quanto possono; senza, le note al centro. */
+  private fitPitches(): void {
+    const c = this.clip();
+    if (!c) return;
+    const folded = this.folded ? foldRows(c.notes.map(n => n.pitch)) : null;
+    if (folded) {
+      const h = Math.max(this.names ? NAMED_ROW.min : 8, Math.min(FOLD_ROW_MAX, Math.floor(this.notesHeight / folded.length)));
+      return this.setPitches(new PitchAxis(h, 0, ROLL.ruler, folded).scrolled(0, this.notesHeight));
+    }
     const pitches = [...c.notes.map(n => n.pitch), ...(this.names?.keys() ?? [])];
     const [lo, hi] = pitches.length ? [Math.min(...pitches), Math.max(...pitches)] : [60, 72];
     const fitting = Math.floor(this.notesHeight / (hi - lo + 2));
     const rows = new PitchAxis(this.names ? Math.max(NAMED_ROW.min, Math.min(NAMED_ROW.max, fitting)) : 12, 0, ROLL.ruler);
     this.setPitches(rows.centeredOn(lo, hi, this.notesHeight));
-    this.fitPending = false;
+  }
+
+  /** Con il Fold le righe seguono le note: una nota a un'altezza nuova ne aggiunge una, l'ultima
+   *  nota tolta da un'altezza la toglie. Senza note si vedono tutte le righe. */
+  private followFold(clip: MidiClip): void {
+    const rows = this.folded ? foldRows(clip.notes.map(n => n.pitch)) : null;
+    if (sameRows(rows, this._pitches.rows)) return;
+    if ((rows === null) !== (this._pitches.rows === null)) this.fitPitches();
+    else this.setPitches(this._pitches.withRows(rows, this.notesHeight));
   }
 
   private setPitches(p: PitchAxis): void {

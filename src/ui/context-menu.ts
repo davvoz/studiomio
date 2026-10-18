@@ -11,9 +11,18 @@ export interface MenuAction {
   readonly run: () => void;
 }
 
+/** Una riga di campioni di colore, più uno per togliere il colore. */
+export interface MenuColors {
+  readonly colors: readonly string[];
+  /** Il colore attuale (assente: nessuno), segnato nella riga. */
+  readonly current?: string;
+  /** Riceve il colore scelto, o undefined per «nessun colore». */
+  readonly pick: (color: string | undefined) => void;
+}
+
 export const SEPARATOR = 'separator' as const;
 
-export type MenuItem = MenuAction | typeof SEPARATOR;
+export type MenuItem = MenuAction | MenuColors | typeof SEPARATOR;
 
 let current: { close(): void } | null = null;
 
@@ -25,6 +34,25 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
   for (const item of items) {
     if (item === SEPARATOR) {
       menu.append(Object.assign(document.createElement('div'), { className: 'separator' }));
+      continue;
+    }
+    if ('colors' in item) {
+      const row = Object.assign(document.createElement('div'), { className: 'swatches' });
+      for (const color of [...item.colors, undefined]) {
+        const s = Object.assign(document.createElement('button'), {
+          className: color ? 'swatch' : 'swatch none', role: 'menuitem', title: color ? color : 'Nessun colore',
+        });
+        if (color) s.style.setProperty('--swatch', color);
+        s.classList.toggle('current', color?.toLowerCase() === item.current?.toLowerCase());
+        s.onclick = () => {
+          close();
+          item.pick(color);
+        };
+        s.onpointerenter = () => s.focus();
+        buttons.push(s);
+        row.append(s);
+      }
+      menu.append(row);
       continue;
     }
     const b = Object.assign(document.createElement('button'), { className: 'item', disabled: !!item.disabled, role: 'menuitem' });

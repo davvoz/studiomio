@@ -104,7 +104,7 @@ export class ProjectCodec {
       masterEffects: p.masterEffects.map(encodeEffect),
       ...encodeRacks('masterRacks', p.masterRacks),
       launchQuantization: p.launchQuantization,
-      scenes: p.scenes.map(s => ({ id: s.id, name: s.name })),
+      scenes: p.scenes.map(s => ({ id: s.id, name: s.name, ...(s.color ? { color: s.color } : {}) })),
       samples: p.samples.map(encodeSample),
       tracks: p.tracks.map(t => ({
         kind: t.kind, id: t.id, name: t.name, color: t.color,
@@ -137,7 +137,7 @@ export class ProjectCodec {
         masterEffects: r.array('masterEffects').map(decodeEffect),
         masterRacks: decodeRacks(r, 'masterRacks'),
         launchQuantization: r.str('launchQuantization'),
-        scenes: r.array('scenes').map(s => ({ id: asId(s.str('id')), name: s.str('name') })),
+        scenes: r.array('scenes').map(s => ({ id: asId(s.str('id')), name: s.str('name'), ...(s.has('color') ? { color: s.str('color') } : {}) })),
         samples: r.array('samples').map(decodeSample),
         tracks: r.array('tracks').map(t => this.decodeTrack(t)),
       });

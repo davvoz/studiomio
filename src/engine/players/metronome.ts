@@ -1,7 +1,7 @@
 import type { TimeSignature } from '../../core/music-time';
 import type { AudioGraph, AudioNodeLike } from '../audio-graph';
 import type { ScheduledSource, ScheduleWindow } from '../scheduler';
-import { ActiveNodes } from './track-player';
+import { ActiveNodes, stopQuietly } from './track-player';
 
 /** Clic su ogni battito, più acuto sul primo della battuta. */
 export class Metronome implements ScheduledSource {
@@ -28,6 +28,10 @@ export class Metronome implements ScheduledSource {
     this.active.stopAll();
   }
 
+  retake(at: number): void {
+    this.active.retakeAt(at);
+  }
+
   private click(when: number, accent: boolean): void {
     const osc = this.graph.createOscillator();
     const env = this.graph.createGain();
@@ -42,6 +46,10 @@ export class Metronome implements ScheduledSource {
     this.active.add(osc, () => {
       osc.disconnect();
       env.disconnect();
+    }, {
+      cut: at => stopQuietly(osc, Math.max(at, when)),
+      // un clic già partito finisce com'è; quelli da `at` in poi si tolgono
+      retake: at => { if (at <= when) stopQuietly(osc, when); },
     });
   }
 }

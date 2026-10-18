@@ -19,6 +19,9 @@ export interface Instrument {
   /** Toglie le note che partirebbero da `at` (secondi del contesto) e chiude lì quelle che
    *  suonerebbero oltre. */
   cut(at: number): void;
+  /** Toglie le note che partirebbero da `at`; quelle già partite suonano fino alla loro fine
+   *  (riprogrammazione dopo una modifica: le note da `at` arrivano di nuovo). */
+  retake(at: number): void;
   dispose(): void;
 }
 

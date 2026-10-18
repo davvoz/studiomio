@@ -45,6 +45,12 @@ export class NoteQueue {
       .sort(before);
   }
 
+  /** Toglie le note che partirebbero da `frame` in poi; quelle già partite restano com'erano. */
+  dropFrom(frame: number): void {
+    const dropped = new Set(this.events.filter(e => e.kind === 'on' && e.frame >= frame).map(e => e.id));
+    if (dropped.size) this.events = this.events.filter(e => !dropped.has(e.id));
+  }
+
   get size(): number {
     return this.events.length;
   }

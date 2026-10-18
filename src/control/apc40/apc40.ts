@@ -555,12 +555,14 @@ export class Apc40 {
           : this.padColor(tracks[col], states[col], ring.scene + row));
       }
     }
-    // scene (pulsanti RGB): verdi se la riga ha clip, lampeggiano se qualcosa della riga è in coda
+    // scene (pulsanti RGB): se la riga ha clip, del colore della scena (verdi se non ne ha);
+    // lampeggiano se qualcosa della riga è in coda
     for (let i = 0; i < SCENES; i++) {
       const s = ring.scene + i;
       const row = s < p.scenes.length ? p.tracks.map(t => t.slots[s]) : [];
       const queued = p.tracks.some(t => t.slots[s] && queuedSlot(engine.sessionState(t)) === s);
-      note(NOTE.sceneLaunch + i, queued ? TRIGGERED(COLOR.green) : row.some(c => c) ? COLOR.green : COLOR.off);
+      const color = p.scenes[s]?.color;
+      note(NOTE.sceneLaunch + i, queued ? TRIGGERED(COLOR.green) : row.some(c => c) ? (color ? paletteIndex(color) : COLOR.green) : COLOR.off);
     }
     // per traccia
     tracks.forEach((t, c) => {

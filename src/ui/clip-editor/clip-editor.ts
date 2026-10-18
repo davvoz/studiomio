@@ -6,6 +6,7 @@ import { autoWarp, followTempo } from '../../model/warp-tools';
 import { findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
 import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
+import { addHeightHandle } from '../editor-height';
 import { Surface } from '../surface';
 import type { Pointer } from '../timeline/gestures';
 import { gridStep } from '../timeline/geometry';
@@ -74,6 +75,7 @@ export class ClipEditor implements EditorHost {
     const wrap = Object.assign(document.createElement('div'), { className: 'editor-canvas-wrap' });
     wrap.append(this.surface.canvas);
     this.element.append(this.panel.element, wrap, this.mods.lane.element);
+    addHeightHandle(this.element);
     new ResizeObserver(() => {
       this.surface.resize(wrap.clientWidth, wrap.clientHeight);
       if (this.fitPending) this.fit();

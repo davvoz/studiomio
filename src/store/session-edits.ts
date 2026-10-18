@@ -2,7 +2,7 @@
  * restituiscono un Edit (si annullano). Uno slot è (traccia, indice di scena). */
 import type { ClipId, SceneId, TrackId } from '../core/id';
 import { AudioClip } from '../model/audio-clip';
-import type { Clip } from '../model/clip';
+import type { Clip, Color } from '../model/clip';
 import { paletteColor } from '../model/colors';
 import { MidiClip } from '../model/midi-clip';
 import type { Project } from '../model/project';
@@ -92,6 +92,10 @@ export const renameScene = (id: SceneId, name: string): Edit =>
 
 export const deleteScene = (id: SceneId): Edit => edit('Elimina scena', p => p.removingScene(id));
 
+/** Colora la scena (senza `color`: nessun colore). */
+export const setSceneColor = (id: SceneId, color?: Color): Edit =>
+  edit(color ? 'Colore della scena' : 'Togli il colore della scena', p => p.recoloringScene(id, color));
+
 /** Cattura e inserisci scena, come in Live: una scena nuova sotto la `index` con le clip che
  *  suonano (`playing`: traccia → clip). Nella scena nuova vanno le clip stesse e al loro posto
  *  restano delle copie: chi suona continua senza interruzioni, ma ora dalla riga nuova. */
@@ -113,7 +117,7 @@ export const duplicateScene = (id: SceneId): Edit =>
     const index = p.scenes.findIndex(s => s.id === id);
     if (index < 0) throw new Error(`scena ${id} non trovata`);
     const source = p.scenes[index];
-    let next = p.addingScene({ id: ids.next('scene'), name: `${source.name} copia` }, index + 1);
+    let next = p.addingScene({ id: ids.next('scene'), name: `${source.name} copia`, ...(source.color ? { color: source.color } : {}) }, index + 1);
     for (const t of p.tracks) {
       const clip = t.slots[index];
       if (clip) next = next.updatingTrack(t.id, x => x.withSlot(index + 1, clip.withId(ids.next('clip'))));

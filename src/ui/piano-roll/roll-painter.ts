@@ -68,8 +68,10 @@ export function paintRoll(p: RollPaint): void {
 }
 
 function paintRows({ g, width, pitches, named }: RollPaint, bottom: number): void {
-  const hi = pitches.yToPitch(ROLL.ruler), lo = pitches.yToPitch(bottom);
-  for (let pitch = lo; pitch <= hi; pitch++) {
+  // con il Fold sotto l'ultima riga può restare spazio vuoto
+  g.fillStyle = C.unnamed;
+  g.fillRect(0, ROLL.ruler, width, bottom - ROLL.ruler);
+  for (const pitch of pitches.visible(ROLL.ruler, bottom)) {
     const y = pitches.pitchToY(pitch);
     g.fillStyle = named ? (named.has(pitch) ? C.named : C.unnamed) : isBlackKey(pitch) ? C.black : C.white;
     g.fillRect(0, y, width, pitches.rowHeight);

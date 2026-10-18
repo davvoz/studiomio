@@ -118,6 +118,13 @@ export class TrackModulator implements ScheduledSource {
     this.stale = this.touched.size > 0;
   }
 
+  /** Riprogrammazione da `at`: fino a lì resta ciò che era programmato, poi le finestre nuove
+   *  riprendono i bersagli (o li riportano neutri). */
+  retake(at: number): void {
+    for (const { sink } of this.touched.values()) sink.hold(at);
+    this.stale = this.touched.size > 0;
+  }
+
   /** Da `at` (secondi) tutti i bersagli toccati tornano neutri: una clip lanciata al posto di
    *  quella che suonava porta le sue curve, o nessuna. */
   cut(at: number): void {

@@ -232,7 +232,7 @@ mute/solo, FX), che il pulsante **Mixer** nasconde quando serve spazio.
 | Trascina file audio su uno slot | importa lì (sulla traccia, o su una nuova se non è audio) |
 | Invio · Canc · Ctrl+D · frecce | lancia · elimina · duplica nello slot sotto · sposta la scelta |
 | Ctrl+C · Ctrl+X · Ctrl+V | copia e incolla tra slot; una clip copiata dalla session si incolla anche nella timeline, al cursore (e viceversa) |
-| Doppio clic sul nome di una scena o di una traccia | rinomina · tasto destro: duplica, inserisci, elimina |
+| Doppio clic sul nome di una scena o di una traccia | rinomina · tasto destro: duplica, inserisci, elimina; sulle scene anche il colore |
 
 Come in Live, una traccia a cui si lancia una clip smette di seguire la sua timeline (che
 nell'arrangement si vede spenta) finché non si preme **↩** (Torna all'arrangement), acceso
@@ -339,6 +339,7 @@ Doppio clic su una clip MIDI (sulla timeline, doppio clic su una traccia MIDI vu
 | Trascina il bordo di una nota | durata (dall'inizio o dalla fine) |
 | Trascina nel vuoto · Maiusc+clic | selezione a riquadro · aggiunge o toglie dalla selezione |
 | B | modo disegno: premi e trascina crea una nota, un clic su una nota la toglie |
+| F (o **Fold** nel pannello) | solo le righe delle altezze che hanno note, come il Fold di Live; le righe seguono le note (spostandone una a un'altezza nuova compare la sua riga) |
 | Corsia in basso | trascina una barra: velocity (le note selezionate la seguono) |
 | Tastiera a sinistra | suona le note con lo strumento della traccia; con la Drum Machine ci sono i nomi dei pad al posto dei tasti |
 | ↑ ↓ (Maiusc: ottava) · ← → · Q · Ctrl+D · Ctrl+A · Canc | trasponi · sposta di un passo · quantizza · duplica · seleziona tutto · elimina |
@@ -346,6 +347,11 @@ Doppio clic su una clip MIDI (sulla timeline, doppio clic su una traccia MIDI vu
 | :2 · ×2 (nel pannello) | la clip intera (note, loop, modulazioni) dura la metà o il doppio, come :2 e ×2 delle clip audio; sulla timeline la clip si accorcia o si allunga dal suo inizio |
 | Tasto destro | menu: su una nota (taglia, copia, incolla, duplica, quantizza, ottava, elimina), nel vuoto (incolla qui, seleziona tutto, modo disegno) |
 | Rotella · Maiusc+rotella · Ctrl+rotella · Alt+rotella | scorri le altezze · scorri il tempo · zoom del tempo · altezza delle righe |
+| Trascina il bordo arancione in alto | altezza dell'editor (anche quello audio; doppio clic: l'altezza iniziale); si ricorda |
+
+La griglia, qui e nell'editor audio, è come quella di Live: linee più marcate per battute,
+quarti e ottavi, e fasce alternate (ogni quarto, o ogni battuta da lontano); sul righello le
+tacche sono più lunghe sui quarti.
 
 ## Modulazioni delle clip
 

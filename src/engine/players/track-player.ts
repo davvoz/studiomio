@@ -32,14 +32,24 @@ export interface PlayerContext {
   readonly tempo: () => number;
 }
 
+/** Come un nodo programmato smette prima del previsto. */
+export interface NodeEnding {
+  /** Finisce all'istante `at` (di norma con una breve dissolvenza). */
+  cut(at: number): void;
+  /** Riprogrammazione da `at`: se parte da `at` in poi non suona; se è già in corso lascia il
+   *  posto a quello che lo sostituisce (che riparte da `at`). */
+  retake(at: number): void;
+}
+
 /** Nodi programmati e non ancora finiti, per poterli fermare tutti insieme. */
 export class ActiveNodes {
-  private readonly nodes = new Map<ScheduledNodeLike, (at: number) => void>();
+  private readonly nodes = new Map<ScheduledNodeLike, NodeEnding>();
 
-  /** Registra il nodo; alla fine `cleanup` scollega ciò che serve; `cut` lo fa finire
-   *  all'istante dato (di norma con una breve dissolvenza). */
-  add(node: ScheduledNodeLike, cleanup: () => void, cut: (at: number) => void = at => stopQuietly(node, at)): void {
-    this.nodes.set(node, cut);
+  /** Registra il nodo; alla fine `cleanup` scollega ciò che serve. Senza `ending` il nodo si
+   *  ferma di colpo all'istante del taglio. */
+  add(node: ScheduledNodeLike, cleanup: () => void, ending?: NodeEnding): void {
+    const stop = (at: number) => stopQuietly(node, at);
+    this.nodes.set(node, ending ?? { cut: stop, retake: stop });
     node.onended = () => {
       this.nodes.delete(node);
       cleanup();
@@ -48,7 +58,12 @@ export class ActiveNodes {
 
   /** Fa finire all'istante `at` tutti i nodi che suonerebbero oltre. */
   cutAt(at: number): void {
-    for (const cut of this.nodes.values()) cut(at);
+    for (const e of this.nodes.values()) e.cut(at);
+  }
+
+  /** Riprogrammazione da `at` (vedi `NodeEnding.retake`). */
+  retakeAt(at: number): void {
+    for (const e of this.nodes.values()) e.retake(at);
   }
 
   get size(): number {

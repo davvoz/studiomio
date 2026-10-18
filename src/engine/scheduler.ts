@@ -27,6 +27,10 @@ export interface ScheduledSource {
   schedule(window: ScheduleWindow): void;
   /** Ferma subito tutto ciò che ha programmato. */
   stopAll(): void;
+  /** Riprogrammazione dopo una modifica: dimentica ciò che ha programmato da `at` (secondi del
+   *  contesto) in poi, senza interrompere ciò che sta già suonando; il trasporto gli manda
+   *  subito le finestre da `at`, dove ciò che è in corso riparte. */
+  retake(at: number): void;
 }
 
 export interface LoopRange {
@@ -74,6 +78,34 @@ export class Scheduler {
     this.runs = [{ beat0: beat, time0: time, end: looping ? loop.end : Infinity, shift: clock - beat }];
     this.scheduledUntil = beat;
     this.fresh = clock;
+  }
+
+  /** Riparte dall'istante `time` con tempo e loop nuovi senza fermare niente: ciò che è già
+   *  partito finisce come previsto, il resto ogni sorgente lo riprende da lì (vedi `retake`).
+   *  `time` deve cadere entro ciò che è già programmato. */
+  resumeAt(time: number, tempo: TempoMap, loop: LoopRange): void {
+    const beat = this.positionAt(time), clock = this.clockAt(time);
+    if (beat === null || clock === null) return;
+    for (const s of this.sources()) s.retake(time);
+    this.start(beat, time, tempo, loop, clock);
+  }
+
+  /** Solo `sources` riprendono dall'istante `time` (le tracce modificate): dimenticano ciò che
+   *  avevano programmato da lì e ricevono di nuovo le finestre fin dove si è programmato. Le
+   *  altre sorgenti e le corse restano come sono. `time` deve cadere entro ciò che è già
+   *  programmato. */
+  retake(time: number, sources: readonly ScheduledSource[]): void {
+    const tempo = this.tempo, clock = this.clockAt(time);
+    if (!tempo || clock === null || !sources.length) return;
+    for (const s of sources) s.retake(time);
+    this.runs.forEach((run, i) => {
+      const last = i === this.runs.length - 1;
+      if (!last && run.time0 + tempo.secondsAt(run.end - run.beat0) <= time) return; // giro già finito
+      const from = Math.max(run.beat0, run.beat0 + tempo.beatAt(time - run.time0));
+      const to = last ? this.scheduledUntil : run.end;
+      // ciò che è in corso a `from` riparte da lì, anche le clip della session
+      if (to > from) this.emit(run, from, to, sources, from, clock);
+    });
   }
 
   /** L'orologio all'istante `time` (null se fermo). */
@@ -147,13 +179,15 @@ export class Scheduler {
     return [...this.runs].reverse().find(r => r.time0 <= time) ?? this.runs[0];
   }
 
-  private emit(run: Run, from: Beats, to: Beats): void {
+  private emit(
+    run: Run, from: Beats, to: Beats, sources: Iterable<ScheduledSource> = this.sources(), runStart = run.beat0, fresh = this.fresh,
+  ): void {
     const tempo = this.tempo!;
     const window: ScheduleWindow = {
-      from, to, runStart: run.beat0, runEnd: run.end, tempo,
+      from, to, runStart, runEnd: run.end, tempo,
       timeAt: beat => run.time0 + tempo.secondsAt(beat - run.beat0),
-      shift: run.shift, fresh: this.fresh,
+      shift: run.shift, fresh,
     };
-    for (const s of this.sources()) s.schedule(window);
+    for (const s of sources) s.schedule(window);
   }
 }

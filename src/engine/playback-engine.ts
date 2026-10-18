@@ -69,7 +69,8 @@ type EngineEvents = {
 
 /** Trasporto e riproduzione del progetto. Riceve ogni nuova versione del progetto con
  *  `setProject`: aggiorna mixer e player e, se sta suonando e qualcosa che si sente è
- *  cambiato, riprogramma dalla posizione corrente. Suona la timeline e le clip lanciate
+ *  cambiato, riprogramma da un attimo dopo senza interrompere niente: solo le tracce cambiate,
+ *  o tutto se cambiano tempo o loop. Suona la timeline e le clip lanciate
  *  nella session, quantizzate sull'orologio continuo del trasporto. */
 export class PlaybackEngine {
   private project: Project | null = null;
@@ -86,8 +87,9 @@ export class PlaybackEngine {
   private readonly tickMs: number;
   private cancelTimer: (() => void) | null = null;
   private cursor: Beats = 0;
-  /** Qualche tratto non è partito perché il suo audio non era pronto. */
-  private missed = false;
+  /** Le tracce con un tratto non partito (o partito con l'audio provvisorio) perché il suo
+   *  audio non era pronto. */
+  private readonly missed = new Set<TrackId>();
   private readonly session = new Session();
   /** Le note programmate di ogni traccia, per l'interfaccia. */
   private readonly activity = new Map<TrackId, NoteActivity>();
@@ -267,8 +269,9 @@ export class PlaybackEngine {
     this.project = next;
     this.mixer.sync(next);
     const changed = this.syncPlayers(next);
-    const audible = changed || !prev || prev.tempo !== next.tempo || prev.loop !== next.loop;
-    if (this.playing && audible) this.resume();
+    if (!this.playing) return;
+    if (!prev || prev.tempo !== next.tempo || prev.loop !== next.loop) this.resume();
+    else if (changed.size) this.retake(changed);
   }
 
   play(from: Beats = this.cursor): void {
@@ -298,10 +301,10 @@ export class PlaybackEngine {
     if (this.playing) this.restart(this.cursor);
   }
 
-  /** Da chiamare quando arriva dell'audio che mancava: se qualcosa è stato saltato,
-   *  riprogramma dalla posizione corrente così si sente. */
+  /** Da chiamare quando arriva dell'audio che mancava: le tracce che l'aspettavano si
+   *  riprogrammano da un attimo dopo, così si sente. */
   refresh(): void {
-    if (this.playing && this.missed) this.resume();
+    if (this.playing && this.missed.size) this.retake([...this.missed]);
   }
 
   /** L'ora del contesto audio, in secondi. */
@@ -338,17 +341,36 @@ export class PlaybackEngine {
     this.restartAt(beat, this.playing ? this.clock : beat, this.graph.currentTime + this.startLatency);
   }
 
-  /** Riprogramma senza spostarsi (dopo una modifica): si riparte da dove il trasporto sarà
-   *  quando il nuovo suono arriva, così niente slitta. */
+  /** Tempo o loop nuovi mentre suona: tutto riprende da dove il trasporto sarà quando il nuovo
+   *  suono arriva (così niente slitta), senza fermare ciò che suona già. */
   private resume(): void {
-    const at = this.graph.currentTime + this.startLatency;
-    this.restartAt(this.scheduler.positionAt(at) ?? this.position, this.scheduler.clockAt(at) ?? this.clock, at);
+    const p = this.project!, now = this.graph.currentTime;
+    // tutto programmato oltre l'istante della ripresa: da lì le sorgenti ripartono
+    this.scheduler.advance(now);
+    this.missed.clear();
+    this.scheduler.resumeAt(now + this.startLatency, p.tempo, p.loop);
+    this.scheduler.advance(now);
+  }
+
+  /** Solo le tracce `ids` (modificate, o con l'audio appena arrivato) riprendono da un attimo
+   *  dopo; le altre continuano senza accorgersene. */
+  private retake(ids: Iterable<TrackId>): void {
+    const now = this.graph.currentTime;
+    this.scheduler.advance(now);
+    const sources: ScheduledSource[] = [];
+    for (const id of ids) {
+      this.missed.delete(id);
+      const player = this.players.get(id)?.player, mod = this.modulators.get(id);
+      if (player) sources.push(player);
+      if (mod) sources.push(mod);
+    }
+    this.scheduler.retake(now + this.startLatency, sources);
   }
 
   private restartAt(beat: Beats, clock: number, time: number): void {
     const p = this.project!;
     this.scheduler.stop();
-    this.missed = false;
+    this.missed.clear();
     this.scheduler.start(beat, time, p.tempo, p.loop, clock);
     this.scheduler.advance(this.graph.currentTime);
   }
@@ -387,9 +409,9 @@ export class PlaybackEngine {
     yield this.metronome;
   }
 
-  /** Allinea i player alle tracce; vero se è cambiato qualcosa che si sente. */
-  private syncPlayers(project: Project): boolean {
-    let changed = false;
+  /** Allinea i player alle tracce; restituisce quelle in cui è cambiato qualcosa che si sente. */
+  private syncPlayers(project: Project): Set<TrackId> {
+    const changed = new Set<TrackId>();
     const present = new Set<TrackId>();
     const prevTracks = this.previousTracks;
     for (const t of project.tracks) {
@@ -402,7 +424,7 @@ export class PlaybackEngine {
       else this.modulators.set(t.id, new TrackModulator(t, () => this.session.programs(t.id), target => this.modSink(t.id, target), () => this.graph.currentTime));
       if (entry && entry.kind === t.kind) {
         const prev = prevTracks.get(t.id);
-        if (prev?.arrangement !== t.arrangement || (prev && this.playingClipChanged(prev, t))) changed = true;
+        if (prev?.arrangement !== t.arrangement || (prev && this.playingClipChanged(prev, t))) changed.add(t.id);
         entry.player.update(t);
         continue;
       }
@@ -417,11 +439,11 @@ export class PlaybackEngine {
       const notes = new NoteActivity();
       this.activity.set(id, notes);
       const ctx: PlayerContext = {
-        graph: this.graph, output: this.mixer.input(id), missing: () => { this.missed = true; },
+        graph: this.graph, output: this.mixer.input(id), missing: () => { this.missed.add(id); },
         programs: () => this.session.programs(id), notes, tempo: () => this.project?.tempo.bpm ?? 120,
       };
       this.players.set(t.id, { kind: t.kind, player: factory(t, ctx, this.services) });
-      changed = true;
+      changed.add(id);
     }
     for (const [id, { player }] of this.players) {
       if (!present.has(id)) {
@@ -431,7 +453,7 @@ export class PlaybackEngine {
         this.modulators.get(id)?.reset();
         this.modulators.delete(id);
         this.session.remove(id);
-        changed = true;
+        this.missed.delete(id);
       }
     }
     this.previousTracks = new Map(project.tracks.map(t => [t.id, t]));

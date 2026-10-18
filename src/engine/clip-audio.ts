@@ -1,4 +1,5 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
+import type { ClipId, SampleId } from '../core/id';
 import type { Beats, TempoMap } from '../core/music-time';
 import { SupersededError } from '../workers/worker-pool';
 import { AudioClip } from '../model/audio-clip';
@@ -15,6 +16,9 @@ export interface Playable {
   readonly buffer: AudioBufferLike;
   readonly startBeat: Beats;
   readonly rate: number;
+  /** Audio provvisorio (il render di prima, mentre arriva quello nuovo): chi lo suona lo
+   *  riprogrammi quando arriva quello giusto. */
+  readonly provisional?: boolean;
 }
 
 export interface PlayableProvider {
@@ -35,6 +39,9 @@ export class ClipAudio implements PlayableProvider {
   private readonly jobs = new WeakMap<AudioClip, { tempo: TempoMap; sample: SampleRef; render: ClipRender; key: string }>();
   private readonly buffers = new WeakMap<readonly Float32Array[], AudioBufferLike>();
   private readonly raw = new Map<string, AudioBufferLike>();
+  /** L'ultimo render pronto di ogni clip e il tempo a cui è fatto: suona al posto di quello
+   *  nuovo finché non arriva (cambiando il tempo l'audio non si interrompe). */
+  private readonly last = new Map<ClipId, { readonly playable: Playable; readonly tempo: TempoMap; readonly sample: SampleId }>();
   private readonly events = new Emitter<ClipAudioEvents>();
 
   constructor(
@@ -51,6 +58,8 @@ export class ClipAudio implements PlayableProvider {
   setProject(project: Project): void {
     this.tempo = project.tempo;
     this.samples = new Map(project.samples.map(s => [s.id, s]));
+    const clips = new Set(project.tracks.flatMap(t => t.clips.map(c => c.id)));
+    for (const id of this.last.keys()) if (!clips.has(id)) this.last.delete(id);
     for (const t of project.tracks) {
       for (const p of t.arrangement) if (p.clip instanceof AudioClip) this.playable(p.clip);
     }
@@ -92,14 +101,27 @@ export class ClipAudio implements PlayableProvider {
         () => this.events.emit('ready'),
         err => { if (!(err instanceof SupersededError)) this.events.emit('error', clip, err); },
       );
-      return null;
+      return this.standIn(clip, j.tempo);
     }
     let buffer = this.buffers.get(channels);
     if (!buffer) {
       buffer = toAudioBuffer(this.graph, channels, audio.sampleRate);
       this.buffers.set(channels, buffer);
     }
-    return { buffer, startBeat: j.render.startBeat, rate: 1 };
+    const playable = { buffer, startBeat: j.render.startBeat, rate: 1 };
+    this.last.set(clip.id, { playable, tempo: j.tempo, sample: clip.sample });
+    return playable;
+  }
+
+  /** Mentre il render nuovo si calcola: l'ultimo pronto della clip, letto più veloce o più lento
+   *  quanto basta per restare a tempo (per un attimo l'altezza segue la velocità). Null se la
+   *  clip non ne ha uno dello stesso sample. */
+  private standIn(clip: AudioClip, tempo: TempoMap): Playable | null {
+    const last = this.last.get(clip.id);
+    if (!last || last.sample !== clip.sample) return null;
+    // a tempo costante il battito b è a secondsAt(b): basta il rapporto tra le durate di un battito
+    const speed = last.tempo.secondsAt(1) / tempo.secondsAt(1);
+    return { ...last.playable, rate: last.playable.rate * speed, provisional: true };
   }
 
   /** Lavoro di warp della clip al tempo corrente (memorizzato per clip e tempo). */
