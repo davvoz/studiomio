@@ -4,7 +4,8 @@
  *
  * Nel grafo audio un collegamento che torna su sé stesso zittirebbe tutto, quindi qui si
  * scartano quelli che chiudono un anello: una traccia che ascolta sé stessa, due tracce che si
- * ascoltano a vicenda, una traccia che ascolta il gruppo che la contiene. Il master può ascoltare
+ * ascoltano a vicenda, una traccia che ascolta il gruppo che la contiene o un bus a cui manda
+ * (il suono passa anche per le mandate). Il master può ascoltare
  * qualunque traccia (le tracce non dipendono mai da lui). */
 import type { DeviceId, TrackId } from '../core/id';
 import type { EffectList } from './effect-list';
@@ -47,13 +48,16 @@ class Flow {
 const allowed = (flow: Flow, owner: ChainOwner, source: TrackId): boolean =>
   owner === MASTER || (owner !== source && !flow.reaches(owner, source));
 
-/** Le catene del progetto nell'ordine in cui si risolvono i collegamenti: tracce, poi master. */
-const chains = (p: Project): [ChainOwner, EffectList][] => [...p.tracks.map((t): [ChainOwner, EffectList] => [t.id, t.effects]), [MASTER, p.masterEffects]];
+/** Le catene del progetto nell'ordine in cui si risolvono i collegamenti: tracce, bus, poi master. */
+const chains = (p: Project): [ChainOwner, EffectList][] => [...p.channels.map((t): [ChainOwner, EffectList] => [t.id, t.effects]), [MASTER, p.masterEffects]];
 
 /** I collegamenti, saltando `skip` (l'effetto di cui si cerca la sorgente). */
 function resolve(p: Project, skip?: { owner: ChainOwner; device: DeviceId }): { links: SidechainLink[]; flow: Flow } {
   const flow = new Flow();
-  for (const t of p.tracks) if (t.group) flow.add(t.id, t.group);
+  for (const t of p.tracks) {
+    if (t.group) flow.add(t.id, t.group);
+    for (const bus of Object.keys(t.sends) as TrackId[]) flow.add(t.id, bus);
+  }
   const links: SidechainLink[] = [];
   for (const [owner, effects] of chains(p)) {
     for (const e of effects) {
@@ -75,5 +79,5 @@ export const sidechainLinks = (p: Project): SidechainLink[] => resolve(p).links;
 /** Le tracce che l'effetto `device` di `owner` può ascoltare. */
 export function sidechainSources(p: Project, owner: ChainOwner, device: DeviceId): TrackId[] {
   const { flow } = resolve(p, { owner, device });
-  return p.tracks.filter(t => allowed(flow, owner, t.id)).map(t => t.id);
+  return p.channels.filter(t => allowed(flow, owner, t.id)).map(t => t.id);
 }

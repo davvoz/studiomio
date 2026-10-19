@@ -19,6 +19,14 @@ export interface MixerSettings {
 
 export const DEFAULT_MIXER: MixerSettings = { volumeDb: 0, pan: 0, mute: false, solo: false };
 
+/** Le mandate di una traccia: per bus, il livello in dB del suono che gli arriva. */
+export type Sends = Readonly<Partial<Record<TrackId, number>>>;
+
+/** Da qui in giù una mandata è chiusa (−∞): non si salva e non manda niente. */
+export const SEND_OFF_DB = -40;
+
+const NO_SENDS: Sends = Object.freeze({});
+
 export interface TrackProps<C extends Clip> {
   readonly id: TrackId;
   readonly name: string;
@@ -34,6 +42,8 @@ export interface TrackProps<C extends Clip> {
   readonly racks?: RackList;
   /** Il gruppo che contiene la traccia (assente: nessuno, esce nel master). */
   readonly group?: TrackId;
+  /** Le mandate verso i bus (assenti: tutte chiuse). */
+  readonly sends?: Sends;
 }
 
 /** Una traccia: mixer, clip sulla timeline e slot della session. Ogni tipo di traccia
@@ -65,6 +75,13 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
   get racks(): RackList { return this.props.racks ?? NO_RACKS; }
   /** Il gruppo che contiene la traccia, o null: il suono esce nel suo canale invece che nel master. */
   get group(): TrackId | null { return this.props.group ?? null; }
+  /** Le mandate aperte, per bus (le altre sono chiuse). */
+  get sends(): Sends { return this.props.sends ?? NO_SENDS; }
+
+  /** Il livello della mandata verso il bus, in dB (SEND_OFF_DB: chiusa). */
+  send(bus: TrackId): number {
+    return this.sends[bus] ?? SEND_OFF_DB;
+  }
 
   /** I dispositivi della catena nell'ordine del suono: lo strumento (se c'è) e gli effetti. */
   get chainKeys(): readonly DeviceKey[] { return this.keysFor(this.effects); }
@@ -100,6 +117,16 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
   withGroup(group: TrackId | null): this {
     if (group === this.group) return this;
     return this.with({ group: group ?? undefined } as Partial<P>);
+  }
+
+  /** Apre, cambia o (fino a SEND_OFF_DB) chiude la mandata verso un bus. Le regole dei bus le
+   *  controlla il progetto. */
+  withSend(bus: TrackId, db: number): this {
+    const open = db > SEND_OFF_DB;
+    if (open ? this.sends[bus] === db : !(bus in this.sends)) return this;
+    const { [bus]: _, ...rest } = this.sends;
+    const sends: Sends = open ? { ...rest, [bus]: db } : rest;
+    return this.with({ sends: Object.keys(sends).length ? sends : undefined } as Partial<P>);
   }
 
   placing(placement: lane.Placement, ids: IdFactory): this {
@@ -259,6 +286,33 @@ export class GroupTrack extends Track<never, GroupTrackProps> {
 
   withFolded(folded: boolean): this {
     return folded === this.folded ? this : this.with({ folded: folded || undefined });
+  }
+
+  accepts(_clip: Clip): _clip is never {
+    return false;
+  }
+}
+
+/** La lettera del bus in posizione `index`, come in Live: A, B, C… (dopo la Z, A1, B1…). */
+export const busLetter = (index: number): string =>
+  `${String.fromCharCode(65 + (index % 26))}${index >= 26 ? Math.floor(index / 26) : ''}`;
+
+/** Bus, come le tracce di ritorno di Live: non ha clip né slot; riceve il suono che le tracce
+ *  gli mandano (le loro mandate), lo passa per i suoi effetti ed esce nel master. Nel progetto
+ *  i bus stanno in una lista a parte, dopo le tracce. */
+export class BusTrack extends Track<never> {
+  readonly kind = 'bus';
+
+  static create(props: TrackProps<never>): BusTrack {
+    return new BusTrack(props);
+  }
+
+  static empty(id: TrackId, name: string, color: Color): BusTrack {
+    return new BusTrack(emptyProps(id, name, color, 0));
+  }
+
+  protected create(props: TrackProps<never>): this {
+    return new BusTrack(props) as this;
   }
 
   accepts(_clip: Clip): _clip is never {

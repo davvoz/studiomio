@@ -29,7 +29,7 @@ export class SidechainPicker {
     const current = e.sidechain ?? OWN;
     const broken = !!e.sidechain && !valid.has(e.sidechain);
     const items: [string, string][] = [[OWN, '— sé stesso —'],
-      ...p.tracks.filter(t => valid.has(t.id) || t.id === e.sidechain)
+      ...p.channels.filter(t => valid.has(t.id) || t.id === e.sidechain)
         .map((t): [string, string] => [t.id, valid.has(t.id) ? t.name : `⚠ ${t.name}`])];
     const shown = JSON.stringify(items);
     if (shown !== this.shown) {

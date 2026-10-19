@@ -7,12 +7,12 @@ import { Project } from '../model/project';
 import type { DeviceKey, Macro, Rack, RackList } from '../model/rack';
 import type { SampleRef } from '../model/sample';
 import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
-import { AudioTrack, GroupTrack, MidiTrack, type MixerSettings, type Track, type TrackProps } from '../model/track';
+import { AudioTrack, BusTrack, GroupTrack, MidiTrack, type MixerSettings, type Sends, type Track, type TrackProps } from '../model/track';
 import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 10;
+export const PROJECT_VERSION = 11;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -46,6 +46,12 @@ export const defaultTrackTypes: readonly TrackType[] = [
     encodeExtra: (t): JsonObject => ((t as GroupTrack).folded ? { folded: true } : {}),
     accepts: probe(GroupTrack.empty(asId('probe'), '', '', 0)),
   },
+  {
+    kind: 'bus',
+    create: props => BusTrack.create(props as TrackProps<never>),
+    encodeExtra: () => ({}),
+    accepts: probe(BusTrack.empty(asId('probe'), '', '')),
+  },
 ];
 
 /** Aggiornamenti del formato: la voce N porta un file dalla versione N alla N+1. */
@@ -72,6 +78,8 @@ const migrations: Record<number, Migration> = {
   8: json => json,
   // 9 → 10: un effetto può ascoltare un'altra traccia, il sidechain (campo facoltativo)
   9: json => json,
+  // 10 → 11: i bus (campo facoltativo) e le mandate delle tracce verso i bus (campo facoltativo)
+  10: json => json,
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
@@ -108,18 +116,25 @@ export class ProjectCodec {
       launchQuantization: p.launchQuantization,
       scenes: p.scenes.map(s => ({ id: s.id, name: s.name, ...(s.color ? { color: s.color } : {}) })),
       samples: p.samples.map(encodeSample),
-      tracks: p.tracks.map(t => ({
-        kind: t.kind, id: t.id, name: t.name, color: t.color,
-        ...(t.group ? { group: t.group } : {}),
-        mixer: encodeMixer(t.mixer),
-        arrangement: t.arrangement.map(pl => ({
-          id: pl.id, start: pl.start, length: pl.length, offset: pl.offset, clip: this.encodeClip(pl.clip),
-        })),
-        slots: t.slots.map(c => (c ? this.encodeClip(c) : null)),
-        effects: t.effects.map(encodeEffect),
-        ...encodeRacks('racks', t.racks),
-        ...this.trackType(t.kind).encodeExtra(t),
+      tracks: p.tracks.map(t => this.encodeTrack(t)),
+      // senza bus il file resta come lo scrivevano le versioni di prima
+      ...(p.buses.length ? { buses: p.buses.map(b => this.encodeTrack(b)) } : {}),
+    };
+  }
+
+  private encodeTrack(t: Track): JsonObject {
+    return {
+      kind: t.kind, id: t.id, name: t.name, color: t.color,
+      ...(t.group ? { group: t.group } : {}),
+      mixer: encodeMixer(t.mixer),
+      ...(Object.keys(t.sends).length ? { sends: { ...t.sends } as JsonObject } : {}),
+      arrangement: t.arrangement.map(pl => ({
+        id: pl.id, start: pl.start, length: pl.length, offset: pl.offset, clip: this.encodeClip(pl.clip),
       })),
+      slots: t.slots.map(c => (c ? this.encodeClip(c) : null)),
+      effects: t.effects.map(encodeEffect),
+      ...encodeRacks('racks', t.racks),
+      ...this.trackType(t.kind).encodeExtra(t),
     };
   }
 
@@ -142,6 +157,7 @@ export class ProjectCodec {
         scenes: r.array('scenes').map(s => ({ id: asId(s.str('id')), name: s.str('name'), ...(s.has('color') ? { color: s.str('color') } : {}) })),
         samples: r.array('samples').map(decodeSample),
         tracks: r.array('tracks').map(t => this.decodeTrack(t)),
+        buses: r.has('buses') ? r.array('buses').map(b => this.decodeTrack(b) as BusTrack) : undefined,
       });
     } catch (e) {
       // regole del modello violate (es. slot e scene non corrispondono): errore di formato
@@ -178,6 +194,7 @@ export class ProjectCodec {
       id: asId(r.str('id')), name: r.str('name'), color: r.str('color'),
       group: r.has('group') ? asId<'track'>(r.str('group')) : undefined,
       mixer: decodeMixer(r.get('mixer')),
+      sends: r.has('sends') ? decodeSends(r.get('sends')) : undefined,
       arrangement: arrangement.sort((a, b) => a.start - b.start),
       slots: r.array('slots').map(s => (s.raw === null ? null : clipFor(s))),
       effects: r.array('effects').map(decodeEffect),
@@ -209,6 +226,8 @@ const encodeMixer = (m: MixerSettings): JsonObject => ({ volumeDb: m.volumeDb, p
 const decodeMixer = (r: JsonReader): MixerSettings => ({
   volumeDb: r.num('volumeDb'), pan: r.num('pan'), mute: r.bool('mute'), solo: r.bool('solo'),
 });
+
+const decodeSends = (r: JsonReader): Sends => Object.fromEntries(r.keys().map(k => [k, r.num(k)]));
 
 const encodeSample = (s: SampleRef): JsonObject => ({
   id: s.id, name: s.name, file: s.file, sampleRate: s.sampleRate, channels: s.channels, frames: s.frames,

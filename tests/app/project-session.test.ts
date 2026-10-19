@@ -61,7 +61,10 @@ describe('ProjectSession', () => {
 
     const saved = store.project;
     await session.newProject();
-    expect(store.project.tracks).toHaveLength(0);
+    // si comincia con una traccia MIDI, una audio e due bus
+    expect(store.project.tracks.map(t => t.kind)).toEqual(['midi', 'audio']);
+    expect(store.project.buses.map(b => b.name)).toEqual(['A Bus', 'B Bus']);
+    expect(session.changed).toBe(false);
     loaded.clear();
     await session.open();
     expect(store.project.id).toBe(saved.id);

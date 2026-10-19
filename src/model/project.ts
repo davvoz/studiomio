@@ -7,7 +7,7 @@ import type { EffectList } from './effect-list';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
 import { checkRacks, NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
 import type { SampleRef } from './sample';
-import { DEFAULT_MIXER, GroupTrack, type MixerSettings, type Track } from './track';
+import { BusTrack, DEFAULT_MIXER, GroupTrack, type MixerSettings, type Track } from './track';
 
 export interface Scene {
   readonly id: SceneId;
@@ -35,6 +35,8 @@ export interface ProjectProps {
   readonly tempo: Tempo;
   readonly signature: TimeSignature;
   readonly tracks: readonly Track[];
+  /** I bus, dopo le tracce (assenti: nessuno). */
+  readonly buses?: readonly BusTrack[];
   readonly scenes: readonly Scene[];
   readonly samples: readonly SampleRef[];
   readonly loop: LoopRegion;
@@ -48,6 +50,8 @@ export interface ProjectProps {
   readonly launchQuantization: string;
 }
 
+const NO_BUSES: readonly BusTrack[] = [];
+
 /** Radice del modello. Immutabile: ogni modifica restituisce un nuovo progetto che
  *  condivide con il vecchio tutte le parti non toccate (utile per annulla/ripeti e per
  *  capire cosa è cambiato confrontando i riferimenti). Garantisce le regole che
@@ -56,6 +60,8 @@ export class Project {
   private readonly props: ProjectProps;
   /** Le tracce visibili, calcolate alla prima richiesta (il progetto non cambia). */
   private visible: readonly Track[] | null = null;
+  /** Tracce e bus insieme, calcolati alla prima richiesta. */
+  private allChannels: readonly Track[] | null = null;
 
   private constructor(props: ProjectProps) {
     this.props = props;
@@ -90,6 +96,11 @@ export class Project {
   get tempo(): Tempo { return this.props.tempo; }
   get signature(): TimeSignature { return this.props.signature; }
   get tracks(): readonly Track[] { return this.props.tracks; }
+  get buses(): readonly BusTrack[] { return this.props.buses ?? NO_BUSES; }
+  /** I canali del mixer che hanno una catena: le tracce e poi i bus. */
+  get channels(): readonly Track[] {
+    return (this.allChannels ??= this.buses.length ? [...this.tracks, ...this.buses] : this.tracks);
+  }
   get scenes(): readonly Scene[] { return this.props.scenes; }
   get samples(): readonly SampleRef[] { return this.props.samples; }
   get loop(): LoopRegion { return this.props.loop; }
@@ -98,8 +109,9 @@ export class Project {
   get masterRacks(): RackList { return this.props.masterRacks ?? NO_RACKS; }
   get launchQuantization(): string { return this.props.launchQuantization; }
 
+  /** La traccia, o il bus, con questo id. */
   track(id: TrackId): Track | undefined {
-    return this.tracks.find(t => t.id === id);
+    return this.tracks.find(t => t.id === id) ?? this.buses.find(b => b.id === id);
   }
 
   sample(id: SampleId): SampleRef | undefined {
@@ -123,7 +135,7 @@ export class Project {
   /** I sample usati dalle clip audio e dai dispositivi (es. i pad della Drum Machine). */
   usedSampleIds(): Set<SampleId> {
     const clips = this.tracks.flatMap(t => t.clips).filter(c => c instanceof AudioClip).map(c => c.sample);
-    const devices = [...this.tracks.flatMap(t => t.devices), ...this.masterEffects].flatMap(deviceSampleIds);
+    const devices = [...this.channels.flatMap(t => t.devices), ...this.masterEffects].flatMap(deviceSampleIds);
     return new Set([...clips, ...devices]);
   }
 
@@ -189,16 +201,21 @@ export class Project {
   }
 
   /** Toglie la traccia; un gruppo se ne va con tutte le sue tracce. Gli effetti che le
-   *  ascoltavano (sidechain) tornano ad ascoltare il proprio ingresso. */
+   *  ascoltavano (sidechain) tornano ad ascoltare il proprio ingresso; le mandate verso un bus
+   *  tolto si chiudono. */
   removingTrack(id: TrackId): Project {
-    const gone = new Set(this.trackBlock(this.requireTrack(id).id).map(t => t.id));
+    const track = this.requireTrack(id);
+    const gone = new Set(track instanceof BusTrack ? [id] : this.trackBlock(id).map(t => t.id));
     const unkeyed = (list: EffectList): EffectList => (list.some(e => e.sidechain && gone.has(e.sidechain))
       ? list.map(e => (e.sidechain && gone.has(e.sidechain) ? withSidechain(e, null) : e)) : list);
+    const kept = <T extends Track>(t: T): T => {
+      const effects = unkeyed(t.effects);
+      const next = effects === t.effects ? t : t.withEffects(effects);
+      return track instanceof BusTrack ? next.withSend(id, -Infinity) : next;
+    };
     return this.with({
-      tracks: this.tracks.filter(t => !gone.has(t.id)).map(t => {
-        const effects = unkeyed(t.effects);
-        return effects === t.effects ? t : t.withEffects(effects);
-      }),
+      tracks: this.tracks.filter(t => !gone.has(t.id)).map(kept),
+      buses: this.buses.filter(b => !gone.has(b.id)).map(kept),
       masterEffects: unkeyed(this.masterEffects),
     });
   }
@@ -213,12 +230,23 @@ export class Project {
     return this.with({ tracks: rest }).validated();
   }
 
-  /** Modifica una traccia; il tipo della traccia resta quello che `fn` riceve. */
+  /** Modifica una traccia (o un bus); il tipo della traccia resta quello che `fn` riceve. */
   updatingTrack<T extends Track>(id: TrackId, fn: (t: T) => T): Project {
     const old = this.requireTrack(id) as T;
     const updated = fn(old);
     if (updated === old) return this;
+    if (old instanceof BusTrack) return this.with({ buses: this.buses.map(b => (b.id === id ? updated as unknown as BusTrack : b)) }).validated();
     return this.with({ tracks: this.tracks.map(t => (t.id === id ? updated : t)) }).validated();
+  }
+
+  // ---------------------------------------------------------------- bus
+
+  /** Aggiunge un bus (in fondo, o in `index` tra i bus). */
+  addingBus(bus: BusTrack, index = this.buses.length): Project {
+    if (this.track(bus.id)) throw new Error(`traccia ${bus.id} già presente`);
+    const buses = [...this.buses];
+    buses.splice(index, 0, bus);
+    return this.with({ buses }).validated();
   }
 
   // ---------------------------------------------------------------- gruppi
@@ -373,6 +401,7 @@ export class Project {
     let previous: Track | null = null;
     for (const t of this.tracks) {
       if (ids.has(t.id)) throw new Error(`traccia ${t.id} duplicata`);
+      if (t instanceof BusTrack) throw new Error(`il bus "${t.name}" sta tra le tracce`);
       if (t.group) {
         // il gruppo viene prima e le sue tracce lo seguono: prima c'è il gruppo o un'altra sua traccia
         if (!ids.has(t.group) || !(this.track(t.group) instanceof GroupTrack)) throw new Error(`la traccia "${t.name}" è in un gruppo che non c'è`);
@@ -386,6 +415,18 @@ export class Project {
         throw new Error(`la traccia "${t.name}" ha ${t.slots.length} slot ma le scene sono ${this.scenes.length}`);
       }
       checkRacks(t.chainKeys, t.racks);
+    }
+    for (const b of this.buses) {
+      if (!((b as Track) instanceof BusTrack)) throw new Error(`la traccia "${(b as Track).name}" sta tra i bus ma non è un bus`);
+      if (ids.has(b.id)) throw new Error(`traccia ${b.id} duplicata`);
+      if (b.group) throw new Error(`il bus "${b.name}" non può stare in un gruppo`);
+      if (Object.keys(b.sends).length) throw new Error(`il bus "${b.name}" non può mandare ad altri bus`);
+      ids.add(b.id);
+      checkRacks(b.chainKeys, b.racks);
+    }
+    const buses = new Set(this.buses.map(b => b.id));
+    for (const t of this.tracks) {
+      for (const bus of Object.keys(t.sends)) if (!buses.has(bus as TrackId)) throw new Error(`la traccia "${t.name}" manda a un bus che non c'è`);
     }
     checkRacks(this.masterEffects.map(e => e.id), this.masterRacks);
     const known = new Set(this.samples.map(s => s.id));

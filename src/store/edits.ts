@@ -1,6 +1,6 @@
 /* Modifiche del progetto, una per azione dell'utente. Sono funzioni pure: ricevono i
  * parametri e restituiscono un Edit che lo store applica e può annullare. */
-import type { DeviceId, PlacementId, SampleId, SceneId, TrackId } from '../core/id';
+import type { DeviceId, IdFactory, PlacementId, SampleId, SceneId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
@@ -12,10 +12,10 @@ import {
 import * as chain from '../model/effect-list';
 import { INSTRUMENT_DEVICE } from '../model/envelope';
 import { MidiClip } from '../model/midi-clip';
-import type { ChainOwner, LoopRegion } from '../model/project';
+import { Project, type ChainOwner, type LoopRegion } from '../model/project';
 import type { SampleRef } from '../model/sample';
 import { withoutMappingsOf } from '../model/rack';
-import { AudioTrack, GroupTrack, MidiTrack, type MixerSettings, type Track } from '../model/track';
+import { AudioTrack, BusTrack, busLetter, GroupTrack, MidiTrack, type MixerSettings, type Track } from '../model/track';
 import { edit, type Edit } from './project-store';
 import { reapplyMacros } from './rack-edits';
 
@@ -29,6 +29,12 @@ export const setLoopRegion = (patch: Partial<LoopRegion>): Edit => edit('Regione
 
 export const setLaunchQuantization = (id: string): Edit =>
   edit('Quantizzazione del lancio', p => (p.launchQuantization === id ? p : p.withLaunchQuantization(id)));
+
+/** Il progetto con cui si comincia, come in Live: una traccia MIDI, una audio e due bus. */
+export function starterProject(name: string, ids: IdFactory): Project {
+  const ctx = { ids };
+  return [addTrack('midi'), addTrack('audio'), addBus(), addBus()].reduce((p, e) => e.apply(p, ctx), Project.empty(name, ids));
+}
 
 // ------------------------------------------------------------------ tracce
 
@@ -56,6 +62,27 @@ export const addTrack = (kind: TrackKind, place?: TrackPlace): Edit =>
 
 export const removeTrack = (id: TrackId): Edit =>
   edit('Elimina traccia', p => p.removingTrack(id));
+
+// ------------------------------------------------------------------ bus
+
+/** Aggiunge un bus in fondo ai bus: "A Bus", "B Bus"… (la prima lettera libera da lì). */
+export const addBus = (): Edit =>
+  edit('Nuovo bus', (p, { ids }) => {
+    const taken = new Set(p.buses.map(b => b.name));
+    let n = p.buses.length;
+    while (taken.has(`${busLetter(n)} Bus`)) n++;
+    return p.addingBus(BusTrack.empty(ids.next('track'), `${busLetter(n)} Bus`, paletteColor(p.tracks.length + p.buses.length)));
+  });
+
+/** Il livello della mandata della traccia verso il bus, in dB (fino a SEND_OFF_DB: chiusa). */
+export const setSend = (track: TrackId, bus: TrackId, db: number): Edit =>
+  edit('Mandata', p => {
+    if (!(p.track(bus) instanceof BusTrack)) throw new Error(`la traccia ${bus} non è un bus`);
+    return p.updatingTrack(track, t => {
+      if (t instanceof BusTrack) throw new TypeError(`il bus ${t.name} non ha mandate`);
+      return t.withSend(bus, db);
+    });
+  });
 
 // ------------------------------------------------------------------ gruppi
 

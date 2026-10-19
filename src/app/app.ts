@@ -6,10 +6,11 @@ import type { SampleRef } from '../model/sample';
 import { ControlSurfaces } from '../control/control-surfaces';
 import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
-import { MASTER, Project, type ChainOwner } from '../model/project';
+import { MASTER, type ChainOwner } from '../model/project';
+import { BusTrack } from '../model/track';
 import { sceneArrangement } from '../model/scene-export';
 import { foldTail } from '../engine/offline-mix';
-import { addMidiClip, addTrack, setLoopRegion, type TrackKind } from '../store/edits';
+import { addBus, addMidiClip, addTrack, setLoopRegion, starterProject, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
 import { findClip, placementRef, setClipColor, type ClipRef } from '../store/clip-ref';
 import { showContextMenu } from '../ui/context-menu';
@@ -40,7 +41,7 @@ import { ProjectSession } from './project-session';
 
 /** L'applicazione: crea le parti, le collega e implementa i comandi. */
 export class App implements Commands, TimelineActions {
-  readonly store = new ProjectStore(Project.empty('Nuovo progetto', randomIds), randomIds);
+  readonly store = new ProjectStore(starterProject('Nuovo progetto', randomIds), randomIds);
   readonly audio = new AudioSystem(this.store);
   readonly session = new ProjectSession(this.store, this.audio);
   readonly ui = new UiState();
@@ -142,7 +143,7 @@ export class App implements Commands, TimelineActions {
       const alive = new Set(p.tracks.flatMap(t => t.arrangement.map(x => x.id)));
       if ([...this.ui.selection].some(id => !alive.has(id))) this.ui.select([...this.ui.selection].filter(id => alive.has(id)));
       if (this.ui.track && !p.track(this.ui.track)) this.ui.selectTrack(null);
-      else if (this.ui.track && !p.visibleTracks.some(t => t.id === this.ui.track)) {
+      else if (this.ui.track && !(p.track(this.ui.track) instanceof BusTrack) && !p.visibleTracks.some(t => t.id === this.ui.track)) {
         this.ui.selectTrack(p.groupsOf(this.ui.track).filter(g => g.folded).at(-1)?.id ?? null);
       }
     });
@@ -246,6 +247,12 @@ export class App implements Commands, TimelineActions {
   newMidiClip(track: TrackId, beat: Beats): void {
     const bar = this.store.project.signature.beatsPerBar;
     this.store.apply(addMidiClip(track, Math.floor(beat / bar) * bar, bar));
+  }
+
+  /** Un bus nuovo; i bus si vedono nella session, accanto al master. */
+  addBus(): void {
+    this.store.apply(addBus());
+    if (!this.sessionView.isVisible) this.say('Bus aggiunto: lo trovi nella session (Tab), con le manopole delle mandate nel mixer.');
   }
 
   addTrack(kind: TrackKind): void {
@@ -385,7 +392,7 @@ export class App implements Commands, TimelineActions {
   loadDemo(): void {
     this.run(async () => {
       if (!(await this.closeProject())) return;
-      await this.session.newProject();
+      await this.session.newProject(true);
       await buildDemoProject(this.store, this.session);
       this.store.load(this.store.project); // il progetto demo non si annulla
       this.session.forgetChanges();

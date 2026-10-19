@@ -53,6 +53,7 @@ export function mainMenu(app: App): Menu[] {
       items: () => [
         { label: 'Nuova traccia audio', run: () => app.addTrack('audio') },
         { label: 'Nuova traccia MIDI', run: () => app.addTrack('midi') },
+        { label: 'Nuovo bus', run: () => app.addBus() },
         SEPARATOR,
         { label: 'Raggruppa le tracce', shortcut: 'Ctrl+G', run: () => app.groupTracks() },
         { label: 'Separa il gruppo', shortcut: 'Ctrl+Maiusc+G', run: () => app.ungroupTracks() },

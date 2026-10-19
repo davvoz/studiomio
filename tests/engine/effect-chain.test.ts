@@ -98,7 +98,7 @@ describe('MixerGraph: il master', () => {
     expect(master.gain.value).toBeCloseTo(0.501, 3);
 
     // il canale della traccia finisce nel bus, non dopo gli effetti del master
-    const gate = graph.gains.at(-1)!;
+    const gate = graph.gains.at(-2)!; // l'ultimo è il cancello delle mandate
     expect(mixer.input(track(0))).toBe(graph.gains[2]);
     expect(gate.outputs).toEqual([bus]);
 

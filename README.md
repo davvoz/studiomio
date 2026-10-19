@@ -81,11 +81,11 @@ Windows. L'icona è `build/icon.png` (512×512).
 src/
   core/                id tipizzati, eventi, tempo musicale (battiti, tempo, metro)
   model/               il progetto, immutabile
-    project.ts         radice: tracce (e i loro gruppi), scene, sample, tempo, loop, master (volume ed effetti), quantizzazione del lancio
+    project.ts         radice: tracce (e i loro gruppi), bus, scene, sample, tempo, loop, master (volume ed effetti), quantizzazione del lancio
     launch.ts          i passi della quantizzazione del lancio (1/16 … 4 battute)
     effect-list.ts     operazioni su una catena di effetti, per tracce e master (funzioni pure)
     rack.ts            i rack: gruppi di dispositivi di seguito con 8 macro e le loro mappature (funzioni pure)
-    track.ts           Track → AudioTrack, MidiTrack, GroupTrack (mixer, timeline, slot della session, strumento, gruppo)
+    track.ts           Track → AudioTrack, MidiTrack, GroupTrack, BusTrack (mixer, mandate, timeline, slot della session, strumento, gruppo)
     clip.ts            Clip → AudioClip (sample + warp), MidiClip (note); ogni clip ha le sue modulazioni
     envelope.ts        modulazioni delle clip: bersagli, scale, punti, valore nel tempo della clip
     note-edits.ts      operazioni del piano roll sulle note (funzioni pure)
@@ -329,6 +329,25 @@ al gruppo (quelle senza clip lì si fermano); ■ sotto la colonna le ferma tutt
 in Live: il solo di una traccia lascia passare il suo gruppo (e zittisce le altre), il solo del
 gruppo vale per tutte le sue tracce, il mute del gruppo le zittisce. Aperto o chiuso si salva con
 il progetto ed è un passo di annullamento.
+
+## Bus e mandate
+
+Come le Return Track di Live: un bus non ha clip, riceve il suono che le tracce gli mandano, lo
+passa per i suoi effetti (es. un riverbero o un delay condiviso) ed esce nel master. Un progetto
+nuovo comincia con una traccia MIDI, una audio e due bus ("A Bus", "B Bus"); i progetti salvati
+prima restano come erano, senza bus.
+
+| | |
+|---|---|
+| "+ Bus" nella session · Crea › Nuovo bus | aggiunge un bus, in fondo ai bus |
+| Le manopole in cima a ogni striscia del mixer | la mandata della traccia verso ciascun bus, da −∞ (chiusa) a 0 dB; doppio clic la chiude |
+| Clic sulla testa del bus · tasto destro | apre i suoi effetti · effetti, rinomina, colore, elimina |
+
+Nella session i bus stanno dopo le tracce, accanto al master; nella timeline non si vedono. Le
+mandate partono dopo il fader e il pan (post-fader, come in Live): abbassare la traccia abbassa
+anche ciò che manda. Il mute di una traccia (o del suo gruppo) chiude anche le sue mandate; il
+solo di una traccia lascia aperti i bus, così si sente con il suo riverbero; il solo di un bus
+zittisce il resto, ma le tracce continuano a mandargli il suono. Un bus non manda ad altri bus.
 
 ## Rack e macro
 

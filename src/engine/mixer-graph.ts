@@ -1,25 +1,45 @@
 import type { DeviceId, TrackId } from '../core/id';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import { sidechainLinks } from '../model/sidechain';
-import type { MixerSettings, Track } from '../model/track';
+import { SEND_OFF_DB, type MixerSettings, type Track } from '../model/track';
 import { EffectChain, type Effect, type EffectHost } from './effect-chain';
 import type { Meter, MeterHost, MeterReading } from './meters';
 import { dbToGain, type AudioGraph, type AudioNodeLike, type AudioParamLike, type ConstantSourceNodeLike, type GainNodeLike, type PannerNodeLike } from './audio-graph';
 
+/** Cosa lascia passare ogni canale: il suono verso la sua uscita e quello verso i bus. */
+export interface MixerGates {
+  /** I canali che si sentono dalla loro uscita (tracce, gruppi e bus). */
+  readonly audible: Set<TrackId>;
+  /** Le tracce le cui mandate suonano. */
+  readonly sending: Set<TrackId>;
+}
+
 /** I canali aperti: mai quelli in mute; con almeno un solo attivo, come in Live, quelli in solo,
  *  quelli dentro un gruppo in solo e i gruppi che contengono una traccia in solo (il suo suono
- *  passa di lì). Il mute di un gruppo zittisce le sue tracce perché passano dal suo canale. */
-export function audibleTracks(tracks: readonly Track[]): Set<TrackId> {
+ *  passa di lì). Il mute di un gruppo zittisce le sue tracce perché passano dal suo canale.
+ *  I bus restano aperti al solo di una traccia (si sente anche il suo riverbero); il solo di un
+ *  bus chiude le tracce e gli altri bus, ma le tracce continuano a mandargli il suono. Le mandate
+ *  di una traccia tacciono se lei o un suo gruppo sono in mute, o se c'è il solo di un'altra. */
+export function mixerGates(tracks: readonly Track[], buses: readonly Track[] = []): MixerGates {
   const byId = new Map(tracks.map(t => [t.id, t]));
   const groupsOf = (t: Track): Track[] => {
     const out: Track[] = [];
     for (let g = t.group ? byId.get(t.group) : undefined; g; g = g.group ? byId.get(g.group) : undefined) out.push(g);
     return out;
   };
-  const soloed = tracks.filter(t => t.mixer.solo);
+  const soloed = tracks.filter(t => t.mixer.solo), soloedBuses = buses.filter(b => b.mixer.solo);
   const open = new Set(soloed.flatMap(t => [t, ...groupsOf(t)]).map(t => t.id));
-  return new Set(tracks.filter(t => !t.mixer.mute && (!soloed.length || open.has(t.id) || groupsOf(t).some(g => g.mixer.solo))).map(t => t.id));
+  const passes = (t: Track) => !soloed.length || open.has(t.id) || groupsOf(t).some(g => g.mixer.solo);
+  const audible = new Set([
+    ...tracks.filter(t => !t.mixer.mute && (soloed.length ? passes(t) : !soloedBuses.length)),
+    ...buses.filter(b => !b.mixer.mute && (!soloedBuses.length || b.mixer.solo)),
+  ].map(t => t.id));
+  const sending = new Set(tracks.filter(t => !t.mixer.mute && !groupsOf(t).some(g => g.mixer.mute) && passes(t)).map(t => t.id));
+  return { audible, sending };
 }
+
+/** I canali che si sentono dalla loro uscita (vedi `mixerGates`). */
+export const audibleTracks = (tracks: readonly Track[], buses: readonly Track[] = []): Set<TrackId> => mixerGates(tracks, buses).audible;
 
 /** Tempo di assestamento dei controlli, per evitare scatti udibili. */
 const SMOOTH = 0.01;
@@ -49,10 +69,18 @@ function unlink(from: AudioNodeLike, to: AudioNodeLike): void {
   } catch { /* non erano più collegati */ }
 }
 
+/** Una mandata fatta: il suo guadagno e l'ingresso del bus in cui entra. */
+interface SendWire {
+  readonly gain: GainNodeLike;
+  readonly to: AudioNodeLike;
+  db: number;
+}
+
 /** Canale del mixer di una traccia: effetti → `tap` → volume → modulazione del volume → pan →
  *  mute/solo → misuratore → uscita (il master, o il canale del gruppo che contiene la traccia).
  *  Da `tap` si prende il suono per il sidechain degli altri canali. La modulazione del pan è
- *  una sorgente costante sommata al pan. */
+ *  una sorgente costante sommata al pan. Le mandate partono dopo il pan (dopo il fader, come
+ *  in Live) e passano per un loro cancello, che il solo dei bus lascia aperto. */
 class ChannelStrip {
   readonly input: GainNodeLike;
   readonly chain: EffectChain;
@@ -63,7 +91,9 @@ class ChannelStrip {
   private readonly panner: PannerNodeLike;
   private readonly panOffset: ConstantSourceNodeLike;
   private readonly gate: GainNodeLike;
-  private applied: { mixer: MixerSettings; audible: boolean } | null = null;
+  private readonly sendGate: GainNodeLike;
+  private readonly sends = new Map<TrackId, SendWire>();
+  private applied: { mixer: MixerSettings; audible: boolean; sending: boolean } | null = null;
   private output: AudioNodeLike;
 
   constructor(private readonly graph: AudioGraph, effects: EffectHost, output: AudioNodeLike, readonly meter: Meter | null) {
@@ -78,22 +108,47 @@ class ChannelStrip {
     this.panOffset.connect(this.panner.pan);
     this.panOffset.start();
     this.gate = graph.createGain();
+    this.sendGate = graph.createGain();
     // gli effetti stanno prima del volume, come in Live; il misuratore dopo: si vede ciò che si sente
     this.chain = new EffectChain(graph, effects, this.input, this.tap);
     this.tap.connect(this.fader);
     this.fader.connect(this.modGain);
     this.modGain.connect(this.panner);
     this.panner.connect(this.gate);
+    this.panner.connect(this.sendGate);
     metered(this.gate, output, meter);
   }
 
-  apply(mixer: MixerSettings, audible: boolean): void {
-    if (this.applied?.mixer === mixer && this.applied.audible === audible) return;
-    const t = this.graph.currentTime, first = this.applied === null;
+  apply(mixer: MixerSettings, audible: boolean, sending: boolean): void {
+    const a = this.applied;
+    if (a?.mixer === mixer && a.audible === audible && a.sending === sending) return;
+    const t = this.graph.currentTime, first = a === null;
     setParam(this.fader.gain, dbToGain(mixer.volumeDb), t, first);
     setParam(this.panner.pan, Math.max(-1, Math.min(1, mixer.pan)), t, first);
     setParam(this.gate.gain, audible ? 1 : 0, t, first);
-    this.applied = { mixer, audible };
+    setParam(this.sendGate.gain, sending ? 1 : 0, t, first);
+    this.applied = { mixer, audible, sending };
+  }
+
+  /** Le mandate aperte, per bus: livello in dB e ingresso del bus. Le altre si staccano. */
+  syncSends(targets: ReadonlyMap<TrackId, { readonly db: number; readonly to: AudioNodeLike }>): void {
+    for (const [bus, wire] of this.sends) {
+      if (targets.get(bus)?.to === wire.to) continue;
+      wire.gain.disconnect();
+      this.sends.delete(bus);
+    }
+    for (const [bus, { db, to }] of targets) {
+      let wire = this.sends.get(bus);
+      const first = !wire;
+      if (!wire) {
+        wire = { gain: this.graph.createGain(), to, db };
+        this.sendGate.connect(wire.gain);
+        wire.gain.connect(to);
+        this.sends.set(bus, wire);
+      } else if (wire.db === db) continue;
+      setParam(wire.gain.gain, dbToGain(db), this.graph.currentTime, first);
+      wire.db = db;
+    }
   }
 
   /** Manda il canale altrove (una traccia entrata in un gruppo o uscita). */
@@ -112,7 +167,8 @@ class ChannelStrip {
 
   dispose(): void {
     this.chain.dispose();
-    for (const n of [this.tap, this.fader, this.modGain, this.panner, this.panOffset, this.gate]) n.disconnect();
+    for (const n of [this.tap, this.fader, this.modGain, this.panner, this.panOffset, this.gate, this.sendGate]) n.disconnect();
+    for (const wire of this.sends.values()) wire.gain.disconnect();
     this.meter?.dispose();
   }
 }
@@ -127,6 +183,7 @@ interface KeyWire {
  *  Le tracce si sommano nel bus del master, che passa per i suoi effetti e poi per il suo
  *  volume: bus → effetti del master → `master` → misuratore → uscita. Le tracce di un gruppo
  *  si sommano invece nel canale del gruppo, che esce nel master (o nel gruppo che lo contiene).
+ *  Le mandate portano il suono delle tracce nei canali dei bus, che escono nel master.
  *  Il sidechain porta il suono di un canale nel rilevatore di un effetto di un altro (vedi
  *  model/sidechain.ts). Con `meters` ogni canale ha il suo misuratore di livello (nell'export
  *  non servono). */
@@ -177,8 +234,8 @@ export class MixerGraph {
   }
 
   sync(project: Project): void {
-    const audible = audibleTracks(project.tracks);
-    const present = new Set(project.tracks.map(t => t.id));
+    const { audible, sending } = mixerGates(project.tracks, project.buses);
+    const present = new Set(project.channels.map(t => t.id));
     for (const [id, s] of this.strips) {
       if (!present.has(id)) {
         s.dispose();
@@ -189,8 +246,19 @@ export class MixerGraph {
       const strip = this.strip(t.id);
       // il gruppo viene prima delle sue tracce: il suo canale c'è già
       strip.route(t.group ? this.strip(t.group).input : this.bus);
-      strip.apply(t.mixer, audible.has(t.id));
+      strip.apply(t.mixer, audible.has(t.id), sending.has(t.id));
       strip.chain.sync(t.effects, project.tempo.bpm);
+      const sends = new Map<TrackId, { db: number; to: AudioNodeLike }>();
+      for (const [bus, db] of Object.entries(t.sends) as [TrackId, number][]) {
+        if (db > SEND_OFF_DB && present.has(bus)) sends.set(bus, { db, to: this.strip(bus).input });
+      }
+      strip.syncSends(sends);
+    }
+    for (const b of project.buses) {
+      const strip = this.strip(b.id);
+      strip.route(this.bus);
+      strip.apply(b.mixer, audible.has(b.id), false);
+      strip.chain.sync(b.effects, project.tempo.bpm);
     }
     this.masterChain.sync(project.masterEffects, project.tempo.bpm);
     if (this.masterSettings !== project.master) {

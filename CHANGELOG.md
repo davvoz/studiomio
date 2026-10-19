@@ -6,6 +6,18 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Buses, like Live's return tracks: a bus has no clips, it receives what the tracks send it,
+  runs it through its own effects (a shared reverb or delay, say) and goes to the master. Each
+  mixer strip in the session gets a send knob per bus, from −∞ (closed) to 0 dB, post-fader;
+  double-click closes it. Add buses with "+ Bus" in the session or Create › New bus; click a
+  bus's header to open its effects, right-click to rename, recolor or delete it. Soloing a track
+  keeps the buses open, so you hear it with its reverb; muting a track closes its sends too.
+  Projects saved earlier open as they were, without buses.
+
+### Changed
+- A new project starts with a MIDI track, an audio track and two buses (A Bus, B Bus).
+
 ## [0.3.6] - 2026-10-19
 
 ### Changed

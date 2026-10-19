@@ -27,6 +27,8 @@ export interface NumberParam extends ParamBase {
   readonly scale?: 'linear' | 'log';
   /** Passo dei valori (es. 1 per i semitoni). */
   readonly step?: number;
+  /** Al minimo il parametro è spento e si legge −∞ (es. una mandata chiusa). */
+  readonly offAtMin?: boolean;
 }
 
 export interface ChoiceParam extends ParamBase {
@@ -66,7 +68,7 @@ const KINDS: { readonly [K in ParamSpec['kind']]: ParamKind<Extract<ParamSpec, {
     fromUnit: (p, u) => KINDS.number.clamp(p, p.scale === 'log'
       ? p.min * Math.pow(p.max / p.min, clamp01(u))
       : p.min + clamp01(u) * (p.max - p.min)),
-    format: (p, v) => formatNumber(v, p.unit ?? ''),
+    format: (p, v) => (p.offAtMin && v <= p.min ? `−∞${p.unit ? ` ${p.unit}` : ''}` : formatNumber(v, p.unit ?? '')),
   },
   choice: {
     clamp: (p, v) => Math.max(0, Math.min(p.options.length - 1, Math.round(Number.isFinite(v) ? v : p.default))),

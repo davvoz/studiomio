@@ -1,6 +1,6 @@
 /* La session view, come in Live: una colonna per traccia con le clip negli slot (una riga per
- * scena), sotto lo stop della traccia e il mixer; a destra il master con il lancio delle
- * scene. Un clic su ▶ lancia una clip (al prossimo confine della quantizzazione), ▶ di una
+ * scena), sotto lo stop della traccia e il mixer; dopo le tracce i bus (senza clip, solo il
+ * mixer); a destra il master con il lancio delle scene. Un clic su ▶ lancia una clip (al prossimo confine della quantizzazione), ▶ di una
  * scena lancia la riga. Le clip si trascinano da uno slot all'altro (Ctrl copia). */
 import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
@@ -10,10 +10,10 @@ import { LAUNCH_QUANTA } from '../../model/launch';
 import type { Clip } from '../../model/clip';
 import { PALETTE } from '../../model/colors';
 import type { ChainOwner, Scene } from '../../model/project';
-import { GroupTrack, type Track } from '../../model/track';
+import { BusTrack, GroupTrack, type Track } from '../../model/track';
 import { setClipColor, setTrackColor, slotRef, type ClipRef } from '../../store/clip-ref';
 import { copySlotClip, pasteToSlot, type Clipboard } from '../../store/clipboard';
-import { removeTrack, renameTrack, setLaunchQuantization, type TrackKind } from '../../store/edits';
+import { addBus, removeTrack, renameTrack, setLaunchQuantization, type TrackKind } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import {
   captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, insertScene, moveSlotClip, newSlotMidiClip, renameScene,
@@ -131,6 +131,7 @@ export class SessionView {
       el('button', { textContent: '+ Scena', title: 'Nuova scena in fondo', onclick: () => store.apply(insertScene()) }),
       el('button', { textContent: '+ Audio', title: 'Nuova traccia audio', onclick: () => deps.addTrack('audio') }),
       el('button', { textContent: '+ MIDI', title: 'Nuova traccia MIDI', onclick: () => deps.addTrack('midi') }),
+      el('button', { textContent: '+ Bus', title: 'Nuovo bus: le tracce gli mandano il suono con le manopole delle mandate', onclick: () => store.apply(addBus()) }),
       this.mixerToggle,
       el('span', { className: 'muted', textContent: 'Tab: arrangement · doppio clic su uno slot vuoto: clip MIDI nuova o audio da importare · trascina (Ctrl copia)' }));
     this.picker.onchange = () => {
@@ -249,12 +250,13 @@ export class SessionView {
 
   // ---------------------------------------------------------------- disegno
 
-  /** Le colonne sono le tracce che si vedono: un gruppo chiuso nasconde quelle delle sue tracce. */
+  /** Le colonne sono le tracce che si vedono (un gruppo chiuso nasconde quelle delle sue
+   *  tracce), poi i bus. */
   private render(): void {
     const p = this.deps.store.project, tracks = p.visibleTracks;
-    const T = tracks.length, S = p.scenes.length;
+    const T = tracks.length, B = p.buses.length, S = p.scenes.length;
     // lo spazio che avanza sta prima del master, che resta sul bordo destro
-    this.grid.style.gridTemplateColumns = `repeat(${T}, var(--session-col)) minmax(0, 1fr) var(--session-master)`;
+    this.grid.style.gridTemplateColumns = `${T + B ? `repeat(${T + B}, var(--session-col)) ` : ''}minmax(0, 1fr) var(--session-master)`;
     this.grid.style.gridTemplateRows = `auto repeat(${S}, var(--session-row)) auto 1fr auto`;
     if (this.quantize.value !== p.launchQuantization) this.quantize.value = p.launchQuantization;
     if (this.selected && !(tracks.some(t => t.id === this.selected!.track) && this.selected.slot < S)) this.selected = null;
@@ -269,7 +271,15 @@ export class SessionView {
       t.slots.forEach((clip, s) => cells.push(place(this.slot(t, s, clip), row.scene(s), col)));
       cells.push(place(this.stopButton(t), row.stop(S), col));
     });
-    const masterCol = T + 2;
+    p.buses.forEach((b, i) => {
+      const col = T + i + 1;
+      cells.push(place(this.busHead(b), row.head, col));
+      // niente slot: la colonna resta vuota fino al mixer
+      const lane = place(el('div', { className: 'bus-lane' }), row.scene(0), col);
+      lane.style.gridRowEnd = String(row.stop(S) + 1);
+      cells.push(lane);
+    });
+    const masterCol = T + B + 2;
     cells.push(place(el('div', { className: 'session-head master-head', textContent: 'Master' }), row.head, masterCol));
     p.scenes.forEach((scene, s) => cells.push(place(this.sceneCell(scene, s), row.scene(s), masterCol)));
     cells.push(place(el('button', {
@@ -278,7 +288,7 @@ export class SessionView {
     }), row.stop(S), masterCol));
     this.cells = cells;
     this.grid.append(...cells, this.ring);
-    this.renderStrips(T, S);
+    this.renderStrips(T + B, S);
     this.highlightTrack();
     this.placeRing();
     this.refreshState();
@@ -306,9 +316,10 @@ export class SessionView {
     this.ringAt = at;
   }
 
-  /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano. */
-  private renderStrips(T: number, S: number): void {
-    const p = this.deps.store.project, tracks = p.visibleTracks;
+  /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano.
+   *  `columns`: quante colonne hanno una striscia (tracce che si vedono e bus). */
+  private renderStrips(columns: number, S: number): void {
+    const p = this.deps.store.project, tracks = [...p.visibleTracks, ...p.buses];
     const alive = new Set(tracks.map(t => t.id));
     for (const [id, strip] of this.strips) {
       if (alive.has(id)) continue;
@@ -325,15 +336,46 @@ export class SessionView {
         this.strips.set(t.id, strip);
         this.grid.append(strip.element);
       }
-      strip.update(t);
+      strip.update(t, p.buses);
       place(strip.element, row.mixer(S), i + 1);
     });
     this.master.update(p);
-    place(this.master.element, row.mixer(S), T + 2);
+    place(this.master.element, row.mixer(S), columns + 2);
   }
 
   private clickTrack(id: TrackId, e: MouseEvent): void {
-    clickTrack(this.deps.ui, id, e, () => this.deps.store.project.visibleTracks.map(t => t.id));
+    const p = this.deps.store.project;
+    clickTrack(this.deps.ui, id, e, () => [...p.visibleTracks, ...p.buses].map(t => t.id));
+  }
+
+  /** L'intestazione di un bus: come quella di una traccia, ma un bus non ha clip né gruppi. */
+  private busHead(b: BusTrack): HTMLElement {
+    const name = el('span', { className: 'session-track-name', textContent: b.name });
+    const head = el('div', { className: 'session-head bus', title: `${b.name}: un clic apre gli effetti, doppio clic rinomina` }, name);
+    head.style.setProperty('--color', b.color);
+    head.onpointerdown = e => this.clickTrack(b.id, e);
+    head.onclick = e => {
+      if (!e.shiftKey && !e.ctrlKey && !e.metaKey) this.deps.openDevices(b.id);
+    };
+    head.ondblclick = e => {
+      e.stopPropagation();
+      renameInline(name, n => this.apply(renameTrack(b.id, n)));
+    };
+    head.oncontextmenu = e => {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, [
+        { label: 'Effetti', run: () => this.deps.openDevices(b.id) },
+        ...addEffectItems(this.deps.store, b.id, () => this.deps.openDevices(b.id)),
+        { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameTrack(b.id, n))) },
+        { colors: PALETTE, current: b.color, required: true, pick: c => c && this.apply(setTrackColor(b.id, c)) },
+        SEPARATOR,
+        { label: 'Elimina il bus', run: () => this.apply(removeTrack(b.id)) },
+        SEPARATOR,
+        { label: 'Nuovo bus', run: () => this.apply(addBus()) },
+      ]);
+    };
+    this.heads.set(b.id, head);
+    return head;
   }
 
   private head(t: Track): HTMLElement {

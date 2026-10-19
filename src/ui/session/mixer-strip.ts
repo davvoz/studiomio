@@ -1,12 +1,13 @@
-/* Il mixer in fondo alla session, come in Live: per ogni traccia FX, pan, volume verticale con
- * il misuratore di livello, mute e solo; per il master volume, livello e picco. Ogni striscia
- * si costruisce una volta e poi si aggiorna, così un fader trascinato non si interrompe. */
+/* Il mixer in fondo alla session, come in Live: per ogni traccia le mandate verso i bus, FX,
+ * pan, volume verticale con il misuratore di livello, mute e solo (i bus non hanno mandate);
+ * per il master volume, livello e picco. Ogni striscia si costruisce una volta e poi si
+ * aggiorna, così un fader trascinato non si interrompe. */
 import type { TrackId } from '../../core/id';
 import type { NumberParam } from '../../devices/params';
 import { instrumentType } from '../../devices/registry';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
-import { GroupTrack, MidiTrack, type Track } from '../../model/track';
-import { setMasterMixer, setMixer } from '../../store/edits';
+import { BusTrack, GroupTrack, MidiTrack, SEND_OFF_DB, type Track } from '../../model/track';
+import { setMasterMixer, setMixer, setSend } from '../../store/edits';
 import type { ProjectStore } from '../../store/project-store';
 import { controlFor, type ParamControl } from '../device/controls';
 import { el } from '../dom';
@@ -14,6 +15,11 @@ import { LevelMeter, PeakReadout, type MeterBoard } from '../meters/meter-board'
 import { fxButton, setFxCount, setVolume, volumeSlider } from '../mixer-controls';
 
 const PAN: NumberParam = { kind: 'number', id: 'pan', label: 'Pan', min: -50, max: 50, default: 0, unit: 'pan', step: 1 };
+
+/** La manopola della mandata verso un bus: da chiusa (−∞) a 0 dB, come in Live. */
+const sendParam = (bus: BusTrack): NumberParam => ({
+  kind: 'number', id: `send-${bus.id}`, label: bus.name, min: SEND_OFF_DB, max: 0, default: SEND_OFF_DB, unit: 'dB', step: 0.5, offAtMin: true,
+});
 
 const formatDb = (db: number) => (db <= -40 ? '−∞' : `${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db).toFixed(1)}`);
 
@@ -31,6 +37,10 @@ export class TrackStrip {
   readonly element = el('div', { className: 'strip' });
   private readonly fx: HTMLButtonElement;
   private readonly badge = el('div', { className: 'strip-badge' });
+  /** Le manopole delle mandate, una per bus (i bus non ne hanno). */
+  private readonly sendBox = el('div', { className: 'strip-sends' });
+  private sends: { readonly bus: TrackId; readonly control: ParamControl }[] = [];
+  private shownBuses: readonly BusTrack[] | null = null;
   private readonly pan: ParamControl;
   private readonly volume: HTMLInputElement;
   private readonly db = el('div', { className: 'strip-db' });
@@ -39,7 +49,7 @@ export class TrackStrip {
   private readonly detach: () => void;
   private shown: Track | null = null;
 
-  constructor(id: TrackId, store: ProjectStore, actions: StripActions, meters: MeterBoard) {
+  constructor(private readonly id: TrackId, private readonly store: ProjectStore, actions: StripActions, meters: MeterBoard) {
     const mixer = (patch: Parameters<typeof setMixer>[1], mergeKey?: string) => store.apply(setMixer(id, patch), mergeKey ? { mergeKey } : {});
     const current = () => store.project.track(id)!;
     this.fx = fxButton(0, 'Strumento ed effetti della traccia', () => actions.openDevices(id));
@@ -55,20 +65,40 @@ export class TrackStrip {
     this.element.dataset.track = id;
     const meter = new LevelMeter('strip-meter', () => meters.resetClip(id));
     this.detach = meters.attach(id, meter);
-    this.element.append(this.badge, this.fx, this.pan.element, faderBlock(this.volume, meter, this.db), el('div', { className: 'strip-ms' }, this.mute, this.solo));
+    this.element.append(this.sendBox, this.badge, this.fx, this.pan.element, faderBlock(this.volume, meter, this.db), el('div', { className: 'strip-ms' }, this.mute, this.solo));
   }
 
-  update(t: Track): void {
+  /** `buses`: i bus del progetto, per le manopole delle mandate. */
+  update(t: Track, buses: readonly BusTrack[]): void {
+    this.updateSends(t, buses);
     if (t === this.shown) return;
     this.shown = t;
     this.element.style.setProperty('--color', t.color);
-    this.badge.textContent = t instanceof MidiTrack ? instrumentType(t.instrument.type)?.label ?? t.instrument.type : t instanceof GroupTrack ? 'Gruppo' : 'Audio';
+    this.element.classList.toggle('bus-strip', t instanceof BusTrack);
+    this.badge.textContent = t instanceof MidiTrack ? instrumentType(t.instrument.type)?.label ?? t.instrument.type
+      : t instanceof GroupTrack ? 'Gruppo' : t instanceof BusTrack ? 'Bus' : 'Audio';
+    for (const s of this.sends) s.control.set(t.send(s.bus));
     setFxCount(this.fx, t.effects.length);
     this.pan.set(Math.round(t.mixer.pan * 50));
     setVolume(this.volume, t.mixer.volumeDb);
     this.db.textContent = formatDb(t.mixer.volumeDb);
     this.mute.classList.toggle('on', t.mixer.mute);
     this.solo.classList.toggle('on', t.mixer.solo);
+  }
+
+  /** Le manopole si rifanno solo se i bus cambiano (aggiunti, tolti, spostati o rinominati). */
+  private updateSends(t: Track, buses: readonly BusTrack[]): void {
+    if (buses === this.shownBuses) return;
+    this.shownBuses = buses;
+    this.sends = t instanceof BusTrack ? [] : buses.map(b => {
+      const control = controlFor(sendParam(b), t.send(b.id), (db, final) => {
+        this.store.apply(setSend(this.id, b.id, db), { mergeKey: `send-${this.id}-${b.id}` });
+        if (final) this.store.endMerge();
+      });
+      control.element.title = `Mandata verso ${b.name} (doppio clic: chiusa)`;
+      return { bus: b.id, control };
+    });
+    this.sendBox.replaceChildren(...this.sends.map(s => s.control.element));
   }
 
   dispose(): void {

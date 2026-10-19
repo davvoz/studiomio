@@ -8,6 +8,7 @@ import { MemoryDirectory, type Directory } from '../persistence/directory';
 import { FsAccessDirectory } from '../persistence/fs-access-directory';
 import { ProjectFolder } from '../persistence/project-folder';
 import type { ProjectStore } from '../store/project-store';
+import { starterProject } from '../store/edits';
 import { importSample } from '../store/selection-edits';
 import { importSampleToSlot } from '../store/session-edits';
 import type { SampleId } from '../core/id';
@@ -110,11 +111,12 @@ export class ProjectSession {
     return this.register(name.replace(/\.[^.]+$/, ''), file, data);
   }
 
-  async newProject(): Promise<void> {
+  /** Un progetto nuovo, con le tracce iniziali (vedi `starterProject`); `blank`: senza tracce. */
+  async newProject(blank = false): Promise<void> {
     this.audio.engine.stop();
     this.folder = new ProjectFolder(new MemoryDirectory('Nuovo progetto'));
     this.onDisk = false;
-    this.store.load(Project.empty('Nuovo progetto', this.store.ids));
+    this.store.load(blank ? Project.empty('Nuovo progetto', this.store.ids) : starterProject('Nuovo progetto', this.store.ids));
     this.savedVersion = this.store.project;
     this.events.emit('change');
   }
