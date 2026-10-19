@@ -6,5 +6,6 @@ await userPresets.load().catch(e => console.warn('preset: non è stato possibile
 
 const app = new App(document.getElementById('app')!);
 
-// in sviluppo l'app è raggiungibile dalla console (e dalle verifiche automatiche)
-if (import.meta.env.DEV) Object.assign(window, { studiomio: app });
+// in sviluppo l'app è raggiungibile dalla console (e dalle verifiche automatiche); nell'app
+// installata solo i controller, per la diagnosi da F12: copy(studiomio.surfaces.report())
+Object.assign(window, { studiomio: import.meta.env.DEV ? app : { surfaces: app.surfaces } });

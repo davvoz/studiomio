@@ -6,6 +6,16 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Novation Launchpad support (Launchpad X, Mini MK3, Pro MK3 and MK2), plug and play like in
+  Live: the 8×8 grid launches the clips of an 8-track × 8-scene box of the session (playing clips
+  pulse green, queued ones blink), the right-hand buttons launch scenes, the arrows move the box
+  and the Session button opens the overview of the whole session. Each model also gets its
+  mixer as in Live: volume and pan faders drawn on the grid, stop, mute and solo buttons; on the
+  Pro MK3, faders for the parameters of the selected device too. The Launchpad support was
+  written from Live's own scripts without the hardware: please report anything that doesn't
+  behave as described.
+
 ## [0.3.4] - 2026-10-19
 
 ### Added

@@ -54,7 +54,7 @@ export class App implements Commands, FileCommands, TimelineActions {
   /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
   private readonly clipEditors: Readonly<Record<string, BottomView & { open(ref: ClipRef): boolean }>>;
   private readonly transport: TransportBar;
-  /** I controller MIDI (l'APC40 mkII sulla session). */
+  /** I controller MIDI sulla session (APC40 mkII, Launchpad). */
   readonly surfaces: ControlSurfaces;
   private readonly status = Object.assign(document.createElement('span'), { className: 'status-text' });
   private readonly statusBar = Object.assign(document.createElement('footer'), { className: 'status' });
@@ -383,8 +383,8 @@ export class App implements Commands, FileCommands, TimelineActions {
       const name = surfaces.connected;
       button.classList.toggle('on', name !== null);
       button.title = name ? `${name}: collegato alla session`
-        : surfaces.enabled ? 'Controller MIDI: collega un APC40 mkII, si attiva da solo'
-          : "Controller MIDI: attiva l'APC40 mkII (il browser chiede il permesso per il MIDI)";
+        : surfaces.enabled ? 'Controller MIDI: collega un APC40 mkII o un Launchpad, si attiva da solo'
+          : "Controller MIDI: attiva l'APC40 mkII o il Launchpad (il browser chiede il permesso per il MIDI)";
     };
     surfaces.onChange(render);
     render();

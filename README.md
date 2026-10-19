@@ -17,7 +17,7 @@ Nasce dal motore DSP di [WarpMio](../warpmio), portato in TypeScript.
    "Ulteriori informazioni" → "Esegui comunque" (l'installer non è firmato digitalmente).
 
 Gli aggiornamenti arrivano da soli: quando esce una nuova versione, studiomio la scarica e propone
-di riavviare. Serve Windows 10 o 11 a 64 bit; l'APC40 mkII funziona appena collegato.
+di riavviare. Serve Windows 10 o 11 a 64 bit; l'APC40 mkII e i Launchpad funzionano appena collegati.
 
 ## Avvio
 
@@ -55,7 +55,7 @@ Il pacchetto WebAssembly non è nel repository: dopo `npm install` lancia una vo
 ## App per Windows
 
 La stessa app, installabile: Electron porta con sé il suo Chromium, quindi memoria condivisa,
-MIDI (APC40) e cartelle dei progetti funzionano senza browser, senza server e senza rete.
+MIDI (APC40, Launchpad) e cartelle dei progetti funzionano senza browser, senza server e senza rete.
 `src/` non sa di girare in Electron: tutto sta in `electron/main.ts`, che serve `dist/` da un
 protocollo interno (`app://studiomio`, con le intestazioni COOP/COEP), concede i permessi solo
 all'app e controlla gli aggiornamenti. F12 apre gli strumenti per sviluppatori.
@@ -124,9 +124,14 @@ src/
     effect-spectrum.ts lo spettro prima e dopo un effetto (AnalyserNode)
     project-session.ts cartella del progetto: importa, apri, salva, salva con nome
   control/
-    control-surfaces.ts i controller MIDI (Web MIDI): riconosce l'APC40 mkII, lo collega e lo scollega a caldo
-    apc40/protocol.ts  il protocollo dell'APC40 mkII: note, CC, SysEx dell'Ableton mode, tavolozza, curva del fader
+    control-surfaces.ts i controller MIDI (Web MIDI): riconosce APC40 mkII e Launchpad, li collega e li scollega a caldo; il report per la diagnosi
+    session-surface.ts ciò che i controller hanno in comune: riquadro, stato di slot e scene, dispositivi, fader, LED
+    palette.ts         la tavolozza dei pad RGB (la stessa per APC40 mkII e Launchpad)
+    mixer-scale.ts     da 0..127 a volume e pan, come in Live
+    apc40/protocol.ts  il protocollo dell'APC40 mkII: note, CC, SysEx dell'Ableton mode
     apc40/apc40.ts     l'APC40 sulla session: lancio, riquadro rosso, mixer, dispositivi, trasporto, LED
+    launchpad/protocol.ts i modelli di Launchpad: porte, griglia, SysEx della DAW mode, layout, fader
+    launchpad/launchpad.ts il Launchpad sulla session: lancio, mappa dei blocchi, mixer, fader sulla griglia, LED
   ui/
     timeline/          arrangement: geometria, disegno su canvas, gesti, pianificazione
     track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume, livello; rientro e ▸/▾ dei gruppi)
@@ -270,6 +275,37 @@ una macro non si muove dalla sua manopola: lo muove la macro. Non ci sono ancora
 (il pulsante lo dice nella barra di stato): Record Arm e registrazione, mandate (Sends, User),
 crossfader, cue e nudge.
 
+### Novation Launchpad
+
+Come l'APC40, plug and play come in Live, sui modelli che Live guida con i suoi script:
+**Launchpad X**, **Mini MK3**, **Pro MK3** e **MK2** (i Launchpad più vecchi, a due colori, no).
+Li si mette in DAW mode (il MK2 nel layout Session) e la griglia 8×8 suona un riquadro di 8
+tracce × 8 scene. Uno alla volta: con APC40 e Launchpad collegati insieme vince l'APC40.
+
+| Sul Launchpad | In studiomio |
+|---|---|
+| Griglia 8×8 | le clip del riquadro: colore della clip, verde che pulsa = suona, verde che lampeggia = in coda; un pad su uno slot vuoto ferma la traccia |
+| Pulsanti a destra | lanciano le scene (del colore della scena; lampeggiano se qualcosa della riga è in coda) |
+| Frecce | spostano il riquadro di 1 (Pro MK3 con Shift, e sulla mappa dei blocchi: di una pagina) |
+| Session | X e Mini MK3: doppio clic = mappa dei blocchi (bianco: il riquadro, verde: suona, azzurro: ci sono clip; un pad ci porta il riquadro), un clic la chiude. Pro MK3 e MK2: la mappa finché lo si tiene. Se il controller mostra un suo layout (Note, Custom…), torna alla Session |
+| X: Session (un clic) | il **mixer**: i pulsanti a destra scelgono Volume e Pan (fader sulla griglia, 0 dB all'85% come in Live), Stop, Mute, Solo (sull'ultima riga della griglia); di nuovo lo stesso pulsante per tornare ai clip |
+| Mini MK3: Stop Solo Mute | l'ultimo pulsante a destra fa girare stop, solo e mute sull'ultima riga della griglia (le altre scene lanciano) |
+| Pro MK3: riga sotto la griglia | sceglie la traccia; con Mute, Solo, Stop Clip fa quello |
+| Pro MK3: Volume · Pan · Device | i fader sulla griglia: volume, pan, o gli 8 parametri del dispositivo scelto (i pulsanti a destra cambiano banco, ◂ ▸ cambiano dispositivo) |
+| Pro MK3: Play · Shift+Play · Shift+Record Arm · Shift+Mute · Shift+Solo · Shift+Sends | play/stop · stop e torna all'inizio · annulla · ripeti · metronomo · tap tempo |
+| MK2: Mixer | il mixer sulla griglia: righe di stop, mute, solo (e azzera volume e pan); a destra Volume e Pan (fader), Stop (tutto), Mute e Solo (li toglie a tutte) |
+
+Non ci sono ancora (lo dice la barra di stato): i modi Note, Custom, Drums, Keys, User,
+registrazione e Record Arm, mandate, Clear/Duplicate/Quantise/Fixed Length.
+
+Il Launchpad ha più porte MIDI e i programmi usano quella "DAW" (su Windows: `MIDIIN2 (LPX MIDI)`
+per X e Mini MK3, `MIDIIN3 (LPProMK3 MIDI)` per il Pro MK3). Se non risponde, dalla console (F12):
+`studiomio.surfaces.ports()` elenca le porte, `studiomio.surfaces.launchpadPort = 1` prova
+un'altra interfaccia (`undefined` torna alla scelta automatica), e
+`copy(studiomio.surfaces.report())` copia un resoconto (porte, avvio, ultimi messaggi MIDI) da
+mandare a chi sviluppa. Il supporto dei Launchpad è scritto sugli script di Live 11, senza
+l'hardware sotto mano: va provato.
+
 ## Gruppi di tracce
 
 Come i Group Track di Live: un gruppo raccoglie delle tracce (anche altri gruppi) e le loro
@@ -281,7 +317,7 @@ va nel master (o nel gruppo che lo contiene). Un gruppo non ha clip.
 | Clic · Maiusc+clic · Ctrl+clic sull'intestazione (o sulla testa della colonna) | sceglie la traccia · tutte fino a lì · aggiunge o toglie dalla scelta |
 | Ctrl+G (o tasto destro: "Raggruppa") | raggruppa le tracce scelte: il gruppo prende il posto della prima, le altre lo seguono |
 | Ctrl+Maiusc+G (o tasto destro: "Separa il gruppo") | toglie il gruppo (quello scelto o quello della traccia scelta); le tracce restano |
-| ▾ / ▸ | chiude o apre il gruppo: chiuso, le sue tracce non si vedono (timeline, session, APC40) ma suonano |
+| ▾ / ▸ | chiude o apre il gruppo: chiuso, le sue tracce non si vedono (timeline, session, controller) ma suonano |
 | Tasto destro su una traccia · su un gruppo | "Nuova traccia … qui sotto" (nello stesso gruppo) · anche "nel gruppo" |
 | × su un gruppo · "Elimina il gruppo e le sue tracce" | elimina il gruppo con tutto ciò che contiene (Ctrl+Z lo riporta) |
 | File audio trascinati su un gruppo | vanno in una traccia nuova in fondo al gruppo |

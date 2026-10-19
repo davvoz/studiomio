@@ -5,7 +5,7 @@ import { TimelineGeometry } from './timeline/geometry';
 
 type UiEvents = { change: [] };
 
-/** Il riquadro della session che un controller (l'APC40) suona: prima traccia e prima scena,
+/** Il riquadro della session che un controller (l'APC40, un Launchpad) suona: prima traccia e prima scena,
  *  larghezza e altezza (il "riquadro rosso" di Live). */
 export interface SessionRing {
   readonly track: number;
