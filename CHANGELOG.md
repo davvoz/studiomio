@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-19
+
 ### Added
 - Novation Launchpad support (Launchpad X, Mini MK3, Pro MK3 and MK2), plug and play like in
   Live: the 8×8 grid launches the clips of an 8-track × 8-scene box of the session (playing clips
