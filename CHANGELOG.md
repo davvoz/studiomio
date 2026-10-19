@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- In the session the buses sat right after the tracks: they now stay next to the master, on the
+  right edge, like Live's return tracks, and keep their place while the tracks scroll sideways.
+- With many buses the send knobs piled up in the mixer and covered the scenes: they are now
+  smaller, three per row and at most two rows (scroll inside for more). Under each knob is the
+  bus name; the value shows while you turn it.
+
 ## [0.3.7] - 2026-10-19
 
 ### Added

@@ -81,6 +81,17 @@ const place = <T extends HTMLElement>(e: T, gridRow: number, gridColumn: number)
 
 const slotKey = (track: TrackId, slot: number) => `${track}:${slot}`;
 
+/** Le colonne: le tracce, lo spazio che avanza, i bus, il master. La colonna del bus `i`
+ *  (con `T` tracce) viene dopo lo spazio, accanto al master. */
+const busColumn = (T: number, i: number) => T + 2 + i;
+
+/** Un bus resta fermo accanto al master, come in Live, mentre le tracce scorrono sotto. */
+function pinBus(e: HTMLElement, buses: number, i: number): HTMLElement {
+  e.classList.add('bus-pinned');
+  e.style.setProperty('--bus-right', `calc(var(--session-master) + 2px + ${buses - 1 - i} * (var(--session-col) + 2px))`);
+  return e;
+}
+
 /** Preferenze dell'interfaccia di chi usa questo browser (se lo spazio locale manca, pazienza). */
 const MIXER_PREF = 'studiomio.session.mixer';
 const readPref = (key: string): string | null => {
@@ -251,12 +262,13 @@ export class SessionView {
   // ---------------------------------------------------------------- disegno
 
   /** Le colonne sono le tracce che si vedono (un gruppo chiuso nasconde quelle delle sue
-   *  tracce), poi i bus. */
+   *  tracce); i bus stanno a destra, accanto al master. */
   private render(): void {
     const p = this.deps.store.project, tracks = p.visibleTracks;
     const T = tracks.length, B = p.buses.length, S = p.scenes.length;
-    // lo spazio che avanza sta prima del master, che resta sul bordo destro
-    this.grid.style.gridTemplateColumns = `${T + B ? `repeat(${T + B}, var(--session-col)) ` : ''}minmax(0, 1fr) var(--session-master)`;
+    // lo spazio che avanza sta tra le tracce e i bus: bus e master restano sul bordo destro
+    const cols = (n: number) => (n ? `repeat(${n}, var(--session-col)) ` : '');
+    this.grid.style.gridTemplateColumns = `${cols(T)}minmax(0, 1fr) ${cols(B)}var(--session-master)`;
     this.grid.style.gridTemplateRows = `auto repeat(${S}, var(--session-row)) auto 1fr auto`;
     if (this.quantize.value !== p.launchQuantization) this.quantize.value = p.launchQuantization;
     if (this.selected && !(tracks.some(t => t.id === this.selected!.track) && this.selected.slot < S)) this.selected = null;
@@ -272,11 +284,12 @@ export class SessionView {
       cells.push(place(this.stopButton(t), row.stop(S), col));
     });
     p.buses.forEach((b, i) => {
-      const col = T + i + 1;
-      cells.push(place(this.busHead(b), row.head, col));
+      const col = busColumn(T, i);
+      cells.push(pinBus(place(this.busHead(b), row.head, col), B, i));
       // niente slot: la colonna resta vuota fino al mixer
-      const lane = place(el('div', { className: 'bus-lane' }), row.scene(0), col);
+      const lane = pinBus(place(el('div', { className: 'bus-lane' }), row.scene(0), col), B, i);
       lane.style.gridRowEnd = String(row.stop(S) + 1);
+      lane.style.setProperty('--color', b.color);
       cells.push(lane);
     });
     const masterCol = T + B + 2;
@@ -288,7 +301,7 @@ export class SessionView {
     }), row.stop(S), masterCol));
     this.cells = cells;
     this.grid.append(...cells, this.ring);
-    this.renderStrips(T + B, S);
+    this.renderStrips(S);
     this.highlightTrack();
     this.placeRing();
     this.refreshState();
@@ -316,10 +329,10 @@ export class SessionView {
     this.ringAt = at;
   }
 
-  /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano.
-   *  `columns`: quante colonne hanno una striscia (tracce che si vedono e bus). */
-  private renderStrips(columns: number, S: number): void {
-    const p = this.deps.store.project, tracks = [...p.visibleTracks, ...p.buses];
+  /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano. */
+  private renderStrips(S: number): void {
+    const p = this.deps.store.project, T = p.visibleTracks.length, B = p.buses.length;
+    const tracks = [...p.visibleTracks, ...p.buses];
     const alive = new Set(tracks.map(t => t.id));
     for (const [id, strip] of this.strips) {
       if (alive.has(id)) continue;
@@ -337,10 +350,11 @@ export class SessionView {
         this.grid.append(strip.element);
       }
       strip.update(t, p.buses);
-      place(strip.element, row.mixer(S), i + 1);
+      if (i < T) place(strip.element, row.mixer(S), i + 1);
+      else pinBus(place(strip.element, row.mixer(S), busColumn(T, i - T)), B, i - T);
     });
     this.master.update(p);
-    place(this.master.element, row.mixer(S), columns + 2);
+    place(this.master.element, row.mixer(S), T + B + 2);
   }
 
   private clickTrack(id: TrackId, e: MouseEvent): void {

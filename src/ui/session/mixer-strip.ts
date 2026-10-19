@@ -16,9 +16,10 @@ import { fxButton, setFxCount, setVolume, volumeSlider } from '../mixer-controls
 
 const PAN: NumberParam = { kind: 'number', id: 'pan', label: 'Pan', min: -50, max: 50, default: 0, unit: 'pan', step: 1 };
 
-/** La manopola della mandata verso un bus: da chiusa (−∞) a 0 dB, come in Live. */
+/** La manopola della mandata verso un bus: da chiusa (−∞) a 0 dB, come in Live (senza l'unità,
+ *  che nella manopola piccola non ci sta: è nel suggerimento). */
 const sendParam = (bus: BusTrack): NumberParam => ({
-  kind: 'number', id: `send-${bus.id}`, label: bus.name, min: SEND_OFF_DB, max: 0, default: SEND_OFF_DB, unit: 'dB', step: 0.5, offAtMin: true,
+  kind: 'number', id: `send-${bus.id}`, label: bus.name, min: SEND_OFF_DB, max: 0, default: SEND_OFF_DB, step: 0.5, offAtMin: true,
 });
 
 const formatDb = (db: number) => (db <= -40 ? '−∞' : `${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db).toFixed(1)}`);
@@ -95,7 +96,7 @@ export class TrackStrip {
         this.store.apply(setSend(this.id, b.id, db), { mergeKey: `send-${this.id}-${b.id}` });
         if (final) this.store.endMerge();
       });
-      control.element.title = `Mandata verso ${b.name} (doppio clic: chiusa)`;
+      control.element.title = `Mandata verso ${b.name}, in dB (doppio clic: chiusa)`;
       return { bus: b.id, control };
     });
     this.sendBox.replaceChildren(...this.sends.map(s => s.control.element));
