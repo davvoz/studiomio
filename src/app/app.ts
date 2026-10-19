@@ -3,9 +3,14 @@ import { randomIds } from '../core/id';
 import type { Beats, Seconds } from '../core/music-time';
 import type { Color } from '../model/clip';
 import type { SampleRef } from '../model/sample';
+import { BrowserCatalog, standardSources } from '../browser/catalog';
+import { FsFolder, indexedDbPlaces } from '../browser/fs-folder';
+import type { BrowserItem, BrowserSource, LoadTarget } from '../browser/item';
 import { ControlSurfaces } from '../control/control-surfaces';
 import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
+import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../devices/registry';
+import { userPresets } from '../devices/user-presets';
 import { MASTER, type ChainOwner } from '../model/project';
 import { BusTrack } from '../model/track';
 import { sceneArrangement } from '../model/scene-export';
@@ -20,6 +25,8 @@ import { timelineMenu, type TimelineActions } from './menus';
 import { ProjectStore } from '../store/project-store';
 import { addedPlacements, deleteMany, duplicateMany, splitMany } from '../store/selection-edits';
 import { BottomPanel, type BottomView } from '../ui/bottom-panel';
+import { acceptBrowserDrops } from '../ui/browser/browser-drag';
+import { BrowserView } from '../ui/browser/browser-view';
 import { ClipEditor } from '../ui/clip-editor/clip-editor';
 import { DeviceView } from '../ui/device/device-view';
 import { PianoRoll } from '../ui/piano-roll/piano-roll';
@@ -36,8 +43,10 @@ import { TransportBar } from '../ui/transport-bar';
 import { UiState } from '../ui/ui-state';
 import { PeakStore } from '../ui/waveform';
 import { AudioSystem } from './audio-system';
+import { BrowserLoader } from './browser-loader';
 import { mainMenu } from './main-menu';
 import { ProjectSession } from './project-session';
+import { SamplePreview } from './sample-preview';
 
 /** L'applicazione: crea le parti, le collega e implementa i comandi. */
 export class App implements Commands, TimelineActions {
@@ -51,8 +60,15 @@ export class App implements Commands, TimelineActions {
   readonly pianoRoll: PianoRoll;
   readonly device: DeviceView;
   readonly sessionView: SessionView;
+  /** Il browser a sinistra: le sue fonti, chi carica ciò che si sceglie, la vista. */
+  readonly catalog = new BrowserCatalog<FsFolder>(standardSources({
+    instruments: INSTRUMENT_TYPES, effects: EFFECT_TYPES, user: userPresets, project: this.store,
+  }), indexedDbPlaces);
+  private readonly loader: BrowserLoader;
+  readonly browser: BrowserView;
   private readonly arrangementArea = Object.assign(document.createElement('div'), { className: 'arrangement' });
   private readonly viewButtons: { arrangement: HTMLButtonElement; session: HTMLButtonElement; back: HTMLButtonElement };
+  private readonly browserButton: HTMLButtonElement;
   private readonly bottom = new BottomPanel();
   /** Appunti condivisi da timeline e piano roll. */
   readonly clipboard = new Clipboard();
@@ -66,10 +82,28 @@ export class App implements Commands, TimelineActions {
   private readonly statusBar = Object.assign(document.createElement('footer'), { className: 'status' });
 
   constructor(root: HTMLElement) {
+    this.loader = new BrowserLoader({
+      store: this.store, ui: this.ui,
+      importFiles: (files, track, beat) => this.session.importFiles(files, track, beat),
+      importFilesToSlots: (files, track, slot) => this.session.importFilesToSlots(files, track, slot),
+      cursor: () => this.audio.engine.position,
+      openDevices: owner => this.openDevices(owner),
+      say: t => this.say(t),
+    });
+    const dropItem = (item: BrowserItem, target: LoadTarget) => this.loadItem(item, target);
+    this.browser = new BrowserView({
+      catalog: this.catalog,
+      load: item => this.loadItem(item),
+      addFolder: () => this.addBrowserFolder(),
+      preview: new SamplePreview(this.audio.context, id => this.audio.library.get(id)),
+      say: t => this.say(t),
+    });
+    void this.catalog.restore();
     this.arrangement = new ArrangementView({
       store: this.store, ui: this.ui, engine: this.audio.engine, peaks: this.peaks,
       openClip: (track, id) => this.openClip(placementRef(track, id)),
       dropFiles: (files, track, beat) => this.run(() => this.session.importFiles(files, track, beat)),
+      dropItem,
       contextMenu: (hit, x, y) => showContextMenu(x, y, timelineMenu(this, hit)),
     });
     this.editor = new ClipEditor({
@@ -99,10 +133,11 @@ export class App implements Commands, TimelineActions {
       importSample: file => this.session.importSampleFile(file),
       sampleAudio: id => this.audio.library.get(id),
       say: t => this.say(t),
+      dropItem,
     });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
-    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner) };
+    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner), dropItem };
     const meters = new MeterBoard(owner => this.audio.engine.levels(owner));
     this.sessionView = new SessionView({
       store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard,
@@ -112,6 +147,7 @@ export class App implements Commands, TimelineActions {
       addTrack: kind => this.addTrack(kind),
       exportScene: index => this.exportScene(index),
       say: t => this.say(t),
+      dropItem,
     });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
     const master = new MasterStrip(this.store, headerActions, meters);
@@ -119,10 +155,17 @@ export class App implements Commands, TimelineActions {
     const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
     const main = this.arrangementArea;
     main.append(headers.element, this.arrangement.element, master.header, master.lane);
+    // il master della timeline riceve gli effetti dal browser
+    acceptBrowserDrops(master.header, item => dropItem(item, { kind: 'chain', owner: MASTER }), { accept: item => item.payload?.kind === 'effect' });
     const views = Object.assign(document.createElement('div'), { className: 'views' });
     views.append(main, this.sessionView.element);
+    // il browser a sinistra, accanto a viste e area in basso, come in Live
+    const work = Object.assign(document.createElement('div'), { className: 'work' });
+    work.append(views, this.bottom.element);
+    const workspace = Object.assign(document.createElement('div'), { className: 'workspace' });
+    workspace.append(this.browser.element, work);
     this.statusBar.append(this.status, Object.assign(document.createElement('span'), { className: 'version', textContent: `v${__APP_VERSION__}` }));
-    root.append(menuBar.element, transport.element, views, this.bottom.element, this.statusBar);
+    root.append(menuBar.element, transport.element, workspace, this.statusBar);
     const viewButton = (text: string, title: string, run: () => void) => Object.assign(document.createElement('button'), { textContent: text, title, onclick: run });
     this.viewButtons = {
       arrangement: viewButton('☰ Arr.', 'Arrangement: la timeline (Tab)', () => this.showView('arrangement')),
@@ -130,7 +173,8 @@ export class App implements Commands, TimelineActions {
       back: viewButton('↩', 'Torna all\'arrangement: le tracce prese dalla session tornano a suonare la loro timeline', () => this.audio.engine.backToArrangement()),
     };
     this.viewButtons.back.className = 'back-to-arrangement';
-    transport.addGroup(this.viewButtons.arrangement, this.viewButtons.session, this.viewButtons.back);
+    this.browserButton = viewButton('◧ Browser', 'Mostra o nasconde il browser (Ctrl+Alt+B)', () => this.toggleBrowser());
+    transport.addGroup(this.browserButton, this.viewButtons.arrangement, this.viewButtons.session, this.viewButtons.back);
     this.surfaces = this.controlSurfaces();
     this.audio.engine.onSessionChange(() => this.renderViews());
     this.renderViews();
@@ -295,7 +339,46 @@ export class App implements Commands, TimelineActions {
     this.renderViews();
   }
 
+  toggleBrowser(): void {
+    this.browser.toggle();
+    this.renderViews();
+  }
+
+  searchBrowser(): void {
+    this.browser.focusSearch();
+    this.renderViews();
+  }
+
+  /** Carica una voce del browser dove la si lascia o, senza, dove si sta lavorando. */
+  loadItem(item: BrowserItem, target: LoadTarget = this.browserTarget(item)): void {
+    const payload = item.payload;
+    if (payload) this.run(() => this.loader.load(payload, target));
+  }
+
+  /** Dove va una voce caricata con il doppio clic: un dispositivo nella catena aperta in basso
+   *  (o sulla traccia scelta), un sample nello slot scelto della session o al cursore della
+   *  traccia scelta nella timeline. */
+  private browserTarget(item: BrowserItem): LoadTarget {
+    const audio = item.payload?.kind === 'sample' || item.payload?.kind === 'file';
+    const owner = this.device.openOwner;
+    if (!audio && owner && this.bottom.open === this.device) return { kind: 'chain', owner };
+    if (this.sessionView.isVisible && audio) {
+      const s = this.sessionView.selection;
+      return { kind: 'slot', track: s?.track ?? this.ui.track, slot: s?.slot ?? 0 };
+    }
+    return { kind: 'lane', track: this.ui.track, beat: this.audio.engine.position };
+  }
+
+  /** Aggiunge ai luoghi del browser una cartella scelta dall'utente (una già aggiunta non si ripete). */
+  private async addBrowserFolder(): Promise<BrowserSource> {
+    const folder = await FsFolder.pick();
+    const source = await this.catalog.addFolder(folder, (a, b) => a.same(b));
+    this.say(`Cartella "${folder.name}" nei luoghi del browser.`);
+    return source;
+  }
+
   private renderViews(): void {
+    this.browserButton.classList.toggle('on', this.browser.isOpen);
     const session = this.sessionView.isVisible;
     this.viewButtons.arrangement.classList.toggle('on', !session);
     this.viewButtons.session.classList.toggle('on', session);

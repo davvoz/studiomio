@@ -6,6 +6,18 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- The browser, on the left like Live's (◧ Browser at the top, View › Browser or Ctrl+Alt+B;
+  drag its right edge to resize it). It holds only what studiomio has: Instruments and Audio
+  Effects (a folder per device, with its user and factory presets), Drums (the Drum Machine
+  kits), Current Project (the project's samples), User Presets, and sample folders from disk
+  that you add with "+ Folder…" (remembered between sessions). Ctrl+F searches every source,
+  starting from the selected one. Double-click or Enter loads an item where you're working: a
+  device into the open chain or onto the selected track (an instrument on a non-MIDI track gets
+  a new MIDI track), a sample into the selected session slot or at the cursor on the timeline.
+  Or drag it onto a timeline lane, a track header, a session slot or column, the open device
+  chain or the master. Selecting a sample shows its waveform and, with 🎧 on, plays it.
+
 ## [0.3.8] - 2026-10-19
 
 ### Fixed

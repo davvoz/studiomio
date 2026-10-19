@@ -97,6 +97,7 @@ src/
     edits.ts           una modifica per azione dell'utente (funzioni pure)
     clipboard.ts       appunti: copia e incolla di clip (timeline e slot) e di note
     session-edits.ts   modifiche della session: clip negli slot, scene
+    browser-edits.ts   caricare dal browser: strumento o effetto con il preset, in un passo
     clip-ref.ts        una clip sulla timeline o in uno slot: gli editor lavorano su entrambe
   persistence/
     project-codec.ts   progetto ⇄ JSON, con registri per tipi di clip e traccia
@@ -118,8 +119,13 @@ src/
     mixer-graph.ts     canali con volume, pan, mute/solo; master con i suoi effetti
     offline-mix.ts     export del mix con lo stesso motore (OfflineAudioContext)
     warp-job.ts        dalla clip audio al lavoro di warp per il DSP
+  browser/             il browser, solo dati: voci e fonti (item.ts), categorie dei dispositivi
+                       (device-sources.ts), sample del progetto e cartelle del disco (sample-sources.ts,
+                       fs-folder.ts), ricerca (search.ts), l'elenco delle fonti (catalog.ts)
   app/
     app.ts             monta l'app e implementa i comandi
+    browser-loader.ts  dove va ciò che arriva dal browser (strumento, effetto, sample)
+    sample-preview.ts  l'anteprima dei sample del browser
     audio-system.ts    monta insieme worker, sample, cache, AudioContext e motore
     effect-spectrum.ts lo spettro prima e dopo un effetto (AnalyserNode)
     project-session.ts cartella del progetto: importa, apri, salva, salva con nome
@@ -137,6 +143,7 @@ src/
     track-headers.ts   intestazioni delle tracce (nome, mute/solo, volume, livello; rientro e ▸/▾ dei gruppi)
     track-groups.ts    i gruppi dall'interfaccia: Ctrl+G, Ctrl+Maiusc+G, voci dei menu delle tracce
     session/           la session view: griglia di slot e scene, mixer in fondo alle colonne
+    browser/           il pannello del browser (fonti, albero, ricerca, anteprima) e il trascinamento delle sue voci
     master-strip.ts    la riga del master
     meters/            misuratori: scala dei dB, balistica, un ciclo di disegno per tutti
     transport-bar.ts   barra in alto
@@ -221,6 +228,29 @@ MioBrano/
 | Ctrl+L · Ctrl+4 · Ctrl+Maiusc+M | loop · griglia · metronomo |
 | Rotella · Maiusc+rotella · Ctrl+rotella · + / − | scorri · scorri in orizzontale · zoom |
 | Ctrl+S · Ctrl+O | salva · apri |
+
+## Browser
+
+A sinistra, come in Live (**◧ Browser** in alto, Vista › Browser o Ctrl+Alt+B lo mostra e lo
+nasconde; il bordo destro si trascina per allargarlo). Contiene solo ciò che studiomio ha:
+
+| Nella colonna | Cosa c'è |
+|---|---|
+| Strumenti · Effetti audio | una cartella per dispositivo (si carica così com'è) con dentro i suoi preset: prima quelli dell'utente (★), poi quelli di fabbrica |
+| Batterie | i kit della Drum Machine, in fila |
+| Progetto corrente | i sample del progetto aperto, con la durata |
+| Preset dell'utente | i preset salvati con ★, una cartella per dispositivo |
+| + Cartella… | aggiunge ai luoghi una cartella di sample del disco (si ricorda tra un avvio e l'altro; dopo un riavvio il browser può chiedere di nuovo il permesso di leggerla); tasto destro: togli dal browser |
+
+| | |
+|---|---|
+| Ctrl+F · Esc | cerca (in tutte le fonti, prima quella scelta: ogni risultato dice da dove viene) · svuota la ricerca |
+| Clic · frecce | sceglie (▸ ◂ aprono e chiudono le cartelle); un sample si vede in fondo e, con 🎧 acceso, si sente |
+| Doppio clic · Invio | carica dove si sta lavorando: un dispositivo nella catena aperta in basso o sulla traccia scelta (uno strumento su una traccia non MIDI va in una traccia MIDI nuova, subito dopo); un sample nello slot scelto della session o, nella timeline, al cursore sulla traccia scelta |
+| Trascina | su una corsia della timeline (al punto, sulla griglia), sull'intestazione di una traccia, su uno slot o sulla testa di una colonna della session, sulla catena aperta, sul master (gli effetti); sotto le tracce: in una traccia nuova |
+
+Caricare dal browser è un passo di annullamento. L'anteprima suona il sample così com'è (senza
+warp), fuori dal mixer.
 
 ## Session view
 

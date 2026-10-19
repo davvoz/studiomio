@@ -24,12 +24,17 @@ export interface Commands {
   /** Raggruppa le tracce scelte (Ctrl+G) · separa il gruppo scelto (Ctrl+Maiusc+G). */
   groupTracks(): void;
   ungroupTracks(): void;
+  /** Mostra o nasconde il browser (Ctrl+Alt+B) · porta il cursore nella sua ricerca (Ctrl+F). */
+  toggleBrowser(): void;
+  searchBrowser(): void;
 }
 
 export interface Binding<C = Commands> {
   readonly key: string;
   readonly ctrl?: boolean;
   readonly shift?: boolean;
+  /** Solo le scorciatoie che lo nominano guardano Alt. */
+  readonly alt?: boolean;
   readonly run: (c: C) => void;
 }
 
@@ -62,6 +67,8 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'o', ctrl: true, run: c => c.open() },
   { key: 'g', ctrl: true, run: c => c.groupTracks() },
   { key: 'g', ctrl: true, shift: true, run: c => c.ungroupTracks() },
+  { key: 'b', ctrl: true, alt: true, run: c => c.toggleBrowser() },
+  { key: 'f', ctrl: true, run: c => c.searchBrowser() },
 ];
 
 /** Campi in cui si scrive: lì tutti i tasti sono loro. */
@@ -85,7 +92,8 @@ export function bindKeys<C>(target: Document | HTMLElement, commands: C, keymap:
     const key = e.key.toLowerCase();
     // Maiusc conta solo se la scorciatoia lo nomina o usa Ctrl: "+" richiede Maiusc su molte tastiere
     const b = keymap.find(k => (k.key === e.code || k.key === key) && !!k.ctrl === ctrl
-      && (k.shift === undefined ? !(ctrl && e.shiftKey) : k.shift === e.shiftKey));
+      && (k.shift === undefined ? !(ctrl && e.shiftKey) : k.shift === e.shiftKey)
+      && (k.alt === undefined || k.alt === e.altKey));
     if (!b) return;
     e.preventDefault();
     if (ownKeys) e.stopPropagation();

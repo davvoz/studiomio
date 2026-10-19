@@ -1,3 +1,4 @@
+import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { DeviceId, SampleId, TrackId } from '../../core/id';
 import type { SampleData } from '../../devices/dsp/core';
 import type { SampleRef } from '../../model/sample';
@@ -19,6 +20,7 @@ import {
 } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { addEffectToRack, groupDevices, mapMacro, moveDevice, ungroupRack, unmapParam } from '../../store/rack-edits';
+import { acceptBrowserDrops } from '../browser/browser-drag';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
 import { DevicePanel } from './device-panel';
@@ -42,6 +44,8 @@ export interface DeviceViewDeps {
   readonly sampleAudio?: (id: SampleId) => SampleData | undefined;
   /** Un messaggio nella barra di stato (es. perché un raggruppamento non si può fare). */
   readonly say?: (text: string) => void;
+  /** Una voce del browser lasciata sulla catena aperta. */
+  readonly dropItem?: (item: BrowserItem, target: LoadTarget) => void;
 }
 
 /** La chiave del pannello dello strumento (gli effetti usano il loro id). */
@@ -115,6 +119,8 @@ export class DeviceView {
       }
     });
     deps.store.onChange(() => this.sync());
+    const dropItem = deps.dropItem;
+    if (dropItem) acceptBrowserDrops(this.element, item => this.owner && dropItem(item, { kind: 'chain', owner: this.owner }), { accept: () => !!this.owner });
   }
 
   get isOpen(): boolean {

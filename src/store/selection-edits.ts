@@ -66,10 +66,11 @@ export const splitMany = (refs: readonly PlacementRef[], at: Beats): Edit =>
     return pl && pl.start < at && placementEnd(pl) > at ? acc.updatingTrack(r.track, t => t.splitting(r.id, at, ids)) : acc;
   }, p));
 
-/** Aggiunge un sample e lo posa: sulla traccia indicata se è audio, altrimenti su una nuova. */
+/** Aggiunge un sample (se non è già nel progetto) e lo posa: sulla traccia indicata se è audio,
+ *  altrimenti su una nuova. */
 export const importSample = (sample: SampleRef, target: TrackId | null, start: Beats): Edit =>
   edit('Importa audio', (p, { ids }) => {
-    let next = p.addingSample(sample);
+    let next = p.sample(sample.id) ? p : p.addingSample(sample);
     let trackId = target && next.track(target)?.kind === 'audio' ? target : null;
     if (!trackId) {
       const t = AudioTrack.empty(ids.next('track'), sample.name, paletteColor(next.tracks.length), next.scenes.length);

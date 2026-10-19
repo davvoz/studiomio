@@ -3,6 +3,7 @@
  * Documenti\studiomio\Preset (li scrive il processo principale); nel browser restano nello
  * spazio locale. Si salvano solo i parametri: i sample caricati (es. i pad della Drum Machine)
  * sono file del progetto. */
+import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { ParamValues } from '../model/device';
 import { paramsOf, resolveParams, type DeviceType, type Preset } from './device-type';
 import { effectType, instrumentType } from './registry';
@@ -95,12 +96,18 @@ export class StoragePresets implements PresetBackend {
 
 export class UserPresets {
   private presets = new Map<string, Preset[]>();
+  private readonly events = new Emitter<{ change: [] }>();
 
   /** `backend` conserva i preset; `folderOf` dà la cartella di un preset nuovo dal suo tipo. */
   constructor(
     private readonly backend: PresetBackend | null,
     private readonly folderOf: (type: string) => string = type => type,
   ) {}
+
+  /** I preset sono cambiati (letti, salvati, eliminati): per chi li elenca, come il browser. */
+  onChange(fn: () => void): Unsubscribe {
+    return this.events.on('change', fn);
+  }
 
   /** Si apre la cartella dei preset (solo nell'app desktop). */
   get canReveal(): boolean {
@@ -115,6 +122,7 @@ export class UserPresets {
       const preset = storedPreset(p);
       if (preset) this.put(preset);
     }
+    this.events.emit('change');
   }
 
   /** I preset salvati per il tipo, in ordine di nome. */
@@ -132,6 +140,7 @@ export class UserPresets {
     const stored: StoredPreset = { type, name: preset.name, params: { ...preset.params } };
     await this.backend.save(this.folderOf(type), stored);
     this.put(stored);
+    this.events.emit('change');
   }
 
   async remove(type: string, name: string): Promise<void> {
@@ -140,6 +149,7 @@ export class UserPresets {
     const list = (this.presets.get(type) ?? []).filter(p => p.name !== name);
     if (list.length) this.presets.set(type, list);
     else this.presets.delete(type);
+    this.events.emit('change');
   }
 
   async reveal(): Promise<void> {

@@ -2,6 +2,7 @@
  * scena), sotto lo stop della traccia e il mixer; dopo le tracce i bus (senza clip, solo il
  * mixer); a destra il master con il lancio delle scene. Un clic su ▶ lancia una clip (al prossimo confine della quantizzazione), ▶ di una
  * scena lancia la riga. Le clip si trascinano da uno slot all'altro (Ctrl copia). */
+import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
@@ -9,7 +10,7 @@ import { groupSlotState } from '../../engine/session';
 import { LAUNCH_QUANTA } from '../../model/launch';
 import type { Clip } from '../../model/clip';
 import { PALETTE } from '../../model/colors';
-import type { ChainOwner, Scene } from '../../model/project';
+import { MASTER, type ChainOwner, type Scene } from '../../model/project';
 import { BusTrack, GroupTrack, type Track } from '../../model/track';
 import { setClipColor, setTrackColor, slotRef, type ClipRef } from '../../store/clip-ref';
 import { copySlotClip, pasteToSlot, type Clipboard } from '../../store/clipboard';
@@ -19,6 +20,7 @@ import {
   captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, insertScene, moveSlotClip, newSlotMidiClip, renameScene,
   setSceneColor, updateSlotClip, type SlotRef,
 } from '../../store/session-edits';
+import { acceptBrowserDrops } from '../browser/browser-drag';
 import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
 import { el } from '../dom';
 import { renameInline } from '../inline-rename';
@@ -37,6 +39,9 @@ export interface SessionViewDeps {
   readonly clipboard: Clipboard;
   openClip(ref: ClipRef): void;
   openDevices(owner: ChainOwner): void;
+  /** Una voce del browser lasciata su uno slot, sulla testa di una colonna (o del master) o
+   *  fuori dalle colonne (`track` null: una traccia nuova). */
+  dropItem?(item: BrowserItem, target: LoadTarget): void;
   /** Importa dei file audio negli slot da `slot` in giù (su una traccia nuova se `track` è null o non è audio). */
   importToSlot(files: File[], track: TrackId | null, slot: number): void;
   addTrack(kind: TrackKind): void;
@@ -367,6 +372,7 @@ export class SessionView {
     const name = el('span', { className: 'session-track-name', textContent: b.name });
     const head = el('div', { className: 'session-head bus', title: `${b.name}: un clic apre gli effetti, doppio clic rinomina` }, name);
     head.style.setProperty('--color', b.color);
+    head.dataset.track = b.id;
     head.onpointerdown = e => this.clickTrack(b.id, e);
     head.onclick = e => {
       if (!e.shiftKey && !e.ctrlKey && !e.metaKey) this.deps.openDevices(b.id);
@@ -397,6 +403,7 @@ export class SessionView {
     const name = el('span', { className: 'session-track-name', textContent: t.name });
     const head = el('div', { className: 'session-head', title: `${t.name}: un clic apre strumento ed effetti, doppio clic rinomina` }, name);
     head.style.setProperty('--color', t.color);
+    head.dataset.track = t.id;
     if (t instanceof GroupTrack) {
       head.classList.add('group');
       head.prepend(el('button', {
@@ -583,6 +590,32 @@ export class SessionView {
       const ref = this.slotAt(e.target);
       this.deps.importToSlot(files, ref?.track ?? null, ref?.slot ?? 0);
     });
+    if (this.deps.dropItem) {
+      acceptBrowserDrops(g, (item, e) => this.deps.dropItem!(item, this.dropTarget(item, e.target)), {
+        // lo slot (o la testa della colonna) dove andrà, evidenziato
+        over: e => {
+          for (const c of g.querySelectorAll('.drop-target')) c.classList.remove('drop-target');
+          const node = (e?.target as HTMLElement | null)?.closest?.('.slot, .session-head');
+          node?.classList.add('drop-target');
+        },
+      });
+    }
+  }
+
+  /** Dove va una voce del browser lasciata su `target`: lo slot sotto; sulla testa (o sul mixer)
+   *  di una colonna la sua traccia (un sample nel primo slot libero); sul master la sua catena. */
+  private dropTarget(item: BrowserItem, target: EventTarget | null): LoadTarget {
+    const ref = this.slotAt(target);
+    if (ref) return { kind: 'slot', ...ref };
+    const node = (target as HTMLElement | null)?.closest?.<HTMLElement>('[data-track], .master-head');
+    const p = this.deps.store.project;
+    if (node?.classList.contains('master-head')) return { kind: 'chain', owner: MASTER };
+    const track = node?.dataset.track ? p.track(node.dataset.track as TrackId) : undefined;
+    const audio = item.payload?.kind === 'sample' || item.payload?.kind === 'file';
+    if (!track) return audio ? { kind: 'slot', track: null, slot: 0 } : { kind: 'lane', track: null, beat: 0 };
+    if (!audio) return { kind: 'chain', owner: track.id };
+    const free = track.slots.findIndex(c => !c);
+    return { kind: 'slot', track: track.id, slot: free < 0 ? 0 : free };
   }
 
   private dragMove(e: PointerEvent): void {

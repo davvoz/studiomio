@@ -1,3 +1,4 @@
+import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { PlacementId, TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
@@ -11,6 +12,7 @@ import {
   LoopRegionGesture, MarqueeGesture, MoveClipsGesture, ResizeClipGesture, ScrubGesture,
   type Gesture, type GestureHost, type Pointer,
 } from './gestures';
+import { acceptBrowserDrops } from '../browser/browser-drag';
 import { LOOP_CURSOR, loopPartAt } from '../loop-drag';
 import { Surface } from '../surface';
 import { paintLanes, paintPlayhead, paintRuler, RULER_LOOP_BAND } from './painters';
@@ -24,6 +26,8 @@ export interface ArrangementDeps {
   readonly openClip: (track: TrackId, placement: PlacementId) => void;
   /** File trascinati sulla timeline. */
   readonly dropFiles: (files: File[], track: TrackId | null, beat: Beats) => void;
+  /** Una voce del browser lasciata su una corsia (o sotto le tracce: `track` null). */
+  readonly dropItem?: (item: BrowserItem, target: LoadTarget) => void;
   /** Tasto destro: `hit` è ciò che c'è sotto, (x, y) il punto nella finestra. */
   readonly contextMenu: (hit: Hit, x: number, y: number) => void;
 }
@@ -239,15 +243,22 @@ export class ArrangementView implements GestureHost {
         e.dataTransfer.dropEffect = 'copy';
       }
     });
-    el.addEventListener('drop', e => {
-      e.preventDefault();
-      const files = [...(e.dataTransfer?.files ?? [])];
-      if (!files.length) return;
+    // dove cade qualcosa: la traccia sotto (null sotto le tracce) e il battito, sulla griglia
+    const place = (e: DragEvent) => {
       const r = el.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
       const track = this.store.project.visibleTracks[this.geo.trackIndexAt(y)];
       const step = gridStep(this.geo.pxPerBeat, this.store.project.signature);
-      this.deps.dropFiles(files, track?.id ?? null, Math.max(0, snapTo(this.geo.xToBeat(x), step)));
+      return { track: track?.id ?? null, beat: Math.max(0, snapTo(this.geo.xToBeat(x), step)) };
+    };
+    el.addEventListener('drop', e => {
+      const files = [...(e.dataTransfer?.files ?? [])];
+      if (!files.length) return;
+      e.preventDefault();
+      const { track, beat } = place(e);
+      this.deps.dropFiles(files, track, beat);
     });
+    const dropItem = this.deps.dropItem;
+    if (dropItem) acceptBrowserDrops(el, (item, e) => dropItem(item, { kind: 'lane', ...place(e) }));
   }
 }

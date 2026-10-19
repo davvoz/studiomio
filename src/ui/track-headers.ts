@@ -1,3 +1,4 @@
+import type { BrowserItem, LoadTarget } from '../browser/item';
 import type { TrackId } from '../core/id';
 import { instrumentType } from '../devices/registry';
 import { PALETTE } from '../model/colors';
@@ -6,6 +7,7 @@ import { GroupTrack, type MidiTrack, type Track } from '../model/track';
 import { addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
 import { setTrackColor } from '../store/clip-ref';
 import type { ProjectStore } from '../store/project-store';
+import { acceptBrowserDrops } from './browser/browser-drag';
 import { SEPARATOR, showContextMenu, type MenuItem } from './context-menu';
 import { groupMenuItems, newTrackHereItems, toggleFold } from './track-groups';
 import { clickTrack, type UiState } from './ui-state';
@@ -17,6 +19,8 @@ import { addEffectItems, fxButton, setFxCount, setVolume, volumeSlider } from '.
 export interface HeaderActions {
   /** Apre la catena dei dispositivi (strumento ed effetti) di una traccia o del master. */
   openDevices(owner: ChainOwner): void;
+  /** Una voce del browser lasciata su una traccia (o sotto le tracce: `track` null). */
+  dropItem?(item: BrowserItem, target: LoadTarget): void;
 }
 
 const kindBadge = (text: string) => () => el('span', { className: 'kind', textContent: text });
@@ -60,6 +64,12 @@ export class TrackHeaders {
       showContextMenu(e.clientX, e.clientY, newTrackItems(store));
     };
     this.element.append(add, scroll);
+    // dal browser: sull'intestazione va nella catena della traccia, sotto le tracce in una nuova
+    if (actions.dropItem) acceptBrowserDrops(scroll, (item, e) => {
+      const y = e.clientY - scroll.getBoundingClientRect().top;
+      const track = store.project.visibleTracks[ui.geometry.trackIndexAt(y)];
+      actions.dropItem!(item, track ? { kind: 'chain', owner: track.id } : { kind: 'lane', track: null, beat: 0 });
+    });
     store.onChange(() => this.render());
     ui.onChange(() => {
       this.position();

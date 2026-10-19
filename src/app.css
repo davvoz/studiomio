@@ -15,7 +15,14 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); overflow: hidden; }
-#app { display: grid; grid-template-rows: auto auto minmax(120px, 1fr) auto auto; height: 100%; }
+#app { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100%; }
+/* sotto le barre: il browser a sinistra, poi le viste con l'area in basso */
+.workspace { display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
+.work { display: grid; grid-template-rows: minmax(120px, 1fr) auto; min-height: 0; min-width: 0; }
+/* ognuno nella sua colonna: con il browser nascosto la prima resta vuota (larga 0) e non ci
+   scivola dentro l'area di lavoro */
+.workspace > .browser { grid-column: 1; }
+.workspace > .work { grid-column: 2; }
 
 button, input, select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 5px;
@@ -546,3 +553,44 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .prisma-slider-fill.negative { background: color-mix(in srgb, #4cb8ff 55%, transparent); }
 .prisma-slider-text { position: relative; text-align: center; font: 10.5px/18px ui-monospace, monospace; color: var(--text); pointer-events: none; white-space: nowrap; }
 .drive-controls { display: flex; align-items: flex-start; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; }
+
+/* ---------------------------------------------------------------- browser */
+.browser { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); border-right: 1px solid var(--line); user-select: none; }
+.browser[hidden] { display: none; }
+.browser-top { padding: 6px; border-bottom: 1px solid var(--line); }
+.browser-search { width: 100%; padding: 3px 8px; font-size: 12px; }
+.browser-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 116px minmax(0, 1fr); }
+.browser-sources { display: flex; flex-direction: column; overflow-y: auto; padding: 2px 0 8px; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 45%, var(--panel)); }
+.browser-section { padding: 9px 10px 3px; font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+button.browser-source { flex: none; background: none; border: 0; border-radius: 0; padding: 3px 10px; text-align: left; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.browser-source:not(:disabled):hover { background: var(--panel-2); }
+button.browser-source.on { background: color-mix(in srgb, var(--accent) 24%, var(--panel)); color: #fff; box-shadow: inset 3px 0 0 var(--accent); }
+button.browser-add { margin-top: 6px; color: var(--muted); font-size: 11.5px; }
+.browser-list { overflow: auto; min-width: 0; padding: 2px 0; outline: none; font-size: 12px; }
+.browser-row { display: flex; align-items: center; gap: 5px; height: 21px; padding: 0 8px 0 calc(4px + var(--depth, 0) * 14px); white-space: nowrap; cursor: default; }
+.browser-row:hover { background: var(--panel-2); }
+.browser-row.selected { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); }
+.browser-list:focus .browser-row.selected { background: color-mix(in srgb, var(--accent) 42%, var(--panel)); color: #fff; }
+.browser-row .twist { flex: none; width: 11px; font-size: 10px; text-align: center; color: var(--muted); cursor: pointer; }
+.browser-row .icon { flex: none; width: 14px; text-align: center; color: var(--muted); }
+.browser-row.icon-instrument .icon { color: #f2b45c; }
+.browser-row.icon-effect .icon { color: #6cc4f0; }
+.browser-row.icon-user-preset .icon { color: var(--accent); }
+.browser-row.icon-sample .icon { color: #8fd18a; }
+.browser-row.icon-folder .icon { color: #c5b48a; }
+.browser-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.browser-row .hint { flex: none; max-width: 48%; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; color: var(--muted); }
+.browser-row.folder .name { color: var(--text); }
+.browser-note { height: auto; min-height: 21px; padding-top: 4px; padding-bottom: 4px; white-space: normal; font-style: italic; gap: 8px; }
+.browser-note button { font-style: normal; flex: none; }
+.browser-preview { display: flex; flex-direction: column; gap: 4px; padding: 5px 6px 6px; border-top: 1px solid var(--line); }
+.browser-preview-head { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; }
+.browser-preview-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.browser-preview-toggle { flex: none; padding: 0 6px; font-size: 12px; line-height: 1.6; }
+.browser-wave { display: block; width: 100%; height: 34px; border-radius: 3px; background: var(--bg); }
+/* il bordo destro: trascinandolo il browser si allarga o si stringe */
+.browser-resize { position: absolute; top: 0; bottom: 0; right: -4px; width: 7px; z-index: 4; cursor: ew-resize; touch-action: none; }
+.browser-resize:hover, .browser-resize.dragging { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); }
+/* dove si può lasciare una voce trascinata dal browser */
+.lanes-wrap.browser-drop, .header-scroll.browser-drop, .device-view.browser-drop, .master-header.browser-drop { box-shadow: inset 0 0 0 2px var(--accent); }
+.session-head.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
