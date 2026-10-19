@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-10-19
+
 ### Added
 - Buses, like Live's return tracks: a bus has no clips, it receives what the tracks send it,
   runs it through its own effects (a shared reverb or delay, say) and goes to the master. Each
