@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-10-19
+
 ### Fixed
 - In the session the buses sat right after the tracks: they now stay next to the master, on the
   right edge, like Live's return tracks, and keep their place while the tracks scroll sideways.
