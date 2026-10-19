@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-10-20
+
 ### Added
 - The browser, on the left like Live's (◧ Browser at the top, View › Browser or Ctrl+Alt+B;
   drag its right edge to resize it). It holds only what studiomio has: Instruments and Audio
