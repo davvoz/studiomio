@@ -51,6 +51,8 @@ interface Modulation {
 
 export class PrismaDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'prisma' });
+  /** Le schede e le fonti di modulazione, nell'intestazione del dispositivo. */
+  readonly head: HTMLElement;
   private readonly controls = new Map<string, { control: ParamControl; spec: ParamSpec }>();
   private readonly rings = new Map<string, SVGGElement>();
   private readonly tables: { osc: OscKey; view: TableView }[] = [];
@@ -79,7 +81,7 @@ export class PrismaDisplay implements DeviceDisplay {
     this.lfoEditor = new LfoEditor(() => this.values, set);
     this.matrix = new MatrixView({ values: () => this.values, set, slider: (id, label) => this.slider(id, label) });
 
-    const top = el('div', { className: 'prisma-top' },
+    this.head = el('div', {},
       el('div', { className: 'prisma-tabs' }, ...PAGES.map((label, i) => {
         const b = el<HTMLButtonElement>('button', { className: 'mini', textContent: label, onclick: () => this.showPage(i) });
         this.pageTabs.push(b);
@@ -88,7 +90,7 @@ export class PrismaDisplay implements DeviceDisplay {
       el('div', { className: 'prisma-chips', title: 'Trascina una fonte su una manopola per modularla · clic: sceglila, poi Alt+trascina su una manopola per la quantità' },
         ...CHIPS.map(c => this.chip(c.src, c.label))));
     this.pages.push(this.oscPage(), this.modPage(), el('div', { className: 'prisma-page' }, this.matrix.element));
-    this.element.append(top, ...this.pages);
+    this.element.append(...this.pages);
     this.bindAltDrag();
     this.showPage(view.page);
     this.update(ctx.settings, true);

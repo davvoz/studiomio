@@ -5,7 +5,7 @@ import type { AudioData } from '../../src/dsp/types';
 import { Project } from '../../src/model/project';
 import { MemoryDirectory } from '../../src/persistence/directory';
 import { PROJECT_FILE } from '../../src/persistence/project-folder';
-import { addSample, placeSample } from '../../src/store/edits';
+import { addSample, addTrack, placeSample } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 
 /** Audio finto: "decodifica" qualunque file in 1 s di silenzio stereo e registra i sample caricati. */
@@ -45,14 +45,16 @@ describe('ProjectSession', () => {
     const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
     const { audio, loaded } = fakeAudio();
     const session = new ProjectSession(store, audio, async () => disk);
-    expect(session.saved).toBe(false);
+    expect([session.saved, session.changed]).toEqual([false, false]); // vuoto: niente da perdere
     const sample = await session.addAudio('loop.wav', { channels: [new Float32Array(10)], sampleRate: 44100 }, new Uint8Array([9, 9]));
     store.apply(addSample(sample));
     await session.importFiles([fileOf('voce.wav')], null, 0);
     store.apply(placeSample(store.project.tracks[0].id, sample.id, 8));
 
+    expect(session.changed).toBe(true);
+
     await session.save(); // mai salvato: chiede la cartella
-    expect(session.saved).toBe(true);
+    expect([session.saved, session.changed]).toEqual([true, false]);
     expect(session.name).toBe('Brano');
     expect(await disk.list('audio')).toEqual(expect.arrayContaining(['loop.wav', 'voce.wav']));
     expect(await disk.exists(PROJECT_FILE)).toBe(true);
@@ -67,6 +69,12 @@ describe('ProjectSession', () => {
     expect(loaded.size).toBe(2); // i sample tornano nel motore
     expect(session.saved).toBe(true);
     expect(store.canUndo).toBe(false);
+
+    await session.newProject();
+    store.apply(addTrack('audio'));
+    expect(session.changed).toBe(true);
+    session.forgetChanges(); // come il demo appena caricato
+    expect([session.changed, session.saved]).toEqual([false, false]); // non perde nulla, ma non è su disco
   });
 
   it('aprire una cartella senza progetto è un errore chiaro', async () => {

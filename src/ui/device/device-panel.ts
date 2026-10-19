@@ -68,7 +68,8 @@ export class DevicePanel {
     sections.push(...(options.extra ?? []));
     const head = el('div', { className: 'device-panel-head' },
       ...(options.onFold ? [this.fold] : []), ...(options.before ?? []),
-      el('span', { className: 'device-name', textContent: type.label }), this.presets,
+      el('span', { className: 'device-name', textContent: type.label }),
+      ...(options.display?.head ? [Object.assign(options.display.head, { className: 'display-head' })] : []), this.presets,
       ...(options.onPresetSaved ? [this.save] : []), ...(options.after ?? []));
     if (options.onFold) {
       const toggle = () => {

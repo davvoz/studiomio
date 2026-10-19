@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { asId } from '../../src/core/id';
 import { MidiClip } from '../../src/model/midi-clip';
 import { ProjectCodec } from '../../src/persistence/project-codec';
-import { findClip, placementRef, scaleMidiClipAt, slotRef, updateClipAt } from '../../src/store/clip-ref';
+import { findClip, placementRef, scaleMidiClipAt, setClipColor, setTrackColor, slotRef, updateClipAt } from '../../src/store/clip-ref';
 import { copySlotClip, pasteClips, pasteToSlot } from '../../src/store/clipboard';
 import { addMidiClip, setLaunchQuantization } from '../../src/store/edits';
 import {
@@ -200,5 +200,47 @@ describe('appunti tra session e timeline', () => {
     store.apply(pasteClips(copied, 1, 8));
     const pl = store.project.tracks[1].arrangement[0];
     expect([pl.start, pl.length]).toEqual([8, 4]);
+  });
+});
+
+describe('colore delle clip', () => {
+  it('colora insieme clip della timeline e degli slot; senza colore torna quello della traccia', () => {
+    const { store, track } = setup({ midi: 2 });
+    store.apply(addMidiClip(track(0), 0, 4));
+    store.apply(newSlotMidiClip({ track: track(1), slot: 0 }));
+    const p0 = store.project;
+    const refs = [placementRef(track(0), p0.tracks[0].arrangement[0].id), slotRef(track(1), p0.tracks[1].slots[0]!.id)];
+    const colors = () => refs.map(r => findClip(store.project, r)!.clip.color);
+
+    store.apply(setClipColor(refs, '#5b8def'));
+    expect(colors()).toEqual(['#5b8def', '#5b8def']);
+    expect(store.undoLabel).toBe('Colore delle clip');
+
+    store.apply(setClipColor(refs));
+    expect(colors()).toEqual([store.project.tracks[0].color, store.project.tracks[1].color]);
+
+    store.undo();
+    store.undo(); // un solo passo per tutte le clip
+    expect(colors()).toEqual(refs.map(r => findClip(p0, r)!.clip.color));
+  });
+
+  it('il colore della traccia: le clip con il suo colore lo seguono, quelle colorate a mano no', () => {
+    const { store, track } = setup({ midi: 1 });
+    store.apply(addMidiClip(track(0), 0, 4));
+    store.apply(addMidiClip(track(0), 4, 4));
+    store.apply(newSlotMidiClip({ track: track(0), slot: 0 }));
+    const t0 = store.project.tracks[0];
+    const [a, b] = t0.arrangement.map(pl => placementRef(track(0), pl.id));
+    const slot = slotRef(track(0), t0.slots[0]!.id);
+    store.apply(setClipColor([b], '#e36bd0'));
+    const color = (r: typeof a) => findClip(store.project, r)!.clip.color;
+
+    store.apply(setTrackColor(track(0), '#4bc3d6'));
+    expect(store.project.tracks[0].color).toBe('#4bc3d6');
+    expect([color(a), color(b), color(slot)]).toEqual(['#4bc3d6', '#e36bd0', '#4bc3d6']);
+
+    store.undo(); // un solo passo per traccia e clip
+    expect(store.project.tracks[0].color).toBe(t0.color);
+    expect([color(a), color(slot)]).toEqual([t0.color, t0.color]);
   });
 });

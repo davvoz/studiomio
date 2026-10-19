@@ -6,6 +6,36 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- A standard menu bar (File, Edit, Create, View, Options, Help) replaces the row of buttons at
+  the top: open, save, import, export, undo, zoom, grid snap and MIDI controllers now live in
+  the menus, with their shortcuts shown next to each entry. The control bar keeps only what you
+  need while playing: transport, position, tempo, loop, metronome and the Arrangement/Session
+  switch. Alt plus a menu's initial opens it; ← and → move between menus.
+
+- Prisma's page tabs and modulation sources moved into the device's title bar, so the
+  instrument fits the device view and the chain no longer scrolls vertically: it only scrolls
+  sideways, like in Live.
+
+- The ✕ button on every track header is gone (it was easy to hit by mistake and took room from
+  the track name): delete a track from its right-click menu.
+- The • next to the project name now means exactly "there are unsaved changes": an empty new
+  project or the demo just loaded no longer shows it.
+
+### Added
+- Unsaved changes are no longer lost without warning: New project, Open, Load demo and closing
+  the window ask whether to save first (Save / Don't save / Cancel).
+- Ctrl+N: new project.
+- Clip colors: right-click a clip (on the timeline or in a session slot) and pick a color from
+  the swatches; on the timeline it colors every selected clip at once, in one undo step. The
+  crossed swatch gives the clips their track's color back. Pads on the APC40 and Launchpad
+  follow the new color.
+- Track colors: right-click a track header (in the arrangement or the session) and pick a
+  color. The track's clips that still had the track color follow it; clips given a color of
+  their own keep it. One undo step brings back both.
+- Help › Keyboard shortcuts lists every shortcut; Help › About shows the version.
+- Ctrl+Shift+S: Save As.
+
 ## [0.3.5] - 2026-10-19
 
 ### Added

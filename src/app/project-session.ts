@@ -51,7 +51,18 @@ export class ProjectSession {
   }
 
   get saved(): boolean {
-    return this.onDisk && this.store.project === this.savedVersion;
+    return this.onDisk && !this.changed;
+  }
+
+  /** Ci sono modifiche dall'ultimo salvataggio (o dall'apertura): chiudere il progetto le perde. */
+  get changed(): boolean {
+    return this.store.project !== this.savedVersion;
+  }
+
+  /** Il progetto com'è adesso conta come non modificato (es. il demo appena caricato). */
+  forgetChanges(): void {
+    this.savedVersion = this.store.project;
+    this.events.emit('change');
   }
 
   /** Importa file audio: copia nella cartella del progetto, analisi e clip sulla timeline.

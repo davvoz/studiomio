@@ -3,7 +3,7 @@
  * su un ClipRef e non devono sapere quale dei due. */
 import type { ClipId, PlacementId, TrackId } from '../core/id';
 import type { Placement } from '../model/arrangement';
-import type { Clip } from '../model/clip';
+import type { Clip, Color } from '../model/clip';
 import type { Project } from '../model/project';
 import type { Track } from '../model/track';
 import type { MidiClip } from '../model/midi-clip';
@@ -58,6 +58,29 @@ export function findClip(project: Project, ref: ClipRef): FoundClip | null {
 
 /** Modifica il contenuto della clip, dovunque stia. */
 export const updateClipAt = <C extends Clip>(label: string, ref: ClipRef, fn: (c: C) => Clip): Edit => locator(ref).update(label, ref, fn);
+
+/** Il colore di più clip insieme (un solo passo da annullare); senza colore ognuna prende
+ *  quello della sua traccia. */
+export const setClipColor = (refs: readonly ClipRef[], color?: Color): Edit =>
+  edit(refs.length === 1 ? 'Colore della clip' : 'Colore delle clip', (p, ctx) => refs.reduce((q, ref) => {
+    const track = q.track(ref.track);
+    return track ? updateClipAt('', ref, c => c.withColor(color ?? track.color)).apply(q, ctx) : q;
+  }, p));
+
+/** Il colore di una traccia. Le sue clip che avevano il colore della traccia lo seguono; quelle
+ *  a cui si è dato un colore proprio lo tengono. */
+export const setTrackColor = (id: TrackId, color: Color): Edit =>
+  edit('Colore della traccia', (p, ctx) => {
+    const track = p.track(id);
+    if (!track || track.color === color) return p;
+    const same = (c: Clip | null): c is Clip => c?.color.toLowerCase() === track.color.toLowerCase();
+    const refs = [
+      ...track.arrangement.filter(pl => same(pl.clip)).map(pl => placementRef(id, pl.id)),
+      ...track.slots.filter(same).map(c => slotRef(id, c.id)),
+    ];
+    const recolored = p.updatingTrack(id, t => t.withColor(color));
+    return refs.length ? setClipColor(refs, color).apply(recolored, ctx) : recolored;
+  });
 
 /** Il crop di una clip audio: il file ritagliato entra nel progetto e la clip (già fatta per
  *  suonarlo) prende il posto della vecchia. */

@@ -15,7 +15,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); overflow: hidden; }
-#app { display: grid; grid-template-rows: auto minmax(120px, 1fr) auto auto; height: 100%; }
+#app { display: grid; grid-template-rows: auto auto minmax(120px, 1fr) auto auto; height: 100%; }
 
 button, input, select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 5px;
@@ -26,7 +26,21 @@ button:disabled { opacity: .4; cursor: default; }
 button:not(:disabled):hover { border-color: var(--accent); }
 button.on { background: var(--accent); color: #141414; border-color: var(--accent); }
 
-/* ---------------------------------------------------------------- barra in alto */
+/* ---------------------------------------------------------------- barra dei menu */
+.menubar {
+  display: flex; align-items: center; gap: 1px; height: 28px; padding: 0 6px;
+  background: var(--bg); border-bottom: 1px solid var(--line); user-select: none;
+}
+.menubar .menu-title {
+  background: none; border: 0; border-radius: 4px; padding: 3px 10px; font-size: 12.5px; color: var(--text);
+}
+.menubar .menu-title:hover, .menubar .menu-title.open { background: var(--panel-2); }
+.menubar .menu-title.open { color: var(--accent); }
+.menubar .title { flex: 1 0 0; min-width: 0; text-align: center; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menubar .aside { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.menubar .surface { font-size: 11.5px; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 10px; padding: 0 8px; }
+
+/* ---------------------------------------------------------------- barra di controllo */
 .transport {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
   padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line);
@@ -35,7 +49,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .transport .play { min-width: 40px; }
 .transport input[type=number] { width: 76px; }
 .transport .pos { font: 600 16px/1 ui-monospace, monospace; min-width: 82px; text-align: center; color: var(--accent); }
-.transport .title { flex: 1 0 0; min-width: 0; text-align: right; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.transport .group.end { margin-left: auto; }
 
 /* ---------------------------------------------------------------- arrangement */
 .arrangement { display: grid; grid-template-columns: var(--header-w) 1fr; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
@@ -59,7 +73,6 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .header .track-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
 .header .rename { flex: 1; padding: 1px 4px; }
 .header .kind { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
-.header .del { padding: 0 6px; line-height: 1.2; color: var(--muted); }
 .header .controls { display: flex; align-items: center; gap: 4px; }
 .header .controls button { padding: 1px 7px; font-size: 11.5px; }
 .header .controls input[type=range] { flex: 1; min-width: 0; padding: 0; accent-color: var(--accent); }
@@ -125,12 +138,12 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-head [hidden] { display: none; }
 .device-title { font-weight: 600; margin-right: auto; padding-left: 9px; border-left: 4px solid var(--color, var(--accent)); }
 .device-head .close { padding: 2px 9px; }
+/* la catena scorre solo in orizzontale, come in Live: ogni dispositivo è disegnato per stare
+ * nell'altezza della vista (anche con la barra di scorrimento sotto) ed è alto quanto la catena */
 .device-chain {
-  display: flex; gap: 10px; padding: 8px 10px; overflow: auto; flex: 1; min-height: 0; align-items: flex-start;
+  display: flex; gap: 10px; padding: 8px 10px; overflow: auto hidden; flex: 1; min-height: 0; align-items: flex-start;
   scrollbar-width: thin; scrollbar-color: #3a4048 transparent;
 }
-/* ogni dispositivo è alto almeno quanto la catena; se il contenuto non ci sta il pannello si
- * allunga e la catena scorre, invece di farlo uscire dalla cornice */
 .device-chain > * { min-height: 100%; }
 .device-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #1f2328; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px 8px; transition: border-color .12s; }
 .device-panel:hover { border-color: #3a4048; }
@@ -155,6 +168,8 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-panel-head .save-preset { color: var(--muted); }
 .device-panel-head .save-preset:hover { color: var(--text); }
 .device-name { font-weight: 600; margin-right: auto; padding: 0 4px; }
+.device-panel-head:has(> .display-head) .device-name { margin-right: 6px; }
+.display-head { display: flex; align-items: center; gap: 12px; margin-right: auto; min-width: 0; }
 .device-panel-head .mini { padding: 0 7px; font-size: 12px; line-height: 1.6; }
 .device-panel-head .power { color: var(--muted); }
 .device-panel:not(.off) .power { background: var(--accent); color: #141414; border-color: var(--accent); }
@@ -242,6 +257,23 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .context-menu .swatch.none { background: linear-gradient(to top right, transparent 46%, #e5484d 46% 54%, transparent 54%), #2c3138; border-color: #4a505a; }
 .context-menu .swatch:hover, .context-menu .swatch:focus { outline: 2px solid #fff; outline-offset: 1px; }
 .context-menu .swatch.current { box-shadow: inset 0 0 0 2px #101214; outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---------------------------------------------------------------- finestre di dialogo */
+.dialog { padding: 0; border: 1px solid #3a3f47; border-radius: 9px; background: #23272e; color: var(--text); box-shadow: 0 16px 48px #000c; max-width: min(560px, calc(100vw - 32px)); }
+.dialog::backdrop { background: #0008; }
+.dialog-body { padding: 18px 22px 14px; max-height: calc(100vh - 64px); overflow-y: auto; }
+.dialog h2 { margin: 0 0 12px; font-size: 16px; }
+.dialog p { margin: 0 0 8px; color: var(--muted); }
+.dialog p.version { color: var(--accent); font: 600 12px/1.4 ui-monospace, monospace; }
+.dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.dialog footer .primary { background: var(--accent); color: #141414; border-color: var(--accent); }
+.dialog footer button:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.dialog:has(.definitions) { max-width: min(760px, calc(100vw - 32px)); }
+.definitions { columns: 2 280px; column-gap: 32px; font-size: 12.5px; }
+.definitions table { width: 100%; border-collapse: collapse; break-inside: avoid; margin-bottom: 12px; }
+.definitions caption { text-align: left; padding-bottom: 2px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--line); }
+.definitions td { padding: 3px 0; }
+.definitions td.key { text-align: right; padding-left: 24px; font: 11.5px ui-monospace, monospace; color: var(--muted); white-space: nowrap; }
 
 /* ---------------------------------------------------------------- barra di stato */
 .status { display: flex; gap: 12px; padding: 5px 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); min-height: 26px; }
@@ -430,7 +462,6 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .device-panel.instrument-panel .device-sections:has(> .prisma) { max-width: none; }
 .prisma { display: flex; flex-direction: column; gap: 5px; }
 .prisma [hidden] { display: none !important; }
-.prisma-top { display: flex; align-items: center; gap: 12px; }
 .prisma-tabs, .prisma-subtabs { display: flex; gap: 2px; }
 .prisma-tabs button.on, .prisma-subtabs button.on { background: var(--accent); color: #141414; border-color: var(--accent); }
 .prisma-tabs button.full { animation: prisma-full .25s 6 alternate; }

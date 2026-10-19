@@ -11,7 +11,7 @@ import type { Clip } from '../../model/clip';
 import { PALETTE } from '../../model/colors';
 import type { ChainOwner, Scene } from '../../model/project';
 import { GroupTrack, type Track } from '../../model/track';
-import { slotRef, type ClipRef } from '../../store/clip-ref';
+import { setClipColor, setTrackColor, slotRef, type ClipRef } from '../../store/clip-ref';
 import { copySlotClip, pasteToSlot, type Clipboard } from '../../store/clipboard';
 import { removeTrack, renameTrack, setLaunchQuantization, type TrackKind } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
@@ -367,6 +367,7 @@ export class SessionView {
         { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: () => this.deps.openDevices(t.id) },
         ...addEffectItems(this.deps.store, t.id, () => this.deps.openDevices(t.id)),
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameTrack(t.id, n))) },
+        { colors: PALETTE, current: t.color, required: true, pick: c => c && this.apply(setTrackColor(t.id, c)) },
         SEPARATOR,
         ...groupMenuItems(this.deps.store, this.deps.ui, t),
         SEPARATOR,
@@ -583,6 +584,8 @@ export class SessionView {
       { label: 'Copia', shortcut: KEY.copy, run: () => this.copySelected() },
       { label: 'Duplica', shortcut: KEY.duplicate, run: () => this.duplicateSelected() },
       { label: 'Rinomina', run: () => name && renameInline(name, n => this.apply(updateSlotClip('Rinomina clip', ref.track, clip.id, c => c.withName(n)))) },
+      SEPARATOR,
+      { colors: PALETTE, current: clip.color, noneTitle: 'Colore della traccia', pick: c => this.apply(setClipColor([slotRef(ref.track, clip.id)], c)) },
       SEPARATOR,
       { label: 'Elimina', shortcut: KEY.delete, run: () => this.clearSelected() },
     ];

@@ -1,6 +1,7 @@
 import type { TrackId } from '../core/id';
 import { randomIds } from '../core/id';
 import type { Beats, Seconds } from '../core/music-time';
+import type { Color } from '../model/clip';
 import type { SampleRef } from '../model/sample';
 import { ControlSurfaces } from '../control/control-surfaces';
 import { buildDemoProject } from '../demo/demo-project';
@@ -10,8 +11,9 @@ import { sceneArrangement } from '../model/scene-export';
 import { foldTail } from '../engine/offline-mix';
 import { addMidiClip, addTrack, setLoopRegion, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
-import { findClip, placementRef, type ClipRef } from '../store/clip-ref';
+import { findClip, placementRef, setClipColor, type ClipRef } from '../store/clip-ref';
 import { showContextMenu } from '../ui/context-menu';
+import { choose } from '../ui/dialog';
 import { gridStep } from '../ui/timeline/geometry';
 import { timelineMenu, type TimelineActions } from './menus';
 import { ProjectStore } from '../store/project-store';
@@ -28,14 +30,16 @@ import { SessionView } from '../ui/session/session-view';
 import { MeterBoard } from '../ui/meters/meter-board';
 import { groupSelectedTracks, ungroupSelectedTrack } from '../ui/track-groups';
 import { TrackHeaders } from '../ui/track-headers';
-import { TransportBar, type FileCommands } from '../ui/transport-bar';
+import { MenuBar } from '../ui/menu-bar';
+import { TransportBar } from '../ui/transport-bar';
 import { UiState } from '../ui/ui-state';
 import { PeakStore } from '../ui/waveform';
 import { AudioSystem } from './audio-system';
+import { mainMenu } from './main-menu';
 import { ProjectSession } from './project-session';
 
 /** L'applicazione: crea le parti, le collega e implementa i comandi. */
-export class App implements Commands, FileCommands, TimelineActions {
+export class App implements Commands, TimelineActions {
   readonly store = new ProjectStore(Project.empty('Nuovo progetto', randomIds), randomIds);
   readonly audio = new AudioSystem(this.store);
   readonly session = new ProjectSession(this.store, this.audio);
@@ -54,6 +58,7 @@ export class App implements Commands, FileCommands, TimelineActions {
   /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
   private readonly clipEditors: Readonly<Record<string, BottomView & { open(ref: ClipRef): boolean }>>;
   private readonly transport: TransportBar;
+  private readonly menuBar: MenuBar;
   /** I controller MIDI sulla session (APC40 mkII, Launchpad). */
   readonly surfaces: ControlSurfaces;
   private readonly status = Object.assign(document.createElement('span'), { className: 'status-text' });
@@ -109,14 +114,14 @@ export class App implements Commands, FileCommands, TimelineActions {
     });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
     const master = new MasterStrip(this.store, headerActions, meters);
-    const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this, () =>
-      `${this.session.name}${this.session.saved ? '' : ' •'}`);
+    const transport = this.transport = new TransportBar(this.store, this.audio.engine, this);
+    const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
     const main = this.arrangementArea;
     main.append(headers.element, this.arrangement.element, master.header, master.lane);
     const views = Object.assign(document.createElement('div'), { className: 'views' });
     views.append(main, this.sessionView.element);
     this.statusBar.append(this.status, Object.assign(document.createElement('span'), { className: 'version', textContent: `v${__APP_VERSION__}` }));
-    root.append(transport.element, views, this.bottom.element, this.statusBar);
+    root.append(menuBar.element, transport.element, views, this.bottom.element, this.statusBar);
     const viewButton = (text: string, title: string, run: () => void) => Object.assign(document.createElement('button'), { textContent: text, title, onclick: run });
     this.viewButtons = {
       arrangement: viewButton('☰ Arr.', 'Arrangement: la timeline (Tab)', () => this.showView('arrangement')),
@@ -130,7 +135,7 @@ export class App implements Commands, FileCommands, TimelineActions {
     this.renderViews();
 
     this.session.on('message', t => this.say(t));
-    this.session.on('change', () => transport.render());
+    this.session.on('change', () => menuBar.render());
     // le clip eliminate escono dalla selezione, la traccia eliminata non è più quella scelta;
     // una traccia nascosta in un gruppo chiuso passa la scelta al gruppo che si vede
     this.store.onChange(p => {
@@ -142,7 +147,9 @@ export class App implements Commands, FileCommands, TimelineActions {
       }
     });
     bindKeys(document, this, KEYMAP);
-    this.say('Trascina dei file audio sulla timeline o premi "Demo". Ctrl+rotella per lo zoom, Alt per trascinare senza griglia.');
+    // chiudere la finestra con modifiche non salvate chiede conferma (in Electron la chiede il processo principale)
+    addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });
+    this.say('Trascina dei file audio sulla timeline o apri File › Carica il progetto demo. Ctrl+rotella per lo zoom, Alt per trascinare senza griglia.');
   }
 
   // ---------------------------------------------------------------- comandi
@@ -164,6 +171,11 @@ export class App implements Commands, FileCommands, TimelineActions {
   deleteSelection(): void {
     const refs = this.selection();
     if (refs.length) this.store.apply(deleteMany(refs));
+  }
+
+  colorSelection(color: Color | undefined): void {
+    const refs = this.selection().map(r => placementRef(r.track, r.id));
+    if (refs.length) this.store.apply(setClipColor(refs, color));
   }
 
   duplicateSelection(): void {
@@ -296,10 +308,17 @@ export class App implements Commands, FileCommands, TimelineActions {
 
   // ---------------------------------------------------------------- file
 
-  newProject(): void { this.run(() => this.session.newProject()); }
-  open(): void { this.run(() => this.session.open()); }
+  newProject(): void { this.run(async () => { if (await this.closeProject()) await this.session.newProject(); }); }
+  open(): void { this.run(async () => { if (await this.closeProject()) await this.session.open(); }); }
   save(): void { this.run(() => this.session.save()); }
   saveAs(): void { this.run(() => this.session.saveAs()); }
+
+  /** Chiede dei file audio e li importa (come se li si trascinasse). */
+  chooseAudioFiles(): void {
+    const picker = Object.assign(document.createElement('input'), { type: 'file', accept: 'audio/*', multiple: true });
+    picker.onchange = () => this.importFiles([...(picker.files ?? [])]);
+    picker.click();
+  }
 
   /** Nella session i file vanno nello slot scelto (o in una traccia nuova dalla prima scena),
    *  nella timeline al cursore. */
@@ -350,18 +369,33 @@ export class App implements Commands, FileCommands, TimelineActions {
     return this.session.addAudio(`${sample.name} crop.wav`, { channels, sampleRate: sr }, new Uint8Array(encodeWav(channels, sr, 24)));
   }
 
+  /** Prima di lasciare il progetto (nuovo, apri, demo): se ci sono modifiche chiede se salvarle.
+   *  false: si rinuncia (anche se il salvataggio non va a buon fine). */
+  private async closeProject(): Promise<boolean> {
+    if (!this.session.changed) return true;
+    const answer = await choose('Salvare le modifiche?', `Se non le salvi, le modifiche a "${this.session.name}" andranno perse.`, [
+      { label: 'Non salvare', value: 'discard' },
+      { label: 'Annulla', value: 'cancel' },
+      { label: 'Salva', value: 'save', primary: true },
+    ]);
+    if (answer === 'save') await this.session.save(); // se si annulla la scelta della cartella, si ferma qui
+    return answer === 'save' || answer === 'discard';
+  }
+
   loadDemo(): void {
     this.run(async () => {
+      if (!(await this.closeProject())) return;
       await this.session.newProject();
       await buildDemoProject(this.store, this.session);
       this.store.load(this.store.project); // il progetto demo non si annulla
+      this.session.forgetChanges();
       this.say('Progetto demo caricato: premi Spazio per ascoltarlo.');
     });
   }
 
   // ---------------------------------------------------------------- aiuti
 
-  /** I controller MIDI: si collegano da soli se il permesso c'è già; il pulsante 🎛 lo chiede. */
+  /** I controller MIDI: si collegano da soli se il permesso c'è già; Opzioni › Attiva i controller MIDI lo chiede. */
   private controlSurfaces(): ControlSurfaces {
     const app = this;
     const surfaces = new ControlSurfaces({
@@ -378,17 +412,16 @@ export class App implements Commands, FileCommands, TimelineActions {
       closeDetail: () => this.bottom.closeAll(),
       say: t => this.say(t),
     });
-    const button = Object.assign(document.createElement('button'), { textContent: '🎛', onclick: () => this.run(() => surfaces.enable()) });
+    const led = Object.assign(document.createElement('span'), { className: 'surface' });
     const render = () => {
       const name = surfaces.connected;
-      button.classList.toggle('on', name !== null);
-      button.title = name ? `${name}: collegato alla session`
-        : surfaces.enabled ? 'Controller MIDI: collega un APC40 mkII o un Launchpad, si attiva da solo'
-          : "Controller MIDI: attiva l'APC40 mkII o il Launchpad (il browser chiede il permesso per il MIDI)";
+      led.hidden = name === null;
+      led.textContent = `🎛 ${name}`;
+      led.title = `${name}: collegato alla session`;
     };
     surfaces.onChange(render);
     render();
-    this.transport.addGroup(button);
+    this.menuBar.addAside(led);
     this.ui.onChange(() => this.device.markControlled(this.ui.controlledDevice));
     void surfaces.autoStart();
     return surfaces;

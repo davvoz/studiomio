@@ -62,6 +62,14 @@ function createWindow(): BrowserWindow {
     webPreferences: { preload: join(import.meta.dirname, 'preload.cjs') },
   });
   win.removeMenu();
+  // l'app blocca la chiusura se ci sono modifiche non salvate: qui si chiede se uscire lo stesso
+  win.webContents.on('will-prevent-unload', event => {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'question', buttons: ['Esci senza salvare', 'Annulla'], defaultId: 1, cancelId: 1, noLink: true,
+      title: 'Modifiche non salvate', message: 'Ci sono modifiche non salvate.', detail: 'Se esci adesso andranno perse.',
+    });
+    if (choice === 0) event.preventDefault();
+  });
   win.once('ready-to-show', () => {
     win.maximize();
     win.show();

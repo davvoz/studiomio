@@ -61,6 +61,8 @@ export const NO_SPECTRUM: SpectrumTap = { sampleRate: 48000, binCount: 0, read: 
 
 export interface DeviceDisplay {
   readonly element: HTMLElement;
+  /** Controlli che stanno nell'intestazione del dispositivo, dopo il nome (per esempio le schede). */
+  readonly head?: HTMLElement;
   update(settings: DeviceSettings, enabled: boolean): void;
   /** Voci in più nel menu (tasto destro) di un parametro, prima di quelle delle macro. */
   menuFor?(param: string): MenuItem[];

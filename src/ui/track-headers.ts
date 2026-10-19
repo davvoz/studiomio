@@ -1,8 +1,10 @@
 import type { TrackId } from '../core/id';
 import { instrumentType } from '../devices/registry';
+import { PALETTE } from '../model/colors';
 import type { ChainOwner } from '../model/project';
 import { GroupTrack, type MidiTrack, type Track } from '../model/track';
 import { addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
+import { setTrackColor } from '../store/clip-ref';
 import type { ProjectStore } from '../store/project-store';
 import { SEPARATOR, showContextMenu, type MenuItem } from './context-menu';
 import { groupMenuItems, newTrackHereItems, toggleFold } from './track-groups';
@@ -123,14 +125,11 @@ class HeaderRow {
     this.volume = volumeSlider(store, 0, `vol-${id}`, (volumeDb, merge) => this.mixer({ volumeDb }, merge));
     this.fx = fxButton(0, 'Effetti della traccia', open);
     this.name.ondblclick = () => this.rename();
-    const del = el('button', {
-      className: 'del', textContent: '×', title: isGroup ? 'Elimina il gruppo con le sue tracce' : 'Elimina traccia', onclick: () => store.apply(removeTrack(id)),
-    });
     const meter = new LevelMeter('track-meter', () => meters.resetClip(id));
     this.detachMeter = meters.attach(id, meter);
     this.element.classList.toggle('group', isGroup);
     this.element.append(
-      el('div', { className: 'top' }, ...(this.fold ? [this.fold] : []), this.name, this.badge, del),
+      el('div', { className: 'top' }, ...(this.fold ? [this.fold] : []), this.name, this.badge),
       el('div', { className: 'controls' }, this.mute, this.solo, this.volume, this.fx),
       meter.element);
     this.element.oncontextmenu = e => {
@@ -139,6 +138,7 @@ class HeaderRow {
       const t = this.track();
       showContextMenu(e.clientX, e.clientY, [
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => this.rename() },
+        { colors: PALETTE, current: t.color, required: true, pick: c => c && store.apply(setTrackColor(t.id, c)) },
         { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: open },
         ...addEffectItems(store, id, open),
         { label: t.mixer.mute ? 'Togli il mute' : 'Mute', run: () => this.mixer({ mute: !t.mixer.mute }) },

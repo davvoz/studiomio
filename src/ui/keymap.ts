@@ -15,7 +15,9 @@ export interface Commands {
   toggleMetronome(): void;
   toggleSnap(): void;
   zoom(factor: number): void;
+  newProject(): void;
   save(): void;
+  saveAs(): void;
   open(): void;
   /** Passa da arrangement a session e viceversa. */
   toggleView(): void;
@@ -54,7 +56,9 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: '+', run: c => c.zoom(1.25) },
   { key: '=', run: c => c.zoom(1.25) },
   { key: '-', run: c => c.zoom(0.8) },
+  { key: 'n', ctrl: true, run: c => c.newProject() },
   { key: 's', ctrl: true, run: c => c.save() },
+  { key: 's', ctrl: true, shift: true, run: c => c.saveAs() },
   { key: 'o', ctrl: true, run: c => c.open() },
   { key: 'g', ctrl: true, run: c => c.groupTracks() },
   { key: 'g', ctrl: true, shift: true, run: c => c.ungroupTracks() },

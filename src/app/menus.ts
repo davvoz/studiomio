@@ -1,6 +1,8 @@
 /* I menu contestuali della timeline: per ogni cosa sotto il puntatore, le sue voci. */
 import type { TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
+import type { Color } from '../model/clip';
+import { PALETTE } from '../model/colors';
 import { placementRef, type ClipRef } from '../store/clip-ref';
 import type { TrackKind } from '../store/edits';
 import { KEY, SEPARATOR, type MenuItem } from '../ui/context-menu';
@@ -13,6 +15,8 @@ export interface TimelineActions {
   cutSelection(): void;
   copySelection(): void;
   deleteSelection(): void;
+  /** Colora le clip selezionate (undefined: il colore della loro traccia). */
+  colorSelection(color: Color | undefined): void;
   duplicateSelection(): void;
   /** Incolla sulla traccia di indice `trackIndex` dal battito `at`. */
   pasteAt(trackIndex: number, at: Beats): void;
@@ -39,6 +43,8 @@ const MENUS: { readonly [K in Hit['kind']]: (a: TimelineActions, hit: Extract<Hi
     { label: 'Incolla qui', shortcut: KEY.paste, disabled: !a.canPaste, run: () => a.pasteAt(hit.trackIndex, a.snap(hit.beat)) },
     { label: 'Duplica', shortcut: KEY.duplicate, run: () => a.duplicateSelection() },
     { label: 'Dividi qui', shortcut: KEY.split, run: () => a.splitSelectionAt(a.snap(hit.beat)) },
+    SEPARATOR,
+    { colors: PALETTE, current: hit.placement.clip.color, noneTitle: 'Colore della traccia', pick: c => a.colorSelection(c) },
     SEPARATOR,
     { label: 'Elimina', shortcut: KEY.delete, run: () => a.deleteSelection() },
   ],

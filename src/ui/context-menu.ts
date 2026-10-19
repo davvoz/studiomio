@@ -16,6 +16,10 @@ export interface MenuColors {
   readonly colors: readonly string[];
   /** Il colore attuale (assente: nessuno), segnato nella riga. */
   readonly current?: string;
+  /** Senza il campione «nessun colore»: un colore ci vuole (per esempio per le tracce). */
+  readonly required?: boolean;
+  /** Il suggerimento del campione «nessun colore» (cosa succede sceglendolo). */
+  readonly noneTitle?: string;
   /** Riceve il colore scelto, o undefined per «nessun colore». */
   readonly pick: (color: string | undefined) => void;
 }
@@ -24,10 +28,18 @@ export const SEPARATOR = 'separator' as const;
 
 export type MenuItem = MenuAction | MenuColors | typeof SEPARATOR;
 
+/** Per chi apre il menu da una barra (i menu a tendina). */
+export interface MenuOptions {
+  /** Chiamata quando il menu si chiude, per qualunque motivo. */
+  readonly onClose?: () => void;
+  /** Tasti in più gestiti da chi ha aperto il menu (per esempio ← e → per passare al menu vicino). */
+  readonly keys?: Readonly<Record<string, () => void>>;
+}
+
 let current: { close(): void } | null = null;
 
 /** Apre il menu nel punto (x, y) della finestra. */
-export function showContextMenu(x: number, y: number, items: readonly MenuItem[]): void {
+export function showContextMenu(x: number, y: number, items: readonly MenuItem[], options: MenuOptions = {}): void {
   current?.close();
   const menu = Object.assign(document.createElement('div'), { className: 'context-menu', role: 'menu', tabIndex: -1 });
   const buttons: HTMLButtonElement[] = [];
@@ -38,9 +50,9 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
     }
     if ('colors' in item) {
       const row = Object.assign(document.createElement('div'), { className: 'swatches' });
-      for (const color of [...item.colors, undefined]) {
+      for (const color of item.required ? item.colors : [...item.colors, undefined]) {
         const s = Object.assign(document.createElement('button'), {
-          className: color ? 'swatch' : 'swatch none', role: 'menuitem', title: color ? color : 'Nessun colore',
+          className: color ? 'swatch' : 'swatch none', role: 'menuitem', title: color ? color : item.noneTitle ?? 'Nessun colore',
         });
         if (color) s.style.setProperty('--swatch', color);
         s.classList.toggle('current', color?.toLowerCase() === item.current?.toLowerCase());
@@ -83,6 +95,7 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
     list[(i + dir + list.length) % list.length]?.focus();
   };
   const KEYS: Readonly<Record<string, () => void>> = {
+    ...options.keys,
     ArrowDown: () => step(1),
     ArrowUp: () => step(-1),
     Escape: () => close(),
@@ -103,6 +116,7 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
     removeEventListener('blur', close);
     removeEventListener('resize', close);
     if (current === handle) current = null;
+    options.onClose?.();
   };
   const handle = { close };
   current = handle;
