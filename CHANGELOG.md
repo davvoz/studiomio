@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-10-19
+
 ### Changed
 - A standard menu bar (File, Edit, Create, View, Options, Help) replaces the row of buttons at
   the top: open, save, import, export, undo, zoom, grid snap and MIDI controllers now live in
