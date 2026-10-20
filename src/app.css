@@ -317,7 +317,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 /* ---------------------------------------------------------------- EQ */
 /* i pannelli grafici (EQ, Drive) riempiono l'altezza del dispositivo: il grafico prende lo
  * spazio che resta sopra i controlli, nella catena come dentro un rack */
-.device-sections:has(> .eq-display, > .drive-display) { flex: 1 0 auto; flex-wrap: nowrap; }
+.device-sections:has(> .eq-display, > .drive-display, > .gate-display) { flex: 1 0 auto; flex-wrap: nowrap; }
 .eq-display { display: flex; flex-direction: column; gap: 6px; }
 .eq-graph { display: block; width: 600px; flex: 1 1 0; min-height: 120px; border-radius: 6px; border: 1px solid var(--line); cursor: crosshair; touch-action: none; }
 .device-panel.off .eq-graph { opacity: .6; }
@@ -605,6 +605,10 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .smp-mode .choice-buttons { display: flex; }
 .smp-mode .choice-buttons button { padding: 0 9px; font-size: 12px; line-height: 1.6; min-width: 0; }
 .device-panel.off .smp canvas { opacity: .6; }
+.gate-display { display: flex; flex-direction: column; gap: 6px; }
+.gate-steps { display: block; width: 520px; flex: 1 1 0; min-height: 70px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer; touch-action: none; }
+.device-panel.off .gate-steps { opacity: .6; }
+.gate-controls { display: flex; gap: 6px; }
 .drive-controls { display: flex; align-items: flex-start; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; }
 
 /* ---------------------------------------------------------------- browser */

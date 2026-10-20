@@ -22,6 +22,12 @@ Sections: Added, Changed, Fixed.
   the right channel can be offset for stereo movement. The envelope opens (or closes) the
   filter with the loudness of the sound, or of another track through the sidechain: the kick
   that opens the bass.
+- Gate, a new effect: the trance gate. A pattern of up to 32 steps, in time and locked to the
+  bar, opens and closes the sound; each step has its own level, and Gate, attack and release
+  shape how long and how softly it opens. Swing delays the odd steps, Profondità lets some of
+  the sound through when closed (a stepped tremolo). Click a step to open or close it, drag up
+  and down to set its level (across several steps too); right-click for all open, all closed,
+  invert, random and shift.
 
 ## [0.3.12] - 2026-10-20
 

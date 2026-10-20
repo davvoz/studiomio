@@ -10,6 +10,7 @@ import type { MenuItem } from '../context-menu';
 import { DriveDisplay } from './drive/drive-display';
 import { DrumDisplay } from './drums/drum-display';
 import { EqDisplay } from './eq/eq-display';
+import { GateDisplay } from './gate/gate-display';
 import { PrismaDisplay } from './prisma/prisma-display';
 import { SamplerDisplay } from './sampler/sampler-display';
 import { WavetableDisplay } from './wavetable/wavetable-display';
@@ -80,6 +81,7 @@ export type DisplayFactory = (ctx: DisplayContext) => DeviceDisplay;
 export const DEVICE_DISPLAYS: Readonly<Record<string, DisplayFactory>> = {
   eq: ctx => new EqDisplay(ctx),
   drive: ctx => new DriveDisplay(ctx),
+  gate: ctx => new GateDisplay(ctx),
   drums: ctx => new DrumDisplay(ctx),
   wavetable: ctx => new WavetableDisplay(ctx),
   prisma: ctx => new PrismaDisplay(ctx),

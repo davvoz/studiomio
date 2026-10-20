@@ -6,6 +6,7 @@ import { CompressorCore } from '../effects/compressor/compressor-core';
 import { DelayCore } from '../effects/delay/delay-core';
 import { DriveCore } from '../effects/drive/drive-core';
 import { EqCore } from '../effects/eq/eq-core';
+import { GateCore } from '../effects/gate/gate-core';
 import { LimiterCore } from '../effects/limiter/limiter-core';
 import { MultibandCore } from '../effects/multiband/multiband-core';
 import { PhaserCore } from '../effects/phaser/phaser-core';
@@ -38,6 +39,7 @@ export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
   delay: sampleRate => new DelayCore(sampleRate),
   drive: sampleRate => new DriveCore(sampleRate),
   eq: sampleRate => new EqCore(sampleRate),
+  gate: sampleRate => new GateCore(sampleRate),
   limiter: sampleRate => new LimiterCore(sampleRate),
   multiband: sampleRate => new MultibandCore(sampleRate),
   phaser: sampleRate => new PhaserCore(sampleRate),
