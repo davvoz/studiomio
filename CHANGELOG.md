@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-10-20
+
 ### Added
 - Follow, like Live's: "↦ Segui" in the control bar (Ctrl+Shift+F, Options › Segui la testina).
   While playing, the arrangement scrolls to keep the playhead in view. Scrolling sideways,
