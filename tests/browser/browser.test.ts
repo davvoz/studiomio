@@ -6,7 +6,9 @@ import { REVERB } from '../../src/devices/effects/reverb/reverb';
 import { DELAY } from '../../src/devices/effects/delay/delay';
 import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../../src/devices/registry';
 import { BrowserCatalog, standardSources, type FolderPlaces } from '../../src/browser/catalog';
-import { deviceSource, kitSource, userPresetsSource, type UserPresetList } from '../../src/browser/device-sources';
+import { deviceSource, kitSource, userPresetsSource, type UserPresetList, type UserRackList } from '../../src/browser/device-sources';
+import { MACRO_COUNT } from '../../src/model/rack';
+import type { RackPreset } from '../../src/model/rack-preset';
 import { childrenOf, type BrowserItem } from '../../src/browser/item';
 import { duration, folderSource, projectSamplesSource, type FolderEntry, type FolderReader } from '../../src/browser/sample-sources';
 import { search, searchSources } from '../../src/browser/search';
@@ -72,6 +74,34 @@ describe('categorie dei dispositivi', () => {
     source.onChange!(() => changed++);
     u.fire();
     expect(changed).toBe(1);
+  });
+
+  it('rack salvati: Instrument Rack tra gli strumenti, Audio Effect Rack tra gli effetti e tra i Preset dell\'utente', async () => {
+    const macros = Array.from({ length: MACRO_COUNT }, () => ({ name: null, value: 0, mappings: [] }));
+    const synth: RackPreset = { name: 'Basso', instrument: { type: 'analog', preset: null, params: {} }, effects: [], macros };
+    const eco: RackPreset = { name: 'Eco', instrument: null, effects: [{ type: 'delay', preset: null, params: {}, enabled: true }], macros };
+    const fns = new Set<() => void>();
+    const racks: UserRackList = { list: () => [synth, eco], onChange: fn => { fns.add(fn); return () => fns.delete(fn); } };
+    const sources = standardSources({ instruments: [ANALOG], effects: [DELAY], user: user(), racks, project: setup().store });
+    const [instruments, effects] = [await sources[0].items(), await sources[1].items()];
+    expect(names(instruments)).toEqual(['Instrument Rack', ANALOG.label]);
+    expect(names(effects)).toEqual(['Audio Effect Rack', DELAY.label]);
+    expect(await childrenOf(instruments[0])).toMatchObject([{ name: 'Basso', icon: 'rack', payload: { kind: 'rack', rack: synth } }]);
+    const mine = sources.find(s => s.id === 'user-presets')!;
+    expect(names(await mine.items())).toEqual(['Instrument Rack', 'Audio Effect Rack']);
+    // i rack salvati cambiati: le fonti si rileggono
+    let changed = 0;
+    const off = sources[1].onChange!(() => changed++);
+    fns.forEach(f => f());
+    off();
+    fns.forEach(f => f());
+    expect(changed).toBe(1);
+    // lo stesso rack in due fonti si trova una volta sola
+    const hits = await searchSources(sources, 'eco');
+    expect(hits.filter(h => h.item.payload?.kind === 'rack').map(h => h.item.name)).toEqual(['Eco']);
+    // senza rack salvati, nessuna cartella
+    expect(names(await deviceSource({ id: 'fx', label: 'FX', kind: 'effect', types: [DELAY], user: user(), racks: { list: () => [] } }).items()))
+      .toEqual([DELAY.label]);
   });
 });
 

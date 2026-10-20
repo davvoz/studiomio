@@ -649,7 +649,8 @@ button.browser-add { margin-top: 6px; color: var(--muted); font-size: 11.5px; }
 .browser-row .icon { flex: none; width: 14px; text-align: center; color: var(--muted); }
 .browser-row.icon-instrument .icon { color: #f2b45c; }
 .browser-row.icon-effect .icon { color: #6cc4f0; }
-.browser-row.icon-user-preset .icon { color: var(--accent); }
+.browser-row.icon-user-preset .icon,
+.browser-row.icon-rack .icon { color: var(--accent); }
 .browser-row.icon-sample .icon { color: #8fd18a; }
 .browser-row.icon-folder .icon { color: #c5b48a; }
 .browser-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

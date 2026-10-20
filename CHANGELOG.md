@@ -20,6 +20,15 @@ Sections: Added, Changed, Fixed.
   while Repeat is on; with Repeat off the sound passes untouched, as if the effect were off,
   even in Gate mode (which then lets the sound through like Inserisci). Map Repeat to a key or
   to a rack's button macro to play it live.
+- Saved racks, to reuse them in every project: ★ in a rack's header (or right-click the header ›
+  Salva il rack…) saves its devices, their settings and the 8 macros with their mappings under
+  the name you type. They show up in the browser, like Live's rack presets: Instrument Racks in
+  Strumenti › Instrument Rack, Audio Effect Racks in Effetti audio › Audio Effect Rack, both in
+  Preset dell'utente. Double-click or drag one onto a track: an Instrument Rack replaces the
+  instrument of a MIDI track (or goes on a new one), an Audio Effect Rack goes at the end of the
+  chain, also on the Master. Right-click the header to update or delete the saved rack. In the
+  desktop app every rack is a file in Documenti\studiomio\Rack, so it can be copied to another
+  computer. Loaded samples and sidechains belong to the project and aren't saved with the rack.
 
 ## [0.3.13] - 2026-10-21
 

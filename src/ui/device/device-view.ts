@@ -325,6 +325,7 @@ export class DeviceView {
       onSelect: extend => this.select(rack.devices, extend),
       keyMapping: () => !!this.deps.ui?.keyMapping,
       onKeyTarget: index => this.deps.ui?.chooseKeyTarget({ kind: 'macro', owner, rack: rack.id, index }),
+      say: this.deps.say,
     });
     this.rackPanels.set(rack.id, panel);
     const element = el('div', { className: `rack${folded ? ' folded' : ''}${mapping !== undefined ? ' mapping' : ''}` }, panel.element);

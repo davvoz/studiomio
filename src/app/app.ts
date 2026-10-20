@@ -11,6 +11,7 @@ import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
 import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../devices/registry';
 import { userPresets } from '../devices/user-presets';
+import { userRacks } from '../devices/user-racks';
 import { MASTER, type ChainOwner } from '../model/project';
 import { BusTrack } from '../model/track';
 import { sceneArrangement, sceneClips, sceneLength } from '../model/scene-export';
@@ -64,7 +65,7 @@ export class App implements Commands, TimelineActions {
   readonly sessionView: SessionView;
   /** Il browser a sinistra: le sue fonti, chi carica ciò che si sceglie, la vista. */
   readonly catalog = new BrowserCatalog<FsFolder>(standardSources({
-    instruments: INSTRUMENT_TYPES, effects: EFFECT_TYPES, user: userPresets, project: this.store,
+    instruments: INSTRUMENT_TYPES, effects: EFFECT_TYPES, user: userPresets, racks: userRacks, project: this.store,
   }), indexedDbPlaces);
   private readonly loader: BrowserLoader;
   readonly browser: BrowserView;
@@ -163,7 +164,9 @@ export class App implements Commands, TimelineActions {
     const main = this.arrangementArea;
     main.append(headers.element, this.arrangement.element, master.header, master.lane);
     // il master della timeline riceve gli effetti dal browser
-    acceptBrowserDrops(master.header, item => dropItem(item, { kind: 'chain', owner: MASTER }), { accept: item => item.payload?.kind === 'effect' });
+    // sul master solo effetti: niente strumenti né Instrument Rack
+    const masterAccepts = (p: BrowserItem['payload']) => p?.kind === 'effect' || (p?.kind === 'rack' && !p.rack.instrument);
+    acceptBrowserDrops(master.header, item => dropItem(item, { kind: 'chain', owner: MASTER }), { accept: item => masterAccepts(item.payload) });
     const views = Object.assign(document.createElement('div'), { className: 'views' });
     views.append(main, this.sessionView.element);
     // il browser a sinistra, accanto a viste e area in basso, come in Live

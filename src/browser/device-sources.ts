@@ -1,8 +1,10 @@
-/* Le categorie dei dispositivi: strumenti, batterie, effetti audio, e i preset dell'utente
- * raccolti per dispositivo. Le voci vengono dal registro dei dispositivi e dai preset (di
- * fabbrica e dell'utente): un dispositivo nuovo nel registro compare qui da solo. */
+/* Le categorie dei dispositivi: strumenti, batterie, effetti audio, e i preset e i rack
+ * dell'utente raccolti per dispositivo. Le voci vengono dal registro dei dispositivi, dai preset
+ * (di fabbrica e dell'utente) e dai rack salvati: un dispositivo nuovo nel registro compare qui
+ * da solo. */
 import type { Unsubscribe } from '../core/emitter';
 import type { DeviceType, Preset } from '../devices/device-type';
+import type { RackPreset } from '../model/rack-preset';
 import type { BrowserItem, BrowserPayload, BrowserSource } from './item';
 
 /** Ciò che serve dei preset dell'utente (UserPresets lo soddisfa). */
@@ -11,7 +13,35 @@ export interface UserPresetList {
   onChange?(fn: () => void): Unsubscribe;
 }
 
+/** Ciò che serve dei rack salvati (UserRacks lo soddisfa). */
+export interface UserRackList {
+  list(): RackPreset[];
+  onChange?(fn: () => void): Unsubscribe;
+}
+
 type DeviceKind = 'instrument' | 'effect';
+
+/** Le liste di cui una fonte segue i cambiamenti. */
+function onChangeOf(...lists: readonly ({ onChange?(fn: () => void): Unsubscribe } | undefined)[]): BrowserSource['onChange'] {
+  const watched = lists.filter(l => l?.onChange);
+  if (!watched.length) return undefined;
+  return fn => {
+    const offs = watched.map(l => l!.onChange!(fn));
+    return () => offs.forEach(off => off());
+  };
+}
+
+/** La cartella dei rack salvati di un tipo, come in Live: "Instrument Rack" tra gli strumenti
+ *  (i rack con lo strumento), "Audio Effect Rack" tra gli effetti; nessuna se non ce ne sono. */
+function rackFolder(prefix: string, kind: DeviceKind, racks: UserRackList | undefined): BrowserItem[] {
+  const list = racks?.list().filter(r => !!r.instrument === (kind === 'instrument')) ?? [];
+  if (!list.length) return [];
+  const id = `${prefix}/rack`;
+  return [{
+    id, name: kind === 'instrument' ? 'Instrument Rack' : 'Audio Effect Rack', icon: 'folder',
+    children: async () => list.map((r): BrowserItem => ({ id: `${id}/${r.name}`, name: r.name, icon: 'rack', payload: { kind: 'rack', rack: r } })),
+  }];
+}
 
 const payload = (kind: DeviceKind, type: DeviceType, preset: Preset | null): BrowserPayload => ({ kind, type: type.type, preset });
 
@@ -31,18 +61,23 @@ export interface DeviceSourceOptions {
   readonly kind: DeviceKind;
   readonly types: readonly DeviceType[];
   readonly user: UserPresetList;
+  /** I rack salvati, in una cartella prima dei dispositivi. */
+  readonly racks?: UserRackList;
 }
 
-/** Una categoria di dispositivi, come "Instruments" e "Audio Effects" di Live: una cartella
- *  per dispositivo (che si carica così com'è) con dentro i suoi preset. */
-export function deviceSource({ id, label, kind, types, user }: DeviceSourceOptions): BrowserSource {
+/** Una categoria di dispositivi, come "Instruments" e "Audio Effects" di Live: i rack salvati,
+ *  poi una cartella per dispositivo (che si carica così com'è) con dentro i suoi preset. */
+export function deviceSource({ id, label, kind, types, user, racks }: DeviceSourceOptions): BrowserSource {
   return {
     id, label, section: 'categories',
-    items: async () => types.map((t): BrowserItem => ({
-      id: `${id}/${t.type}`, name: t.label, icon: kind, payload: payload(kind, t, null),
-      children: async () => presetItems(`${id}/${t.type}`, kind, t, user),
-    })),
-    onChange: user.onChange && (fn => user.onChange!(fn)),
+    items: async () => [
+      ...rackFolder(id, kind, racks),
+      ...types.map((t): BrowserItem => ({
+        id: `${id}/${t.type}`, name: t.label, icon: kind, payload: payload(kind, t, null),
+        children: async () => presetItems(`${id}/${t.type}`, kind, t, user),
+      })),
+    ],
+    onChange: onChangeOf(user, racks),
   };
 }
 
@@ -56,9 +91,9 @@ export function kitSource(id: string, label: string, types: readonly DeviceType[
   };
 }
 
-/** I preset salvati dall'utente, una cartella per dispositivo (solo quelli che ne hanno), come
- *  la User Library di Live. */
-export function userPresetsSource(instruments: readonly DeviceType[], effects: readonly DeviceType[], user: UserPresetList): BrowserSource {
+/** I rack e i preset salvati dall'utente, una cartella per tipo di rack e per dispositivo (solo
+ *  quelli che ne hanno), come la User Library di Live. */
+export function userPresetsSource(instruments: readonly DeviceType[], effects: readonly DeviceType[], user: UserPresetList, racks?: UserRackList): BrowserSource {
   const id = 'user-presets';
   const folders = (kind: DeviceKind, types: readonly DeviceType[]) => types.filter(t => user.list(t.type).length).map((t): BrowserItem => ({
     id: `${id}/${t.type}`, name: t.label, icon: 'folder',
@@ -66,8 +101,11 @@ export function userPresetsSource(instruments: readonly DeviceType[], effects: r
   }));
   return {
     id, label: 'Preset dell\'utente', section: 'places',
-    empty: 'Nessun preset salvato: ★ nell\'intestazione di un dispositivo ne salva uno.',
-    items: async () => [...folders('instrument', instruments), ...folders('effect', effects)],
-    onChange: user.onChange && (fn => user.onChange!(fn)),
+    empty: 'Nessun preset salvato: ★ nell\'intestazione di un dispositivo o di un rack ne salva uno.',
+    items: async () => [
+      ...rackFolder(id, 'instrument', racks), ...rackFolder(id, 'effect', racks),
+      ...folders('instrument', instruments), ...folders('effect', effects),
+    ],
+    onChange: onChangeOf(user, racks),
   };
 }

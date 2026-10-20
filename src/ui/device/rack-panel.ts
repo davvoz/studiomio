@@ -1,18 +1,22 @@
 /* Il pannello di un rack, a sinistra dei suoi dispositivi come in Live: intestazione, le 8 macro
  * e, con "Map" acceso, le mappature della macro scelta (minimo, massimo, togli) e il modo di
- * aggiungerne. Ogni modifica passa dallo store. */
+ * aggiungerne. Ogni modifica passa dallo store. Con ★ il rack si salva per gli altri progetti. */
 import type { DeviceId } from '../../core/id';
 import { formatParam, type NumberParam, type ParamSpec } from '../../devices/params';
-import { deviceTypeAt, mappingSpec } from '../../devices/rack-params';
+import { deviceAt, deviceTypeAt, mappingSpec } from '../../devices/rack-params';
+import { userRacks } from '../../devices/user-racks';
 import type { ChainOwner, Project } from '../../model/project';
-import { MACRO_MAX, MACRO_MODES, macroMode, macroName, macroParam, rackName, type DeviceKey, type MacroMapping, type Rack } from '../../model/rack';
+import {
+  findRack, MACRO_MAX, MACRO_MODES, macroMode, macroName, macroParam, rackName, type DeviceKey, type MacroMapping, type Rack,
+} from '../../model/rack';
+import { captureRack } from '../../model/rack-preset';
 import {
   mapMacro, moveRack, removeRack, renameMacro, renameRack, setMacro, setMacroMode, setMappingRange, ungroupRack, unmapParam,
 } from '../../store/rack-edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
-import { showContextMenu, SEPARATOR } from '../context-menu';
+import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
-import { renameInline } from '../inline-rename';
+import { editInline, renameInline } from '../inline-rename';
 import { controlFor, type ParamControl } from './controls';
 
 export interface RackPanelOptions {
@@ -34,6 +38,8 @@ export interface RackPanelOptions {
   /** KEY acceso: un clic su una macro la sceglie per la tastiera del computer (`onKeyTarget`). */
   readonly keyMapping: () => boolean;
   readonly onKeyTarget: (macro: number) => void;
+  /** Un messaggio per la barra di stato (rack salvato, errore…). */
+  readonly say?: (text: string) => void;
 }
 
 /** Il nome e la manopola di un parametro mappato, per le righe delle mappature. */
@@ -48,13 +54,14 @@ export class RackPanel {
   readonly head = el('div', { className: 'device-panel-head' });
   private readonly macros: ParamControl[] = [];
   private readonly rows: MappingRow[] = [];
+  private readonly name: HTMLElement;
 
   constructor(private readonly o: RackPanelOptions) {
     const { rack } = o;
     const project = o.store.project;
     const button = (text: string, title: string, run: (e: MouseEvent) => void, extra: Record<string, unknown> = {}) =>
       el<HTMLButtonElement>('button', { className: 'mini', textContent: text, title, onclick: run, ...extra });
-    const name = el('span', { className: 'device-name', textContent: rackName(rack), title: 'Doppio clic per rinominare' });
+    const name = this.name = el('span', { className: 'device-name', textContent: rackName(rack), title: 'Doppio clic per rinominare' });
     name.onclick = e => o.onSelect(e.shiftKey);
     name.ondblclick = () => renameInline(name, n => this.apply(renameRack(o.owner, rack.id, n)));
     const hasInstrument = rack.devices.includes('instrument');
@@ -69,9 +76,15 @@ export class RackPanel {
       }),
       button('◂', 'Sposta il rack prima', () => this.apply(moveRack(o.owner, rack.id, -1)), { disabled: !o.canMove(-1) }),
       button('▸', 'Sposta il rack dopo', () => this.apply(moveRack(o.owner, rack.id, 1)), { disabled: !o.canMove(1) }),
+      button('★', 'Salva il rack: lo ritrovi nel browser, in tutti i progetti (clic destro sull\'intestazione: aggiorna, elimina)',
+        () => this.askName(), { className: 'mini save-preset' }),
       button('⊟', 'Separa il rack: i dispositivi restano, le macro spariscono (Ctrl+Maiusc+G)', () => this.apply(ungroupRack(o.owner, rack.id))),
       ...(hasInstrument ? [] : [button('×', 'Elimina il rack con i suoi effetti', () => this.apply(removeRack(o.owner, rack.id)))]),
     );
+    this.head.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, this.saveMenu());
+    });
     const grid = el('div', { className: 'rack-macros' }, ...rack.macros.map((_, i) => this.macro(project, i)));
     const body = el('div', { className: 'rack-body' }, grid);
     if (o.mapping !== undefined) body.append(this.mappingList(project));
@@ -144,6 +157,57 @@ export class RackPanel {
     return e;
   }
 
+  // ---------------------------------------------------------------- rack salvati
+
+  /** Il menu dell'intestazione: salvare il rack, aggiornare o eliminare quello salvato con il
+   *  suo nome. */
+  private saveMenu(): MenuItem[] {
+    const name = rackName(this.o.rack);
+    const saved = !!userRacks.find(name);
+    return [
+      { label: 'Salva il rack…', run: () => this.askName() },
+      { label: `Aggiorna il rack salvato «${name}»`, disabled: !saved, run: () => void this.save(name) },
+      { label: `Elimina il rack salvato «${name}»`, disabled: !saved, run: () => void this.remove(name) },
+      ...(userRacks.canReveal ? [{ label: 'Apri la cartella dei rack', run: () => void userRacks.reveal().catch(e => this.o.say?.(message(e))) }] : []),
+    ];
+  }
+
+  /** Il nome si scrive al posto di quello del rack; parte dal nome del rack. */
+  private askName(): void {
+    if (!this.name.isConnected) return;
+    editInline(this.name, rackName(this.o.rack), name => void this.save(name), 'Nome del rack');
+  }
+
+  /** Salva il rack com'è ora; il rack prende il nome con cui è salvato, come in Live. */
+  private async save(name: string): Promise<void> {
+    const { store, owner, rack, say } = this.o;
+    const existed = !!userRacks.find(name);
+    try {
+      await userRacks.save(captureRack(store.project, owner, rack.id, name));
+    } catch (e) {
+      say?.(`Non è stato possibile salvare il rack «${name}»: ${message(e)}`);
+      return;
+    }
+    const now = findRack(store.project.racksOf(owner), rack.id);
+    if (now && now.name !== name) this.apply(renameRack(owner, rack.id, name));
+    // i sample sono file del progetto: nel rack salvato restano solo i parametri
+    const samples = rack.devices.some(k => deviceAt(store.project, owner, k)?.samples);
+    const note = samples ? ' I sample caricati non sono nel rack salvato.' : '';
+    say?.(existed ? `Rack «${name}» aggiornato.${note}` : `Rack «${name}» salvato: lo trovi nel browser, in tutti i progetti.${note}`);
+  }
+
+  private async remove(name: string): Promise<void> {
+    try {
+      await userRacks.remove(name);
+    } catch (e) {
+      this.o.say?.(`Non è stato possibile eliminare il rack «${name}»: ${message(e)}`);
+      return;
+    }
+    this.o.say?.(`Rack salvato «${name}» eliminato (quello nel progetto resta).`);
+  }
+
+  // ---------------------------------------------------------------- mappature
+
   /** Le mappature della macro scelta, e "+ Parametro". */
   private mappingList(p: Project): HTMLElement {
     const { o } = this;
@@ -204,6 +268,8 @@ export class RackPanel {
     if (final) this.o.store.endMerge();
   }
 }
+
+const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** Una macro interruttore o pulsante: un tasto che si illumina quando è acceso. L'interruttore
  *  cambia a ogni clic; il pulsante è acceso finché lo si tiene premuto. */

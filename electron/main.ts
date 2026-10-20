@@ -1,11 +1,12 @@
 // Processo principale di Electron: apre la finestra dell'app, serve i file di `dist/`, tiene i
-// file dei preset dell'utente e controlla gli aggiornamenti su GitHub Releases. L'app vera e
+// file dei preset e dei rack dell'utente e controlla gli aggiornamenti su GitHub Releases. L'app vera e
 // propria (src/) non cambia.
 import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type IpcMainInvokeEvent } from 'electron';
 import updater from 'electron-updater';
 import { mkdir, readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { loadPresets, removePreset, savePreset, type StoredPreset } from './presets.js';
+import { loadRacks, removeRack, saveRack, type StoredRack } from './racks.js';
 import { releaseNotesText } from './release-notes.js';
 
 const { autoUpdater } = updater;
@@ -93,10 +94,11 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-/** I preset dell'utente: file in Documenti, così restano anche se si disinstalla l'app o se ne
- *  cancellano i dati, e si copiano a mano su un altro computer. */
+/** I preset e i rack dell'utente: file in Documenti, così restano anche se si disinstalla l'app
+ *  o se ne cancellano i dati, e si copiano a mano su un altro computer. */
 function handlePresets(): void {
   const root = join(app.getPath('documents'), 'studiomio', 'Preset');
+  const rackRoot = join(app.getPath('documents'), 'studiomio', 'Rack');
   const text = (v: unknown): string => {
     if (typeof v !== 'string' || !v) throw new TypeError('testo atteso');
     return v;
@@ -105,6 +107,15 @@ function handlePresets(): void {
     const { type, name, params } = (v ?? {}) as Record<string, unknown>;
     if (!params || typeof params !== 'object') throw new TypeError('parametri attesi');
     return { type: text(type), name: text(name), params: params as Record<string, number> };
+  };
+  const rack = (v: unknown): StoredRack => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new TypeError('rack atteso');
+    return { ...(v as Record<string, unknown>), name: text((v as Record<string, unknown>).name) };
+  };
+  const reveal = async (dir: string) => {
+    await mkdir(dir, { recursive: true });
+    const error = await shell.openPath(dir);
+    if (error) throw new Error(error);
   };
   // risponde solo all'app, non a pagine d'altra origine
   const handle = (channel: string, run: (...args: unknown[]) => Promise<unknown>) =>
@@ -115,11 +126,11 @@ function handlePresets(): void {
   handle('presets:load', () => loadPresets(root));
   handle('presets:save', (folder, p) => savePreset(root, text(folder), preset(p)));
   handle('presets:remove', (type, name) => removePreset(root, text(type), text(name)));
-  handle('presets:reveal', async () => {
-    await mkdir(root, { recursive: true });
-    const error = await shell.openPath(root);
-    if (error) throw new Error(error);
-  });
+  handle('presets:reveal', () => reveal(root));
+  handle('racks:load', () => loadRacks(rackRoot));
+  handle('racks:save', r => saveRack(rackRoot, rack(r)));
+  handle('racks:remove', name => removeRack(rackRoot, text(name)));
+  handle('racks:reveal', () => reveal(rackRoot));
 }
 
 /** Cerca una nuova versione all'avvio: la scarica in background e propone di riavviare. */

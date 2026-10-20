@@ -7,6 +7,7 @@ import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { ParamValues } from '../model/device';
 import { paramsOf, resolveParams, type DeviceType, type Preset } from './device-type';
 import { effectType, instrumentType } from './registry';
+import type { RackBackend } from './user-racks';
 
 /** Un preset con il suo tipo di dispositivo, come lo scrive e lo rilegge chi lo conserva. */
 export interface StoredPreset extends Preset {
@@ -34,7 +35,7 @@ export interface PresetStorage {
 declare global {
   interface Window {
     /** Dal preload di Electron (electron/preload.cts); assente nel browser. */
-    readonly studiomioDesktop?: { readonly presets: Required<PresetBackend> };
+    readonly studiomioDesktop?: { readonly presets: Required<PresetBackend>; readonly racks: Required<RackBackend> };
   }
 }
 

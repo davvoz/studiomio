@@ -36,13 +36,15 @@ export async function search(roots: readonly BrowserItem[], query: string, { lim
 }
 
 /** Ciò che una voce carica, come chiave: la stessa cosa in due fonti (un kit in Strumenti e in
- *  Batterie, un preset dell'utente nel suo dispositivo e tra i Preset dell'utente) è una sola. */
+ *  Batterie, un preset o un rack dell'utente nella sua categoria e tra i Preset dell'utente) è
+ *  una sola. */
 function payloadKey(item: BrowserItem): string {
   const p: BrowserPayload | undefined = item.payload;
   if (!p) return `item:${item.id}`;
   switch (p.kind) {
     case 'instrument':
     case 'effect': return `${p.kind}:${p.type}:${p.preset?.name ?? ''}`;
+    case 'rack': return `rack:${p.rack.name}`;
     case 'sample': return `sample:${p.sample.id}`;
     case 'file': return `item:${item.id}`;
   }

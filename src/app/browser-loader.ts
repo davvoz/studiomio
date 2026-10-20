@@ -1,5 +1,6 @@
 /* Dove va ciò che arriva dal browser, come in Live: uno strumento sulla traccia MIDI (su un'altra
- * traccia, in una traccia MIDI nuova), un effetto in fondo alla catena, un sample sulla timeline,
+ * traccia, in una traccia MIDI nuova), un effetto in fondo alla catena, un rack salvato (un
+ * Instrument Rack come uno strumento, un Audio Effect Rack come un effetto), un sample sulla timeline,
  * in uno slot o (sulla catena di una traccia MIDI) in un Sampler. Con il doppio clic va dove si sta lavorando: la catena aperta in basso, lo slot
  * scelto nella session, la traccia scelta al cursore nella timeline. */
 import type { TrackId } from '../core/id';
@@ -8,9 +9,10 @@ import type { BrowserPayload, LoadTarget } from '../browser/item';
 import type { Preset } from '../devices/device-type';
 import { effectType, instrumentType } from '../devices/registry';
 import { MASTER, type ChainOwner } from '../model/project';
+import type { RackPreset } from '../model/rack-preset';
 import type { SampleRef } from '../model/sample';
 import { MidiTrack } from '../model/track';
-import { loadEffect, loadInstrument, loadSampler } from '../store/browser-edits';
+import { loadEffect, loadInstrument, loadRack, loadSampler } from '../store/browser-edits';
 import type { ProjectStore } from '../store/project-store';
 import { addedPlacements, importSample } from '../store/selection-edits';
 import { importSampleToSlot } from '../store/session-edits';
@@ -37,6 +39,7 @@ export class BrowserLoader {
     switch (payload.kind) {
       case 'instrument': return this.instrument(payload.type, payload.preset, target);
       case 'effect': return this.effect(payload.type, payload.preset, target);
+      case 'rack': return this.rack(payload.rack, target);
       case 'sample':
       case 'file': return this.audio(payload, target);
     }
@@ -66,6 +69,26 @@ export class BrowserLoader {
     this.deps.openDevices(where);
     const name = where === MASTER ? 'Master' : store.project.track(where)?.name;
     this.deps.say(`${preset ? `${label}: ${preset.name}` : label} in fondo agli effetti di "${name}".`);
+  }
+
+  private rack(rack: RackPreset, target: LoadTarget): void {
+    const { store, ui, say } = this.deps;
+    const owner = ownerOf(target);
+    if (rack.instrument && owner === MASTER) return say(`«${rack.name}» ha uno strumento: va su una traccia MIDI, non sul master.`);
+    // un rack salvato con una versione più nuova dell'app può avere dispositivi che questa non ha
+    const unknown = [
+      ...(rack.instrument && !instrumentType(rack.instrument.type) ? [rack.instrument.type] : []),
+      ...rack.effects.filter(e => !effectType(e.type)).map(e => e.type),
+    ];
+    if (unknown.length) return say(`«${rack.name}» usa dispositivi che questa versione non ha (${unknown.join(', ')}): aggiorna l'app.`);
+    const before = new Set(store.project.tracks.map(t => t.id));
+    store.apply(loadRack(owner, rack));
+    const where = store.project.tracks.find(t => !before.has(t.id))?.id ?? owner;
+    if (!where) return;
+    if (rack.instrument && where !== MASTER) ui.selectTrack(where);
+    this.deps.openDevices(where);
+    const name = where === MASTER ? 'Master' : store.project.track(where)?.name;
+    say(rack.instrument ? `Rack «${rack.name}» su "${name}".` : `Rack «${rack.name}» in fondo agli effetti di "${name}".`);
   }
 
   private async audio(payload: Extract<BrowserPayload, { kind: 'sample' | 'file' }>, target: LoadTarget): Promise<void> {

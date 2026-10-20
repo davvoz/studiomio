@@ -25,8 +25,12 @@ export async function loadPresets(root: string): Promise<StoredPreset[]> {
 export async function savePreset(root: string, folder: string, preset: StoredPreset): Promise<void> {
   const existing = (await scan(root)).find(f => f.type === preset.type && f.name === preset.name);
   const path = existing?.path ?? await freePath(join(root, safeName(folder)), safeName(preset.name));
-  const body = { studiomio: 'preset', version: 1, type: preset.type, name: preset.name, params: preset.params };
-  // prima un file a parte, poi lo scambio: un'interruzione non lascia un preset a metà
+  await writeJson(path, { studiomio: 'preset', version: 1, type: preset.type, name: preset.name, params: preset.params });
+}
+
+/** Scrive un file JSON: prima un file a parte, poi lo scambio, così un'interruzione non lascia
+ *  un file a metà. */
+export async function writeJson(path: string, body: unknown): Promise<void> {
   const temp = `${path}.tmp`;
   await writeFile(temp, `${JSON.stringify(body, null, 2)}\n`, 'utf8');
   await rename(temp, path);
@@ -46,14 +50,17 @@ export function safeName(name: string): string {
   return s || 'preset';
 }
 
-async function scan(root: string): Promise<PresetFile[]> {
+const scan = (root: string): Promise<PresetFile[]> => scanJson(root, parse);
+
+/** I file JSON nella cartella (e sotto) che `parse` riconosce; gli altri si saltano. */
+export async function scanJson<T>(root: string, parse: (raw: unknown, path: string) => T | null): Promise<T[]> {
   let entries: string[];
   try {
     entries = await readdir(root, { recursive: true });
   } catch {
     return []; // la cartella non c'è ancora
   }
-  const files = await Promise.all(entries.filter(e => e.toLowerCase().endsWith('.json')).map(async (e): Promise<PresetFile | null> => {
+  const files = await Promise.all(entries.filter(e => e.toLowerCase().endsWith('.json')).map(async (e): Promise<T | null> => {
     const path = join(root, e);
     try {
       return parse(JSON.parse(await readFile(path, 'utf8')), path);
@@ -61,7 +68,7 @@ async function scan(root: string): Promise<PresetFile[]> {
       return null;
     }
   }));
-  return files.filter((f): f is PresetFile => f !== null);
+  return files.filter((f): f is Awaited<T> => f !== null) as T[];
 }
 
 function parse(raw: unknown, path: string): PresetFile | null {
@@ -73,11 +80,11 @@ function parse(raw: unknown, path: string): PresetFile | null {
 }
 
 /** `dir\base.json`, o `base (2).json`… se c'è già un file con quel nome. */
-async function freePath(dir: string, base: string): Promise<string> {
+export async function freePath(dir: string, base: string): Promise<string> {
   await mkdir(dir, { recursive: true });
   for (let n = 1; ; n++) {
     const path = resolve(dir, n === 1 ? `${base}.json` : `${base} (${n}).json`);
-    if (!path.startsWith(resolve(dir) + sep)) throw new Error('nome del preset non valido');
+    if (!path.startsWith(resolve(dir) + sep)) throw new Error('nome del file non valido');
     if (!existsSync(path)) return path;
   }
 }

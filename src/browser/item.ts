@@ -9,13 +9,15 @@ import type { TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import type { Preset } from '../devices/device-type';
 import type { ChainOwner } from '../model/project';
+import type { RackPreset } from '../model/rack-preset';
 import type { SampleRef } from '../model/sample';
 
-/** Ciò che una voce carica: un dispositivo (con o senza preset), un sample del progetto o un
- *  file audio del disco. */
+/** Ciò che una voce carica: un dispositivo (con o senza preset), un rack salvato, un sample del
+ *  progetto o un file audio del disco. */
 export type BrowserPayload =
   | { readonly kind: 'instrument'; readonly type: string; readonly preset: Preset | null }
   | { readonly kind: 'effect'; readonly type: string; readonly preset: Preset | null }
+  | { readonly kind: 'rack'; readonly rack: RackPreset }
   | { readonly kind: 'sample'; readonly sample: SampleRef }
   | { readonly kind: 'file'; readonly name: string; readonly file: () => Promise<File> };
 
@@ -28,7 +30,7 @@ export type LoadTarget =
   | { readonly kind: 'chain'; readonly owner: ChainOwner };
 
 /** Come si mostra una voce (l'icona). */
-export type ItemIcon = 'instrument' | 'effect' | 'preset' | 'user-preset' | 'sample' | 'folder';
+export type ItemIcon = 'instrument' | 'effect' | 'preset' | 'user-preset' | 'rack' | 'sample' | 'folder';
 
 export interface BrowserItem {
   /** Unico nel browser: il percorso dalla fonte ("instruments/analog/f:Bass"). */

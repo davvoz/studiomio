@@ -51,7 +51,7 @@ type Row =
 type Loaded = readonly BrowserItem[] | 'loading' | 'locked' | Error;
 
 const ICONS: Readonly<Record<BrowserItem['icon'], string>> = {
-  instrument: '♫', effect: '≋', preset: '◦', 'user-preset': '★', sample: '∿', folder: '▤',
+  instrument: '♫', effect: '≋', preset: '◦', 'user-preset': '★', rack: '▦', sample: '∿', folder: '▤',
 };
 
 export class BrowserView {

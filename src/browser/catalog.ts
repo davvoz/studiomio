@@ -3,7 +3,7 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { DeviceType } from '../devices/device-type';
 import type { BrowserSource } from './item';
-import { deviceSource, kitSource, userPresetsSource, type UserPresetList } from './device-sources';
+import { deviceSource, kitSource, userPresetsSource, type UserPresetList, type UserRackList } from './device-sources';
 import { folderSource, projectSamplesSource, type FolderReader, type SampleProvider } from './sample-sources';
 
 /** Chi conserva le cartelle aggiunte (IndexedDB nell'app, una lista nei test). */
@@ -16,20 +16,21 @@ export interface StandardSources {
   readonly instruments: readonly DeviceType[];
   readonly effects: readonly DeviceType[];
   readonly user: UserPresetList;
+  readonly racks?: UserRackList;
   readonly project: SampleProvider;
 }
 
 /** Le fonti dell'app, come in Live ma solo con ciò che c'è: Strumenti, Batterie (i kit degli
  *  strumenti che danno un nome alle note, cioè la Drum Machine), Effetti audio; poi i luoghi
  *  Progetto corrente e Preset dell'utente. */
-export function standardSources({ instruments, effects, user, project }: StandardSources): BrowserSource[] {
+export function standardSources({ instruments, effects, user, racks, project }: StandardSources): BrowserSource[] {
   const drums = instruments.filter(t => t.noteNames);
   return [
-    deviceSource({ id: 'instruments', label: 'Strumenti', kind: 'instrument', types: instruments, user }),
+    deviceSource({ id: 'instruments', label: 'Strumenti', kind: 'instrument', types: instruments, user, racks }),
     ...(drums.length ? [kitSource('drums', 'Batterie', drums, user)] : []),
-    deviceSource({ id: 'effects', label: 'Effetti audio', kind: 'effect', types: effects, user }),
+    deviceSource({ id: 'effects', label: 'Effetti audio', kind: 'effect', types: effects, user, racks }),
     projectSamplesSource(project),
-    userPresetsSource(instruments, effects, user),
+    userPresetsSource(instruments, effects, user, racks),
   ];
 }
 
