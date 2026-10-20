@@ -9,9 +9,10 @@ import type { UiState } from '../ui-state';
 import type { PeakStore } from '../waveform';
 import { gridStep, hitTest, snapTo, type Hit } from './geometry';
 import {
-  LoopRegionGesture, MarqueeGesture, MoveClipsGesture, ResizeClipGesture, ScrubGesture,
+  LoopRegionGesture, MarqueeGesture, MoveClipsGesture, PanGesture, ResizeClipGesture, ScrubGesture,
   type Gesture, type GestureHost, type Pointer,
 } from './gestures';
+import { TimelineScrollbar } from './scrollbar';
 import { acceptBrowserDrops } from '../browser/browser-drag';
 import { LOOP_CURSOR, loopPartAt } from '../loop-drag';
 import { Surface } from '../surface';
@@ -58,6 +59,10 @@ export class ArrangementView implements GestureHost {
   private readonly ruler = new Surface('ruler');
   private readonly lanes = new Surface('lanes');
   private readonly overlay = new Surface('overlay');
+  private readonly scrollbar = new TimelineScrollbar(beat => {
+    this.pauseFollow();
+    this.scrollTo(beat, this.geo.scrollY);
+  });
   private gesture: Gesture | null = null;
   private dirty = true;
 
@@ -70,7 +75,9 @@ export class ArrangementView implements GestureHost {
     const lanesWrap = Object.assign(document.createElement('div'), { className: 'lanes-wrap' });
     rulerWrap.append(this.ruler.canvas);
     lanesWrap.append(this.lanes.canvas, this.overlay.canvas);
-    this.element.append(rulerWrap, lanesWrap);
+    this.element.append(rulerWrap, lanesWrap, this.scrollbar.element);
+    // il tasto centrale trascina la vista: niente scorrimento automatico del browser
+    this.element.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
 
     new ResizeObserver(() => {
       this.ruler.resize(rulerWrap.clientWidth, rulerWrap.clientHeight);
@@ -117,6 +124,23 @@ export class ArrangementView implements GestureHost {
     if (x < 0 || x > w * 0.92) this.ui.setGeometry(g.scrolled(beat - (w * 0.1) / g.pxPerBeat, g.scrollY));
   }
 
+  /** Porta la vista al battito `beat` (bordo sinistro) e a `y` pixel scorsi in verticale,
+   *  senza andare oltre l'ultima traccia. */
+  private scrollTo(beat: Beats, y: number): void {
+    const g = this.geo;
+    const maxY = Math.max(0, this.store.project.visibleTracks.length * g.trackHeight - this.lanes.height + 40);
+    this.ui.setGeometry(g.scrolled(beat, Math.min(maxY, y)));
+  }
+
+  /** La barra sotto la timeline: si scorre fino a portare la fine del brano (o del loop,
+   *  o la testina) al bordo sinistro. */
+  private updateScrollbar(): void {
+    const { project } = this.store, g = this.geo;
+    const visible = this.lanes.width / g.pxPerBeat;
+    const content = Math.max(project.arrangementEnd, project.loop.end, this.deps.engine.position);
+    this.scrollbar.update({ total: Math.max(content, g.scrollBeat) + visible, start: g.scrollBeat, visible });
+  }
+
   // ---------------------------------------------------------------- disegno
 
   private readonly frame = () => {
@@ -133,6 +157,7 @@ export class ArrangementView implements GestureHost {
         selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTracks: this.ui.selectedTracks,
         peaks: (c: AudioClip) => this.deps.peaks.get(c.sample, c.reversed),
       });
+      this.updateScrollbar();
     }
     const o = this.overlay;
     o.g.clearRect(0, 0, o.width, o.height);
@@ -148,8 +173,8 @@ export class ArrangementView implements GestureHost {
     return { x: e.clientX - r.left, y: e.clientY - r.top, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey };
   }
 
-  private startGesture(e: PointerEvent, el: HTMLElement, make: (p: Pointer) => Gesture): void {
-    if (e.button !== 0) return;
+  private startGesture(e: PointerEvent, el: HTMLElement, make: (p: Pointer) => Gesture, button = 0): void {
+    if (e.button !== button) return;
     e.preventDefault();
     el.setPointerCapture(e.pointerId);
     const p = this.pointer(e, el);
@@ -178,8 +203,17 @@ export class ArrangementView implements GestureHost {
     if (this.deps.engine.playing) this.ui.pauseFollow();
   }
 
+  /** Tasto centrale: trascinando si sposta la vista. Vero se è iniziato il gesto. */
+  private startPan(e: PointerEvent, el: HTMLElement): boolean {
+    if (e.button !== 1) return false;
+    this.pauseFollow();
+    this.startGesture(e, el, p => new PanGesture(this, p, (beat, y) => this.scrollTo(beat, y)), 1);
+    return true;
+  }
+
   private bindLanes(el: HTMLCanvasElement): void {
     el.addEventListener('pointerdown', e => {
+      if (this.startPan(e, el)) return;
       if (e.button === 0) this.pauseFollow();
       const p = this.pointer(e, el);
       const hit = hitTest(this.store.project, this.geo, p.x, p.y);
@@ -218,6 +252,7 @@ export class ArrangementView implements GestureHost {
 
   private bindRuler(el: HTMLCanvasElement): void {
     el.addEventListener('pointerdown', e => {
+      if (this.startPan(e, el)) return;
       const p = this.pointer(e, el);
       // un clic nel righello (non sulla banda del loop) sposta la testina e riprende Segui
       if (e.button === 0 && p.y >= RULER_LOOP_BAND + 2) this.ui.resumeFollow();
@@ -247,10 +282,10 @@ export class ArrangementView implements GestureHost {
         this.ui.setGeometry(g.zoomed(g.pxPerBeat * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left));
         return;
       }
-      const dx = e.shiftKey ? e.deltaY : e.deltaX, dy = e.shiftKey ? 0 : e.deltaY;
+      // Maiusc+rotella: Chromium su Windows la consegna già come deltaX (con deltaY a 0)
+      const dx = e.shiftKey ? e.deltaX || e.deltaY : e.deltaX, dy = e.shiftKey ? 0 : e.deltaY;
       if (dx) this.pauseFollow();
-      const maxY = Math.max(0, this.store.project.visibleTracks.length * g.trackHeight - this.lanes.height + 40);
-      this.ui.setGeometry(g.scrolled(g.scrollBeat + dx / g.pxPerBeat, Math.min(maxY, g.scrollY + dy)));
+      this.scrollTo(g.scrollBeat + dx / g.pxPerBeat, g.scrollY + dy);
     }, { passive: false });
   }
 

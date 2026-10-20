@@ -228,6 +228,26 @@ export class LoopRegionGesture implements Gesture {
   paint(): void { /* il loop si vede sul righello */ }
 }
 
+/** Tasto centrale trascinato: la vista segue la mano, avanti e indietro e su e giù. */
+export class PanGesture implements Gesture {
+  readonly cursor = 'grabbing';
+  readonly hidden = NONE;
+  private readonly start: TimelineGeometry;
+
+  constructor(host: GestureHost, private readonly origin: Pointer, private readonly scrollTo: (beat: Beats, y: number) => void) {
+    this.start = host.geo;
+  }
+
+  move(p: Pointer): void {
+    const g = this.start;
+    this.scrollTo(g.scrollBeat - (p.x - this.origin.x) / g.pxPerBeat, g.scrollY - (p.y - this.origin.y));
+  }
+
+  end(): void { /* niente */ }
+  cancel(): void { /* niente */ }
+  paint(): void { /* niente */ }
+}
+
 /** Nella parte bassa del righello: sposta la testina (anche trascinando). */
 export class ScrubGesture implements Gesture {
   readonly cursor = 'text';

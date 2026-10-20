@@ -173,7 +173,7 @@ src/
     instruments/prisma/  il synth Prisma (tipo Serum): descrizione, fonti e destinazioni (prisma.ts), preset (prisma-presets.ts),
                        curve e forme degli LFO (shapes.ts), inviluppo (curved-env.ts), filtro (prisma-filter.ts), suono (prisma-core.ts)
     instruments/drums/   la Drum Machine: pad, modelli e kit (drums.ts), suono (drums-core.ts)
-    instruments/sampler/ il Sampler (come Simpler/Sampler di Live): modi, fette e preset (sampler.ts), suono (sampler-core.ts)
+    instruments/sampler/ il Sampler (come Simpler/Sampler di Live): modi, fette, zone e preset (sampler.ts), suono (sampler-core.ts)
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
     effects/phaser/    il Phaser (anche flanger): descrizione e preset (phaser.ts), suono (phaser-core.ts)
     effects/eq/        l'EQ: descrizione (eq.ts), matematica dei filtri comune a suono e disegno (eq-math.ts), suono (eq-core.ts)
@@ -228,6 +228,8 @@ MioBrano/
 | Tasto destro | menu: su una clip (apri, taglia, copia, incolla, duplica, dividi, elimina), su una corsia (incolla qui, nuova clip MIDI), sull'intestazione di una traccia (rinomina, strumento, mute/solo, elimina, nuove tracce) |
 | Ctrl+L · Ctrl+4 · Ctrl+Maiusc+M | loop · griglia · metronomo |
 | Rotella · Maiusc+rotella · Ctrl+rotella · + / − | scorri · scorri in orizzontale · zoom |
+| Barra sotto la timeline | trascina il cursore: avanti e indietro · clic: porta lì la vista |
+| Trascina con il tasto centrale (rotella premuta) | sposta la vista in ogni direzione |
 | Ctrl+S · Ctrl+O | salva · apri |
 
 ## Browser
@@ -596,6 +598,29 @@ campionamento resta intonato; una voce che riparte (Mono, voce rubata) sfuma inv
 Il pannello mostra la **forma d'onda** con la regione che suona accesa, il loop (con il fade
 disegnato), le fette numerate e un cursore per ogni voce che suona.
 
+**Zone**, come nel Sampler di Live: fino a 32 sample, ognuno sui suoi tasti (uno solo o un
+intervallo) e sulle sue velocity, con la sua nota base, Tune/Fine, volume, pan e le sue posizioni
+(inizio, fine, loop); una nota suona tutte le zone che la contengono (strati, livelli di
+velocity). La scheda **Zone**, in alto, mostra la tastiera con una riga per zona: la barra dei
+tasti (alta quanto le velocity) e un punto sulla nota base; sotto, la scheda della zona scelta. La
+scheda **Sample** mostra la forma d'onda della zona scelta (la tendina accanto la cambia). Più
+file lasciati insieme diventano zone nuove: se i nomi dicono tutti una nota ("Piano C3.wav") quella
+è la nota base e le zone si dividono la tastiera a metà strada tra le note, altrimenti un tasto
+ciascuno (a partire da quello sotto il puntatore, o da C1), con la nota base sul tasto così suonano
+alla loro altezza. Le zone di un tasto solo danno il nome del loro sample alle note del piano roll,
+come i pad. A una voce sola (Mono, Legato) suona la prima zona della nota; in Slice solo la prima
+zona, con le sue fette. Un preset cambia il suono ma non la mappa delle zone.
+
+| Gesto (scheda Zone) | Azione |
+| --- | --- |
+| file audio o sample del browser sulla tastiera o su una riga | zone nuove dal tasto sotto il puntatore |
+| file sul nome di una zona | ne cambia il sample |
+| trascina una barra · un suo bordo | sposta la zona (con la nota base) · cambia il primo o l'ultimo tasto |
+| clic sulla tastiera · su una riga | suona il tasto · sceglie la zona |
+| rotella · Maiusc+rotella · rotella sui nomi | zoom sui tasti · scorre i tasti · scorre le righe |
+| doppio clic sulla riga in fondo · sul vuoto | carica zone nuove · tutta la tastiera |
+| tasto destro | Carica in zone nuove…, Cambia il sample, Togli la zona, Un tasto per zona da C1, Dividi la tastiera tra le note base, Tutte su tutta la tastiera |
+
 | Gesto | Azione |
 | --- | --- |
 | trascina S / E (in alto) · L (in basso) | Inizio e Fine · inizio e fine del loop (Maiusc: fine) |
@@ -604,7 +629,7 @@ disegnato), le fette numerate e un cursore per ogni voce che suona.
 | clic su una fetta (Slice) | la suona |
 | doppio clic (fette ai transienti) | aggiunge una fetta · su un marker la toglie; trascinarlo la sposta |
 | tasto destro | Carica un sample…, Togli il sample, Mostra tutto; in Slice Rileva e Togli tutte le fette |
-| file audio o sample del browser lasciato sul pannello | diventa il sample (si copia nel progetto) |
+| file audio o sample del browser lasciato sul pannello | diventa il sample della zona scelta (si copia nel progetto); più file, zone nuove |
 
 Un sample del browser lasciato sulla catena di una traccia MIDI (o caricato con il doppio clic
 mentre è aperta) va in un Sampler: se lo strumento è già un Sampler cambia solo il sample.

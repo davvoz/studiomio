@@ -6,6 +6,23 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Zones in the Sampler, like Live's Sampler: load up to 32 samples and put each on its own key
+  or on a range of keys (and velocities), with its own root note, tune, volume, pan, start/end
+  and loop. A note plays every zone that contains it, so zones can be layered or split by
+  velocity. The new "Zone" tab shows the keyboard with one row per zone: drag a bar to move it,
+  drag an edge to resize it, click a key to hear it. Drop several audio files at once and they
+  become new zones: one key each from the key under the pointer (a drum kit), or, when every file
+  name has a note in it ("Piano C3.wav"), spread across the keyboard around those notes (a
+  multisampled instrument). Zones on a single key name their notes in the piano roll, and
+  picking a preset no longer resets the key map.
+- A scroll bar under the arrangement: drag it to move along the timeline, or click it to jump
+  there. You can also drag the timeline with the middle mouse button (the pressed wheel), in
+  any direction.
+
+### Fixed
+- Shift + mouse wheel didn't scroll the arrangement sideways on Windows.
+
 ## [0.3.11] - 2026-10-20
 
 ### Added

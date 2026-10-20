@@ -8,6 +8,7 @@
   --line: #2c3138;
   --header-w: 210px;
   --ruler-h: 30px;
+  --hscroll-h: 14px;
   color-scheme: dark;
   font: 13px/1.4 system-ui, sans-serif;
 }
@@ -61,7 +62,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 
 /* ---------------------------------------------------------------- arrangement */
 .arrangement { display: grid; grid-template-columns: var(--header-w) 1fr; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
-.headers { display: grid; grid-template-rows: var(--ruler-h) 1fr; border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
+.headers { display: grid; grid-template-rows: var(--ruler-h) 1fr var(--hscroll-h); border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
 .header-add { display: flex; gap: 4px; padding: 3px 6px; border-bottom: 1px solid var(--line); }
 .header-add button { padding: 1px 8px; font-size: 12px; }
 .header-scroll { overflow: hidden; position: relative; }
@@ -85,7 +86,12 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .header .controls button { padding: 1px 7px; font-size: 11.5px; }
 .header .controls input[type=range] { flex: 1; min-width: 0; padding: 0; accent-color: var(--accent); }
 
-.arrangement-body { display: grid; grid-template-rows: var(--ruler-h) 1fr; min-width: 0; min-height: 0; }
+.arrangement-body { display: grid; grid-template-rows: var(--ruler-h) 1fr var(--hscroll-h); min-width: 0; min-height: 0; }
+/* la barra sotto la timeline: il cursore è il tratto che si vede, trascinandolo la vista scorre */
+.timeline-scroll { position: relative; background: var(--panel); border-top: 1px solid var(--line); touch-action: none; cursor: default; }
+.timeline-scroll .thumb { position: absolute; left: 0; top: 2px; bottom: 2px; border-radius: 4px; background: #4a515c; }
+.timeline-scroll:hover .thumb { background: #5a626e; }
+.timeline-scroll.dragging .thumb { background: var(--accent); }
 .ruler-wrap, .lanes-wrap { position: relative; overflow: hidden; }
 .ruler-wrap canvas, .lanes-wrap canvas { position: absolute; left: 0; top: 0; display: block; }
 .lanes-wrap .overlay { touch-action: none; }
@@ -557,7 +563,7 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .device-panel.instrument-panel .device-sections:has(> .smp) { max-width: none; }
 .smp { display: flex; gap: 6px; align-items: stretch; }
 .smp [hidden] { display: none !important; }
-.smp.drop .smp-wave, .smp.browser-drop .smp-wave { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.smp.drop .smp-wave, .smp.browser-drop .smp-wave, .smp.drop .smp-zones, .smp.browser-drop .smp-zones { outline: 2px dashed var(--accent); outline-offset: -2px; }
 .smp-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .smp-top { display: flex; gap: 6px; }
 .smp-row { display: flex; gap: 6px; align-items: stretch; }
@@ -582,12 +588,14 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .smp-wave-bar { display: flex; align-items: center; gap: 6px; min-height: 22px; }
 .smp-sample { font-size: 12px; padding: 1px 4px; max-width: 220px; }
 .smp-info { font-size: 11px; margin-left: auto; white-space: nowrap; }
-.smp-wave { display: block; width: 100%; flex: 1 1 0; min-height: 0; border-radius: 6px; border: 1px solid var(--line); touch-action: none; }
+.smp-wave, .smp-zones { display: block; width: 100%; flex: 1 1 0; min-height: 0; border-radius: 6px; border: 1px solid var(--line); touch-action: none; }
+.smp-zone-pick { font-size: 12px; padding: 1px 4px; max-width: 190px; }
+.smp-slot { display: contents; }
 .smp-env-card { width: 300px; flex: none; }
 .smp-env-card .smp-knobs { justify-content: space-between; }
 .smp-env-card .knob { width: 52px; }
 .smp-env { display: block; width: 100%; min-width: 0; height: 46px; border-radius: 6px; border: 1px solid var(--line); touch-action: none; }
-.smp-sample-card { min-width: 222px; }
+.smp-sample-card, .smp-zone-card { min-width: 222px; }
 .smp-detect { padding: 0 7px; font-size: 11.5px; }
 .smp-lfo-card { flex: none; }
 .smp-lfo-grid { display: grid; grid-template-columns: repeat(3, minmax(46px, auto)); gap: 2px 1px; align-content: start; }
