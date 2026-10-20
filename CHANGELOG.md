@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.13] - 2026-10-21
+
 ### Added
 - Beat Repeat, a new effect like Live's Beat Repeat: in time with the song, every Interval
   (shifted by Offset sixteenths) and with a given Chance, it captures a slice as long as the
