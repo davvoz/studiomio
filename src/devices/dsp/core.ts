@@ -13,8 +13,9 @@ export interface InstrumentCore {
   render(left: Float32Array, right: Float32Array, from: number, to: number): void;
   /** Il tempo del progetto, per chi ha modulazioni a tempo (LFO sincronizzati). */
   setTempo?(bpm: number): void;
-  /** Per chi suona un sample: dove leggono le voci che suonano (frazioni del sample), scritte in
-   *  `out`; restituisce quante sono. L'interfaccia le disegna sulla forma d'onda. */
+  /** Per chi suona un sample: dove leggono le voci che suonano (frazioni del sample; con più
+   *  sample, l'indice del sample più la frazione), scritte in `out`; restituisce quante sono.
+   *  L'interfaccia le disegna sulla forma d'onda. */
   playheads?(out: Float32Array): number;
 }
 

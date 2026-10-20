@@ -43,7 +43,8 @@ const KEY = 'studiomio.presets';
 /** I valori da salvare: solo quelli diversi dai predefiniti, come nei preset di fabbrica. */
 export function presetParams(t: DeviceType, values: ParamValues): ParamValues {
   const all = resolveParams(t, values);
-  return Object.fromEntries(paramsOf(t).filter(p => all[p.id] !== p.default).map(p => [p.id, all[p.id]]));
+  // ciò che un preset non cambia (la mappa delle zone del Sampler) non ci va
+  return Object.fromEntries(paramsOf(t).filter(p => all[p.id] !== p.default && !t.keepsOnPreset?.(p.id)).map(p => [p.id, all[p.id]]));
 }
 
 /** Un preset da dati letti da fuori (file, spazio locale), o null se non lo è. */

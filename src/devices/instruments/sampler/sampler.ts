@@ -15,8 +15,29 @@ import { FILTER, FILTER_TYPES } from '../prisma/prisma';
 
 export { LFO_SYNC, VOICE_MODE };
 
-/** Il posto del sample nel dispositivo. */
+/** Il posto del sample nel dispositivo (quello della prima zona). */
 export const SAMPLE_SLOT = 'sample';
+
+/** Le zone al massimo: ognuna un sample, sui tasti da `lo` a `hi` e sulle velocity da `vlo` a
+ *  `vhi`, come nel Sampler di Live. Una nota suona tutte le zone che la contengono. */
+export const MAX_ZONES = 32;
+/** I parametri di una zona. Quelli della prima per le posizioni e la nota base sono i parametri
+ *  del sample singolo (`start`, `root`…), così un Sampler con un solo sample resta com'era. */
+export type ZoneKey = 'lo' | 'hi' | 'vlo' | 'vhi' | 'root' | 'tune' | 'fine' | 'gain' | 'pan' | 'start' | 'end' | 'loopStart' | 'loopEnd';
+const FIRST_ZONE_KEYS: ReadonlySet<ZoneKey> = new Set(['root', 'start', 'end', 'loopStart', 'loopEnd']);
+/** Il posto del sample della zona `i` (da 0): "sample", poi "z2", "z3"… */
+export const zoneSlot = (i: number): string => (i === 0 ? SAMPLE_SLOT : `z${i + 1}`);
+/** La zona di un posto dei sample, o −1. */
+export const zoneOfSlot = (slot: string): number => {
+  if (slot === SAMPLE_SLOT) return 0;
+  const m = /^z(\d+)$/.exec(slot);
+  const i = m ? Number(m[1]) - 1 : -1;
+  return i >= 1 && i < MAX_ZONES ? i : -1;
+};
+/** L'id del parametro `key` della zona `i` (da 0): "z1lo", "z2root"… ("root", "start"… per la prima). */
+export const zoneParam = (i: number, key: ZoneKey): string => (i === 0 && FIRST_ZONE_KEYS.has(key) ? key : `z${i + 1}${key}`);
+/** I parametri che un preset non tocca: la mappa delle zone dipende dai sample caricati. */
+const ZONE_PARAM = /^z\d+[a-zA-Z]+$/;
 
 export const MODES = ['Classic', 'One-Shot', 'Slice'] as const;
 export const MODE = { classic: 0, oneShot: 1, slice: 2 } as const;
@@ -95,6 +116,30 @@ const envParams = (n: number): ParamSpec[] => {
   ];
 };
 
+/** I parametri delle zone (nascosti: si muovono dall'editor delle zone e dalla forma d'onda). */
+const zoneParams = (): ParamSpec[] => Array.from({ length: MAX_ZONES }, (_, i): ParamSpec[] => {
+  // le etichette sono quelle dei controlli della prima zona: il pannello li mostra al loro posto
+  const hidden = { hidden: true };
+  const own: ParamSpec[] = i === 0 ? [] : [
+    choice(zoneParam(i, 'root'), 'Nota base', NOTE_NAMES, 60, { when: { param: 'mode', is: [MODE.classic, MODE.oneShot] }, hidden: true }),
+    position(zoneParam(i, 'start'), 'Inizio', 0, hidden),
+    position(zoneParam(i, 'end'), 'Fine', 100, hidden),
+    position(zoneParam(i, 'loopStart'), 'Loop da', 0, { when: looping, hidden: true }),
+    position(zoneParam(i, 'loopEnd'), 'Loop a', 100, { when: looping, hidden: true }),
+  ];
+  return [
+    choice(zoneParam(i, 'lo'), 'Da', NOTE_NAMES, 0, hidden),
+    choice(zoneParam(i, 'hi'), 'A', NOTE_NAMES, 127, hidden),
+    num(zoneParam(i, 'vlo'), 'Vel. da', 1, 127, 1, '', { step: 1, ...hidden }),
+    num(zoneParam(i, 'vhi'), 'Vel. a', 1, 127, 127, '', { step: 1, ...hidden }),
+    num(zoneParam(i, 'tune'), 'Tune', -48, 48, 0, 'st', { step: 1, ...hidden }),
+    num(zoneParam(i, 'fine'), 'Fine', -50, 50, 0, 'ct', { step: 1, ...hidden }),
+    num(zoneParam(i, 'gain'), 'Volume', -36, 12, 0, 'dB', { step: 0.5, ...hidden }),
+    num(zoneParam(i, 'pan'), 'Pan', -100, 100, 0, 'pan', { step: 1, ...hidden }),
+    ...own,
+  ];
+}).flat();
+
 const sliceParams = (): ParamSpec[] => {
   const hidden = { hidden: true };
   return [
@@ -124,6 +169,7 @@ export const SAMPLER: DeviceType = {
         choice('sliceBy', 'Fette', SLICE_BY, SLICE.transients, { when: { param: 'mode', is: MODE.slice } }),
         choice('sliceGrid', 'Griglia', SLICE_GRIDS.map(String), 2, { when: { param: 'sliceBy', is: SLICE.grid } }),
         ...sliceParams(),
+        ...zoneParams(),
       ],
     },
     {
@@ -206,11 +252,88 @@ export const SAMPLER: DeviceType = {
     { name: 'Caduta', params: { mode: MODE.oneShot, pitchEnv: -24, e3A: 0.001, e3D: 0.8, e3S: 0, e3Dc: 40 } },
     { name: 'Fette in 16', params: { mode: MODE.slice, sliceBy: SLICE.grid, sliceGrid: 2, voiceMode: VOICE_MODE.mono, e1R: 0.02 } },
   ],
-  noteNames: values => {
-    if (values.mode !== MODE.slice) return new Map();
-    return new Map(Array.from({ length: sliceStarts(values).length }, (_, i) => [FIRST_SLICE_NOTE + i, `Fetta ${i + 1}`]));
+  noteNames: (values, samples) => {
+    if (values.mode === MODE.slice) return new Map(Array.from({ length: sliceStarts(values).length }, (_, i) => [FIRST_SLICE_NOTE + i, `Fetta ${i + 1}`]));
+    // le zone su un tasto solo (un kit di suoni, uno per tasto) danno il nome del loro sample
+    const names = new Map<number, string>();
+    for (const [slot, name] of samples ?? []) {
+      const i = zoneOfSlot(slot);
+      if (i < 0) continue;
+      const lo = values[zoneParam(i, 'lo')], hi = values[zoneParam(i, 'hi')];
+      if (lo === hi) names.set(lo, names.has(lo) ? `${names.get(lo)} + ${name}` : name);
+    }
+    return names;
   },
+  keepsOnPreset: id => id === 'root' || ZONE_PARAM.test(id),
 };
+
+/** Una zona come la usano motore e interfaccia: i suoi tasti, velocity e la nota base. */
+export interface ZoneMap {
+  readonly index: number;
+  readonly lo: number;
+  readonly hi: number;
+  readonly vlo: number;
+  readonly vhi: number;
+  readonly root: number;
+}
+
+/** La mappa della zona `i` con questi valori. */
+export const zoneMap = (values: Readonly<Record<string, number>>, i: number): ZoneMap => {
+  const v = (key: ZoneKey) => values[zoneParam(i, key)];
+  return { index: i, lo: Math.min(v('lo'), v('hi')), hi: Math.max(v('lo'), v('hi')), vlo: Math.min(v('vlo'), v('vhi')), vhi: Math.max(v('vlo'), v('vhi')), root: v('root') };
+};
+
+/** I valori che mettono la zona `i` sui tasti `lo`…`hi` con la nota base `root` (le velocity
+ *  tornano tutte). */
+export const zoneKeys = (i: number, lo: number, hi: number, root: number): Record<string, number> =>
+  ({ [zoneParam(i, 'lo')]: lo, [zoneParam(i, 'hi')]: hi, [zoneParam(i, 'root')]: root });
+
+/** Tutti i parametri della zona `i` ai predefiniti (per una zona nuova o tolta). */
+export const zoneDefaults = (i: number): Record<string, number> => {
+  const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'tune', 'fine', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
+  const specs = SAMPLER.sections.flatMap(s => s.params);
+  return Object.fromEntries(keys.map(k => zoneParam(i, k)).map(id => [id, specs.find(p => p.id === id)!.default]));
+};
+
+/** La nota scritta nel nome di un file ("Piano C3.wav", "bass_f#1", "Vox-Eb2"), come la
+ *  scrive Live (C3 = 60), o null. */
+export function noteInName(name: string): number | null {
+  const base = name.replace(/\.[a-z0-9]+$/i, '');
+  // l'ultima nota scritta nel nome, staccata da altre lettere ("Bd1" non è un D1)
+  const found = [...base.matchAll(/(?<![a-z])([a-g])([#b♯♭]?)(-?[0-8])(?![0-9])/gi)].at(-1);
+  if (!found) return null;
+  const pc = ({ c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 } as Record<string, number>)[found[1].toLowerCase()];
+  const acc = found[2] === '#' || found[2] === '♯' ? 1 : found[2] ? -1 : 0;
+  const p = pc + acc + (Number(found[3]) + 2) * 12;
+  return p >= 0 && p <= 127 ? p : null;
+}
+
+/** I tasti di zone con queste note base, come un multicampionamento: ognuna va da metà strada
+ *  dalla nota sotto a metà strada da quella sopra (la più bassa da C-2, la più alta fino a G8);
+ *  zone con la stessa nota base prendono gli stessi tasti. */
+export function spreadRanges(roots: readonly number[]): { lo: number; hi: number }[] {
+  const unique = [...new Set(roots)].sort((a, b) => a - b);
+  return roots.map(r => {
+    const k = unique.indexOf(r), prev = unique[k - 1], next = unique[k + 1];
+    return { lo: prev === undefined ? 0 : Math.floor((prev + r) / 2) + 1, hi: next === undefined ? 127 : Math.floor((r + next) / 2) };
+  });
+}
+
+/** Dove vanno dei sample caricati insieme, uno per zona: se sono più d'uno e tutti i nomi dicono
+ *  una nota ("Piano C3"), quella è la nota base e le zone si dividono la tastiera (vedi
+ *  spreadRanges); altrimenti un tasto ciascuno da `first` in su, con la nota base sul tasto
+ *  (suonano alla loro altezza, come i pad di una batteria). */
+export function layoutZones(names: readonly string[], first: number): { lo: number; hi: number; root: number }[] {
+  const notes = names.map(noteInName);
+  if (names.length > 1 && notes.every(n => n !== null)) {
+    const roots = notes as number[];
+    return spreadRanges(roots).map((r, i) => ({ ...r, root: roots[i] }));
+  }
+  return names.map((_, i) => {
+    const key = Math.max(0, Math.min(127, first + i));
+    return { lo: key, hi: key, root: key };
+  });
+}
 
 /** Gli inizi delle fette (frazioni del sample, in ordine) dentro la regione Inizio…Fine: in
  *  parti uguali con la griglia; ai transienti trovati (i parametri nascosti), più l'inizio. La

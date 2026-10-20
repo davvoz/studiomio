@@ -2,7 +2,7 @@ import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { DeviceId, SampleId, TrackId } from '../../core/id';
 import type { SampleData } from '../../devices/dsp/core';
 import type { SampleRef } from '../../model/sample';
-import { paramSpec, resolveParams } from '../../devices/device-type';
+import { keptOnPreset, paramSpec, resolveParams } from '../../devices/device-type';
 import { deviceTypeAt } from '../../devices/rack-params';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, sampleAt, type EffectSettings, type ParamValues } from '../../model/device';
@@ -492,6 +492,11 @@ export class DeviceView {
         ? type.noteNames?.(resolveParams(type, t.instrument.params), store.project.sampleNames(t.instrument)) : undefined;
       return names?.size ? Math.min(...names.keys()) : 60;
     };
+    // ciò che un preset non cambia (la mappa delle zone del Sampler) resta com'è
+    const withKept = (params: ParamValues): ParamValues => {
+      const t = store.project.track(track.id);
+      return t instanceof MidiTrack ? { ...params, ...keptOnPreset(type, t.instrument.params) } : params;
+    };
     const test = el<HTMLButtonElement>('button', { className: 'mini', textContent: '♪', title: 'Suona una nota di prova', onclick: () => audition(track.id, testPitch()) });
     const display = DEVICE_DISPLAYS[type.type]?.({
       type, settings: track.instrument, sampleRate: this.deps.sampleRate,
@@ -508,6 +513,10 @@ export class DeviceView {
           const sample = await this.deps.importSample(file);
           store.apply(setInstrumentSamples(track.id, { [slot]: sample }, values));
         },
+        loadAll: async (files, values) => {
+          const entries = await Promise.all(Object.entries(files).map(async ([slot, file]) => [slot, await this.deps.importSample(file)] as const));
+          store.apply(setInstrumentSamples(track.id, Object.fromEntries(entries), values));
+        },
         assign: (changes, values) => store.apply(setInstrumentSamples(track.id, changes, values)),
         audio: slot => {
           const t = store.project.track(track.id);
@@ -521,10 +530,10 @@ export class DeviceView {
       type, settings: track.instrument, before: [select], after: [test], display, ...this.foldOptions(track.id, INSTRUMENT),
       onParam: (id, v, final) => this.param(setInstrumentParam(track.id, id, v), `param-${track.id}-${id}`, final),
       onPreset: p => {
-        store.apply(loadPreset(track.id, p.name, p.params));
+        store.apply(loadPreset(track.id, p.name, withKept(p.params)));
         audition(track.id, testPitch());
       },
-      onPresetSaved: p => store.apply(loadPreset(track.id, p.name, p.params)),
+      onPresetSaved: p => store.apply(loadPreset(track.id, p.name, withKept(p.params))),
       say: this.deps.say,
     });
     panel.element.classList.add('instrument-panel');

@@ -31,6 +31,8 @@ export interface SampleSlots {
   list(): readonly SampleRef[];
   /** Copia il file nel progetto e lo mette al posto `slot`, con i parametri `values`. */
   load(slot: string, file: File, values: ParamValues): Promise<void>;
+  /** Come `load`, con più file insieme (per posto): un passo solo. */
+  loadAll?(files: Readonly<Record<string, File>>, values: ParamValues): Promise<void>;
   /** Sample del progetto (null: tolto) per posto, con i parametri `values`: un passo solo. */
   assign(changes: Readonly<Record<string, SampleId | null>>, values: ParamValues): void;
   /** I campioni del sample al posto `slot`, se è caricato (per disegnarlo). */
@@ -53,7 +55,8 @@ export interface DisplayContext {
   audition(pitch: number, velocity: number): void;
   /** Le note che lo strumento ha suonato dalla chiamata precedente (per gli effetti, nessuna). */
   playedNotes(): readonly number[];
-  /** Dove leggono adesso le voci dello strumento, se suona un sample (frazioni del sample). */
+  /** Dove leggono adesso le voci dello strumento, se suona un sample (frazioni del sample; con
+   *  più sample, l'indice del sample più la frazione: vedi InstrumentCore.playheads). */
   playheads?(): readonly number[];
   /** I sample del dispositivo (solo per gli strumenti). */
   readonly samples?: SampleSlots;

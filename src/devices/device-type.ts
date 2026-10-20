@@ -22,7 +22,14 @@ export interface DeviceType {
    *  questi valori dei parametri (e questi nomi dei sample caricati, per posto), il nome di
    *  ogni nota che suona qualcosa. */
   readonly noteNames?: (values: Readonly<Record<string, number>>, samples?: ReadonlyMap<string, string>) => ReadonlyMap<number, string>;
+  /** I parametri che restano come sono quando si sceglie un preset (es. la mappa delle zone del
+   *  Sampler, che dipende dai sample caricati e non dal suono). */
+  readonly keepsOnPreset?: (param: string) => boolean;
 }
+
+/** I valori dei parametri che un preset di `t` non cambia, tra `params`. */
+export const keptOnPreset = (t: DeviceType, params: ParamValues): ParamValues =>
+  t.keepsOnPreset ? Object.fromEntries(Object.entries(params).filter(([id]) => t.keepsOnPreset!(id))) : {};
 
 export const paramsOf = (t: DeviceType): ParamSpec[] => t.sections.flatMap(s => s.params);
 

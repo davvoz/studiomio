@@ -22,18 +22,22 @@ export class VoicePool<V extends PolyVoice> {
     this.startedAt = voices.map(() => 0);
   }
 
-  noteOn(id: number, pitch: number, velocity: number): void {
+  /** Una voce per la nota; chi suona più voci per nota (le zone del Sampler) la chiama più
+   *  volte con lo stesso `id` e fa partire ogni voce a modo suo con `start`. */
+  noteOn(id: number, pitch: number, velocity: number, start: (voice: V) => void = v => v.start(pitch, velocity)): void {
     const i = this.pick();
     this.noteOf[i] = id;
     this.startedAt[i] = ++this.clock;
-    this.voices[i].start(pitch, velocity);
+    start(this.voices[i]);
   }
 
+  /** Lascia tutte le voci della nota. */
   noteOff(id: number): void {
-    const i = this.noteOf.indexOf(id);
-    if (i < 0) return;
-    this.noteOf[i] = null;
-    this.voices[i].release();
+    for (let i = 0; i < this.voices.length; i++) {
+      if (this.noteOf[i] !== id) continue;
+      this.noteOf[i] = null;
+      this.voices[i].release();
+    }
   }
 
   silence(): void {

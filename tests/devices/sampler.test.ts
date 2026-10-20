@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { paramSpec, resolveParams } from '../../src/devices/device-type';
+import { keptOnPreset, paramSpec, resolveParams } from '../../src/devices/device-type';
 import type { SampleData } from '../../src/devices/dsp/core';
 import { instrumentType } from '../../src/devices/registry';
 import {
-  FIRST_SLICE_NOTE, LOOP, LOOP_RELEASE, MODE, SAMPLE_SLOT, SAMPLER, SLICE, sliceStarts, sliceValues, TRIGGER, VOICE_MODE,
+  FIRST_SLICE_NOTE, layoutZones, LOOP, LOOP_RELEASE, MAX_ZONES, MODE, noteInName, SAMPLE_SLOT, SAMPLER, SLICE, sliceStarts, sliceValues,
+  spreadRanges, TRIGGER, VOICE_MODE, zoneKeys, zoneParam, zoneSlot, type ZoneKey,
 } from '../../src/devices/instruments/sampler/sampler';
 import { SamplerCore } from '../../src/devices/instruments/sampler/sampler-core';
+import { presetParams } from '../../src/devices/user-presets';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
 import { findTransients } from '../../src/ui/device/sampler/slices';
 
@@ -264,5 +266,133 @@ describe('Sampler: suono', () => {
     const n = core.playheads(out);
     expect(n).toBe(2);
     expect([...out.subarray(0, n)].sort().map(x => +x.toFixed(2))).toEqual([0.25, 0.5]);
+  });
+});
+
+describe('Sampler: zone', () => {
+  /** Un Sampler con un sample per zona (in ordine) e i parametri. */
+  const zoned = (samples: readonly (SampleData | null)[], params: Record<string, number> = {}) => {
+    const core = new SamplerCore(SR);
+    core.setParams(resolveParams(SAMPLER, { volume: 0, velocity: 0, ...params }));
+    samples.forEach((s, i) => core.setSample(zoneSlot(i), s));
+    return { core, queue: new NoteQueue() };
+  };
+  const level = (x: number) => steps([x], 1);
+  /** Il livello che suona `pitch` (poco dopo l'attacco). */
+  const heard = (samples: readonly (SampleData | null)[], params: Record<string, number>, pitch: number, velocity = 100) => {
+    const { core, queue } = zoned(samples, params);
+    queue.add(pitch, velocity, 0, SR);
+    return run(core, queue, 4000).left[2000];
+  };
+
+  it('la prima zona usa i parametri e il posto del sample singolo; tutti i parametri esistono', () => {
+    expect(zoneSlot(0)).toBe(SAMPLE_SLOT);
+    expect(zoneSlot(1)).toBe('z2');
+    expect(zoneParam(0, 'root')).toBe('root');
+    expect(zoneParam(0, 'start')).toBe('start');
+    expect(zoneParam(0, 'lo')).toBe('z1lo');
+    expect(zoneParam(2, 'loopEnd')).toBe('z3loopEnd');
+    const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'tune', 'fine', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
+    for (let i = 0; i < MAX_ZONES; i++) for (const k of keys) expect(paramSpec(SAMPLER, zoneParam(i, k)), `${i} ${k}`).toBeDefined();
+  });
+
+  it('legge la nota scritta nel nome di un file', () => {
+    expect(noteInName('Piano C3.wav')).toBe(60);
+    expect(noteInName('bass_f#1.aif')).toBe(42);
+    expect(noteInName('Vox-Eb2')).toBe(51);
+    expect(noteInName('Strings A-1')).toBe(21);
+    expect(noteInName('Grand_C2_soft.wav')).toBe(48);
+    expect(noteInName('Bd1.wav')).toBeNull();
+    expect(noteInName('Kick 808.wav')).toBeNull();
+    expect(noteInName('Pad C30')).toBeNull();
+  });
+
+  it('divide la tastiera a metà strada tra le note base', () => {
+    expect(spreadRanges([60, 48, 72])).toEqual([{ lo: 55, hi: 66 }, { lo: 0, hi: 54 }, { lo: 67, hi: 127 }]);
+    expect(spreadRanges([60, 60])).toEqual([{ lo: 0, hi: 127 }, { lo: 0, hi: 127 }]);
+  });
+
+  it('più file: sulle note dei nomi se ci sono tutte, se no un tasto ciascuno', () => {
+    expect(layoutZones(['Kick.wav', 'Snare.wav'], 36)).toEqual([{ lo: 36, hi: 36, root: 36 }, { lo: 37, hi: 37, root: 37 }]);
+    expect(layoutZones(['Piano C2.wav', 'Piano C3.wav'], 36)).toEqual([{ lo: 0, hi: 54, root: 48 }, { lo: 55, hi: 127, root: 60 }]);
+    expect(layoutZones(['Piano C2.wav', 'Kick.wav'], 40).map(z => z.lo)).toEqual([40, 41]);
+    // un file solo va sul tasto, anche se il nome dice una nota
+    expect(layoutZones(['Piano C2.wav'], 40)).toEqual([{ lo: 40, hi: 40, root: 40 }]);
+  });
+
+  it('ogni tasto suona la zona che lo contiene; fuori dalle zone tace', () => {
+    const params = { ...zoneKeys(0, 36, 36, 36), ...zoneKeys(1, 37, 38, 37) };
+    const samples = [level(0.3), level(0.6)];
+    expect(heard(samples, params, 36)).toBeCloseTo(0.3, 2);
+    expect(heard(samples, params, 38)).toBeCloseTo(0.6, 2);
+    expect(heard(samples, params, 39)).toBe(0);
+  });
+
+  it('le zone sovrapposte suonano insieme, e lasciata la nota si chiudono tutte', () => {
+    const { core, queue } = zoned([level(0.3), level(0.4)], { e1R: 0.01 });
+    queue.add(60, 100, 0, SR / 10);
+    const out = run(core, queue, SR / 2).left;
+    expect(out[2000]).toBeCloseTo(0.7, 2);
+    expect(lastSound(out)).toBeLessThan(SR / 10 + SR * 0.05);
+  });
+
+  it('le velocity scelgono la zona', () => {
+    const params = { [zoneParam(0, 'vhi')]: 63, [zoneParam(1, 'vlo')]: 64 };
+    const samples = [level(0.3), level(0.6)];
+    expect(heard(samples, params, 60, 40)).toBeCloseTo(0.3, 2);
+    expect(heard(samples, params, 60, 100)).toBeCloseTo(0.6, 2);
+  });
+
+  it('ogni zona ha la sua nota base, il suo tune e il suo volume', () => {
+    const params = { ...zoneKeys(0, 0, 59, 48), ...zoneKeys(1, 60, 127, 60), [zoneParam(1, 'tune')]: 12 };
+    for (const [pitch, hz] of [[48, 440], [60, 880], [72, 1760]] as const) {
+      const { core, queue } = zoned([sine(440, 1), sine(440, 1)], params);
+      queue.add(pitch, 100, 0, SR);
+      expect(zeroCrossHz(run(core, queue, 12000).left, 1000, 12000)).toBeCloseTo(hz, -1);
+    }
+    expect(heard([null, level(0.8)], { [zoneParam(1, 'gain')]: -6 }, 60)).toBeCloseTo(0.4, 2);
+  });
+
+  it('inizio e fine sono di ogni zona', () => {
+    const { core, queue } = zoned([null, sine(440, 1)], { [zoneParam(1, 'start')]: 50, [zoneParam(1, 'end')]: 60 });
+    queue.add(60, 100, 0, SR * 2);
+    expect(lastSound(run(core, queue, SR).left)).toBeLessThan(SR * 0.1 + 10);
+  });
+
+  it('a una voce sola suona la prima zona, e passando a un\'altra zona cambia sample', () => {
+    const { core, queue } = zoned([level(0.3), level(0.6)], { voiceMode: VOICE_MODE.legato, ...zoneKeys(0, 0, 59, 60), ...zoneKeys(1, 60, 127, 60) });
+    queue.add(50, 100, 0, SR);
+    queue.add(70, 100, 4000, SR);
+    const out = run(core, queue, 8000).left;
+    expect(out[2000]).toBeCloseTo(0.3, 2);
+    expect(out[7000]).toBeCloseTo(0.6, 2);
+  });
+
+  it('in Slice suonano solo le fette della prima zona', () => {
+    const params = { mode: MODE.slice, sliceBy: SLICE.grid, sliceGrid: 0, ...zoneKeys(1, 0, 127, 60) };
+    const { core, queue } = zoned([steps([0.1, 0.2, 0.3, 0.4], 0.4), level(0.6)], params);
+    queue.add(FIRST_SLICE_NOTE + 2, 100, 0, SR);
+    expect(run(core, queue, 4000).left[2000]).toBeCloseTo(0.3, 2);
+  });
+
+  it('i cursori dicono la zona e la frazione del suo sample', () => {
+    const { core, queue } = zoned([null, null, sine(440, 1)]);
+    queue.add(60, 100, 0, SR);
+    run(core, queue, SR / 4);
+    const out = new Float32Array(16);
+    expect(core.playheads(out)).toBe(1);
+    expect(out[0]).toBeCloseTo(2.25, 2);
+  });
+
+  it('nel piano roll le zone di un tasto solo hanno il nome del loro sample', () => {
+    const v = resolveParams(SAMPLER, { ...zoneKeys(0, 36, 36, 36), ...zoneKeys(1, 38, 38, 38), ...zoneKeys(2, 40, 52, 48) });
+    const names = SAMPLER.noteNames!(v, new Map([[zoneSlot(0), 'Kick'], [zoneSlot(1), 'Snare'], [zoneSlot(2), 'Basso']]));
+    expect([...names]).toEqual([[36, 'Kick'], [38, 'Snare']]);
+  });
+
+  it('i preset non toccano la mappa delle zone, e quelli salvati non la contengono', () => {
+    const params = { ...zoneKeys(1, 40, 40, 40), root: 36, fCutoff: 500, start: 10 };
+    expect(keptOnPreset(SAMPLER, params)).toEqual({ ...zoneKeys(1, 40, 40, 40), root: 36 });
+    expect(presetParams(SAMPLER, params)).toEqual({ fCutoff: 500, start: 10 });
   });
 });

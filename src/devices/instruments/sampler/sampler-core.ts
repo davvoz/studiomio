@@ -1,4 +1,5 @@
-/* Il motore del Sampler (vedi sampler.ts). Ogni voce legge il sample a una velocità che dà
+/* Il motore del Sampler (vedi sampler.ts). Una nota fa partire una voce per ogni zona che la
+ * contiene (tasti e velocity), e ogni voce legge il sample della sua zona a una velocità che dà
  * l'intonazione (interpolazione di Hermite, anche quando il file ha un'altra frequenza di
  * campionamento), dentro la regione Inizio…Fine o la sua fetta; in Classic il loop la tiene
  * finché si tiene la nota, in avanti (con la dissolvenza a potenza costante tra la fine del loop
@@ -15,7 +16,7 @@ import { PrismaFilter } from '../prisma/prisma-filter';
 import { LFO_SHAPE as PRISMA_SHAPE, randomValue, shapeValue } from '../prisma/shapes';
 import {
   ENV, FILTER_ENV_OCTAVES, FILTER_VEL_OCTAVES, FIRST_SLICE_NOTE, LFO_CUTOFF_OCTAVES, LFO_SYNC, LFO_TRIG, LOOP,
-  LOOP_RELEASE, MODE, SAMPLE_SLOT, sliceStarts, TRIGGER, VOICE_MODE,
+  LOOP_RELEASE, MAX_ZONES, MODE, sliceStarts, TRIGGER, VOICE_MODE, zoneOfSlot, zoneParam, type ZoneKey,
 } from './sampler';
 
 const CONTROL_RATE = 32;
@@ -42,22 +43,65 @@ const envShape = (v: (id: string) => number, n: number): EnvShape => ({
   attackCurve: v(`e${n}Ac`), decayCurve: v(`e${n}Dc`), releaseCurve: v(`e${n}Rc`),
 });
 
+const ZONE_KEYS: readonly ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'tune', 'fine', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
+
+/** Una zona: il suo sample e i suoi valori, già nelle unità del motore. Restano gli stessi
+ *  oggetti (si aggiornano), così una voce che suona segue i cambi della sua zona. */
+class Zone {
+  sample: SampleData | null = null;
+  lo = 0;
+  hi = 127;
+  vlo = 1;
+  vhi = 127;
+  root = 60;
+  /** In semitoni, con i cent. */
+  tune = 0;
+  gain = 1;
+  pan = 0;
+  start = 0;
+  end = 1;
+  loopStart = 0;
+  loopEnd = 1;
+  private readonly ids: Readonly<Record<ZoneKey, string>>;
+
+  constructor(readonly index: number) {
+    this.ids = Object.fromEntries(ZONE_KEYS.map(k => [k, zoneParam(index, k)])) as Record<ZoneKey, string>;
+  }
+
+  read(params: Readonly<Record<string, number>>): void {
+    const v = (key: ZoneKey, def: number) => params[this.ids[key]] ?? def;
+    const lo = v('lo', 0), hi = v('hi', 127), vlo = v('vlo', 1), vhi = v('vhi', 127);
+    this.lo = Math.min(lo, hi);
+    this.hi = Math.max(lo, hi);
+    this.vlo = Math.min(vlo, vhi);
+    this.vhi = Math.max(vlo, vhi);
+    this.root = v('root', 60);
+    this.tune = v('tune', 0) + v('fine', 0) / 100;
+    this.gain = dbToGain(v('gain', 0));
+    this.pan = v('pan', 0) / 100;
+    this.start = clamp01(v('start', 0) / 100);
+    this.end = Math.max(this.start, clamp01(v('end', 100) / 100));
+    this.loopStart = clamp01(v('loopStart', 0) / 100);
+    this.loopEnd = clamp01(v('loopEnd', 100) / 100);
+  }
+
+  /** Se la nota la fa suonare. */
+  plays(pitch: number, velocity: number): boolean {
+    return !!this.sample && pitch >= this.lo && pitch <= this.hi && velocity >= this.vlo && velocity <= this.vhi;
+  }
+}
+
 /** I valori dei parametri, già nelle unità del motore; li leggono tutte le voci. */
 class Settings {
-  sample: SampleData | null = null;
+  readonly zones = Array.from({ length: MAX_ZONES }, (_, i) => new Zone(i));
   mode = MODE.classic as number;
   reverse = false;
   gate = false;
   loop = LOOP.off as number;
   loopExit = false;
   xfade = 0;
-  start = 0;
-  end = 1;
-  loopStart = 0;
-  loopEnd = 1;
-  /** Gli inizi delle fette (frazioni), più la fine della regione in fondo. */
+  /** Gli inizi delle fette (frazioni), più la fine della regione in fondo (della prima zona). */
   slices: number[] = [];
-  root = 60;
   transpose = 0;
   keyTrack = 1;
   voiceMode = VOICE_MODE.poly as number;
@@ -99,12 +143,8 @@ class Settings {
     this.loop = v('loop');
     this.loopExit = v('loopRelease') === LOOP_RELEASE.exit;
     this.xfade = v('xfade') / 100;
-    this.start = clamp01(v('start') / 100);
-    this.end = Math.max(this.start, clamp01((params.end ?? 100) / 100));
-    this.loopStart = clamp01(v('loopStart') / 100);
-    this.loopEnd = clamp01((params.loopEnd ?? 100) / 100);
-    this.slices = this.mode === MODE.slice ? [...sliceStarts(params), this.end] : [];
-    this.root = params.root ?? 60;
+    for (const z of this.zones) z.read(params);
+    this.slices = this.mode === MODE.slice ? [...sliceStarts(params), this.zones[0].end] : [];
     this.transpose = v('transpose') + v('detune') / 100;
     this.keyTrack = (params.keyTrack ?? 100) / 100;
     this.voiceMode = v('voiceMode');
@@ -138,6 +178,22 @@ class Settings {
     this.readRate();
   }
 
+  /** La prima zona che suona la nota (in Slice la prima zona, che ha le fette), o null. */
+  zoneFor(pitch: number, velocity: number): Zone | null {
+    if (this.mode === MODE.slice) return this.zones[0].sample ? this.zones[0] : null;
+    for (const z of this.zones) if (z.plays(pitch, velocity)) return z;
+    return null;
+  }
+
+  /** Tutte le zone che suonano la nota, in `out` (che restituisce). */
+  zonesFor(pitch: number, velocity: number, out: Zone[]): Zone[] {
+    out.length = 0;
+    if (this.mode === MODE.slice) {
+      if (this.zones[0].sample) out.push(this.zones[0]);
+    } else for (const z of this.zones) if (z.plays(pitch, velocity)) out.push(z);
+    return out;
+  }
+
   /** Per la voce sola (MonoPlayer): in Legato le note sovrapposte scivolano. */
   get legato(): boolean {
     return this.voiceMode === VOICE_MODE.legato;
@@ -163,7 +219,8 @@ class SamplerVoice implements PolyVoice, MonoVoice {
   private readonly filter: PrismaFilter;
   private readonly bufL = new Float64Array(CONTROL_RATE);
   private readonly bufR = new Float64Array(CONTROL_RATE);
-  /** Il sample che la voce suona: lo tiene anche se nel dispositivo ne arriva un altro. */
+  /** La zona che la voce suona, e il suo sample: lo tiene anche se nella zona ne arriva un altro. */
+  private zone: Zone;
   private data: SampleData | null = null;
   /** La posizione nel sample come lo si vede (con Reverse, nel sample rovesciato), in campioni. */
   pos = 0;
@@ -201,6 +258,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     this.pitchEnv = new CurvedEnv(control);
     this.filter = new PrismaFilter(sampleRate);
     this.tailK = Math.exp(-1 / (DECLICK_TIME * sampleRate));
+    this.zone = s.zones[0];
   }
 
   get active(): boolean {
@@ -221,10 +279,17 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     return this.amp.active && !this.done && n > 0 ? this.pos / n : -1;
   }
 
-  start(pitch: number, velocity: number, from: number | null = null): void {
+  /** La zona che suona (da 0). */
+  get zoneIndex(): number {
+    return this.zone.index;
+  }
+
+  /** Una nota da capo: la zona `zone`, o la prima che la suona. */
+  start(pitch: number, velocity: number, from: number | null = null, zone: Zone | null = null): void {
     const { s } = this;
-    const data = s.sample;
-    if (!data || data.channels[0].length < 2) return;
+    const z = zone ?? s.zoneFor(pitch, velocity);
+    const data = z?.sample;
+    if (!z || !data || data.channels[0].length < 2) return;
     const n = data.channels[0].length;
     if (s.mode === MODE.slice) {
       const i = pitch - FIRST_SLICE_NOTE;
@@ -240,9 +305,10 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       this.filter.reset();
       this.fresh = true;
     }
+    this.zone = z;
     this.data = data;
     this.lastL = this.lastR = 0;
-    this.pos = this.sliceA >= 0 ? this.sliceA : Math.floor(s.start * n);
+    this.pos = this.sliceA >= 0 ? this.sliceA : Math.floor(z.start * n);
     this.dir = 1;
     this.done = false;
     this.released = false;
@@ -265,6 +331,9 @@ class SamplerVoice implements PolyVoice, MonoVoice {
   slide(pitch: number, velocity: number): void {
     // una fetta è un altro pezzo del sample: si riparte da lì
     if (this.s.mode === MODE.slice) return this.start(pitch, velocity, null);
+    // un'altra zona è un altro sample: si riparte, scivolando dall'intonazione di adesso
+    const zone = this.s.zoneFor(pitch, velocity);
+    if (zone && zone !== this.zone) return this.start(pitch, velocity, this.pitch, zone);
     this.target = pitch;
     this.velocity = velocity / 127;
   }
@@ -321,7 +390,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
 
   /** Legge fino a `len` campioni nei buffer; meno se la regione finisce prima (allora la voce tace). */
   private read(len: number): number {
-    const { s, bufL, bufR } = this;
+    const { s, bufL, bufR, zone } = this;
     const data = this.data!;
     const L = data.channels[0], R = data.channels[1] ?? L, stereo = R !== L;
     const n = L.length, last = n - 1, reverse = s.reverse;
@@ -330,14 +399,14 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       a = this.sliceA;
       b = this.sliceB;
     } else {
-      a = Math.floor(s.start * n);
-      b = Math.max(a + 2, Math.min(n, Math.round(s.end * n)));
+      a = Math.floor(zone.start * n);
+      b = Math.max(a + 2, Math.min(n, Math.round(zone.end * n)));
     }
     // il loop (solo Classic): dentro la regione, lungo almeno MIN_LOOP
     let la = 0, lb = 0, xf = 0, looping = s.mode === MODE.classic && s.loop !== LOOP.off && !(this.released && s.loopExit);
     if (looping) {
-      la = Math.max(a, Math.min(b - MIN_LOOP, Math.floor(s.loopStart * n)));
-      lb = Math.max(la + MIN_LOOP, Math.min(b, Math.round(s.loopEnd * n)));
+      la = Math.max(a, Math.min(b - MIN_LOOP, Math.floor(zone.loopStart * n)));
+      lb = Math.max(la + MIN_LOOP, Math.min(b, Math.round(zone.loopEnd * n)));
       // oltre la fine del loop (l'ha spostata la manopola) si va fino alla fine della regione
       looping = lb - la >= MIN_LOOP && this.pos <= lb;
       if (looping && s.loop === LOOP.forward) xf = Math.min(s.xfade * (lb - la), la - a);
@@ -396,7 +465,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
   /** Ogni CONTROL_RATE campioni: glide, inviluppi di filtro e pitch, LFO, velocità di lettura,
    *  filtro e guadagni. */
   private control(): void {
-    const { s, sampleRate } = this;
+    const { s, sampleRate, zone } = this;
     this.countdown = CONTROL_RATE;
     const tick = CONTROL_RATE / sampleRate;
     if (this.pitch !== this.target) {
@@ -422,7 +491,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     this.age += tick;
 
     const sliced = s.mode === MODE.slice;
-    const semis = (sliced ? 0 : (this.pitch - s.root) * s.keyTrack) + s.transpose + s.pitchEnv * penv + s.lfoPitch * lfo;
+    const semis = (sliced ? 0 : (this.pitch - zone.root) * s.keyTrack) + s.transpose + zone.tune + s.pitchEnv * penv + s.lfoPitch * lfo;
     const rate = this.data ? this.data.sampleRate / sampleRate : 1;
     this.speed = Math.min(MAX_SPEED, rate * Math.pow(2, semis / 12));
 
@@ -433,8 +502,8 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     }
 
     const v = this.velocity;
-    const level = (1 - s.velocity + s.velocity * v * v) * (1 - s.lfoVolume * 0.5 * (1 - lfo)) * s.gain;
-    const pan = Math.max(-1, Math.min(1, s.pan + s.lfoPan * lfo));
+    const level = (1 - s.velocity + s.velocity * v * v) * (1 - s.lfoVolume * 0.5 * (1 - lfo)) * s.gain * zone.gain;
+    const pan = Math.max(-1, Math.min(1, s.pan + zone.pan + s.lfoPan * lfo));
     const gl = level * (pan > 0 ? 1 - pan : 1), gr = level * (pan < 0 ? 1 + pan : 1);
     if (this.fresh) {
       this.gainL = gl;
@@ -462,6 +531,7 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
   private readonly mono: MonoPlayer;
   private single: boolean | null = null;
   private notes = 0;
+  private readonly hits: Zone[] = [];
 
   constructor(private readonly sampleRate: number, voices = SAMPLER_VOICES) {
     const seed = () => ++this.notes;
@@ -481,19 +551,22 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
     if (bpm > 0) this.settings.setTempo(bpm);
   }
 
-  /** Il sample del dispositivo: le voci che suonano tengono il loro, le note dopo usano questo. */
+  /** Il sample di una zona: le voci che suonano tengono il loro, le note dopo usano questo. */
   setSample(slot: string, sample: SampleData | null): void {
-    if (slot !== SAMPLE_SLOT) return;
-    this.settings.sample = sample && sample.channels.length && sample.channels[0].length > 1 ? sample : null;
+    const i = zoneOfSlot(slot);
+    if (i < 0) return;
+    this.settings.zones[i].sample = sample && sample.channels.length && sample.channels[0].length > 1 ? sample : null;
   }
 
   noteOn(id: number, pitch: number, velocity: number): void {
     const s = this.settings;
-    if (!s.sample) return;
+    const zones = s.zonesFor(pitch, velocity, this.hits);
+    if (!zones.length) return;
     // in Slice suonano solo le note che hanno una fetta
     if (s.mode === MODE.slice && (pitch < FIRST_SLICE_NOTE || pitch >= FIRST_SLICE_NOTE + s.slices.length - 1)) return;
+    // a una voce sola suona la prima zona; in poli una voce per zona
     if (this.single) this.mono.noteOn(id, pitch, velocity);
-    else this.pool.noteOn(id, pitch, velocity);
+    else for (const z of zones) this.pool.noteOn(id, pitch, velocity, v => v.start(pitch, velocity, null, z));
   }
 
   noteOff(id: number): void {
@@ -518,13 +591,13 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
     }
   }
 
-  /** Dove leggono le voci che suonano (frazioni del sample come lo si vede): le scrive in `out`
-   *  e dice quante sono. */
+  /** Dove leggono le voci che suonano: la zona più la frazione del suo sample come lo si vede
+   *  (2.25: un quarto del sample della terza zona). Le scrive in `out` e dice quante sono. */
   playheads(out: Float32Array): number {
     let k = 0;
     for (const v of this.pool.voices) {
       const p = v.position;
-      if (p >= 0 && k < out.length) out[k++] = p;
+      if (p >= 0 && k < out.length) out[k++] = v.zoneIndex + Math.min(p, 0.9999);
     }
     return k;
   }
