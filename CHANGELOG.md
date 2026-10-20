@@ -37,6 +37,13 @@ Sections: Added, Changed, Fixed.
   during each slice you hear the previous one from its end to its start, the classic suck
   before a drop. Switch it on and off on the fly; Dry/Wet blends in the forward sound.
 
+- Chorus, a new effect: slightly delayed copies of the sound with a gently swaying delay, to
+  widen and thicken it. Chorus (two voices), Ensemble (three, denser: the strings of '80s
+  synths) or Vibrato (one voice, pitch only); Larghezza offsets the right channel for stereo,
+  feedback pushes it toward a flanger, and the movement can run in time with the song.
+- Auto Pan, a new effect like Live's Auto Pan: the same LFO shapes as the Auto Filter, locked
+  to the bar, move the sound from side to side (Stereo 180°) or turn it into a tremolo (0°),
+  at constant power so it doesn't dip in the middle.
 - Rack macros can be switches and buttons, not only knobs (something Live's racks don't have):
   right-click a macro and choose Manopola, Interruttore (a click turns it on, another off) or
   Pulsante (on only while you hold it down). Switches and buttons move every mapped parameter
