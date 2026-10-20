@@ -7,13 +7,14 @@ import { deviceTypeAt } from '../../devices/rack-params';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, sampleAt, type EffectSettings, type ParamValues } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
+import { keyLabel, keyOf, sameTarget, type KeyTarget } from '../../model/key-map';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
 import {
-  chainItems, macroName, macroOf, moveDevice as layoutMove, moveRack as layoutMoveRack, rackOf, type DeviceKey, type Rack,
+  chainItems, macroIndex, macroName, macroOf, moveDevice as layoutMove, moveRack as layoutMoveRack, rackOf, type DeviceKey, type Rack,
   type RackList,
 } from '../../model/rack';
 import { MidiTrack, type Track } from '../../model/track';
-import type { ControlledDevice } from '../ui-state';
+import type { ControlledDevice, UiState } from '../ui-state';
 import {
   addEffect, loadEffectPreset, loadPreset, removeEffect, setEffectEnabled, setEffectParam,
   setEffectParams, setEffectSidechain, setInstrument, setInstrumentParam, setInstrumentParams, setInstrumentSamples,
@@ -48,6 +49,8 @@ export interface DeviceViewDeps {
   readonly say?: (text: string) => void;
   /** Una voce del browser lasciata sulla catena aperta. */
   readonly dropItem?: (item: BrowserItem, target: LoadTarget) => void;
+  /** Per mappare la tastiera del computer (KEY acceso e il bersaglio scelto). */
+  readonly ui?: UiState;
 }
 
 /** La chiave del pannello dello strumento (gli effetti usano il loro id). */
@@ -121,6 +124,7 @@ export class DeviceView {
       }
     });
     deps.store.onChange(() => this.sync());
+    deps.ui?.onChange(() => this.showKeys());
     const dropItem = deps.dropItem;
     if (dropItem) acceptBrowserDrops(this.element, item => this.owner && dropItem(item, { kind: 'chain', owner: this.owner }), { accept: () => !!this.owner });
   }
@@ -241,6 +245,7 @@ export class DeviceView {
     const shape = shapeOf(this.owner, source, view);
     if (shape !== this.builtFor) this.build(this.owner, source, shape);
     else this.update(source);
+    this.showKeys();
   }
 
   /** Pannelli nuovi quando cambia la forma della catena (effetti aggiunti, tolti, spostati, rack). */
@@ -318,6 +323,8 @@ export class DeviceView {
         label: t.label, run: () => this.deps.store.apply(addEffectToRack(owner, rack.id, t.type, t.label)),
       }))),
       onSelect: extend => this.select(rack.devices, extend),
+      keyMapping: () => !!this.deps.ui?.keyMapping,
+      onKeyTarget: index => this.deps.ui?.chooseKeyTarget({ kind: 'macro', owner, rack: rack.id, index }),
     });
     this.rackPanels.set(rack.id, panel);
     const element = el('div', { className: `rack${folded ? ' folded' : ''}${mapping !== undefined ? ' mapping' : ''}` }, panel.element);
@@ -328,7 +335,8 @@ export class DeviceView {
 
   /** Su un dispositivo: il clic sul nome lo sceglie, il menu dell'intestazione raggruppa e
    *  separa, il menu di un parametro lo mappa su una macro. Un parametro mappato non si tocca
-   *  (lo muove la macro); con "Map" acceso e una macro scelta un clic lo mappa lì. */
+   *  (lo muove la macro); con "Map" acceso e una macro scelta un clic lo mappa lì; con KEY
+   *  acceso un clic lo sceglie per la tastiera del computer. */
   private bindPanel(owner: ChainOwner, key: DeviceKey, panel: DevicePanel): void {
     const name = panel.element.querySelector<HTMLElement>('.device-name');
     if (name) {
@@ -352,6 +360,12 @@ export class DeviceView {
       const param = paramOf(e.target);
       if (!param) return;
       const racks = this.deps.store.project.racksOf(owner);
+      if (this.deps.ui?.keyMapping) {
+        e.stopPropagation();
+        e.preventDefault();
+        if (e.type === 'pointerdown') this.chooseKeyParam(owner, key, param);
+        return;
+      }
       const map = this.mapMode;
       const mapping = map && map.macro !== null && rackOf(racks, key)?.id === map.rack;
       if (!mapping && !macroOf(racks, key, param)) return;
@@ -420,6 +434,42 @@ export class DeviceView {
         e.title = `Lo muove la macro ${found.index + 1} del rack (tasto destro per toglierlo)`;
       } else delete e.dataset.macro;
     }
+  }
+
+  // ---------------------------------------------------------------- tastiera del computer
+
+  /** Con KEY acceso: il parametro aspetta il suo tasto (se lo muove una macro, il tasto va alla macro). */
+  private chooseKeyParam(owner: ChainOwner, device: DeviceKey, param: string): void {
+    const found = macroOf(this.deps.store.project.racksOf(owner), device, param);
+    if (found) return this.deps.say?.(`Lo muove la macro ${found.index + 1} del rack: dai il tasto alla macro.`);
+    this.deps.ui?.chooseKeyTarget({ kind: 'param', owner, device, param });
+  }
+
+  /** I tasti sui controlli (macro e parametri) e, con KEY acceso, quello che aspetta il tasto. */
+  private showKeys(): void {
+    const owner = this.owner;
+    this.element.classList.toggle('key-mapping', !!this.deps.ui?.keyMapping);
+    if (!owner) return;
+    for (const key of this.panels.keys()) this.markKeys(key as DeviceKey);
+    for (const [rack, panel] of this.rackPanels) {
+      for (const e of panel.element.querySelectorAll<HTMLElement>('.macro[data-param]')) {
+        this.markKey(e, { kind: 'macro', owner, rack, index: macroIndex(e.dataset.param!) });
+      }
+    }
+  }
+
+  private markKeys(device: DeviceKey): void {
+    const panel = this.panels.get(device), owner = this.owner;
+    if (!panel || !owner) return;
+    for (const e of panel.element.querySelectorAll<HTMLElement>('[data-param]')) this.markKey(e, { kind: 'param', owner, device, param: e.dataset.param! });
+  }
+
+  private markKey(e: HTMLElement, target: KeyTarget): void {
+    const key = keyOf(this.deps.store.project.keyMap, target);
+    if (key) e.dataset.key = keyLabel(key);
+    else delete e.dataset.key;
+    const chosen = this.deps.ui?.keyTarget;
+    e.classList.toggle('key-chosen', !!chosen && sameTarget(chosen, target));
   }
 
   // ---------------------------------------------------------------- scelta e gruppi
@@ -502,7 +552,7 @@ export class DeviceView {
       type, settings: track.instrument, sampleRate: this.deps.sampleRate,
       setParams: (values, final) => this.displayParams(track.id, INSTRUMENT, values, final,
         v => setInstrumentParams(track.id, v), `param-${track.id}`),
-      controlsChanged: () => this.markMapped(INSTRUMENT),
+      controlsChanged: () => { this.markMapped(INSTRUMENT); this.markKeys(INSTRUMENT); },
       openSpectrum: () => NO_SPECTRUM,
       audition: (pitch, velocity) => audition(track.id, pitch, velocity),
       playedNotes: this.deps.playedNotes(track.id),
@@ -554,7 +604,7 @@ export class DeviceView {
     const display = DEVICE_DISPLAYS[e.type]?.({
       type, settings: e, sampleRate: this.deps.sampleRate,
       setParams: (values, final) => this.displayParams(owner, id, values, final, v => setEffectParams(owner, id, v), `fx-${id}`),
-      controlsChanged: () => this.markMapped(id),
+      controlsChanged: () => { this.markMapped(id); this.markKeys(id); },
       openSpectrum: () => this.deps.spectrum(owner, id),
       audition: () => {},
       playedNotes: () => [],

@@ -1,5 +1,6 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { PlacementId, TrackId } from '../core/id';
+import { sameTarget, type KeyTarget } from '../model/key-map';
 import type { ChainOwner } from '../model/project';
 import { TimelineGeometry } from './timeline/geometry';
 
@@ -33,6 +34,8 @@ export class UiState {
   private _followPaused = false;
   private _ring: SessionRing | null = null;
   private _controlled: ControlledDevice | null = null;
+  private _keyMapping = false;
+  private _keyTarget: KeyTarget | null = null;
   private readonly events = new Emitter<UiEvents>();
 
   get geometry(): TimelineGeometry { return this._geometry; }
@@ -51,6 +54,11 @@ export class UiState {
   /** Il riquadro del controller collegato, o null se non ce n'è. */
   get sessionRing(): SessionRing | null { return this._ring; }
   get controlledDevice(): ControlledDevice | null { return this._controlled; }
+  /** "KEY" acceso (Ctrl+K): un clic su una macro o un parametro lo sceglie, il tasto premuto
+   *  dopo lo muove. Intanto i tasti mappati non suonano. */
+  get keyMapping(): boolean { return this._keyMapping; }
+  /** Il bersaglio scelto con KEY acceso, che aspetta il suo tasto. */
+  get keyTarget(): KeyTarget | null { return this._keyTarget; }
 
   onChange(fn: () => void): Unsubscribe {
     return this.events.on('change', fn);
@@ -123,6 +131,20 @@ export class UiState {
     const r = this._ring;
     if (r === ring || (r && ring && r.track === ring.track && r.scene === ring.scene && r.width === ring.width && r.height === ring.height)) return;
     this._ring = ring;
+    this.events.emit('change');
+  }
+
+  setKeyMapping(on: boolean): void {
+    if (on === this._keyMapping) return;
+    this._keyMapping = on;
+    this._keyTarget = null;
+    this.events.emit('change');
+  }
+
+  chooseKeyTarget(t: KeyTarget | null): void {
+    const c = this._keyTarget;
+    if (!this._keyMapping || c === t || (c && t && sameTarget(c, t))) return;
+    this._keyTarget = t;
     this.events.emit('change');
   }
 

@@ -234,6 +234,18 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 }
 .device-panel.mappable [data-param] { outline: 1px dashed color-mix(in srgb, var(--macro) 60%, transparent); border-radius: 6px; cursor: pointer; }
 .device-panel.mappable [data-param].chosen { outline: 1px solid var(--macro); background: color-mix(in srgb, var(--macro) 20%, transparent); }
+
+/* la tastiera del computer (KEY): il tasto di un controllo in alto a sinistra; con KEY acceso si
+ * vedono i controlli che si possono mappare e quello che aspetta il tasto */
+:root { --keys: #ffd447; }
+.transport .key-map.on { background: var(--keys); border-color: var(--keys); }
+[data-param][data-key] { position: relative; }
+[data-param][data-key]::before {
+  content: attr(data-key); position: absolute; top: -2px; left: 2px; z-index: 1; font-size: 9px; font-weight: 700;
+  color: #141414; background: var(--keys); border-radius: 3px; padding: 0 3px; line-height: 13px; pointer-events: none;
+}
+.device-view.key-mapping [data-param]:not(.mapped) { position: relative; outline: 1px dashed color-mix(in srgb, var(--keys) 60%, transparent); border-radius: 6px; cursor: pointer; }
+.device-view.key-mapping [data-param].key-chosen { outline: 2px solid var(--keys); background: color-mix(in srgb, var(--keys) 22%, transparent); }
 .inactive { opacity: .3; }
 .choice select { font-size: 12px; padding: 2px 4px; margin-top: 8px; }
 .header .controls .fx { padding: 1px 6px; font-size: 11px; }

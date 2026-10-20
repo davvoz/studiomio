@@ -6,6 +6,17 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Computer keyboard mapping, like Live's Key Map: turn on KEY in the control bar (Ctrl+K, or
+  Opzioni › Mappa la tastiera del computer), click a rack macro or a parameter of an instrument
+  or effect, then press the key that will move it (Canc removes it, Esc turns KEY off). Mapped
+  keys show on their controls. With KEY off, a key flips a switch macro, holds a button macro on
+  while it stays down, jumps a knob macro or a parameter between its two ends and steps a menu
+  to its next choice. One key can move several controls. The mappings are saved with the
+  project and every press can be undone (except holding a button). Keys that are already
+  shortcuts (Space, Tab, Enter, Canc, +, −, Esc, arrows) can't be mapped; a mapped key takes
+  over the piano roll's Q, B and F.
+
 ## [0.3.13] - 2026-10-21
 
 ### Added

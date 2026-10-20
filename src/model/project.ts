@@ -4,8 +4,9 @@ import { AudioClip } from './audio-clip';
 import type { Color } from './clip';
 import { deviceSampleIds, withSidechain, type DeviceSettings } from './device';
 import type { EffectList } from './effect-list';
+import { checkKeyMap, NO_KEYS, type KeyMap, type KeyTarget } from './key-map';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
-import { checkRacks, NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
+import { checkRacks, findRack, NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
 import type { SampleRef } from './sample';
 import { BusTrack, DEFAULT_MIXER, GroupTrack, type MixerSettings, type Track } from './track';
 
@@ -48,6 +49,8 @@ export interface ProjectProps {
   readonly masterRacks?: RackList;
   /** Quantizzazione del lancio delle clip della session (un id di LAUNCH_QUANTA). */
   readonly launchQuantization: string;
+  /** I tasti del computer sulle macro e sui parametri (assenti: nessuno). */
+  readonly keyMap?: KeyMap;
 }
 
 const NO_BUSES: readonly BusTrack[] = [];
@@ -62,6 +65,8 @@ export class Project {
   private visible: readonly Track[] | null = null;
   /** Tracce e bus insieme, calcolati alla prima richiesta. */
   private allChannels: readonly Track[] | null = null;
+  /** Le mappature della tastiera che valgono, calcolate alla prima richiesta. */
+  private liveKeys: KeyMap | null = null;
 
   private constructor(props: ProjectProps) {
     this.props = props;
@@ -108,6 +113,29 @@ export class Project {
   get masterEffects(): EffectList { return this.props.masterEffects; }
   get masterRacks(): RackList { return this.props.masterRacks ?? NO_RACKS; }
   get launchQuantization(): string { return this.props.launchQuantization; }
+
+  /** Le mappature della tastiera i cui rack e dispositivi ci sono (le altre aspettano un
+   *  "Annulla" che li riporti). */
+  get keyMap(): KeyMap {
+    const all = this.props.keyMap ?? NO_KEYS;
+    if (this.liveKeys) return this.liveKeys;
+    const live = all.filter(m => this.hasKeyTarget(m.target));
+    return (this.liveKeys = live.length === all.length ? all : live);
+  }
+
+  hasKeyTarget(t: KeyTarget): boolean {
+    if (t.owner !== MASTER && !this.track(t.owner)) return false;
+    return t.kind === 'macro' ? !!findRack(this.racksOf(t.owner), t.rack) : this.chainKeys(t.owner).includes(t.device);
+  }
+
+  /** Le mappature della tastiera (fn riceve tutte quelle scritte, anche quelle che non valgono). */
+  updatingKeyMap(fn: (map: KeyMap) => KeyMap): Project {
+    const before = this.props.keyMap ?? NO_KEYS;
+    const keyMap = fn(before);
+    if (keyMap === before) return this;
+    checkKeyMap(keyMap);
+    return this.with({ keyMap: keyMap.length ? keyMap : undefined });
+  }
 
   /** La traccia, o il bus, con questo id. */
   track(id: TrackId): Track | undefined {

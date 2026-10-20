@@ -31,6 +31,9 @@ export interface RackPanelOptions {
   readonly onAddEffect: (x: number, y: number) => void;
   /** Clic sul nome: sceglie il rack (Maiusc estende la scelta). */
   readonly onSelect: (extend: boolean) => void;
+  /** KEY acceso: un clic su una macro la sceglie per la tastiera del computer (`onKeyTarget`). */
+  readonly keyMapping: () => boolean;
+  readonly onKeyTarget: (macro: number) => void;
 }
 
 /** Il nome e la manopola di un parametro mappato, per le righe delle mappature. */
@@ -112,13 +115,18 @@ export class RackPanel {
     e.title = m.mappings.length
       ? `${spec.label}: muove ${m.mappings.map(x => `${o.deviceLabel(x.device)} · ${mappingSpec(p, o.owner, x)?.label ?? x.param}`).join(', ')}`
       : `${spec.label}: nessun parametro mappato (accendi Map, scegli la macro e clicca un parametro)`;
-    // con Map acceso un clic sceglie la macro invece di girarla
-    e.addEventListener('pointerdown', ev => {
-      if (o.mapping === undefined) return;
-      ev.stopPropagation();
-      ev.preventDefault();
-      o.onMapMode(index);
-    }, true);
+    // con KEY acceso un clic sceglie la macro per la tastiera, con Map acceso per mapparla, invece di girarla
+    for (const type of ['pointerdown', 'click', 'dblclick', 'wheel']) {
+      e.addEventListener(type, ev => {
+        const keys = o.keyMapping();
+        if (!keys && (o.mapping === undefined || type !== 'pointerdown')) return;
+        ev.stopPropagation();
+        ev.preventDefault();
+        if (type !== 'pointerdown') return;
+        if (keys) o.onKeyTarget(index);
+        else o.onMapMode(index);
+      }, { capture: true, passive: false });
+    }
     e.addEventListener('contextmenu', ev => {
       ev.preventDefault();
       const label = e.querySelector<HTMLElement>('.knob-label');

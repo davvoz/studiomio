@@ -2,8 +2,9 @@ import { asId } from '../core/id';
 import { Tempo, TimeSignature } from '../core/music-time';
 import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
+import type { KeyMap, KeyTarget } from '../model/key-map';
 import { DEFAULT_LAUNCH_QUANTUM } from '../model/launch';
-import { Project } from '../model/project';
+import { Project, type ChainOwner } from '../model/project';
 import { MACRO_MODES, type DeviceKey, type Macro, type MacroMode, type Rack, type RackList } from '../model/rack';
 import type { SampleRef } from '../model/sample';
 import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
@@ -119,6 +120,7 @@ export class ProjectCodec {
       tracks: p.tracks.map(t => this.encodeTrack(t)),
       // senza bus il file resta come lo scrivevano le versioni di prima
       ...(p.buses.length ? { buses: p.buses.map(b => this.encodeTrack(b)) } : {}),
+      ...encodeKeyMap(p.keyMap),
     };
   }
 
@@ -158,6 +160,7 @@ export class ProjectCodec {
         samples: r.array('samples').map(decodeSample),
         tracks: r.array('tracks').map(t => this.decodeTrack(t)),
         buses: r.has('buses') ? r.array('buses').map(b => this.decodeTrack(b) as BusTrack) : undefined,
+        keyMap: r.has('keyMap') ? r.array('keyMap').map(decodeKeyMapping) : undefined,
       });
     } catch (e) {
       // regole del modello violate (es. slot e scene non corrispondono): errore di formato
@@ -292,3 +295,18 @@ const decodeRack = (r: JsonReader): Rack => ({
     ...(m.has('mode') && MACRO_MODES.some(([mode]) => mode === m.str('mode')) ? { mode: m.str('mode') as MacroMode } : {}),
   })),
 });
+
+/** La tastiera si scrive solo se è mappata (e solo ciò che vale: rack e dispositivi che ci sono). */
+const encodeKeyMap = (map: KeyMap): JsonObject => (map.length ? {
+  keyMap: map.map(({ key, target: t }): JsonObject => (t.kind === 'macro'
+    ? { key, kind: t.kind, owner: t.owner, rack: t.rack, index: t.index }
+    : { key, kind: t.kind, owner: t.owner, device: t.device, param: t.param })),
+} : {});
+
+const decodeKeyMapping = (r: JsonReader): { key: string; target: KeyTarget } => {
+  const owner = r.str('owner') as ChainOwner;
+  const kind = r.str('kind');
+  if (kind === 'macro') return { key: r.str('key'), target: { kind, owner, rack: asId(r.str('rack')), index: r.int('index') } };
+  if (kind === 'param') return { key: r.str('key'), target: { kind, owner, device: r.str('device') as DeviceKey, param: r.str('param') } };
+  return r.get('kind').fail(`mappatura della tastiera sconosciuta: ${kind}`);
+};

@@ -14,6 +14,7 @@ import { INSTRUMENT_DEVICE } from '../model/envelope';
 import { MidiClip } from '../model/midi-clip';
 import { Project, type ChainOwner, type LoopRegion } from '../model/project';
 import type { SampleRef } from '../model/sample';
+import { withoutParamKeysOf } from '../model/key-map';
 import { withoutMappingsOf } from '../model/rack';
 import { AudioTrack, BusTrack, busLetter, GroupTrack, MidiTrack, type MixerSettings, type Track } from '../model/track';
 import { edit, type Edit } from './project-store';
@@ -125,11 +126,17 @@ const updatingInstrument = (label: string, id: TrackId, fn: (s: InstrumentSettin
 
 /** Cambia lo strumento; se è di un altro tipo, le macro che lo muovevano lo lasciano. */
 export const setInstrument = (id: TrackId, settings: InstrumentSettings): Edit =>
-  edit('Strumento', p => p.updatingTrack(id, t => {
-    if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
-    const racks = settings.type === t.instrument.type ? t.racks : withoutMappingsOf(t.racks, INSTRUMENT_DEVICE);
-    return t.withInstrument(settings).withChain(t.effects, racks);
-  }));
+  edit('Strumento', p => {
+    const before = p.track(id);
+    const next = p.updatingTrack(id, t => {
+      if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
+      const racks = settings.type === t.instrument.type ? t.racks : withoutMappingsOf(t.racks, INSTRUMENT_DEVICE);
+      return t.withInstrument(settings).withChain(t.effects, racks);
+    });
+    // un altro strumento ha altri parametri: i loro tasti non valgono più
+    const same = before instanceof MidiTrack && before.instrument.type === settings.type;
+    return same ? next : next.updatingKeyMap(map => withoutParamKeysOf(map, id, INSTRUMENT_DEVICE));
+  });
 
 export const setInstrumentParam = (id: TrackId, param: string, value: number): Edit =>
   updatingInstrument('Parametro dello strumento', id, s => withParam(s, param, value));

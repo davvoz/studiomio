@@ -31,6 +31,8 @@ export interface Commands {
   /** Mostra o nasconde il browser (Ctrl+Alt+B) · porta il cursore nella sua ricerca (Ctrl+F). */
   toggleBrowser(): void;
   searchBrowser(): void;
+  /** Mappa la tastiera del computer sulle macro e sui parametri (Ctrl+K, come in Live). */
+  toggleKeyMap(): void;
 }
 
 export interface Binding<C = Commands> {
@@ -75,6 +77,7 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'b', ctrl: true, alt: true, run: c => c.toggleBrowser() },
   { key: 'f', ctrl: true, run: c => c.searchBrowser() },
   { key: 'f', ctrl: true, shift: true, run: c => c.toggleFollow() },
+  { key: 'k', ctrl: true, run: c => c.toggleKeyMap() },
 ];
 
 /** Campi in cui si scrive: lì tutti i tasti sono loro. */
@@ -82,10 +85,21 @@ const TEXT_INPUTS = new Set(['text', 'number', 'search', 'email', 'url', 'passwo
 /** Tasti che un cursore (volume) usa per sé; gli altri, come Ctrl+Z, restano scorciatoie. */
 const SLIDER_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
 
-function ownedByField(t: HTMLElement | null, e: KeyboardEvent): boolean {
+/** Il tasto spetta a un campo di testo (o un cursore), non alle scorciatoie. */
+export function ownedByField(t: HTMLElement | null, e: KeyboardEvent): boolean {
   if (!t) return false;
   if (t.isContentEditable || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') return true;
   return t instanceof HTMLInputElement && (TEXT_INPUTS.has(t.type) || SLIDER_KEYS.has(e.key));
+}
+
+/** La scorciatoia di un tasto premuto, se c'è. */
+export function findBinding<C>(keymap: readonly Binding<C>[], e: KeyboardEvent): Binding<C> | undefined {
+  const ctrl = e.ctrlKey || e.metaKey;
+  const key = e.key.toLowerCase();
+  // Maiusc conta solo se la scorciatoia lo nomina o usa Ctrl: "+" richiede Maiusc su molte tastiere
+  return keymap.find(k => (k.key === e.code || k.key === key) && !!k.ctrl === ctrl
+    && (k.shift === undefined ? !(ctrl && e.shiftKey) : k.shift === e.shiftKey)
+    && (k.alt === undefined || k.alt === e.altKey));
 }
 
 /** Collega la tastiera ai comandi (ignorando i tasti che spettano ai campi di testo). Con
@@ -94,12 +108,7 @@ export function bindKeys<C>(target: Document | HTMLElement, commands: C, keymap:
   target.addEventListener('keydown', ev => {
     const e = ev as KeyboardEvent;
     if (ownedByField(e.target as HTMLElement | null, e)) return;
-    const ctrl = e.ctrlKey || e.metaKey;
-    const key = e.key.toLowerCase();
-    // Maiusc conta solo se la scorciatoia lo nomina o usa Ctrl: "+" richiede Maiusc su molte tastiere
-    const b = keymap.find(k => (k.key === e.code || k.key === key) && !!k.ctrl === ctrl
-      && (k.shift === undefined ? !(ctrl && e.shiftKey) : k.shift === e.shiftKey)
-      && (k.alt === undefined || k.alt === e.altKey));
+    const b = findBinding(keymap, e);
     if (!b) return;
     e.preventDefault();
     if (ownKeys) e.stopPropagation();

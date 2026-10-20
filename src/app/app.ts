@@ -45,6 +45,7 @@ import { UiState } from '../ui/ui-state';
 import { PeakStore } from '../ui/waveform';
 import { AudioSystem } from './audio-system';
 import { BrowserLoader } from './browser-loader';
+import { KeyMapper } from './key-mapper';
 import { mainMenu } from './main-menu';
 import { ProjectSession } from './project-session';
 import { SamplePreview } from './sample-preview';
@@ -138,6 +139,7 @@ export class App implements Commands, TimelineActions {
       playheads: track => this.audio.engine.playheads(track),
       say: t => this.say(t),
       dropItem,
+      ui: this.ui,
     });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
@@ -196,6 +198,8 @@ export class App implements Commands, TimelineActions {
         this.ui.selectTrack(p.groupsOf(this.ui.track).filter(g => g.folded).at(-1)?.id ?? null);
       }
     });
+    // prima delle scorciatoie: i tasti mappati sulle macro e sui parametri
+    new KeyMapper(this.store, this.ui, t => this.say(t));
     bindKeys(document, this, KEYMAP);
     // chiudere la finestra con modifiche non salvate chiede conferma (in Electron la chiede il processo principale)
     addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });
@@ -366,6 +370,12 @@ export class App implements Commands, TimelineActions {
   searchBrowser(): void {
     this.browser.focusSearch();
     this.renderViews();
+  }
+
+  toggleKeyMap(): void {
+    const on = !this.ui.keyMapping;
+    this.ui.setKeyMapping(on);
+    if (on) this.say('KEY: clicca una macro o un parametro di un dispositivo, poi premi il tasto che lo muoverà (Canc lo toglie, Esc per finire).');
   }
 
   /** Carica una voce del browser dove la si lascia o, senza, dove si sta lavorando. */
