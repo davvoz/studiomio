@@ -12,6 +12,7 @@ import { GATE } from './effects/gate/gate';
 import { LIMITER } from './effects/limiter/limiter';
 import { MULTIBAND } from './effects/multiband/multiband';
 import { PHASER } from './effects/phaser/phaser';
+import { REDUX } from './effects/redux/redux';
 import { REVERB } from './effects/reverb/reverb';
 import { REVERSE } from './effects/reverse/reverse';
 import { STEREO } from './effects/stereo/stereo';
@@ -28,7 +29,7 @@ import { WAVETABLE } from './instruments/wavetable/wavetable';
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS];
 
 /** Gli effetti disponibili, come sopra. */
-export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER];
 
 const instruments = new Map(INSTRUMENT_TYPES.map(t => [t.type, t]));
 const effects = new Map(EFFECT_TYPES.map(t => [t.type, t]));

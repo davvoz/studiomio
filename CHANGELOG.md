@@ -44,6 +44,10 @@ Sections: Added, Changed, Fixed.
 - Auto Pan, a new effect like Live's Auto Pan: the same LFO shapes as the Auto Filter, locked
   to the bar, move the sound from side to side (Stereo 180°) or turn it into a tremolo (0°),
   at constant power so it doesn't dip in the middle.
+- Redux, a new lo-fi effect: lowers the sample rate (each sample holds until the next, for
+  stepped waves and folded-back frequencies) and the bit depth (in fractional steps, so it
+  sweeps smoothly). Jitter makes the sample clock uneven; the filter can remove what would fold
+  back (Prima) or smooth the steps (Dopo).
 - Rack macros can be switches and buttons, not only knobs (something Live's racks don't have):
   right-click a macro and choose Manopola, Interruttore (a click turns it on, another off) or
   Pulsante (on only while you hold it down). Switches and buttons move every mapped parameter
