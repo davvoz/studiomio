@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-10-20
+
 ### Added
 - The Sampler, a new instrument like Live's Simpler and Sampler: it plays an audio file across
   the keyboard. Three modes: Classic (pitched from a root note, with a forward loop with
