@@ -1,4 +1,5 @@
 import type { CoreFactory, EffectFactory } from '../dsp/core';
+import { AutoFilterCore } from '../effects/auto-filter/auto-filter-core';
 import { BeatRepeatCore } from '../effects/beat-repeat/beat-repeat-core';
 import { ClipperCore } from '../effects/clipper/clipper-core';
 import { CompressorCore } from '../effects/compressor/compressor-core';
@@ -30,6 +31,7 @@ export const INSTRUMENT_CORES: Readonly<Record<string, CoreFactory>> = {
 
 /** I motori DSP degli effetti, per tipo (stesso schema degli strumenti). */
 export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
+  autoFilter: sampleRate => new AutoFilterCore(sampleRate),
   beatRepeat: sampleRate => new BeatRepeatCore(sampleRate),
   clipper: sampleRate => new ClipperCore(sampleRate),
   compressor: sampleRate => new CompressorCore(sampleRate),

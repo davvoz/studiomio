@@ -15,6 +15,13 @@ Sections: Added, Changed, Fixed.
   (Mix), replace it while they play (Inserisci) or play alone (Gate). The Repeat switch repeats
   right away, from the next grid line, for as long as it stays on: map it to a controller
   button to play it live. With the transport stopped only Repeat repeats.
+- Auto Filter, a new effect like Live's Auto Filter: a resonant low-pass, high-pass, band-pass
+  or notch filter (12 or 24 dB, with drive) whose cutoff moves by itself. Its LFO (sine,
+  triangle, saws, square and two random shapes) runs in time and is locked to the bar: a 1/4
+  cycle always starts on the beat, even after a jump, on every loop lap and in the export, and
+  the right channel can be offset for stereo movement. The envelope opens (or closes) the
+  filter with the loudness of the sound, or of another track through the sidechain: the kick
+  that opens the bass.
 
 ## [0.3.12] - 2026-10-20
 

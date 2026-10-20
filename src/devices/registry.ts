@@ -1,4 +1,5 @@
 import type { DeviceType } from './device-type';
+import { AUTO_FILTER } from './effects/auto-filter/auto-filter';
 import { BEAT_REPEAT } from './effects/beat-repeat/beat-repeat';
 import { CLIPPER } from './effects/clipper/clipper';
 import { COMPRESSOR } from './effects/compressor/compressor';
@@ -22,7 +23,7 @@ import { WAVETABLE } from './instruments/wavetable/wavetable';
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS];
 
 /** Gli effetti disponibili, come sopra. */
-export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, PHASER, BEAT_REPEAT, DELAY, REVERB, STEREO, LIMITER];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, AUTO_FILTER, PHASER, BEAT_REPEAT, DELAY, REVERB, STEREO, LIMITER];
 
 const instruments = new Map(INSTRUMENT_TYPES.map(t => [t.type, t]));
 const effects = new Map(EFFECT_TYPES.map(t => [t.type, t]));
