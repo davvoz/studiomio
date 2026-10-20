@@ -3,7 +3,7 @@
 import type { Beats } from '../../core/music-time';
 import type { MidiClip, Note } from '../../model/midi-clip';
 import {
-  addNote, moveNotes, notesInBox, resizeNotes, setVelocity, type NoteChange, type Selection,
+  addNote, moveNotes, notesInBox, resizeNotes, setVelocity, type NoteChange, type Selection, type TimeRange,
 } from '../../model/note-edits';
 import {
   frameCursor, frameGestureFor, frameHit, IdleGesture, moved, type ClipGesture, type ClipHost, type FrameHit,
@@ -23,7 +23,10 @@ export interface RollHost extends ClipHost<MidiClip> {
   noteLength: Beats;
   /** Modo disegno: un clic crea una nota, un clic su una nota la toglie. */
   readonly drawMode: boolean;
-  select(notes: Iterable<Note>): void;
+  /** La selezione di tempo (il riquadro tracciato), o null. */
+  readonly timeSelection: TimeRange | null;
+  /** Sceglie le note; `time` è la selezione di tempo che va con loro (senza, non ce n'è). */
+  select(notes: Iterable<Note>, time?: TimeRange | null): void;
   /** Il punto dove incollare (la linea del cursore del piano roll). */
   setInsertPoint(beat: Beats): void;
   /** Applica le note nuove e seleziona quelle indicate (un passo di annullamento). */
@@ -217,7 +220,7 @@ export class MarqueeGesture implements RollGesture {
 
   end(): void {
     // un clic senza riquadro fissa il punto d'inserimento, sulla griglia
-    if (this.boxed) this.host.select(this.boxed);
+    if (this.boxed) this.host.select(this.boxed, this.timeRange());
     else this.host.setInsertPoint(Math.max(0, snap(this.host, this.origin, this.host.axis.xToBeat(this.origin.x))));
     this.host.invalidate();
   }
@@ -225,6 +228,21 @@ export class MarqueeGesture implements RollGesture {
   cancel(): void {
     this.boxed = null;
     this.host.invalidate();
+  }
+
+  /** Il tratto di tempo del riquadro, allargato alla griglia (con Maiusc unito a quello che c'era):
+   *  Ctrl+D mette la copia alla sua fine. */
+  private timeRange(): TimeRange {
+    const { axis } = this.host;
+    const a = axis.xToBeat(this.origin.x), b = axis.xToBeat(this.current.x);
+    const g = this.host.snapStep(this.current);
+    let start = Math.max(0, Math.min(a, b)), end = Math.max(a, b);
+    if (g) {
+      start = Math.floor(start / g + 1e-9) * g;
+      end = Math.max(start + g, Math.ceil(end / g - 1e-9) * g);
+    }
+    const prev = this.origin.shift ? this.host.timeSelection : null;
+    return prev ? { start: Math.min(prev.start, start), end: Math.max(prev.end, end) } : { start, end };
   }
 
   preview(clip: MidiClip): MidiClip {

@@ -42,6 +42,7 @@ export function mainMenu(app: App): Menu[] {
         { label: 'Copia', shortcut: KEY.copy, run: () => app.copySelection() },
         { label: 'Incolla', shortcut: KEY.paste, disabled: !app.canPaste, run: () => app.paste() },
         { label: 'Duplica', shortcut: KEY.duplicate, run: () => app.duplicateSelection() },
+        { label: 'Duplica loop', shortcut: KEY.duplicateLoop, run: () => app.duplicateLoop() },
         { label: 'Dividi al cursore', shortcut: KEY.split, run: () => app.splitAtCursor() },
         { label: 'Elimina', shortcut: KEY.delete, run: () => app.deleteSelection() },
         SEPARATOR,
@@ -82,6 +83,7 @@ export function mainMenu(app: App): Menu[] {
           { label: 'Aggancio alla griglia', shortcut: 'Ctrl+4', checked: app.ui.snap, run: () => app.toggleSnap() },
           { label: 'Loop', shortcut: 'Ctrl+L', checked: store.project.loop.enabled, run: () => app.toggleLoop() },
           { label: 'Metronomo', shortcut: 'Ctrl+Maiusc+M', checked: engine.metronomeOn, run: () => app.toggleMetronome() },
+          { label: 'Segui la testina', shortcut: 'Ctrl+Maiusc+F', checked: app.ui.follow, run: () => app.toggleFollow() },
           SEPARATOR,
           name ? { label: `Controller MIDI: ${name}`, checked: true, disabled: true, run: () => {} }
             : surfaces.enabled ? { label: 'Controller MIDI: collega un APC40 mkII o un Launchpad', disabled: true, run: () => {} }

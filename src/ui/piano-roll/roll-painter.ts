@@ -1,5 +1,6 @@
 import type { Beats, TimeSignature } from '../../core/music-time';
 import type { MidiClip, Note } from '../../model/midi-clip';
+import type { TimeRange } from '../../model/note-edits';
 import { FRAME, paintBeatGrid, paintClipRuler } from '../clip-editor/clip-frame';
 import type { BeatAxis } from '../clip-editor/clip-geometry';
 import { COLORS, withAlpha } from '../timeline/painters';
@@ -33,6 +34,8 @@ export interface RollPaint {
   readonly playhead: Beats | null;
   /** Punto d'inserimento (dove si incolla). */
   readonly insert: Beats | null;
+  /** La selezione di tempo (il riquadro con cui si sono scelte le note), o null. */
+  readonly time: TimeRange | null;
   /** Le note con un nome (i pad della drum machine): le loro righe sono più chiare. */
   readonly named: ReadonlyMap<number, string> | null;
 }
@@ -51,6 +54,12 @@ export function paintRoll(p: RollPaint): void {
   g.fillStyle = C.outside;
   g.fillRect(0, ROLL.ruler, Math.max(0, rx0), bottom - ROLL.ruler);
   g.fillRect(rx1, ROLL.ruler, width - rx1, bottom - ROLL.ruler);
+  if (p.time) {
+    // la selezione di tempo: una fascia chiara, sotto le note
+    const x0 = axis.beatToX(p.time.start), x1 = axis.beatToX(p.time.end);
+    g.fillStyle = 'rgba(232,234,238,0.07)';
+    g.fillRect(x0, ROLL.ruler, x1 - x0, bottom - ROLL.ruler);
+  }
   paintNotes(p);
   if (p.insert !== null) {
     g.fillStyle = 'rgba(232,234,238,0.75)';

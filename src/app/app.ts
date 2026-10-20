@@ -22,9 +22,9 @@ import { findClip, placementRef, setClipColor, type ClipRef } from '../store/cli
 import { showContextMenu } from '../ui/context-menu';
 import { choose } from '../ui/dialog';
 import { gridStep } from '../ui/timeline/geometry';
-import { timelineMenu, type TimelineActions } from './menus';
+import { rulerMenu, timelineMenu, type TimelineActions } from './menus';
 import { ProjectStore } from '../store/project-store';
-import { addedPlacements, deleteMany, duplicateMany, splitMany } from '../store/selection-edits';
+import { addedPlacements, deleteMany, duplicateLoopRegion, duplicateMany, splitMany } from '../store/selection-edits';
 import { BottomPanel, type BottomView } from '../ui/bottom-panel';
 import { acceptBrowserDrops } from '../ui/browser/browser-drag';
 import { BrowserView } from '../ui/browser/browser-view';
@@ -107,6 +107,7 @@ export class App implements Commands, TimelineActions {
       dropFiles: (files, track, beat) => this.run(() => this.session.importFiles(files, track, beat)),
       dropItem,
       contextMenu: (hit, x, y) => showContextMenu(x, y, timelineMenu(this, hit)),
+      rulerMenu: (x, y) => showContextMenu(x, y, rulerMenu(this)),
     });
     this.editor = new ClipEditor({
       store: this.store, engine: this.audio.engine, peaks: this.peaks,
@@ -155,7 +156,7 @@ export class App implements Commands, TimelineActions {
     });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
     const master = new MasterStrip(this.store, headerActions, meters);
-    const transport = this.transport = new TransportBar(this.store, this.audio.engine, this);
+    const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this);
     const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
     const main = this.arrangementArea;
     main.append(headers.element, this.arrangement.element, master.header, master.lane);
@@ -315,8 +316,22 @@ export class App implements Commands, TimelineActions {
     this.ui.select(this.store.project.tracks.flatMap(t => t.arrangement.map(x => x.id)));
   }
 
+  get loopEnabled(): boolean {
+    return this.store.project.loop.enabled;
+  }
+
   toggleLoop(): void {
     this.store.apply(setLoopRegion({ enabled: !this.store.project.loop.enabled }));
+  }
+
+  /** Copia il tratto del loop subito dopo, ci sposta il loop e seleziona le clip copiate. */
+  duplicateLoop(): void {
+    const before = this.store.project;
+    this.store.apply(duplicateLoopRegion());
+    this.ui.select(addedPlacements(before, this.store.project).map(r => r.id));
+    const { start, end } = this.store.project.loop, sig = this.store.project.signature;
+    this.arrangement.reveal(start);
+    this.say(`Loop duplicato: ora è da ${sig.format(start)} a ${sig.format(end)}. Ctrl+Maiusc+D di nuovo per un altro giro.`);
   }
 
   toggleMetronome(): void {
@@ -393,6 +408,10 @@ export class App implements Commands, TimelineActions {
 
   toggleSnap(): void {
     this.ui.setSnap(!this.ui.snap);
+  }
+
+  toggleFollow(): void {
+    this.ui.setFollow(this.ui.followPaused || !this.ui.follow);
   }
 
   zoom(factor: number): void {

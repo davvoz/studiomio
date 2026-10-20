@@ -8,7 +8,7 @@ import type { Project } from '../model/project';
 import type { Track } from '../model/track';
 import type { MidiClip } from '../model/midi-clip';
 import type { SampleRef } from '../model/sample';
-import { scaleMidiPlacement, updateClip } from './edits';
+import { duplicateLoopPlacement, scaleMidiPlacement, updateClip } from './edits';
 import { edit, type Edit } from './project-store';
 import { updateSlotClip } from './session-edits';
 
@@ -96,7 +96,13 @@ export const scaleMidiClipAt = (label: string, ref: ClipRef, factor: number): Ed
     ? scaleMidiPlacement(label, ref.track, ref.placement, factor)
     : updateSlotClip<MidiClip>(label, ref.track, ref.clip, c => c.scaledTime(factor));
 
-const idOf = (r: ClipRef): string => (r.kind === 'placement' ? r.placement : r.clip);
+/** "Dupl. Loop" di una clip MIDI, dovunque stia. */
+export const duplicateLoopAt = (ref: ClipRef): Edit =>
+  ref.kind === 'placement'
+    ? duplicateLoopPlacement(ref.track, ref.placement)
+    : updateSlotClip<MidiClip>('Duplica loop', ref.track, ref.clip, c => c.duplicatingLoop());
+
+const idOf =(r: ClipRef): string => (r.kind === 'placement' ? r.placement : r.clip);
 
 export const sameClipRef = (a: ClipRef | null, b: ClipRef | null): boolean =>
   !!a && !!b && a.kind === b.kind && a.track === b.track && idOf(a) === idOf(b);

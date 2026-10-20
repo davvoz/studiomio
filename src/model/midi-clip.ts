@@ -81,6 +81,33 @@ export class MidiClip extends Clip<MidiClipProps> {
     });
   }
 
+  /** "Dupl. Loop" di Live: il loop (senza loop, la clip) raddoppia e la sua copia va subito dopo.
+   *  Note e modulazioni copiate prendono il posto di quelle che c'erano in quel tratto. */
+  duplicatingLoop(): MidiClip {
+    const { start, end } = this.loop.enabled ? this.loop : this.region;
+    const len = end - start, to = end + len;
+    const notes = [
+      ...this.notes.filter(n => n.start < end || n.start >= to),
+      ...this.notesIn(start, end).map(n => ({ ...n, start: n.start + len })),
+    ];
+    // i punti agli estremi restano tutti e due: alla fine del loop originale la curva fa uno
+    // scalino dal suo ultimo valore al primo della copia (come quando il loop ricomincia)
+    const envelopes = this.envelopes.map(e => ({
+      ...e,
+      points: [
+        ...e.points.filter(p => p.beat <= end || p.beat > to),
+        ...e.points.filter(p => p.beat >= start && p.beat <= end).map(p => ({ ...p, beat: p.beat + len })),
+      ].sort((a, b) => a.beat - b.beat),
+    }));
+    const linked = this.loop.start === this.region.start && this.loop.end === this.region.end;
+    return this.with({
+      notes,
+      region: { ...this.region, end: Math.max(this.region.end, to) },
+      loop: this.loop.enabled || linked ? { ...this.loop, end: to } : this.loop,
+      ...(this.props.envelopes && { envelopes }),
+    });
+  }
+
   /** Traspone tutte le note, lasciando fuori quelle che uscirebbero da 0..127. */
   transposed(semitones: number): MidiClip {
     return this.withNotes(this.notes

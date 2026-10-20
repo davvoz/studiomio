@@ -12,8 +12,12 @@ export interface Commands {
   splitAtCursor(): void;
   selectAll(): void;
   toggleLoop(): void;
+  /** Copia il tratto del loop subito dopo e ci sposta il loop (Ctrl+Maiusc+D). */
+  duplicateLoop(): void;
   toggleMetronome(): void;
   toggleSnap(): void;
+  /** Segui la testina (Ctrl+Maiusc+F); se è sospeso, lo riprende. */
+  toggleFollow(): void;
   zoom(factor: number): void;
   newProject(): void;
   save(): void;
@@ -50,6 +54,7 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'delete', run: c => c.deleteSelection() },
   { key: 'backspace', run: c => c.deleteSelection() },
   { key: 'd', ctrl: true, run: c => c.duplicateSelection() },
+  { key: 'd', ctrl: true, shift: true, run: c => c.duplicateLoop() },
   { key: 'x', ctrl: true, run: c => c.cutSelection() },
   { key: 'c', ctrl: true, run: c => c.copySelection() },
   { key: 'v', ctrl: true, run: c => c.paste() },
@@ -69,6 +74,7 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'g', ctrl: true, shift: true, run: c => c.ungroupTracks() },
   { key: 'b', ctrl: true, alt: true, run: c => c.toggleBrowser() },
   { key: 'f', ctrl: true, run: c => c.searchBrowser() },
+  { key: 'f', ctrl: true, shift: true, run: c => c.toggleFollow() },
 ];
 
 /** Campi in cui si scrive: lì tutti i tasti sono loro. */

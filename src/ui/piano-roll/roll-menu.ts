@@ -12,6 +12,7 @@ export interface RollMenuActions {
   copy(): void;
   paste(at?: Beats): void;
   duplicate(): void;
+  duplicateLoop(): void;
   deleteSelected(): void;
   quantize(): void;
   transpose(semitones: number): void;
@@ -25,6 +26,8 @@ const general = (r: RollMenuActions): MenuItem[] => [
   { label: 'Seleziona tutto', shortcut: KEY.selectAll, run: () => r.selectAll() },
   { label: 'Quantizza tutte le note', shortcut: KEY.quantize, run: () => { r.selectAll(); r.quantize(); } },
   { label: 'Modo disegno', shortcut: KEY.draw, checked: r.drawMode, run: () => r.toggleDraw() },
+  SEPARATOR,
+  { label: 'Duplica loop', shortcut: KEY.duplicateLoop, run: () => r.duplicateLoop() },
 ];
 
 const noteMenu = (r: RollMenuActions): MenuItem[] => [

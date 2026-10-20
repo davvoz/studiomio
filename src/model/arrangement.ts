@@ -29,7 +29,7 @@ function fitToClip<C extends Clip>(p: Placement<C>): Placement<C> {
 }
 
 /** Parte di `p` che resta tenendo solo [from, to) della timeline, o null se non resta nulla. */
-function keepBetween<C extends Clip>(p: Placement<C>, from: Beats, to: Beats, id: PlacementId): Placement<C> | null {
+export function keepBetween<C extends Clip>(p: Placement<C>, from: Beats, to: Beats, id: PlacementId): Placement<C> | null {
   const s = Math.max(p.start, from), e = Math.min(placementEnd(p), to);
   if (e - s <= EPS) return null;
   return { ...p, id, start: s, length: e - s, offset: p.offset + (s - p.start) };
@@ -39,22 +39,26 @@ function keepBetween<C extends Clip>(p: Placement<C>, from: Beats, to: Beats, id
  *  accorciate, divise in due o tolte. Il risultato è ordinato per inizio. */
 export function place<C extends Clip>(lane: Lane<C>, placement: Placement<C>, ids: IdFactory): Placement<C>[] {
   placement = fitToClip(placement);
-  const s = placement.start, e = placementEnd(placement);
+  const id = placement.id;
+  return [...clear(lane.filter(p => p.id !== id), placement.start, placementEnd(placement), ids), placement]
+    .sort((a, b) => a.start - b.start);
+}
+
+/** Svuota [from, to) della corsia: le clip a cavallo vengono accorciate o divise in due. */
+export function clear<C extends Clip>(lane: Lane<C>, from: Beats, to: Beats, ids: IdFactory): Placement<C>[] {
   const out: Placement<C>[] = [];
   for (const p of lane) {
-    if (p.id === placement.id) continue;
-    if (placementEnd(p) <= s + EPS || p.start >= e - EPS) {
+    if (placementEnd(p) <= from + EPS || p.start >= to - EPS) {
       out.push(p);
       continue;
     }
-    const left = keepBetween(p, -Infinity, s, p.id);
-    // se la clip sotto sporge da entrambi i lati, la parte destra diventa una clip nuova
-    const right = keepBetween(p, e, Infinity, left ? ids.next('placement') : p.id);
+    const left = keepBetween(p, -Infinity, from, p.id);
+    // se la clip sporge da entrambi i lati, la parte destra diventa una clip nuova
+    const right = keepBetween(p, to, Infinity, left ? ids.next('placement') : p.id);
     if (left) out.push(left);
     if (right) out.push(right);
   }
-  out.push(placement);
-  return out.sort((a, b) => a.start - b.start);
+  return out;
 }
 
 export function remove<C extends Clip>(lane: Lane<C>, id: PlacementId): Placement<C>[] {

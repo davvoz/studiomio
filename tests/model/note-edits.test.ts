@@ -47,6 +47,14 @@ describe('operazioni sulle note', () => {
     expect(r.selected).toEqual([n(60, 2), n(64, 3)]);
   });
 
+  it('duplicare con una selezione di tempo: la copia va dopo la fine del riquadro, non della nota', () => {
+    const short = n(60, 0, 0.25);
+    // una nota di un sedicesimo scelta con un riquadro lungo una battuta
+    expect(duplicateNotes([short], new Set([short]), 0.25, { start: 0, end: 4 }).selected).toEqual([n(60, 4, 0.25)]);
+    // senza riquadro resta subito dopo la nota
+    expect(duplicateNotes([short], new Set([short]), 0.25).selected).toEqual([n(60, 0.25, 0.25)]);
+  });
+
   it('velocity: la nota trascinata va al valore, le altre selezionate la seguono', () => {
     const quiet = n(62, 3, 1, 40);
     const r = setVelocity([...all, quiet], new Set([a, quiet]), a, 120);

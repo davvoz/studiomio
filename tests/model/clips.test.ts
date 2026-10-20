@@ -182,3 +182,36 @@ describe('MidiClip', () => {
     expect(() => clip.addingNotes({ pitch: 60, start: 0, duration: 0, velocity: 1 })).toThrow(RangeError);
   });
 });
+
+describe('MidiClip: duplica loop', () => {
+  const note = (pitch: number, start: number) => ({ pitch, start, duration: 0.5, velocity: 100 });
+  const looped = MidiClip.create({
+    id: asId('clip-1'), name: 'm', color: '#fff',
+    region: { start: 0, end: 8 }, loop: { enabled: true, start: 2, end: 4 },
+    notes: [note(60, 0), note(62, 2), note(64, 3.5), note(65, 4), note(67, 6)],
+  });
+
+  it('il loop raddoppia, le sue note si ripetono e prendono il posto di quelle nel tratto copiato', () => {
+    const d = looped.duplicatingLoop();
+    expect(d.loop).toEqual({ enabled: true, start: 2, end: 6 });
+    expect(d.region).toEqual({ start: 0, end: 8 });
+    // 0 prima del loop resta, 4 (nel tratto copiato) sparisce, 6 (dopo) resta
+    expect(d.notes.map(n => [n.start, n.pitch])).toEqual([[0, 60], [2, 62], [3.5, 64], [4, 62], [5.5, 64], [6, 67]]);
+  });
+
+  it('senza loop raddoppia la clip, e il loop collegato la segue', () => {
+    const plain = MidiClip.create({ id: asId('clip-2'), name: 'm', color: '#fff', ...fullRange(0, 4), notes: [note(60, 1)] });
+    const d = plain.duplicatingLoop();
+    expect(d.region).toEqual({ start: 0, end: 8 });
+    expect(d.loop).toEqual({ enabled: false, start: 0, end: 8 });
+    expect(d.notes.map(n => n.start)).toEqual([1, 5]);
+  });
+
+  it('copia anche le modulazioni', () => {
+    const target: ModTarget = { kind: 'mixer', param: 'volume' };
+    const d = looped.withEnvelope(target, [{ beat: 2, value: 0 }, { beat: 4, value: 1 }, { beat: 5, value: 0.5 }]).duplicatingLoop();
+    expect(d.envelope(target)!.points).toEqual([
+      { beat: 2, value: 0 }, { beat: 4, value: 1 }, { beat: 4, value: 0 }, { beat: 6, value: 1 },
+    ]);
+  });
+});

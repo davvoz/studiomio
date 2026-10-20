@@ -22,13 +22,15 @@ export interface ControlledDevice {
 }
 
 /** Stato dell'interfaccia che non fa parte del progetto (e quindi non si annulla):
- *  zoom, scorrimento, selezione, traccia scelta, aggancio alla griglia. */
+ *  zoom, scorrimento, selezione, traccia scelta, aggancio alla griglia, "Segui". */
 export class UiState {
   private _geometry = new TimelineGeometry();
   private _selection: ReadonlySet<PlacementId> = new Set();
   private _track: TrackId | null = null;
   private _tracks: ReadonlySet<TrackId> = new Set();
   private _snap = true;
+  private _follow = true;
+  private _followPaused = false;
   private _ring: SessionRing | null = null;
   private _controlled: ControlledDevice | null = null;
   private readonly events = new Emitter<UiEvents>();
@@ -40,6 +42,12 @@ export class UiState {
   /** Le tracce scelte (Maiusc e Ctrl+clic ne aggiungono, Ctrl+G le raggruppa); c'è sempre `track`. */
   get selectedTracks(): ReadonlySet<TrackId> { return this._tracks; }
   get snap(): boolean { return this._snap; }
+  /** "Segui": mentre suona, l'arrangement scorre per tenere in vista la testina. */
+  get follow(): boolean { return this._follow; }
+  /** Segui è acceso ma sospeso: l'utente ha spostato la vista o sta modificando (come in Live).
+   *  Riprende al prossimo play, con un clic sul righello o sul pulsante. */
+  get followPaused(): boolean { return this._follow && this._followPaused; }
+  get following(): boolean { return this._follow && !this._followPaused; }
   /** Il riquadro del controller collegato, o null se non ce n'è. */
   get sessionRing(): SessionRing | null { return this._ring; }
   get controlledDevice(): ControlledDevice | null { return this._controlled; }
@@ -89,6 +97,25 @@ export class UiState {
 
   setSnap(on: boolean): void {
     this._snap = on;
+    this.events.emit('change');
+  }
+
+  setFollow(on: boolean): void {
+    if (on === this._follow && !this._followPaused) return;
+    this._follow = on;
+    this._followPaused = false;
+    this.events.emit('change');
+  }
+
+  pauseFollow(): void {
+    if (!this.following) return;
+    this._followPaused = true;
+    this.events.emit('change');
+  }
+
+  resumeFollow(): void {
+    if (!this.followPaused) return;
+    this._followPaused = false;
     this.events.emit('change');
   }
 

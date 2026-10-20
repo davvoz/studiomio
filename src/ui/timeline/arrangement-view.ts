@@ -30,6 +30,8 @@ export interface ArrangementDeps {
   readonly dropItem?: (item: BrowserItem, target: LoadTarget) => void;
   /** Tasto destro: `hit` è ciò che c'è sotto, (x, y) il punto nella finestra. */
   readonly contextMenu: (hit: Hit, x: number, y: number) => void;
+  /** Tasto destro sul righello, (x, y) il punto nella finestra. */
+  readonly rulerMenu?: (x: number, y: number) => void;
 }
 
 type HitKey = 'clip:body' | 'clip:start' | 'clip:end' | 'lane' | 'empty';
@@ -58,8 +60,6 @@ export class ArrangementView implements GestureHost {
   private readonly overlay = new Surface('overlay');
   private gesture: Gesture | null = null;
   private dirty = true;
-  /** Mentre suona, la vista scorre per tenere in vista la testina. */
-  followPlayhead = true;
 
   constructor(private readonly deps: ArrangementDeps) {
     this.store = deps.store;
@@ -85,6 +85,8 @@ export class ArrangementView implements GestureHost {
     this.bindDrop(lanesWrap);
     deps.store.onChange(() => this.invalidate());
     deps.engine.onSessionChange(() => this.invalidate());
+    // come in Live: ripremere Play riprende Segui
+    deps.engine.onStateChange(playing => { if (playing) this.ui.resumeFollow(); });
     deps.ui.onChange(() => this.invalidate());
     requestAnimationFrame(this.frame);
   }
@@ -120,7 +122,8 @@ export class ArrangementView implements GestureHost {
   private readonly frame = () => {
     const { project } = this.store;
     const engine = this.deps.engine;
-    if (engine.playing && this.followPlayhead) this.reveal(engine.position);
+    // durante un gesto la vista sta ferma: scorrere sotto il mouse sposterebbe ciò che si trascina
+    if (engine.playing && this.ui.following && !this.gesture) this.reveal(engine.position);
     if (this.dirty) {
       this.dirty = false;
       const grid = gridStep(this.geo.pxPerBeat, project.signature);
@@ -170,8 +173,14 @@ export class ArrangementView implements GestureHost {
     });
   }
 
+  /** Mentre suona, chi sposta la vista o modifica la timeline sospende Segui (come in Live). */
+  private pauseFollow(): void {
+    if (this.deps.engine.playing) this.ui.pauseFollow();
+  }
+
   private bindLanes(el: HTMLCanvasElement): void {
     el.addEventListener('pointerdown', e => {
+      if (e.button === 0) this.pauseFollow();
       const p = this.pointer(e, el);
       const hit = hitTest(this.store.project, this.geo, p.x, p.y);
       if (hit.kind === 'clip' || hit.kind === 'lane') this.ui.selectTrack(hit.track);
@@ -210,6 +219,8 @@ export class ArrangementView implements GestureHost {
   private bindRuler(el: HTMLCanvasElement): void {
     el.addEventListener('pointerdown', e => {
       const p = this.pointer(e, el);
+      // un clic nel righello (non sulla banda del loop) sposta la testina e riprende Segui
+      if (e.button === 0 && p.y >= RULER_LOOP_BAND + 2) this.ui.resumeFollow();
       this.startGesture(e, el, pp => (p.y < RULER_LOOP_BAND + 2 ? new LoopRegionGesture(this, pp) : new ScrubGesture(this, pp)));
     });
     el.addEventListener('pointermove', e => {
@@ -218,19 +229,26 @@ export class ArrangementView implements GestureHost {
       else el.style.cursor = p.y < RULER_LOOP_BAND + 2 ? LOOP_CURSOR[loopPartAt(this.store.project.loop, p.x, b => this.geo.beatToX(b))] : 'text';
     });
     this.bindGestureEnd(el);
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (!this.gesture) this.deps.rulerMenu?.(e.clientX, e.clientY);
+    });
   }
 
-  /** Rotella: scorre; con Ctrl zooma attorno al puntatore; con Maiusc scorre in orizzontale. */
+  /** Rotella: scorre; con Ctrl zooma attorno al puntatore; con Maiusc scorre in orizzontale.
+   *  Zoomare o scorrere in orizzontale mentre suona sospende Segui. */
   private bindWheel(el: HTMLElement): void {
     el.addEventListener('wheel', e => {
       e.preventDefault();
       const g = this.geo;
       const r = this.lanes.canvas.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey) {
+        this.pauseFollow();
         this.ui.setGeometry(g.zoomed(g.pxPerBeat * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left));
         return;
       }
       const dx = e.shiftKey ? e.deltaY : e.deltaX, dy = e.shiftKey ? 0 : e.deltaY;
+      if (dx) this.pauseFollow();
       const maxY = Math.max(0, this.store.project.visibleTracks.length * g.trackHeight - this.lanes.height + 40);
       this.ui.setGeometry(g.scrolled(g.scrollBeat + dx / g.pxPerBeat, Math.min(maxY, g.scrollY + dy)));
     }, { passive: false });

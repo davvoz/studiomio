@@ -5,11 +5,11 @@ import { resolveParams } from '../../devices/device-type';
 import { instrumentType } from '../../devices/registry';
 import { MidiClip, type Note } from '../../model/midi-clip';
 import {
-  addNote, deleteNotes, duplicateNotes, moveNotes, quantizeNotes, type NoteChange, type Selection,
+  addNote, deleteNotes, duplicateNotes, duplicateSpan, moveNotes, quantizeNotes, type NoteChange, type Selection, type TimeRange,
 } from '../../model/note-edits';
 import { MidiTrack } from '../../model/track';
 import { copyNotes, pasteNotes, type Clipboard } from '../../store/clipboard';
-import { findClip, scaleMidiClipAt, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
+import { duplicateLoopAt, findClip, scaleMidiClipAt, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
 import { BeatAxis, playheadIn, seekBeatOf } from '../clip-editor/clip-geometry';
 import { addHeightHandle } from '../editor-height';
@@ -57,6 +57,7 @@ const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
   { key: 'backspace', run: r => r.deleteSelected() },
   { key: 'a', ctrl: true, run: r => r.selectAll() },
   { key: 'd', ctrl: true, run: r => r.duplicate() },
+  { key: 'd', ctrl: true, shift: true, run: r => r.duplicateLoop() },
   { key: 'x', ctrl: true, run: r => r.cut() },
   { key: 'c', ctrl: true, run: r => r.copy() },
   { key: 'v', ctrl: true, run: r => r.paste() },
@@ -87,6 +88,8 @@ export class PianoRoll implements RollHost {
   private _selection = new Set<Note>();
   private gesture: RollGesture | null = null;
   private insert: Beats | null = null;
+  /** La selezione di tempo: il riquadro con cui si sono scelte le note (Ctrl+D copia dopo la sua fine). */
+  private time: TimeRange | null = null;
   private dirty = true;
   private fitPending = false;
   /** I nomi delle note dati dallo strumento (la drum machine), o null. */
@@ -105,6 +108,7 @@ export class PianoRoll implements RollHost {
       quantize: () => this.quantize(),
       transpose: n => this.transpose(n),
       scaleTime: f => this.scaleTime(f),
+      duplicateLoop: () => this.duplicateLoop(),
       openInstrument: () => { const t = this.target(); if (t) deps.openInstrument(t.track.id); },
       close: () => this.close(),
     });
@@ -164,6 +168,7 @@ export class PianoRoll implements RollHost {
     }
     this._selection = new Set();
     this.insert = null;
+    this.time = null;
     this.element.hidden = false;
     this.names = this.noteNames();
     this.fitPending = true;
@@ -217,8 +222,13 @@ export class PianoRoll implements RollHost {
     this.select(change.selected);
   }
 
-  select(notes: Iterable<Note>): void {
+  get timeSelection(): TimeRange | null {
+    return this.time;
+  }
+
+  select(notes: Iterable<Note>, time: TimeRange | null = null): void {
     this._selection = new Set(notes);
+    this.time = time;
     this.sync();
   }
 
@@ -254,14 +264,23 @@ export class PianoRoll implements RollHost {
     if (c && this._selection.size) this.commitNotes('Elimina note', deleteNotes(c.notes, this._selection));
   }
 
+  /** Tutte le note, con la selezione di tempo sul loop (senza loop, la clip): Ctrl+A e poi Ctrl+D
+   *  ripete la clip intera. */
   selectAll(): void {
     const c = this.clip();
-    if (c) this.select(c.notes);
+    if (!c) return;
+    const { start, end } = c.loop.enabled ? c.loop : c.region;
+    this.select(c.notes, { start, end });
   }
 
+  /** Copia le note scelte dopo la fine della selezione di tempo (il riquadro), o dopo le note se
+   *  non c'è; la selezione di tempo passa sulla copia, così Ctrl+D di nuovo continua in fila. */
   duplicate(): void {
-    const c = this.clip();
-    if (c && this._selection.size) this.commitNotes('Duplica note', duplicateNotes(c.notes, this._selection, this.grid));
+    const c = this.clip(), time = this.time;
+    if (!c || !this._selection.size) return;
+    const span = duplicateSpan(c.notes, this._selection, this.grid, time);
+    this.commitNotes('Duplica note', duplicateNotes(c.notes, this._selection, this.grid, time));
+    if (time) this.select(this._selection, { start: time.end, end: time.end + span });
   }
 
   copy(): void {
@@ -319,6 +338,20 @@ export class PianoRoll implements RollHost {
       this.deps.store.apply(scaleMidiClipAt(label, ref, factor));
     } catch (e) {
       this.deps.say(`${label}: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  /** "Dupl. Loop" di Live: il loop raddoppia, con la copia delle sue note subito dopo. */
+  duplicateLoop(): void {
+    const ref = this.ref;
+    if (!ref || !this.target()) return;
+    try {
+      this.deps.store.apply(duplicateLoopAt(ref));
+      // la clip è lunga il doppio: la si inquadra tutta, copia compresa
+      this.fit();
+      this.invalidate();
+    } catch (e) {
+      this.deps.say(`Duplica loop: ${e instanceof Error ? e.message : e}`);
     }
   }
 
@@ -455,7 +488,7 @@ export class PianoRoll implements RollHost {
           g, width, height, axis: this._axis, pitches: this._pitches, clip,
           selection: this.gesture?.previewSelection?.() ?? this._selection,
           signature: this.deps.store.project.signature, grid: this.grid,
-          playhead: playheadIn(t.found, engine), insert: this.insert, named: this.names,
+          playhead: playheadIn(t.found, engine), insert: this.insert, time: this.gesture ? null : this.time, named: this.names,
         });
         this.gesture?.paint?.(g);
       }

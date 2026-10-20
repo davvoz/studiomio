@@ -6,6 +6,26 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Follow, like Live's: "↦ Segui" in the control bar (Ctrl+Shift+F, Options › Segui la testina).
+  While playing, the arrangement scrolls to keep the playhead in view. Scrolling sideways,
+  zooming or editing the timeline pauses it (the button shows an outline), so you can move
+  around while the song plays; it comes back when you click the ruler, press Play again or click
+  the button.
+- Duplicate Loop (Ctrl+Shift+D). In the piano roll, like Live's "Dupl. Loop": the clip's loop
+  doubles and its notes and modulations repeat in the second half (button next to :2 and ×2, or
+  the right-click menu); an arrangement clip that ended with the loop grows with it. In the
+  arrangement (Edit › Duplica loop, right-click on the ruler or on an empty lane): the stretch
+  under the loop region is copied right after it on every track, and the loop moves onto the
+  copy, so pressing it again lengthens the song one loop at a time.
+
+### Changed
+- In the piano roll, Ctrl+D places the copy after the end of the selection box, as in Live: a
+  short note selected with a box one bar long repeats in the next bar. The box stays visible as
+  a light band and moves onto the copy, so Ctrl+D again keeps going; Ctrl+A selects the whole
+  loop, so Ctrl+A then Ctrl+D repeats the clip. Clicking a single note still copies it right
+  after itself.
+
 ## [0.3.10] - 2026-10-20
 
 ### Added

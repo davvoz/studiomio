@@ -145,6 +145,11 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.withLane(lane.split(this.arrangement, id, at, ids));
   }
 
+  /** Svuota [from, to) della timeline della traccia. */
+  clearing(from: Beats, to: Beats, ids: IdFactory): this {
+    return this.withLane(lane.clear(this.arrangement, from, to, ids));
+  }
+
   /** Sostituisce la catena degli effetti (le operazioni sono in `effect-list`); gli effetti tolti
    *  escono dai loro rack. */
   withEffects(effects: EffectList): this {

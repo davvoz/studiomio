@@ -22,6 +22,10 @@ export interface TimelineActions {
   pasteAt(trackIndex: number, at: Beats): void;
   splitSelectionAt(beat: Beats): void;
   selectAll(): void;
+  readonly loopEnabled: boolean;
+  toggleLoop(): void;
+  /** Copia il tratto del loop subito dopo e ci sposta il loop. */
+  duplicateLoop(): void;
   /** Battito agganciato alla griglia della timeline. */
   snap(beat: Beats): Beats;
   newMidiClip(track: TrackId, beat: Beats): void;
@@ -52,11 +56,23 @@ const MENUS: { readonly [K in Hit['kind']]: (a: TimelineActions, hit: Extract<Hi
     { label: 'Incolla qui', shortcut: KEY.paste, disabled: !a.canPaste, run: () => a.pasteAt(hit.trackIndex, a.snap(hit.beat)) },
     ...(a.isMidiTrack(hit.track) ? [{ label: 'Nuova clip MIDI qui', shortcut: 'doppio clic', run: () => a.newMidiClip(hit.track, hit.beat) }] : []),
     { label: 'Seleziona tutto', shortcut: KEY.selectAll, run: () => a.selectAll() },
+    { label: 'Duplica loop', shortcut: KEY.duplicateLoop, run: () => a.duplicateLoop() },
     SEPARATOR,
     ...newTracks(a),
   ],
-  empty: a => [{ label: 'Seleziona tutto', shortcut: KEY.selectAll, run: () => a.selectAll() }, SEPARATOR, ...newTracks(a)],
+  empty: a => [
+    { label: 'Seleziona tutto', shortcut: KEY.selectAll, run: () => a.selectAll() },
+    { label: 'Duplica loop', shortcut: KEY.duplicateLoop, run: () => a.duplicateLoop() },
+    SEPARATOR,
+    ...newTracks(a),
+  ],
 };
 
 export const timelineMenu = (a: TimelineActions, hit: Hit): MenuItem[] =>
   (MENUS[hit.kind] as (a: TimelineActions, hit: Hit) => MenuItem[])(a, hit);
+
+/** Tasto destro sul righello: la regione di loop. */
+export const rulerMenu = (a: TimelineActions): MenuItem[] => [
+  { label: 'Loop', shortcut: 'Ctrl+L', checked: a.loopEnabled, run: () => a.toggleLoop() },
+  { label: 'Duplica loop', shortcut: KEY.duplicateLoop, run: () => a.duplicateLoop() },
+];

@@ -1,7 +1,7 @@
 /* Modifiche su più clip posate insieme (la selezione della timeline). */
 import type { PlacementId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
-import { placementEnd, type Placement } from '../model/arrangement';
+import { between, keepBetween, placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
 import { paletteColor } from '../model/colors';
 import type { Project } from '../model/project';
@@ -57,6 +57,23 @@ export const duplicateMany = (refs: readonly PlacementRef[]): Edit =>
     if (!pls.length) return p;
     const span = Math.max(...pls.map(x => placementEnd(x.pl))) - Math.min(...pls.map(x => x.pl.start));
     return relocate('Duplica', pls.map(({ r, pl }) => ({ ...r, to: r.track, start: pl.start + span, copy: true }))).apply(p, ctx);
+  });
+
+/** Copia il tratto della regione di loop, su tutte le tracce, subito dopo il loop (la copia prende
+ *  il posto di ciò che c'era, vuoti compresi) e sposta il loop sulla copia: ripetendo si allunga
+ *  il brano un giro alla volta, come Ctrl+D sul loop in Live. */
+export const duplicateLoopRegion = (): Edit =>
+  edit('Duplica loop', (project, { ids }) => {
+    const { start, end } = project.loop, len = end - start;
+    const p = project.tracks.reduce((acc, track) => {
+      if (!between(track.arrangement, start, end + len).length) return acc;
+      const pieces = between(track.arrangement, start, end).flatMap(pl => keepBetween(pl, start, end, pl.id) ?? []);
+      return acc.updatingTrack(track.id, t => pieces.reduce(
+        (tt, pl) => tt.placing({ ...pl, id: ids.next('placement'), clip: pl.clip.withId(ids.next('clip')), start: pl.start + len }, ids),
+        t.clearing(end, end + len, ids),
+      ));
+    }, project);
+    return p.withLoop({ start: end, end: end + len });
   });
 
 /** Divide nel punto `at` le clip della selezione che lo attraversano. */

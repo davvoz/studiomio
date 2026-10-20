@@ -66,14 +66,27 @@ export function quantizeNotes(notes: readonly Note[], sel: Selection, step: Beat
   return { notes: r.notes, selected: sel.size ? r.selected : [] };
 }
 
-/** Copia le note selezionate subito dopo la fine della selezione; la copia resta selezionata. */
-export function duplicateNotes(notes: readonly Note[], sel: Selection, grid: Beats): NoteChange {
+/** Un tratto di tempo della clip (la selezione di tempo di Live: il riquadro tracciato). */
+export interface TimeRange {
+  readonly start: Beats;
+  readonly end: Beats;
+}
+
+/** Di quanto Ctrl+D sposta la copia: la lunghezza della selezione di tempo se c'è (come in Live),
+ *  altrimenti quella delle note scelte arrotondata in su alla griglia. */
+export function duplicateSpan(notes: readonly Note[], sel: Selection, grid: Beats, time: TimeRange | null = null): Beats {
+  if (time) return time.end - time.start;
   const chosen = notes.filter(n => sel.has(n));
-  if (!chosen.length) return { notes, selected: [] };
+  if (!chosen.length) return grid;
   const start = Math.min(...chosen.map(n => n.start)), end = Math.max(...chosen.map(n => n.start + n.duration));
-  // la copia parte sulla griglia, alla fine della selezione arrotondata in su
-  const span = Math.max(grid, Math.ceil((end - start) / grid - 1e-9) * grid);
-  return moveNotes(notes, sel, span, 0, true);
+  return Math.max(grid, Math.ceil((end - start) / grid - 1e-9) * grid);
+}
+
+/** Copia le note selezionate subito dopo la fine della selezione (di tempo, se c'è); la copia
+ *  resta selezionata. */
+export function duplicateNotes(notes: readonly Note[], sel: Selection, grid: Beats, time: TimeRange | null = null): NoteChange {
+  if (!notes.some(n => sel.has(n))) return { notes, selected: [] };
+  return moveNotes(notes, sel, duplicateSpan(notes, sel, grid, time), 0, true);
 }
 
 /** Cambia la velocity: la nota `anchor` va a `velocity`, le altre selezionate si spostano

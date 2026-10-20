@@ -257,6 +257,16 @@ export const scaleMidiPlacement = (label: string, trackId: TrackId, id: Placemen
     ...pl, clip: (pl.clip as unknown as MidiClip).scaledTime(factor), length: pl.length * factor, offset: pl.offset * factor,
   }), ids)));
 
+/** "Dupl. Loop" su una clip MIDI posata (vedi MidiClip.duplicatingLoop). Se la clip sulla timeline
+ *  finiva proprio alla fine del loop, si allunga per far sentire la copia; più lunga, resta com'è. */
+export const duplicateLoopPlacement = (trackId: TrackId, id: PlacementId): Edit =>
+  edit('Duplica loop', (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => {
+    const clip = pl.clip as unknown as MidiClip;
+    const { start, end } = clip.loop.enabled ? clip.loop : clip.region;
+    const endsAtLoop = Math.abs(clip.region.start + pl.offset + pl.length - end) < 1e-9;
+    return { ...pl, clip: clip.duplicatingLoop(), length: pl.length + (endsAtLoop ? end - start : 0) };
+  }, ids)));
+
 // ------------------------------------------------------------------ session
 
 export const setSlot = (trackId: TrackId, sceneIndex: number, clip: Clip | null): Edit =>
