@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-10-20
+
 ### Added
 - Zones in the Sampler, like Live's Sampler: load up to 32 samples and put each on its own key
   or on a range of keys (and velocities), with its own root note, tune, volume, pan, start/end
