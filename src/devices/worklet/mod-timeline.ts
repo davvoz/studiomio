@@ -2,7 +2,7 @@
  * per ogni parametro scalini e rampe con il loro istante, come si fa con un AudioParam; qui si
  * calcola lo spostamento a ogni blocco e lo si somma al valore della manopola. Puro: si prova
  * anche in Node. */
-import { paramFromUnit, paramToUnit, type NumberParam } from '../params';
+import { paramFromUnit, paramToUnit, type ParamSpec } from '../params';
 
 /** Uno scalino al valore all'istante dato, o una rampa lineare che ci arriva. */
 export interface ModEvent {
@@ -72,7 +72,7 @@ export class ParamModulation {
   private readonly offsets = new Map<string, number>();
   private dirty = true;
 
-  constructor(private readonly specs: ReadonlyMap<string, NumberParam>, base: Readonly<Record<string, number>>) {
+  constructor(private readonly specs: ReadonlyMap<string, ParamSpec>, base: Readonly<Record<string, number>>) {
     this.base = base;
   }
 
@@ -81,7 +81,8 @@ export class ParamModulation {
     this.dirty = true;
   }
 
-  /** Un evento per un parametro numerico (gli altri si ignorano); 'hold' tiene il valore da lì. */
+  /** Un evento per un parametro del dispositivo (gli sconosciuti si ignorano); 'hold' tiene il
+   *  valore da lì. */
   event(param: string, kind: ModEvent['kind'] | 'hold', value: number, time: number): void {
     if (!this.specs.has(param)) return;
     let line = this.lines.get(param);

@@ -2,7 +2,7 @@
  * effetti. Ognuno crea il motore del tipo richiesto e riceve parametri (e note) dalla porta. */
 import { paramsOf, type DeviceType } from '../device-type';
 import { followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type KeyedEffect, type TransportFollower } from '../dsp/core';
-import type { NumberParam } from '../params';
+import type { ParamSpec } from '../params';
 import { effectType, instrumentType } from '../registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from './cores';
 import { EffectRunner } from './effect-runner';
@@ -26,9 +26,10 @@ declare function registerProcessor(name: string, ctor: new (options: AudioWorkle
 
 type Handlers<M extends { type: string }> = { readonly [K in M['type']]: (m: Extract<M, { type: K }>) => void };
 
-/** I parametri numerici del tipo (quelli che si possono modulare). */
-const numberSpecs = (type: DeviceType | undefined): Map<string, NumberParam> =>
-  new Map((type ? paramsOf(type) : []).flatMap(p => (p.kind === 'number' ? [[p.id, p] as const] : [])));
+/** I parametri del tipo che si possono modulare: tutti, numeri e scelte (una scelta si sposta
+ *  lungo le sue opzioni e scatta a metà strada, come quando si gira la sua manopola). */
+const modSpecs = (type: DeviceType | undefined): Map<string, ParamSpec> =>
+  new Map((type ? paramsOf(type) : []).map(p => [p.id, p] as const));
 
 /** Collega la porta alla tabella dei messaggi. */
 function listen<M extends { type: string }>(port: MessagePort, handlers: Handlers<M>): void {
@@ -56,7 +57,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     super(options);
     const o = options.processorOptions as InstrumentProcessorOptions;
     this.core = INSTRUMENT_CORES[o.type]?.(sampleRate) ?? silentInstrument;
-    this.mod = new ParamModulation(numberSpecs(instrumentType(o.type)), o.params);
+    this.mod = new ParamModulation(modSpecs(instrumentType(o.type)), o.params);
     const core = this.core;
     const setSample = playsSamples(core) ? core.setSample.bind(core) : () => {};
     for (const [slot, sample] of Object.entries(o.samples ?? {})) setSample(slot, sample);
@@ -128,7 +129,7 @@ class EffectProcessor extends AudioWorkletProcessor {
     this.setKeyed(o.keyed);
     this.core.setTempo(o.bpm);
     this.core.setParams(o.params);
-    this.mod = new ParamModulation(numberSpecs(effectType(o.type)), o.params);
+    this.mod = new ParamModulation(modSpecs(effectType(o.type)), o.params);
     this.runner = new EffectRunner(this.core, sampleRate, o.enabled);
     this.follower = followsTransport(this.core) ? this.core : null;
     this.clock.set(o.transport);

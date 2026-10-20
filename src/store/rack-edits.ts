@@ -9,8 +9,8 @@ import * as chain from '../model/effect-list';
 import { INSTRUMENT_DEVICE } from '../model/envelope';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import {
-  findRack, group, MACRO_MAX, macroOf, moveDevice as moveInLayout, moveRack as moveRackInLayout, ungroup, updateMacro,
-  updateRack, type DeviceKey, type Layout, type Macro, type MacroMapping, type Rack, type RackList,
+  findRack, group, MACRO_MAX, MACRO_MODES, macroMode, macroOf, macroValueFor, moveDevice as moveInLayout, moveRack as moveRackInLayout,
+  ungroup, updateMacro, updateRack, type DeviceKey, type Layout, type Macro, type MacroMapping, type MacroMode, type Rack, type RackList,
 } from '../model/rack';
 import { MidiTrack } from '../model/track';
 import { edit, type Edit } from './project-store';
@@ -105,11 +105,27 @@ export const renameRack = (owner: ChainOwner, id: DeviceId, name: string | null)
 
 // ------------------------------------------------------------------ macro
 
-/** Gira una macro (0 … 127): i parametri mappati la seguono. */
+/** Gira una macro (0 … 127): i parametri mappati la seguono. Un interruttore o un pulsante
+ *  scatta: da metà in su è acceso (127), sotto spento (0). */
 export const setMacro = (owner: ChainOwner, id: DeviceId, index: number, value: number): Edit =>
   edit('Macro', p => {
-    const v = Math.max(0, Math.min(MACRO_MAX, Number.isFinite(value) ? value : 0));
-    const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => (m.value === v ? m : { ...m, value: v }))));
+    const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
+      const v = macroValueFor(macroMode(m), value);
+      return m.value === v ? m : { ...m, value: v };
+    })));
+    return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
+  });
+
+/** Cambia il tipo di una macro. Diventando interruttore scatta al capo più vicino; un pulsante
+ *  parte spento (si accende solo mentre lo si tiene premuto). */
+export const setMacroMode = (owner: ChainOwner, id: DeviceId, index: number, mode: MacroMode): Edit =>
+  edit(`Macro: ${MACRO_MODES.find(([m]) => m === mode)?.[1] ?? mode}`, p => {
+    const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
+      if (macroMode(m) === mode) return m;
+      const value = mode === 'button' ? 0 : macroValueFor(mode, m.value);
+      const { mode: _old, ...rest } = m;
+      return mode === 'knob' ? { ...rest, value } : { ...rest, value, mode };
+    })));
     return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
   });
 
@@ -118,7 +134,8 @@ export const renameMacro = (owner: ChainOwner, id: DeviceId, index: number, name
 
 /** Mappa un parametro di un dispositivo del rack su una macro, su tutta la sua corsa. Se la
  *  macro non muoveva ancora niente prende la posizione del parametro (niente salti); altrimenti
- *  il parametro va dove la macro lo porta. Un parametro mappato su un'altra macro ci si sposta. */
+ *  il parametro va dove la macro lo porta. Un parametro mappato su un'altra macro ci si sposta.
+ *  Un interruttore (una scelta Off/On) su una manopola vuota la fa diventare un interruttore. */
 export const mapMacro = (owner: ChainOwner, id: DeviceId, index: number, device: DeviceKey, param: string): Edit =>
   edit('Mappa sulla macro', p => {
     const rack = requireRack(p, owner, id);
@@ -135,7 +152,10 @@ export const mapMacro = (owner: ChainOwner, id: DeviceId, index: number, device:
         const others = m.mappings.filter(x => x.device !== device || x.param !== param);
         if (i !== index) return others.length === m.mappings.length ? m : { ...m, mappings: others };
         const value = others.length ? m.value : paramToUnit(spec, clampParam(spec, current)) * MACRO_MAX;
-        return { ...m, value, mappings: [...others, mapping] };
+        const toggle = !others.length && !m.mode && spec.kind === 'choice' && spec.options.length === 2;
+        return toggle
+          ? { ...m, mode: 'toggle' as const, value: macroValueFor('toggle', value), mappings: [...others, mapping] }
+          : { ...m, value: macroValueFor(macroMode(m), value), mappings: [...others, mapping] };
       }),
     })));
     return applyMacro(next, owner, requireRack(next, owner, id).macros[index]);

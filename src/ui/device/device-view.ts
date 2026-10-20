@@ -601,10 +601,10 @@ export class DeviceView {
 }
 
 /** La forma della catena: cambia se cambiano proprietario, strumento, effetti, il loro ordine o
- *  tipo, i rack (dispositivi, nomi, mappature) o come si mostrano (`view`). */
+ *  tipo, i rack (dispositivi, nomi, tipi delle macro, mappature) o come si mostrano (`view`). */
 const shapeOf = (owner: ChainOwner, { track, effects, racks }: ChainSource, view: string): string =>
   [owner, track instanceof MidiTrack ? track.instrument.type : '-', ...effects.map(e => `${e.id}:${e.type}`), view,
-    JSON.stringify(racks.map(r => [r.id, r.name, r.devices, r.macros.map(m => [m.name, m.mappings.map(x => `${x.device}:${x.param}`)])]))].join('|');
+    JSON.stringify(racks.map(r => [r.id, r.name, r.devices, r.macros.map(m => [m.name, m.mode ?? 'knob', m.mappings.map(x => `${x.device}:${x.param}`)])]))].join('|');
 
 /** I nomi dei dispositivi di una catena: "Delay", "Delay 2"… */
 function deviceLabels(p: Project, owner: ChainOwner): Map<DeviceKey, string> {

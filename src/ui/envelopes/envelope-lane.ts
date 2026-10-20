@@ -5,6 +5,7 @@
  * Ogni gesto è un passo di annullamento. */
 import type { Beats, TimeSignature } from '../../core/music-time';
 import type { Clip } from '../../model/clip';
+import type { Track } from '../../model/track';
 import { envelopeValueAt, scaleOf, type EnvelopePoint, type ModScale, type ModTarget } from '../../model/envelope';
 import type { BeatAxis } from '../clip-editor/clip-geometry';
 import { paintBeatGrid } from '../clip-editor/clip-frame';
@@ -13,7 +14,7 @@ import { el } from '../dom';
 import { Surface } from '../surface';
 import { snapTo } from '../timeline/geometry';
 import { COLORS, withAlpha } from '../timeline/painters';
-import { formatModValue } from './mod-targets';
+import { choiceTarget, formatModValue } from './mod-targets';
 
 /** Ciò che la corsia usa dell'editor che la ospita. */
 export interface LaneHost {
@@ -28,6 +29,8 @@ export interface LaneHost {
   commit(label: string, fn: (c: Clip) => Clip): void;
   /** La rotella sulla corsia scorre e zooma il tempo come nell'editor. */
   wheel(e: WheelEvent, x: number): void;
+  /** La traccia della clip: per una scelta la corsia mostra l'opzione che si sente. */
+  track?(): Track | null;
 }
 
 /** La rotella sulla corsia: Ctrl zooma il tempo, altrimenti lo scorre. */
@@ -337,6 +340,7 @@ export class EnvelopeLane {
       g.lineWidth = 1.5;
       g.stroke();
       g.lineWidth = 1;
+      this.paintHeardChoice(pts, w);
       const hot = this.hover ? this.pointAt(this.hover.x, this.hover.y) : -1;
       xs.forEach((x, i) => {
         if (x < -4 || x > w + 4) return;
@@ -349,7 +353,8 @@ export class EnvelopeLane {
     // il valore sotto il puntatore (o del punto trascinato)
     if (this.hover) {
       const v = this.drag ? null : this.yToValue(this.hover.y);
-      const text = v === null ? formatModValue(target, envelopeValueAt(pts, axis.xToBeat(this.hover.x))) : formatModValue(target, v);
+      const track = this.host.track?.() ?? null;
+      const text = formatModValue(target, v ?? envelopeValueAt(pts, axis.xToBeat(this.hover.x)), track);
       g.fillStyle = '#e8eaee';
       g.fillText(text, Math.min(w - 110, this.hover.x + 10), Math.max(12, Math.min(h - 4, this.hover.y - 6)));
     }
@@ -357,5 +362,28 @@ export class EnvelopeLane {
       g.fillStyle = COLORS.playhead;
       g.fillRect(Math.round(axis.beatToX(playhead)) - 0.5, 0, 2, h);
     }
+  }
+
+  /** Per una scelta (un interruttore, un menu): a scalini, l'opzione che si sente davvero con la
+   *  curva e la manopola dov'è, all'altezza in cui quell'opzione è esatta. */
+  private paintHeardChoice(pts: readonly EnvelopePoint[], w: number): void {
+    const track = this.host.track?.(), target = this.target;
+    const choice = track && target ? choiceTarget(track, target) : null;
+    if (!choice) return;
+    const { g } = this.surface, axis = this.host.axis, last = choice.spec.options.length - 1;
+    const yOf = (option: number) => this.valueToY((last ? option / last : 0) - choice.baseUnit);
+    g.beginPath();
+    let prev = -1;
+    for (let x = 0; x <= w; x += 2) {
+      const option = choice.heard(envelopeValueAt(pts, axis.xToBeat(x)));
+      if (prev < 0) g.moveTo(x, yOf(option));
+      else if (option !== prev) g.lineTo(x, yOf(prev));
+      g.lineTo(x, yOf(option));
+      prev = option;
+    }
+    g.strokeStyle = 'rgba(255,255,255,0.75)';
+    g.setLineDash([3, 3]);
+    g.stroke();
+    g.setLineDash([]);
   }
 }

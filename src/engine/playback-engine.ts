@@ -4,7 +4,7 @@ import type { Beats } from '../core/music-time';
 import { INSTRUMENT_DEVICE, type ModTarget } from '../model/envelope';
 import { mappingSpec, mappingTravel } from '../devices/rack-params';
 import { launchQuantumBeats } from '../model/launch';
-import { findRack, macroIndex, type Rack } from '../model/rack';
+import { findRack, isSwitchMacro, MACRO_MAX, macroIndex, type Rack } from '../model/rack';
 import type { ChainOwner, Project } from '../model/project';
 import { GroupTrack, type AudioTrack, type MidiTrack, type Track } from '../model/track';
 import type { AudioGraph } from './audio-graph';
@@ -17,7 +17,7 @@ import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
 import { TransportAnchors } from './players/transport-anchors';
-import { audioParamSink, scaledSinks, TrackModulator, type ModSink } from './modulation';
+import { audioParamSink, scaledSinks, switchSink, TrackModulator, type ModSink } from './modulation';
 import { NoteActivity } from './note-activity';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
 import { Scheduler, type ScheduledSource } from './scheduler';
@@ -408,11 +408,13 @@ export class PlaybackEngine {
   private macroSink(track: TrackId, rack: Rack, index: number): ModSink | null {
     const macro = rack.macros[index], project = this.project;
     if (!macro || !project) return null;
-    return scaledSinks(macro.mappings.flatMap(m => {
+    const sink = scaledSinks(macro.mappings.flatMap(m => {
       const spec = mappingSpec(project, track, m);
       const sink = spec && this.modSink(track, { kind: 'device', device: m.device, param: m.param });
       return sink ? [{ sink, scale: mappingTravel(spec, m) }] : [];
     }));
+    // un interruttore o un pulsante scatta, come quando lo si preme
+    return isSwitchMacro(macro) ? switchSink(sink, macro.value >= MACRO_MAX / 2) : sink;
   }
 
   private *sources(): Iterable<ScheduledSource> {

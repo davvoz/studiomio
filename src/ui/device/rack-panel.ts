@@ -5,9 +5,9 @@ import type { DeviceId } from '../../core/id';
 import { formatParam, type NumberParam, type ParamSpec } from '../../devices/params';
 import { deviceTypeAt, mappingSpec } from '../../devices/rack-params';
 import type { ChainOwner, Project } from '../../model/project';
-import { MACRO_MAX, macroName, macroParam, rackName, type DeviceKey, type MacroMapping, type Rack } from '../../model/rack';
+import { MACRO_MAX, MACRO_MODES, macroMode, macroName, macroParam, rackName, type DeviceKey, type MacroMapping, type Rack } from '../../model/rack';
 import {
-  mapMacro, moveRack, removeRack, renameMacro, renameRack, setMacro, setMappingRange, ungroupRack, unmapParam,
+  mapMacro, moveRack, removeRack, renameMacro, renameRack, setMacro, setMacroMode, setMappingRange, ungroupRack, unmapParam,
 } from '../../store/rack-edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { showContextMenu, SEPARATOR } from '../context-menu';
@@ -96,10 +96,17 @@ export class RackPanel {
       kind: 'number', id: macroParam(index), min: 0, max: MACRO_MAX, default: 0, step: 1,
       label: macroName(m, index, x => mappingSpec(p, o.owner, x)?.label),
     };
-    const control = controlFor(spec, m.value, (v, final) => this.merge(setMacro(o.owner, o.rack.id, index, v), `macro-${o.rack.id}-${index}`, final));
+    const set = (v: number) => setMacro(o.owner, o.rack.id, index, v);
+    const mode = macroMode(m);
+    const control = mode === 'knob'
+      ? controlFor(spec, m.value, (v, final) => this.merge(set(v), `macro-${o.rack.id}-${index}`, final))
+      : new MacroSwitch(spec.label, m.value, mode,
+        // l'interruttore è un passo di annullamento; il pulsante tenuto premuto no (si disfa da solo)
+        on => (mode === 'toggle' ? this.apply(set(on ? MACRO_MAX : 0)) : o.store.apply(set(on ? MACRO_MAX : 0), { transient: true })));
     this.macros.push(control);
     const e = control.element;
     e.classList.add('macro');
+    e.dataset.param = spec.id;
     e.classList.toggle('used', m.mappings.length > 0);
     e.classList.toggle('chosen', o.mapping === index);
     e.title = m.mappings.length
@@ -118,6 +125,10 @@ export class RackPanel {
       showContextMenu(ev.clientX, ev.clientY, [
         { label: 'Rinomina la macro', run: () => label && renameInline(label, n => this.apply(renameMacro(o.owner, o.rack.id, index, n))) },
         { label: 'Nome automatico', disabled: m.name === null, run: () => this.apply(renameMacro(o.owner, o.rack.id, index, null)) },
+        SEPARATOR,
+        ...MACRO_MODES.map(([value, label]) => ({
+          label, checked: mode === value, run: () => this.apply(setMacroMode(o.owner, o.rack.id, index, value)),
+        })),
         SEPARATOR,
         { label: 'Mappa…', run: () => o.onMapMode(index) },
       ]);
@@ -183,5 +194,38 @@ export class RackPanel {
   private merge(edit: Edit, mergeKey: string, final: boolean): void {
     this.o.store.apply(edit, { mergeKey });
     if (final) this.o.store.endMerge();
+  }
+}
+
+/** Una macro interruttore o pulsante: un tasto che si illumina quando è acceso. L'interruttore
+ *  cambia a ogni clic; il pulsante è acceso finché lo si tiene premuto. */
+class MacroSwitch implements ParamControl {
+  readonly element = el('div', { className: 'macro-switch' });
+  private readonly key: HTMLButtonElement;
+  private on = false;
+
+  constructor(label: string, value: number, mode: 'toggle' | 'button', press: (on: boolean) => void) {
+    this.key = el<HTMLButtonElement>('button', {
+      className: `macro-key ${mode}`, title: mode === 'toggle' ? 'Clic: accendi o spegni' : 'Tieni premuto: acceso finché non lo lasci',
+    });
+    this.element.append(this.key, el('div', { className: 'knob-label', textContent: label }));
+    if (mode === 'toggle') this.key.onclick = () => press(!this.on);
+    else {
+      this.key.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        this.key.setPointerCapture(e.pointerId);
+        press(true);
+      });
+      const release = () => { if (this.on) press(false); };
+      this.key.addEventListener('pointerup', release);
+      this.key.addEventListener('pointercancel', release);
+      this.key.addEventListener('lostpointercapture', release);
+    }
+    this.set(value);
+  }
+
+  set(value: number): void {
+    this.on = value >= MACRO_MAX / 2;
+    this.key.classList.toggle('on', this.on);
   }
 }

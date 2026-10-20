@@ -7,17 +7,20 @@ import type { NumberParam } from '../../src/devices/params';
 import { paramFromUnit, paramToUnit } from '../../src/devices/params';
 import { ModTimeline, ParamModulation } from '../../src/devices/worklet/mod-timeline';
 import { PlaybackEngine } from '../../src/engine/playback-engine';
+import { switchSink, type ModSink } from '../../src/engine/modulation';
 import {
   envelopeValueAt, INSTRUMENT_DEVICE, parseTargetKey, targetKey, withEnvelope, type ModTarget,
 } from '../../src/model/envelope';
 import { MidiClip } from '../../src/model/midi-clip';
 import { Project } from '../../src/model/project';
 import { ProjectCodec } from '../../src/persistence/project-codec';
-import { addEffect, addMidiClip, addTrack, resizePlacement, setSlot, updateClip } from '../../src/store/edits';
+import { addEffect, addMidiClip, addTrack, resizePlacement, setEffectParam, setSlot, updateClip } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
-import { groupDevices, mapMacro, setMappingRange } from '../../src/store/rack-edits';
+import { groupDevices, mapMacro, setMacroMode, setMappingRange } from '../../src/store/rack-edits';
 import { macroParam } from '../../src/model/rack';
 import { paintStep, simplify } from '../../src/ui/envelopes/envelope-lane';
+import { choiceTarget, formatModValue, targetDevices } from '../../src/ui/envelopes/mod-targets';
+import { BRAKE_CURVES, TAPE_STOP } from '../../src/devices/effects/tape-stop/tape-stop';
 import { FakeEffects, FakeGraph, FakeInstruments, type FakeParam } from '../helpers/fake-audio';
 
 const VOLUME: ModTarget = { kind: 'mixer', param: 'volume' };
@@ -117,6 +120,31 @@ describe('modulazioni nell\'AudioWorklet', () => {
     expect(mod.paramsAt(2)!.cutoff).toBe(1000);
     expect(mod.paramsAt(3)).toBeNull();
   });
+
+  it('un interruttore scatta quando la curva lo sposta oltre metà strada, in su o in giù', () => {
+    const stop = paramSpec(TAPE_STOP, 'stop')!;
+    const mod = new ParamModulation(new Map([['stop', stop]]), { stop: 0 });
+    mod.paramsAt(0);
+    // una rampa da 0 a +1 in un secondo: Off fino a metà, poi On
+    mod.event('stop', 'set', 0, 0);
+    mod.event('stop', 'ramp', 1, 1);
+    expect(mod.paramsAt(0.49)?.stop ?? 0).toBe(0);
+    expect(mod.paramsAt(0.51)!.stop).toBe(1);
+    // con la manopola su On ci vuole uno spostamento in giù
+    mod.setBase({ stop: 1 });
+    mod.event('stop', 'set', -0.6, 2);
+    expect(mod.paramsAt(2)!.stop).toBe(0);
+  });
+
+  it('un menu si sposta lungo le sue opzioni', () => {
+    const curve = paramSpec(TAPE_STOP, 'curve')!;
+    expect(BRAKE_CURVES).toHaveLength(3);
+    const mod = new ParamModulation(new Map([['curve', curve]]), { curve: 0 });
+    mod.event('curve', 'set', 0.5, 1);
+    expect(mod.paramsAt(1)!.curve).toBe(1);
+    mod.event('curve', 'set', 1, 2);
+    expect(mod.paramsAt(2)!.curve).toBe(2);
+  });
 });
 
 /** 120 BPM (un battito = 0.5 s, il battito b suona a 0.05 + b/2): una traccia MIDI con una clip
@@ -212,6 +240,24 @@ describe('modulazioni nel motore', () => {
     expect(replay(delay, 0, r.at(2))).toBeCloseTo(-0.1, 4);
   });
 
+  it('una curva su una macro interruttore la fa scattare a metà strada, come premerla', () => {
+    const r = rig();
+    r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
+    const fx = r.store.project.tracks[0].effects[0].id;
+    r.store.apply(groupDevices(r.t(0), [fx]));
+    const rack = r.store.project.tracks[0].racks[0].id;
+    r.store.apply(mapMacro(r.t(0), rack, 0, fx, 'mix'));
+    r.store.apply(setMacroMode(r.t(0), rack, 0, 'toggle')); // mix 30: spenta (0 %)
+    // da 0 a +1 in 4 battiti: passa la metà a 2 battiti, e lì il mix va tutto su
+    r.editClip(c => c.withEnvelope({ kind: 'device', device: rack, param: macroParam(0) }, pts([0, 0], [4, 1])));
+    r.engine.play(0);
+    r.runUntil(3);
+    const mix = r.effects.created[0].modulation.events.filter(e => e.param === 'mix');
+    expect(replay(mix, 0, r.at(1.9))).toBe(0);
+    expect(replay(mix, 0, r.at(2.1))).toBe(1);
+    expect(mix.some(e => e.type === 'ramp')).toBe(false); // solo scalini
+  });
+
   it('una clip lanciata al posto di un\'altra: il pan torna neutro al confine; lo stop riporta tutto neutro', () => {
     const r = rig();
     const clip = (name: string) => MidiClip.empty(r.ids.next('clip'), name, '#fff', 4);
@@ -241,5 +287,82 @@ describe('modulazioni nel motore', () => {
     r.engine.play(0);
     r.runUntil(0.5);
     expect(r.instruments.created[0].modulation.events.some(e => e.param === 'p1decay' && e.value === 0.3)).toBe(true);
+  });
+});
+
+describe('modulazioni delle scelte nell\'editor', () => {
+  function withTapeStop() {
+    const r = rig();
+    r.store.apply(addEffect(r.t(0), 'tapeStop', 'Tape Stop'));
+    r.store.apply(addEffect(r.t(0), 'gate', 'Gate'));
+    const [tape, gate] = r.store.project.tracks[0].effects.map(e => e.id);
+    return { r, tape, gate, track: () => r.store.project.tracks[0] };
+  }
+
+  it('i menu degli inviluppi mostrano anche le scelte, non i parametri del solo pannello grafico', () => {
+    const { tape, gate, track } = withTapeStop();
+    const devices = targetDevices(track());
+    const params = (key: string) => devices.find(d => d.key === key)!.sections.flatMap(s => s.params.map(p => (p.target as { param: string }).param));
+    expect(params(tape)).toEqual(expect.arrayContaining(['stop', 'start', 'curve', 'time']));
+    expect(params(gate)).toContain('rate');
+    expect(params(gate).some(p => p.startsWith('step'))).toBe(false);
+  });
+
+  it('il valore sotto il puntatore dice anche l\'opzione che si sente, dalla manopola di adesso', () => {
+    const { r, tape, track } = withTapeStop();
+    const stop: ModTarget = { kind: 'device', device: tape, param: 'stop' };
+    expect(formatModValue(stop, 0.6, track())).toBe('On · +60 %');
+    expect(formatModValue(stop, 0.3, track())).toBe('Off · +30 %');
+    r.store.apply(setEffectParam(r.t(0), tape, 'stop', 1));
+    expect(formatModValue(stop, -0.6, track())).toBe('Off · −60 %');
+    expect(choiceTarget(track(), stop)!.heard(0.2)).toBe(1);
+    // i numeri e il mixer restano come prima
+    expect(formatModValue({ kind: 'device', device: tape, param: 'spin' }, 0.6, track())).toBe('+60 %');
+    expect(choiceTarget(track(), VOLUME)).toBeNull();
+  });
+
+  it('nel motore la curva di una scelta arriva all\'effetto come quella di un numero', () => {
+    const { r, tape } = withTapeStop();
+    r.editClip(c => c.withEnvelope({ kind: 'device', device: tape, param: 'stop' }, pts([0, 0], [2, 0], [2, 1])));
+    r.engine.play(0);
+    r.runUntil(2);
+    const events = r.effects.created[0].modulation.events.filter(e => e.param === 'stop');
+    expect(replay(events, 0, r.at(1))).toBe(0);
+    expect(replay(events, 0, r.at(3))).toBe(1);
+  });
+});
+
+describe('modulazione a scatto (macro interruttore e pulsante)', () => {
+  /** Registra gli eventi che arrivano a un bersaglio. */
+  const recorder = () => {
+    const events: { type: string; value: number; time: number }[] = [];
+    const sink: ModSink = {
+      set: (value, time) => events.push({ type: 'set', value, time }),
+      ramp: (value, time) => events.push({ type: 'ramp', value, time }),
+      hold: time => events.push({ type: 'hold', value: 0, time }),
+    };
+    return { events, sink };
+  };
+
+  it('spento: una rampa che passa +½ diventa uno scalino a +1 nell\'istante esatto', () => {
+    const { events, sink } = recorder();
+    const s = switchSink(sink, false);
+    s.set(0, 0);
+    s.ramp(1, 4); // passa ½ a 2 s
+    s.ramp(0.2, 7); // ripassa ½ a 4 + 3·(0.5/0.8)
+    expect(events).toEqual([
+      { type: 'set', value: 0, time: 0 },
+      { type: 'set', value: 1, time: 2 },
+      { type: 'set', value: 0, time: 4 + 3 * (0.5 / 0.8) },
+    ]);
+  });
+
+  it('acceso: scatta in giù solo sotto −½', () => {
+    const { events, sink } = recorder();
+    const s = switchSink(sink, true);
+    s.set(0.3, 0);
+    s.ramp(-0.4, 1);
+    s.ramp(-1, 2);
+    expect(events.map(e => [e.value, +e.time.toFixed(6)])).toEqual([[0, 0], [-1, +(1 + 0.1 / 0.6).toFixed(6)]]);
   });
 });

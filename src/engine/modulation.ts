@@ -50,6 +50,31 @@ export function scaledSinks(targets: readonly { readonly sink: ModSink; readonly
   };
 }
 
+/** Una modulazione che scatta: per un interruttore (una macro interruttore o pulsante), la curva
+ *  oltre metà strada lo porta all'altro capo, prima nulla. Spento (`on` falso) scatta in su a
+ *  +½ e va a +1; acceso scatta in giù a −½ e va a −1. Le rampe diventano uno scalino
+ *  all'istante esatto in cui la curva passa la metà. */
+export function switchSink(inner: ModSink, on: boolean): ModSink {
+  const threshold = on ? -0.5 : 0.5, full = on ? -1 : 1;
+  const step = (v: number) => ((on ? v <= threshold : v >= threshold) ? full : 0);
+  let last = { value: 0, time: -Infinity };
+  return {
+    set: (v, t) => {
+      inner.set(step(v), t);
+      last = { value: v, time: t };
+    },
+    ramp: (v, t) => {
+      const from = step(last.value), to = step(v);
+      if (from !== to) {
+        const at = Number.isFinite(last.time) ? last.time + ((t - last.time) * (threshold - last.value)) / (v - last.value) : t;
+        inner.set(to, at);
+      }
+      last = { value: v, time: t };
+    },
+    hold: t => inner.hold(t),
+  };
+}
+
 /** Come il valore di una curva arriva al bersaglio. `curved`: la mappa non è una retta, quindi
  *  le rampe si spezzano in tratti brevi per seguire la curva disegnata. */
 const OUTPUT: { readonly [K in ModScaleKind]: { readonly map: (v: number) => number; readonly curved: boolean } } = {

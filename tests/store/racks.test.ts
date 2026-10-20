@@ -10,7 +10,7 @@ import type { MidiTrack } from '../../src/model/track';
 import { ProjectCodec } from '../../src/persistence/project-codec';
 import { addEffect, loadEffectPreset, moveEffect, removeEffect, setInstrument } from '../../src/store/edits';
 import {
-  addEffectToRack, groupDevices, mapMacro, moveDevice, moveRack, removeRack, renameMacro, setMacro, setMappingRange,
+  addEffectToRack, groupDevices, mapMacro, moveDevice, moveRack, removeRack, renameMacro, setMacro, setMacroMode, setMappingRange,
   ungroupRack, unmapParam,
 } from '../../src/store/rack-edits';
 import { setup } from '../helpers/fixtures';
@@ -230,5 +230,82 @@ describe('rack: macro', () => {
     json.version = 7;
     delete json.tracks[0].racks;
     expect(codec.decode(json).tracks[0].racks).toEqual([]);
+  });
+});
+
+describe('rack: macro interruttore e pulsante', () => {
+  /** Un rack con il Delay `a` e il Tape Stop. */
+  function rigWithStop() {
+    const r = rig();
+    r.store.apply(addEffect(r.t, 'tapeStop', 'Tape Stop'));
+    const stop = r.track().effects[3].id;
+    r.store.apply(groupDevices(r.t, [r.c, stop]));
+    return { ...r, stop, id: r.racks()[0].id, macro: (i: number) => r.racks()[0].macros[i] };
+  }
+
+  it('un interruttore mappato su una macro vuota la fa diventare interruttore', () => {
+    const r = rigWithStop();
+    r.store.apply(mapMacro(r.t, r.id, 0, r.stop, 'stop'));
+    expect(r.macro(0)).toMatchObject({ mode: 'toggle', value: 0 });
+    // un altro parametro sulla stessa macro va al capo della sua corsa
+    r.store.apply(mapMacro(r.t, r.id, 0, r.c, 'mix'));
+    expect(r.fx(r.c).params.mix).toBe(0);
+    r.store.apply(setMacro(r.t, r.id, 0, 127));
+    expect([r.fx(r.stop).params.stop, r.fx(r.c).params.mix]).toEqual([1, 100]);
+  });
+
+  it('le scelte con più opzioni e le macro già usate restano come sono', () => {
+    const r = rigWithStop();
+    r.store.apply(mapMacro(r.t, r.id, 0, r.stop, 'curve')); // tre curve
+    expect(r.macro(0).mode).toBeUndefined();
+    r.store.apply(mapMacro(r.t, r.id, 1, r.c, 'mix'));
+    r.store.apply(mapMacro(r.t, r.id, 1, r.stop, 'stop'));
+    expect(r.macro(1).mode).toBeUndefined();
+  });
+
+  it('interruttore e pulsante scattano: acceso da metà in su, spento sotto', () => {
+    const r = rigWithStop();
+    r.store.apply(mapMacro(r.t, r.id, 0, r.c, 'mix'));
+    r.store.apply(setMacro(r.t, r.id, 0, 80));
+    r.store.apply(setMacroMode(r.t, r.id, 0, 'toggle'));
+    expect([r.macro(0).value, r.fx(r.c).params.mix]).toEqual([127, 100]);
+    expect(r.store.undoLabel).toBe('Macro: Interruttore');
+    r.store.apply(setMacro(r.t, r.id, 0, 40));
+    expect(r.macro(0).value).toBe(0);
+    r.store.apply(setMacro(r.t, r.id, 0, 64));
+    expect(r.macro(0).value).toBe(127);
+    // il pulsante parte spento; tornata manopola non ha più il tipo
+    r.store.apply(setMacroMode(r.t, r.id, 0, 'button'));
+    expect([r.macro(0).value, r.fx(r.c).params.mix]).toEqual([0, 0]);
+    r.store.apply(setMacroMode(r.t, r.id, 0, 'knob'));
+    expect('mode' in r.macro(0)).toBe(false);
+    r.store.apply(setMacro(r.t, r.id, 0, 40));
+    expect(r.macro(0).value).toBe(40);
+  });
+
+  it('il pulsante tenuto premuto non entra nella cronologia', () => {
+    const r = rigWithStop();
+    r.store.apply(mapMacro(r.t, r.id, 0, r.c, 'mix'));
+    r.store.apply(setMacroMode(r.t, r.id, 0, 'button'));
+    const label = r.store.undoLabel;
+    r.store.apply(setMacro(r.t, r.id, 0, 127), { transient: true });
+    expect(r.fx(r.c).params.mix).toBe(100);
+    r.store.apply(setMacro(r.t, r.id, 0, 0), { transient: true });
+    expect(r.store.undoLabel).toBe(label);
+    r.store.undo();
+    expect(r.macro(0).mode).toBeUndefined(); // l'ultimo passo era il cambio di tipo
+  });
+
+  it('il tipo si salva (le manopole non lo scrivono); un tipo sconosciuto è una manopola', () => {
+    const r = rigWithStop();
+    r.store.apply(mapMacro(r.t, r.id, 0, r.stop, 'stop'));
+    r.store.apply(setMacroMode(r.t, r.id, 1, 'button'));
+    const codec = new ProjectCodec();
+    const json = JSON.parse(codec.stringify(r.store.project));
+    const macros = json.tracks[0].racks[0].macros;
+    expect(macros.slice(0, 3).map((m: { mode?: string }) => m.mode)).toEqual(['toggle', 'button', undefined]);
+    expect(codec.decode(json).tracks[0].racks).toEqual(r.racks());
+    macros[0].mode = 'leva';
+    expect(codec.decode(json).tracks[0].racks[0].macros[0].mode).toBeUndefined();
   });
 });

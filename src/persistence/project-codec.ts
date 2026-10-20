@@ -4,7 +4,7 @@ import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import { DEFAULT_LAUNCH_QUANTUM } from '../model/launch';
 import { Project } from '../model/project';
-import type { DeviceKey, Macro, Rack, RackList } from '../model/rack';
+import { MACRO_MODES, type DeviceKey, type Macro, type MacroMode, type Rack, type RackList } from '../model/rack';
 import type { SampleRef } from '../model/sample';
 import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
 import { AudioTrack, BusTrack, GroupTrack, MidiTrack, type MixerSettings, type Sends, type Track, type TrackProps } from '../model/track';
@@ -271,7 +271,9 @@ const decodeEffect = (r: JsonReader): EffectSettings => ({
 const encodeRacks = (field: string, racks: RackList): JsonObject => (racks.length ? {
   [field]: racks.map(rk => ({
     id: rk.id, name: rk.name, devices: [...rk.devices],
-    macros: rk.macros.map(m => ({ name: m.name, value: m.value, mappings: m.mappings.map(x => ({ ...x })) })),
+    macros: rk.macros.map(m => ({
+      name: m.name, value: m.value, mappings: m.mappings.map(x => ({ ...x })), ...(m.mode && m.mode !== 'knob' ? { mode: m.mode } : {}),
+    })),
   })),
 } : {});
 
@@ -286,5 +288,7 @@ const decodeRack = (r: JsonReader): Rack => ({
     name: m.nullable('name', n => n.asString()),
     value: m.num('value'),
     mappings: m.array('mappings').map(x => ({ device: x.str('device') as DeviceKey, param: x.str('param'), min: x.num('min'), max: x.num('max') })),
+    // interruttori e pulsanti (le manopole non scrivono il tipo); un tipo sconosciuto è una manopola
+    ...(m.has('mode') && MACRO_MODES.some(([mode]) => mode === m.str('mode')) ? { mode: m.str('mode') as MacroMode } : {}),
   })),
 });

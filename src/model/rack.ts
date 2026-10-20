@@ -21,12 +21,34 @@ export interface MacroMapping {
   readonly max: number;
 }
 
+/** Come si suona una macro: manopola (come in Live), interruttore (un clic accende, un altro
+ *  spegne) o pulsante (acceso solo mentre lo si tiene premuto). Interruttore e pulsante valgono
+ *  solo 0 o MACRO_MAX: portano ogni parametro mappato da un capo all'altro della sua corsa. */
+export type MacroMode = 'knob' | 'toggle' | 'button';
+
+export const MACRO_MODES: readonly (readonly [mode: MacroMode, label: string])[] = [
+  ['knob', 'Manopola'], ['toggle', 'Interruttore'], ['button', 'Pulsante'],
+];
+
 export interface Macro {
   /** null: il nome viene dal primo parametro mappato, o è "Macro N". */
   readonly name: string | null;
   /** 0 … MACRO_MAX. */
   readonly value: number;
   readonly mappings: readonly MacroMapping[];
+  /** Assente: manopola. */
+  readonly mode?: MacroMode;
+}
+
+export const macroMode = (m: Macro): MacroMode => m.mode ?? 'knob';
+
+/** Interruttore o pulsante: acceso o spento, niente in mezzo. */
+export const isSwitchMacro = (m: Macro): boolean => macroMode(m) !== 'knob';
+
+/** Il valore che una macro può avere: per interruttore e pulsante, acceso (da metà in su) o spento. */
+export function macroValueFor(mode: MacroMode, value: number): number {
+  const v = Math.max(0, Math.min(MACRO_MAX, Number.isFinite(value) ? value : 0));
+  return mode === 'knob' ? v : v >= MACRO_MAX / 2 ? MACRO_MAX : 0;
 }
 
 export interface Rack {

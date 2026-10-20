@@ -21,6 +21,9 @@ export interface ApplyOptions {
   /** Modifiche consecutive con la stessa chiave (es. un trascinamento) diventano un solo
    *  passo di annullamento, finché non si chiama `endMerge()`. */
   readonly mergeKey?: string;
+  /** Un cambio che si disfa da solo (un pulsante tenuto premuto e poi lasciato): non diventa un
+   *  passo di annullamento e non toglie quelli da rifare. */
+  readonly transient?: boolean;
 }
 
 interface Step {
@@ -71,6 +74,11 @@ export class ProjectStore {
     const previous = this.current;
     const next = e.apply(previous, this.ctx);
     if (next === previous) return previous;
+    if (opts.transient) {
+      this.current = next;
+      this.events.emit('change', next, previous, 'edit');
+      return next;
+    }
     const merging = opts.mergeKey !== undefined && opts.mergeKey === this.mergeKey;
     if (!merging) {
       this.past.push({ project: previous, label: e.label });

@@ -37,6 +37,21 @@ Sections: Added, Changed, Fixed.
   during each slice you hear the previous one from its end to its start, the classic suck
   before a drop. Switch it on and off on the fly; Dry/Wet blends in the forward sound.
 
+- Rack macros can be switches and buttons, not only knobs (something Live's racks don't have):
+  right-click a macro and choose Manopola, Interruttore (a click turns it on, another off) or
+  Pulsante (on only while you hold it down). Switches and buttons move every mapped parameter
+  from one end of its range to the other, so one button can turn on Stop, close a filter and
+  raise a reverb at once. Mapping an on/off parameter such as Stop or Repeat to an empty macro
+  makes it a switch by itself. Holding a button doesn't fill the undo history, and a clip
+  modulation on a switch or button flips it at halfway, like pressing it.
+
+### Changed
+- Clip modulations can now move switches and menus too, not just knobs: draw a curve on
+  Stop, Repeat or Reverse to switch them on and off in time, or on a menu such as Divisione
+  to step through its options. A switch flips when the curve moves it past halfway; the lane
+  shows with a dashed line what is actually heard, and the value under the pointer names the
+  option ("On · +60 %").
+
 ## [0.3.12] - 2026-10-20
 
 ### Added
