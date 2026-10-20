@@ -6,11 +6,14 @@ import { COMPRESSOR } from './effects/compressor/compressor';
 import { DELAY } from './effects/delay/delay';
 import { DRIVE } from './effects/drive/drive';
 import { EQ } from './effects/eq/eq';
+import { GATE } from './effects/gate/gate';
 import { LIMITER } from './effects/limiter/limiter';
 import { MULTIBAND } from './effects/multiband/multiband';
 import { PHASER } from './effects/phaser/phaser';
 import { REVERB } from './effects/reverb/reverb';
+import { REVERSE } from './effects/reverse/reverse';
 import { STEREO } from './effects/stereo/stereo';
+import { TAPE_STOP } from './effects/tape-stop/tape-stop';
 import { ANALOG } from './instruments/analog/analog';
 import { DRUMS } from './instruments/drums/drums';
 import { NEURO } from './instruments/neuro/neuro';
@@ -23,7 +26,7 @@ import { WAVETABLE } from './instruments/wavetable/wavetable';
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS];
 
 /** Gli effetti disponibili, come sopra. */
-export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, AUTO_FILTER, PHASER, BEAT_REPEAT, DELAY, REVERB, STEREO, LIMITER];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, AUTO_FILTER, PHASER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER];
 
 const instruments = new Map(INSTRUMENT_TYPES.map(t => [t.type, t]));
 const effects = new Map(EFFECT_TYPES.map(t => [t.type, t]));

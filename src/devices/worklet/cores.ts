@@ -6,11 +6,14 @@ import { CompressorCore } from '../effects/compressor/compressor-core';
 import { DelayCore } from '../effects/delay/delay-core';
 import { DriveCore } from '../effects/drive/drive-core';
 import { EqCore } from '../effects/eq/eq-core';
+import { GateCore } from '../effects/gate/gate-core';
 import { LimiterCore } from '../effects/limiter/limiter-core';
 import { MultibandCore } from '../effects/multiband/multiband-core';
 import { PhaserCore } from '../effects/phaser/phaser-core';
 import { ReverbCore } from '../effects/reverb/reverb-core';
+import { ReverseCore } from '../effects/reverse/reverse-core';
 import { StereoCore } from '../effects/stereo/stereo-core';
+import { TapeStopCore } from '../effects/tape-stop/tape-stop-core';
 import { AnalogCore } from '../instruments/analog/analog-core';
 import { DrumCore } from '../instruments/drums/drums-core';
 import { NeuroCore } from '../instruments/neuro/neuro-core';
@@ -38,9 +41,12 @@ export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
   delay: sampleRate => new DelayCore(sampleRate),
   drive: sampleRate => new DriveCore(sampleRate),
   eq: sampleRate => new EqCore(sampleRate),
+  gate: sampleRate => new GateCore(sampleRate),
   limiter: sampleRate => new LimiterCore(sampleRate),
   multiband: sampleRate => new MultibandCore(sampleRate),
   phaser: sampleRate => new PhaserCore(sampleRate),
   reverb: sampleRate => new ReverbCore(sampleRate),
+  reverse: sampleRate => new ReverseCore(sampleRate),
   stereo: sampleRate => new StereoCore(sampleRate),
+  tapeStop: sampleRate => new TapeStopCore(sampleRate),
 };

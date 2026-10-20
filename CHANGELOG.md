@@ -22,6 +22,20 @@ Sections: Added, Changed, Fixed.
   the right channel can be offset for stereo movement. The envelope opens (or closes) the
   filter with the loudness of the sound, or of another track through the sidechain: the kick
   that opens the bass.
+- Gate, a new effect: the trance gate. A pattern of up to 32 steps, in time and locked to the
+  bar, opens and closes the sound; each step has its own level, and Gate, attack and release
+  shape how long and how softly it opens. Swing delays the odd steps, Profondità lets some of
+  the sound through when closed (a stepped tremolo). Click a step to open or close it, drag up
+  and down to set its level (across several steps too); right-click for all open, all closed,
+  invert, random and shift.
+- Tape Stop, a new effect: turn Stop on and the sound slows down to a halt like a tape or a
+  turntable switched off, over a time in beats or milliseconds and with a linear, smooth or
+  fast curve; turn it off and it comes back, at once or speeding up from standstill
+  (Ripartenza). With the transport running the brake can wait for the next grid line, so it
+  lands in time.
+- Reverse, a new effect: the sound backwards in slices locked to the bar (1/16 to 1 bar):
+  during each slice you hear the previous one from its end to its start, the classic suck
+  before a drop. Switch it on and off on the fly; Dry/Wet blends in the forward sound.
 
 ## [0.3.12] - 2026-10-20
 
