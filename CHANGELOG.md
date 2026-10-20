@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.14] - 2026-10-21
+
 ### Added
 - Computer keyboard mapping, like Live's Key Map: turn on KEY in the control bar (Ctrl+K, or
   Opzioni › Mappa la tastiera del computer), click a rack macro or a parameter of an instrument
