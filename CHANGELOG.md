@@ -6,6 +6,12 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Copy a scene to the arrangement: right-click the scene › "Copia nell'arrangement". Every track
+  gets a copy of its clip at the cursor, as long as the scene needs for its loops to come round
+  (what was underneath is trimmed, as when pasting); then the cursor moves to its end, so the
+  next scene lines up after it.
+
 ## [0.3.9] - 2026-10-20
 
 ### Added

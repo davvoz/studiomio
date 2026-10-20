@@ -11,6 +11,7 @@ import { LAUNCH_QUANTA } from '../../model/launch';
 import type { Clip } from '../../model/clip';
 import { PALETTE } from '../../model/colors';
 import { MASTER, type ChainOwner, type Scene } from '../../model/project';
+import { sceneClips } from '../../model/scene-export';
 import { BusTrack, GroupTrack, type Track } from '../../model/track';
 import { setClipColor, setTrackColor, slotRef, type ClipRef } from '../../store/clip-ref';
 import { copySlotClip, pasteToSlot, type Clipboard } from '../../store/clipboard';
@@ -47,6 +48,8 @@ export interface SessionViewDeps {
   addTrack(kind: TrackKind): void;
   /** Esporta in WAV l'audio della scena di indice `index`. */
   exportScene(index: number): void;
+  /** Copia la scena di indice `index` nell'arrangement, al cursore. */
+  sceneToArrangement(index: number): void;
   say(text: string): void;
 }
 
@@ -496,12 +499,14 @@ export class SessionView {
     cell.oncontextmenu = e => {
       e.preventDefault();
       const only = this.deps.store.project.scenes.length < 2;
+      const sceneHasClips = sceneClips(this.deps.store.project, index).length > 0;
       showContextMenu(e.clientX, e.clientY, [
         { label: 'Lancia la scena', run: () => this.deps.engine.launchScene(index) },
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameScene(scene.id, n))) },
         { colors: PALETTE, current: scene.color, pick: c => c !== scene.color && this.apply(setSceneColor(scene.id, c)) },
         { label: 'Duplica', run: () => this.apply(duplicateScene(scene.id)) },
         { label: 'Cattura e inserisci scena', shortcut: 'Ctrl+Maiusc+I', run: () => this.captureAndInsertScene(index) },
+        { label: 'Copia nell\'arrangement', disabled: !sceneHasClips, run: () => this.deps.sceneToArrangement(index) },
         { label: 'Esporta audio…', run: () => this.deps.exportScene(index) },
         { label: 'Inserisci una scena sopra', run: () => this.apply(insertScene(index)) },
         { label: 'Inserisci una scena sotto', run: () => this.apply(insertScene(index + 1)) },

@@ -33,6 +33,10 @@ export function sceneLength(clips: readonly Clip[], maxBeats: Beats): SceneLengt
   return { length, loops: true };
 }
 
+/** Le clip della scena `index`, una per traccia (i gruppi non hanno clip). */
+export const sceneClips = (project: Project, index: number): Clip[] =>
+  project.tracks.flatMap(t => (t instanceof GroupTrack ? [] : t.slots[index] ?? []));
+
 export interface SceneArrangement extends SceneLength {
   /** Il progetto con, su ogni traccia, solo la clip della scena dal battito 0. */
   readonly project: Project;
@@ -43,8 +47,7 @@ export interface SceneArrangement extends SceneLength {
  *  con lo slot vuoto tacciono, come quando si lancia la scena. Null se la scena è vuota. */
 export function sceneArrangement(project: Project, index: number, ids: IdFactory, maxBeats: Beats): SceneArrangement | null {
   const tracks = project.tracks.filter(t => !(t instanceof GroupTrack));
-  const clips = tracks.map(t => t.slots[index]).filter((c): c is Clip => !!c);
-  const len = sceneLength(clips, maxBeats);
+  const len = sceneLength(sceneClips(project, index), maxBeats);
   if (!len || !(len.length > 0)) return null;
   let out = project;
   for (const t of tracks) {

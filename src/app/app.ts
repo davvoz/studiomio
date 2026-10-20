@@ -13,10 +13,11 @@ import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../devices/registry';
 import { userPresets } from '../devices/user-presets';
 import { MASTER, type ChainOwner } from '../model/project';
 import { BusTrack } from '../model/track';
-import { sceneArrangement } from '../model/scene-export';
+import { sceneArrangement, sceneClips, sceneLength } from '../model/scene-export';
 import { foldTail } from '../engine/offline-mix';
 import { addBus, addMidiClip, addTrack, setLoopRegion, starterProject, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
+import { sceneToArrangement } from '../store/session-edits';
 import { findClip, placementRef, setClipColor, type ClipRef } from '../store/clip-ref';
 import { showContextMenu } from '../ui/context-menu';
 import { choose } from '../ui/dialog';
@@ -146,6 +147,7 @@ export class App implements Commands, TimelineActions {
       importToSlot: (files, track, slot) => this.run(() => this.session.importFilesToSlots(files, track, slot)),
       addTrack: kind => this.addTrack(kind),
       exportScene: index => this.exportScene(index),
+      sceneToArrangement: index => this.sceneToArrangement(index),
       say: t => this.say(t),
       dropItem,
     });
@@ -448,6 +450,20 @@ export class App implements Commands, TimelineActions {
       const bars = plan.length / p.signature.beatsPerBar;
       this.say(`Scena "${scene.name}" esportata: ${Number.isInteger(bars) ? `${bars} battute` : `${plan.length} battiti`}${plan.loops ? ', in loop' : ''}.`);
     });
+  }
+
+  /** La scena `index` nell'arrangement al cursore, lunga quanto serve perché i suoi loop si
+   *  richiudano. Il cursore va alla sua fine: la scena dopo si mette in fila. */
+  sceneToArrangement(index: number): void {
+    const p = this.store.project, scene = p.scenes[index];
+    const len = scene && sceneLength(sceneClips(p, index), SCENE_MAX_BARS * p.signature.beatsPerBar);
+    if (!len || !(len.length > 0)) return this.say('La scena è vuota: non c\'è niente da copiare.');
+    const at = Math.max(0, this.audio.engine.position);
+    this.store.apply(sceneToArrangement(index, at, len.length));
+    this.ui.select(addedPlacements(p, this.store.project).map(r => r.id));
+    if (!this.audio.engine.playing) this.audio.engine.seek(at + len.length);
+    const bar = (b: Beats) => +(b / p.signature.beatsPerBar + 1).toFixed(2);
+    this.say(`Scena "${scene.name}" nell'arrangement dalla battuta ${bar(at)} alla ${bar(at + len.length)}.`);
   }
 
   /** Il tratto [from, to] di un sample come file nuovo nella cartella del progetto (il crop). */

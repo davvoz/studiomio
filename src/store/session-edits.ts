@@ -1,6 +1,7 @@
 /* Modifiche della session: clip negli slot e scene. Come le altre, funzioni pure che
  * restituiscono un Edit (si annullano). Uno slot è (traccia, indice di scena). */
 import type { ClipId, SceneId, TrackId } from '../core/id';
+import type { Beats } from '../core/music-time';
 import { AudioClip } from '../model/audio-clip';
 import type { Clip, Color } from '../model/clip';
 import { paletteColor } from '../model/colors';
@@ -124,3 +125,14 @@ export const duplicateScene = (id: SceneId): Edit =>
     }
     return next;
   });
+
+/** La scena `index` sulla timeline dal battito `at`: ogni traccia vi posa una copia della clip
+ *  del suo slot, lunga `length` (i loop si ripetono, le altre clip suonano una volta). Quello
+ *  che c'era sotto viene accorciato o tolto, come incollando. */
+export const sceneToArrangement = (index: number, at: Beats, length: Beats): Edit =>
+  edit('Scena nell\'arrangement', (p, { ids }) => p.tracks.reduce((next, t) => {
+    const clip = t instanceof GroupTrack ? null : t.slots[index];
+    if (!clip) return next;
+    const placed = { id: ids.next('placement'), clip: clip.withId(ids.next('clip')), start: Math.max(0, at), length, offset: 0 };
+    return next.updatingTrack(t.id, x => x.placing(placed, ids));
+  }, p));
