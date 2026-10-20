@@ -19,7 +19,11 @@ export class EnvView {
   private env = 1;
   private hot: Handle | null = null;
 
-  constructor(private readonly values: () => Readonly<Record<string, number>>, private readonly set: (values: ParamValues, final: boolean) => void) {
+  constructor(
+    private readonly values: () => Readonly<Record<string, number>>, private readonly set: (values: ParamValues, final: boolean) => void,
+    /** Il nome dell'inviluppo `env`, scritto nell'angolo (lo usa anche il Sampler). */
+    private readonly label: (env: number) => string = env => (env === 1 ? 'Env 1 · volume' : `Env ${env}`),
+  ) {
     const c = this.canvas;
     c.addEventListener('pointerdown', e => this.press(e));
     c.addEventListener('pointermove', e => {
@@ -169,7 +173,7 @@ export class EnvView {
     g.globalAlpha = 1;
     g.font = '10px system-ui, sans-serif';
     g.fillStyle = LABEL;
-    g.fillText(this.env === 1 ? 'Env 1 · volume' : `Env ${this.env}`, 6, 12);
+    g.fillText(this.label(this.env), 6, 12);
   }
 }
 

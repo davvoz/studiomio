@@ -552,6 +552,50 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .prisma-slider-fill { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .prisma-slider-fill.negative { background: color-mix(in srgb, #4cb8ff 55%, transparent); }
 .prisma-slider-text { position: relative; text-align: center; font: 10.5px/18px ui-monospace, monospace; color: var(--text); pointer-events: none; white-space: nowrap; }
+/* Sampler: forma d'onda e inviluppi in alto, le schede sotto, l'LFO a destra */
+.device-panel.instrument-panel .device-sections:has(> .smp) { max-width: none; }
+.smp { display: flex; gap: 6px; align-items: stretch; }
+.smp [hidden] { display: none !important; }
+.smp.drop .smp-wave, .smp.browser-drop .smp-wave { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.smp-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.smp-top { display: flex; gap: 6px; }
+.smp-row { display: flex; gap: 6px; align-items: stretch; }
+.smp-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px 4px; display: flex; flex-direction: column; gap: 3px; }
+.smp-card-head { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.smp-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: auto; }
+.smp-card-head .choice { padding-top: 0; }
+.smp-card-head .choice .knob-label { display: none; }
+.smp-card-head .choice select { margin-top: 0; font-size: 11.5px; padding: 0 2px; }
+.smp-tabs { display: flex; gap: 2px; }
+.smp-tabs button.on { background: var(--accent); color: #141414; border-color: var(--accent); }
+.smp-power { color: var(--muted); padding: 0 6px; }
+.smp-power.on { background: var(--accent); color: #141414; border-color: var(--accent); }
+.smp .smp-knobs { gap: 1px; }
+.smp .knob { width: 46px; }
+.smp .knob-face { width: 30px; height: 30px; overflow: visible; }
+.smp .knob-label { font-size: 10.5px; white-space: nowrap; }
+.smp .smp-knobs .choice select { max-width: 86px; font-size: 11.5px; }
+.smp .choice-buttons button { padding: 1px 6px; font-size: 11px; line-height: 1.35; min-width: 38px; }
+.smp .smp-knobs .choice, .smp-lfo-grid .choice { padding-top: 2px; gap: 2px; }
+.smp-wave-box { flex: 1; min-width: 520px; display: flex; flex-direction: column; gap: 3px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px 6px; }
+.smp-wave-bar { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.smp-sample { font-size: 12px; padding: 1px 4px; max-width: 220px; }
+.smp-info { font-size: 11px; margin-left: auto; white-space: nowrap; }
+.smp-wave { display: block; width: 100%; flex: 1 1 0; min-height: 0; border-radius: 6px; border: 1px solid var(--line); touch-action: none; }
+.smp-env-card { width: 300px; flex: none; }
+.smp-env-card .smp-knobs { justify-content: space-between; }
+.smp-env-card .knob { width: 52px; }
+.smp-env { display: block; width: 100%; min-width: 0; height: 46px; border-radius: 6px; border: 1px solid var(--line); touch-action: none; }
+.smp-sample-card { min-width: 222px; }
+.smp-detect { padding: 0 7px; font-size: 11.5px; }
+.smp-lfo-card { flex: none; }
+.smp-lfo-grid { display: grid; grid-template-columns: repeat(3, minmax(46px, auto)); gap: 2px 1px; align-content: start; }
+.smp-lfo-grid .choice select { max-width: 76px; margin-top: 4px; }
+.smp-mode { padding-top: 0; }
+.smp-mode .knob-label { display: none; }
+.smp-mode .choice-buttons { display: flex; }
+.smp-mode .choice-buttons button { padding: 0 9px; font-size: 12px; line-height: 1.6; min-width: 0; }
+.device-panel.off .smp canvas { opacity: .6; }
 .drive-controls { display: flex; align-items: flex-start; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; }
 
 /* ---------------------------------------------------------------- browser */

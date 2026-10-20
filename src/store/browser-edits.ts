@@ -1,11 +1,13 @@
 /* Ciò che il browser carica nel progetto: uno strumento o un effetto (con il suo preset) su una
- * traccia, come in Live. Ognuna è un solo passo di annullamento. */
+ * traccia, o un sample in un Sampler, come in Live. Ognuna è un solo passo di annullamento. */
 import type { TrackId } from '../core/id';
 import type { Preset } from '../devices/device-type';
+import { SAMPLE_SLOT, SAMPLER } from '../devices/instruments/sampler/sampler';
 import { DEFAULT_INSTRUMENT, withPreset, type InstrumentSettings } from '../model/device';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
+import type { SampleRef } from '../model/sample';
 import { MidiTrack } from '../model/track';
-import { addEffect, addTrack, loadEffectPreset, setInstrument, type TrackKind } from './edits';
+import { addEffect, addTrack, loadEffectPreset, setInstrument, setInstrumentSamples, type TrackKind } from './edits';
 import { edit, type Edit, type EditContext } from './project-store';
 import { reapplyMacros } from './rack-edits';
 
@@ -32,6 +34,17 @@ export const loadInstrument = (target: TrackId | null, type: string, label: stri
     if (!track || !(p.track(track) instanceof MidiTrack)) [next, track] = newTrack(p, ctx, 'midi', target);
     next = setInstrument(track, instrumentSettings(type, preset)).apply(next, ctx);
     return preset ? reapplyMacros(next, track) : next;
+  });
+
+/** Un sample lasciato sulla catena di una traccia MIDI, come in Live: lo suona un Sampler. Se lo
+ *  strumento è già un Sampler cambia solo il sample (le impostazioni restano); altrimenti un
+ *  Sampler nuovo prende il posto dello strumento. Un passo solo. */
+export const loadSampler = (track: TrackId, sample: SampleRef): Edit =>
+  edit(`Sampler: ${sample.name}`, (p, ctx) => {
+    const t = p.track(track);
+    if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t?.name ?? track} non ha uno strumento`);
+    const next = t.instrument.type === SAMPLER.type ? p : setInstrument(track, instrumentSettings(SAMPLER.type, null)).apply(p, ctx);
+    return setInstrumentSamples(track, { [SAMPLE_SLOT]: sample }).apply(next, ctx);
   });
 
 /** Un effetto (con il preset) in fondo alla catena di `owner` (una traccia, un bus o il master);

@@ -16,6 +16,8 @@ export interface Instrument {
   /** Il tempo del progetto è cambiato (per le modulazioni a tempo dello strumento). */
   setTempo?(bpm: number): void;
   stopAll(): void;
+  /** Per chi suona un sample: dove leggono le voci adesso (frazioni del sample). */
+  playheads?(): readonly number[];
   /** Toglie le note che partirebbero da `at` (secondi del contesto) e chiude lì quelle che
    *  suonerebbero oltre. */
   cut(at: number): void;

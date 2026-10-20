@@ -11,7 +11,7 @@ import { ParamModulation } from './mod-timeline';
 import { NoteQueue } from './note-queue';
 import {
   EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
-  type InstrumentMessage, type InstrumentProcessorOptions, type MeterMessage, type MeterProcessorOptions, type MeterReply,
+  type InstrumentMessage, type InstrumentProcessorOptions, type InstrumentReply, type MeterMessage, type MeterProcessorOptions, type MeterReply,
 } from './protocol';
 
 // globali dell'AudioWorkletGlobalScope (non sono nelle librerie DOM di TypeScript)
@@ -39,10 +39,16 @@ function listen<M extends { type: string }>(port: MessagePort, handlers: Handler
 /** Motore muto per un tipo sconosciuto: il progetto si apre lo stesso. */
 const silentInstrument: InstrumentCore = { setParams() {}, noteOn() {}, noteOff() {}, silence() {}, render() {} };
 
+/** Ogni quanti secondi si mandano le posizioni delle voci (per chi le ha). */
+const PLAYHEADS_POST = 1 / 30;
+
 class InstrumentProcessor extends AudioWorkletProcessor {
   private readonly core: InstrumentCore;
   private readonly queue = new NoteQueue();
   private readonly mod: ParamModulation;
+  private readonly heads = new Float32Array(32);
+  private headCount = 0;
+  private untilHeads = 0;
   private alive = true;
 
   constructor(options: AudioWorkletNodeOptions) {
@@ -77,7 +83,20 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     const params = this.mod.paramsAt(currentFrame / sampleRate);
     if (params) this.core.setParams(params);
     this.queue.renderBlock(this.core, left, right, currentFrame);
+    if (this.core.playheads) this.postHeads(left.length);
     return this.alive;
+  }
+
+  /** Le posizioni delle voci, ogni PLAYHEADS_POST secondi mentre suonano; una volta vuote
+   *  quando smettono. */
+  private postHeads(frames: number): void {
+    if ((this.untilHeads -= frames / sampleRate) > 0) return;
+    this.untilHeads = PLAYHEADS_POST;
+    const n = this.core.playheads!(this.heads);
+    if (!n && !this.headCount) return;
+    this.headCount = n;
+    const reply: InstrumentReply = { type: 'playheads', positions: this.heads.slice(0, n) };
+    this.port.postMessage(reply);
   }
 }
 

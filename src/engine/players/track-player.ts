@@ -12,6 +12,8 @@ export interface TrackPlayer extends ScheduledSource {
   audition?(pitch: number, velocity: number, seconds: number): void;
   /** I parametri modulabili dello strumento, per chi ne ha uno. */
   instrumentModulation?(): DeviceModulation | null;
+  /** Dove leggono le voci dello strumento, se suona un sample (frazioni del sample). */
+  playheads?(): readonly number[];
   /** Taglia all'istante `at` tutto ciò che ha già programmato oltre (una clip lanciata
    *  prende il posto di quella che suonava). */
   cut(at: number): void;

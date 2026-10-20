@@ -87,6 +87,7 @@ export class App implements Commands, TimelineActions {
       store: this.store, ui: this.ui,
       importFiles: (files, track, beat) => this.session.importFiles(files, track, beat),
       importFilesToSlots: (files, track, slot) => this.session.importFilesToSlots(files, track, slot),
+      importSample: file => this.session.importSampleFile(file),
       cursor: () => this.audio.engine.position,
       openDevices: owner => this.openDevices(owner),
       say: t => this.say(t),
@@ -133,6 +134,7 @@ export class App implements Commands, TimelineActions {
       },
       importSample: file => this.session.importSampleFile(file),
       sampleAudio: id => this.audio.library.get(id),
+      playheads: track => this.audio.engine.playheads(track),
       say: t => this.say(t),
       dropItem,
     });

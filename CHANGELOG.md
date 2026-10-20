@@ -7,6 +7,18 @@ Sections: Added, Changed, Fixed.
 ## [Unreleased]
 
 ### Added
+- The Sampler, a new instrument like Live's Simpler and Sampler: it plays an audio file across
+  the keyboard. Three modes: Classic (pitched from a root note, with a forward loop with
+  crossfade or a ping-pong loop that holds the note; on release the loop keeps going or the
+  sample plays on to its end), One-Shot (start to end on every hit; Trigger ignores the note
+  length, Gate stops with it) and Slice (one slice per key from C1, cut at the transients, with
+  a sensitivity, or on a grid of 4 to 64 equal parts). Reverse, transpose, detune, key tracking,
+  poly/mono/legato with glide, the 13 filter types of Prisma, three envelopes with curves
+  (volume, filter, pitch) and an LFO to pitch, cutoff, volume and pan. The panel shows the
+  waveform: drag the start, end and loop markers (Shift for fine moves) or the whole loop, wheel
+  to zoom, click a slice to hear it, double-click to add or remove a slice; a cursor follows
+  every voice that plays. Drop an audio file or a browser sample on the panel to load it; a
+  sample dropped on a MIDI track's device chain loads into a Sampler there.
 - Copy a scene to the arrangement: right-click the scene › "Copia nell'arrangement". Every track
   gets a copy of its clip at the cursor, as long as the scene needs for its loops to come round
   (what was underneath is trimmed, as when pasting); then the cursor moves to its end, so the

@@ -56,6 +56,7 @@ class WorkletInstrument implements Instrument {
   private bpm: number;
   private pings = 0;
   private readonly waiting = new Map<number, () => void>();
+  private heads: readonly number[] = [];
 
   constructor(
     private readonly ctx: BaseAudioContext, settings: InstrumentSettings, bpm: number, ready: Promise<void> | null,
@@ -88,6 +89,10 @@ class WorkletInstrument implements Instrument {
 
   stopAll(): void {
     this.send({ type: 'stop' });
+  }
+
+  playheads(): readonly number[] {
+    return this.heads;
   }
 
   cut(at: number): void {
@@ -136,8 +141,13 @@ class WorkletInstrument implements Instrument {
       numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2], processorOptions,
     });
     this.node.port.onmessage = (e: MessageEvent<InstrumentReply>) => {
-      this.waiting.get(e.data.id)?.();
-      this.waiting.delete(e.data.id);
+      const m = e.data;
+      if (m.type === 'playheads') {
+        this.heads = Array.from(m.positions);
+        return;
+      }
+      this.waiting.get(m.id)?.();
+      this.waiting.delete(m.id);
     };
     this.node.connect(this.output);
   }

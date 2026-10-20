@@ -173,6 +173,7 @@ src/
     instruments/prisma/  il synth Prisma (tipo Serum): descrizione, fonti e destinazioni (prisma.ts), preset (prisma-presets.ts),
                        curve e forme degli LFO (shapes.ts), inviluppo (curved-env.ts), filtro (prisma-filter.ts), suono (prisma-core.ts)
     instruments/drums/   la Drum Machine: pad, modelli e kit (drums.ts), suono (drums-core.ts)
+    instruments/sampler/ il Sampler (come Simpler/Sampler di Live): modi, fette e preset (sampler.ts), suono (sampler-core.ts)
     effects/delay/     il Delay: descrizione e preset (delay.ts), suono (delay-core.ts)
     effects/phaser/    il Phaser (anche flanger): descrizione e preset (phaser.ts), suono (phaser-core.ts)
     effects/eq/        l'EQ: descrizione (eq.ts), matematica dei filtri comune a suono e disegno (eq-math.ts), suono (eq-core.ts)
@@ -575,6 +576,40 @@ sale e finisce secco. Scambiando o copiando i pad il sample va con loro.
 
 Mentre suona, i pad delle note che partono si accendono. Nel piano roll la tastiera mostra i
 nomi dei pad e le righe si adattano per farli stare tutti. Preset: Init, 808, Secco.
+
+**Sampler**: suona un file audio sulla tastiera, come Simpler e Sampler di Live. Tre **modi**,
+nell'intestazione: **Classic** (il sample all'intonazione del tasto rispetto alla **Nota base**,
+con il **loop** che tiene la nota finché la si tiene: in avanti, con il **Fade** a potenza
+costante tra la fine del loop e il pezzo prima del suo inizio, o ping-pong; lasciata la nota il
+loop continua o il sample prosegue fino alla fine), **One-Shot** (dall'inizio alla fine a ogni
+colpo: in Trigger la durata della nota non conta, in Gate si ferma con lei) e **Slice** (il sample
+a fette, una per tasto da C1 in su: ai **transienti**, trovati con la stessa analisi dei marker di
+warp e regolati dalla Sensibilità, o in una **griglia** di 4…64 parti uguali). **Reverse** lo
+rovescia: posizioni e fette valgono sul sample rovesciato. Poi l'intonazione (Transpose, Detune,
+Key track, Poli/Mono/Legato con il glide, inviluppo del pitch), il filtro con gli stessi 13 tipi
+di Prisma (con drive, key track, inviluppo e velocity sul cutoff), tre **inviluppi** con le curve
+(volume, filtro, pitch: si disegnano trascinando le maniglie, come in Prisma) e un **LFO** (sette
+forme, a tempo o in Hz, che riparte a ogni nota o libero, con l'entrata graduale) verso pitch,
+cutoff, volume e pan. L'interpolazione è di Hermite e un file a un'altra frequenza di
+campionamento resta intonato; una voce che riparte (Mono, voce rubata) sfuma invece di saltare.
+
+Il pannello mostra la **forma d'onda** con la regione che suona accesa, il loop (con il fade
+disegnato), le fette numerate e un cursore per ogni voce che suona.
+
+| Gesto | Azione |
+| --- | --- |
+| trascina S / E (in alto) · L (in basso) | Inizio e Fine · inizio e fine del loop (Maiusc: fine) |
+| trascina la fascia del loop (in basso) | sposta tutto il loop |
+| rotella · Maiusc+rotella · doppio clic sul vuoto | zoom attorno al puntatore · scorre · tutto il sample |
+| clic su una fetta (Slice) | la suona |
+| doppio clic (fette ai transienti) | aggiunge una fetta · su un marker la toglie; trascinarlo la sposta |
+| tasto destro | Carica un sample…, Togli il sample, Mostra tutto; in Slice Rileva e Togli tutte le fette |
+| file audio o sample del browser lasciato sul pannello | diventa il sample (si copia nel progetto) |
+
+Un sample del browser lasciato sulla catena di una traccia MIDI (o caricato con il doppio clic
+mentre è aperta) va in un Sampler: se lo strumento è già un Sampler cambia solo il sample.
+Preset: Init, One-shot, Loop sostenuto, Pad lento, Basso, Pluck, Al contrario, Vibrato, Lo-fi,
+Caduta, Fette in 16.
 
 **Drive**: saturazione e distorsione, da un calore leggero a un fuzz rotto, fatto per suonare
 pieno. Sei forme: Morbida (tanh, armoniche dispari), Valvola (asimmetrica: armoniche pari,

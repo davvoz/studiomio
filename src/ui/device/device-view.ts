@@ -42,6 +42,8 @@ export interface DeviceViewDeps {
   readonly importSample: (file: File) => Promise<SampleRef>;
   /** I campioni di un sample del progetto già caricato (per i pannelli che lo disegnano). */
   readonly sampleAudio?: (id: SampleId) => SampleData | undefined;
+  /** Dove leggono adesso le voci dello strumento della traccia, se suona un sample. */
+  readonly playheads?: (track: TrackId) => readonly number[];
   /** Un messaggio nella barra di stato (es. perché un raggruppamento non si può fare). */
   readonly say?: (text: string) => void;
   /** Una voce del browser lasciata sulla catena aperta. */
@@ -499,6 +501,7 @@ export class DeviceView {
       openSpectrum: () => NO_SPECTRUM,
       audition: (pitch, velocity) => audition(track.id, pitch, velocity),
       playedNotes: this.deps.playedNotes(track.id),
+      playheads: () => this.deps.playheads?.(track.id) ?? [],
       samples: {
         list: () => store.project.samples,
         load: async (slot, file, values) => {

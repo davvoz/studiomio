@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DRUMS } from '../../src/devices/instruments/drums/drums';
+import { SAMPLE_SLOT, SAMPLER } from '../../src/devices/instruments/sampler/sampler';
 import { REVERB } from '../../src/devices/effects/reverb/reverb';
 import { MASTER } from '../../src/model/project';
 import { AudioTrack, MidiTrack } from '../../src/model/track';
-import { groupTracks } from '../../src/store/edits';
-import { loadEffect, loadInstrument } from '../../src/store/browser-edits';
-import { setup } from '../helpers/fixtures';
+import { groupTracks, setInstrumentParam } from '../../src/store/edits';
+import { loadEffect, loadInstrument, loadSampler } from '../../src/store/browser-edits';
+import { sampleRef, setup } from '../helpers/fixtures';
 
 describe('caricare dal browser', () => {
   it('uno strumento con il preset va sulla traccia MIDI, in un passo solo', () => {
@@ -39,6 +40,26 @@ describe('caricare dal browser', () => {
     r.store.apply(loadInstrument(a.id, DRUMS.type, DRUMS.label, null));
     const added = r.store.project.tracks.find(t => t instanceof MidiTrack)!;
     expect(added.group).toBe(group.id);
+  });
+
+  it('un sample sulla catena di una traccia MIDI: lo suona un Sampler, in un passo solo', () => {
+    const r = setup({ midi: 1 });
+    const kick = sampleRef(r.ids, { name: 'kick' });
+    r.store.apply(loadSampler(r.track(0), kick));
+    const instrument = () => (r.store.project.tracks[0] as MidiTrack).instrument;
+    expect(instrument()).toMatchObject({ type: SAMPLER.type, params: {}, samples: { [SAMPLE_SLOT]: kick.id } });
+    expect(r.store.project.samples.map(s => s.name)).toEqual(['kick']);
+    expect(r.store.undoLabel).toBe('Sampler: kick');
+    // su un Sampler cambia solo il sample: le sue impostazioni restano
+    r.store.apply(setInstrumentParam(r.track(0), 'transpose', 7));
+    const snare = sampleRef(r.ids, { name: 'snare' });
+    r.store.apply(loadSampler(r.track(0), snare));
+    expect(instrument()).toMatchObject({ type: SAMPLER.type, params: { transpose: 7 }, samples: { [SAMPLE_SLOT]: snare.id } });
+    r.store.undo();
+    r.store.undo();
+    r.store.undo();
+    expect(instrument().type).toBe('analog');
+    expect(r.store.project.samples).toHaveLength(0);
   });
 
   it('un effetto con il preset in fondo alla catena: di una traccia, del master, o di una traccia audio nuova', () => {

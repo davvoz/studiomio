@@ -39,7 +39,11 @@ export type InstrumentMessage =
   | { readonly type: 'ping'; readonly id: number }
   | { readonly type: 'dispose' };
 
-export type InstrumentReply = { readonly type: 'pong'; readonly id: number };
+export type InstrumentReply =
+  | { readonly type: 'pong'; readonly id: number }
+  /** Dove leggono le voci (vedi InstrumentCore.playheads), circa 30 volte al secondo mentre
+   *  suonano, e una volta vuoto quando smettono. */
+  | { readonly type: 'playheads'; readonly positions: Float32Array };
 
 export const EFFECT_PROCESSOR = 'studiomio-effect';
 

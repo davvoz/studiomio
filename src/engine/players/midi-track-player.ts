@@ -54,6 +54,10 @@ export class MidiTrackPlayer implements TrackPlayer {
     return this.instrument.modulation ?? null;
   }
 
+  playheads(): readonly number[] {
+    return this.instrument.playheads?.() ?? [];
+  }
+
   audition(pitch: number, velocity: number, duration: number): void {
     this.instrument.play(pitch, velocity, this.ctx.graph.currentTime + 0.005, duration);
   }

@@ -318,6 +318,12 @@ export class PlaybackEngine {
     return this.activity.get(track)?.between(from, to) ?? [];
   }
 
+  /** Dove leggono adesso le voci dello strumento della traccia, se suona un sample (frazioni
+   *  del sample): i cursori sulla forma d'onda del Sampler. */
+  playheads(track: TrackId): readonly number[] {
+    return this.players.get(track)?.player.playheads?.() ?? [];
+  }
+
   /** Fa sentire subito una nota con lo strumento della traccia (piano roll, tastiera). */
   audition(track: TrackId, pitch: number, velocity = 100, seconds = 0.3): void {
     this.players.get(track)?.player.audition?.(pitch, velocity, seconds);
