@@ -1,6 +1,7 @@
 /* Messaggi dal thread principale ai processori di strumenti ed effetti. I tempi sono secondi
  * del contesto audio: il processore li trasforma nel campione esatto. */
 import type { SampleData } from '../dsp/core';
+import type { TransportAnchor } from './transport-clock';
 
 /** Un evento di modulazione di un parametro (vedi mod-timeline.ts): scalino, rampa, o "tieni
  *  il valore che c'è e dimentica il resto" da `time`. */
@@ -54,6 +55,8 @@ export interface EffectProcessorOptions {
   readonly bpm: number;
   /** Il rilevatore ascolta il secondo ingresso (sidechain) invece del primo. */
   readonly keyed: boolean;
+  /** Dove si trova il trasporto (null se fermo): vedi transport-clock.ts. */
+  readonly transport: TransportAnchor | null;
 }
 
 export type EffectMessage =
@@ -63,7 +66,13 @@ export type EffectMessage =
   | { readonly type: 'tempo'; readonly bpm: number }
   /** Il rilevatore passa al secondo ingresso (sidechain) o torna al primo. */
   | { readonly type: 'keyed'; readonly keyed: boolean }
+  /** Un ancoraggio nuovo del trasporto, o null: si è fermato. */
+  | { readonly type: 'transport'; readonly anchor: TransportAnchor | null }
+  /** Risponde con 'pong' quando tutti i messaggi precedenti sono stati ricevuti. */
+  | { readonly type: 'ping'; readonly id: number }
   | { readonly type: 'dispose' };
+
+export type EffectReply = { readonly type: 'pong'; readonly id: number };
 
 export const METER_PROCESSOR = 'studiomio-meter';
 

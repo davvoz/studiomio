@@ -35,8 +35,8 @@ export async function renderMix(
   const engine = new PlaybackEngine(graph, { clips, instruments: deps.instruments, effects: deps.effects }, { timer: { every: () => () => {} } });
   engine.setProject(project);
   engine.scheduleRange(from, to, 0);
-  // gli strumenti ricevono le note per messaggio: devono averle tutte prima di iniziare
-  await deps.instruments.settle(graph);
+  // strumenti ed effetti ricevono note e trasporto per messaggio: devono averli prima di iniziare
+  await Promise.all([deps.instruments.settle(graph), deps.effects.settle?.(graph)]);
   const out = await graph.startRendering();
   return Array.from({ length: out.numberOfChannels }, (_, i) => out.getChannelData(i).slice());
 }

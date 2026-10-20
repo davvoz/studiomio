@@ -1,4 +1,5 @@
 import type { DeviceId } from '../core/id';
+import type { TransportAnchor } from '../devices/worklet/transport-clock';
 import type { EffectSettings } from '../model/device';
 import type { AudioGraph, AudioNodeLike } from './audio-graph';
 import type { DeviceModulation } from './modulation';
@@ -29,6 +30,11 @@ export interface Effect {
 /** Dove nascono gli effetti: nel browser l'AudioWorklet, nei test un registratore. */
 export interface EffectHost {
   create(graph: AudioGraph, settings: EffectSettings, bpm: number): Effect;
+  /** Dove si trova il trasporto, per gli effetti che seguono la battuta: vale per tutti gli
+   *  effetti del grafo, anche quelli creati dopo. null: fermo. */
+  transport?(graph: AudioGraph, anchor: TransportAnchor | null): void;
+  /** Si risolve quando gli effetti del grafo hanno ricevuto i messaggi mandati finora. */
+  settle?(graph: AudioGraph): Promise<void>;
 }
 
 interface Slot {

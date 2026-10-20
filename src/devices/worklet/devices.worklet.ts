@@ -1,7 +1,7 @@
 /* I processori AudioWorklet dei dispositivi: uno per tutti gli strumenti, uno per tutti gli
  * effetti. Ognuno crea il motore del tipo richiesto e riceve parametri (e note) dalla porta. */
 import { paramsOf, type DeviceType } from '../device-type';
-import { isKeyed, playsSamples, type EffectCore, type InstrumentCore, type KeyedEffect } from '../dsp/core';
+import { followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type KeyedEffect, type TransportFollower } from '../dsp/core';
 import type { NumberParam } from '../params';
 import { effectType, instrumentType } from '../registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from './cores';
@@ -9,8 +9,9 @@ import { EffectRunner } from './effect-runner';
 import { METER_VALUES, MeterCore } from './meter-core';
 import { ParamModulation } from './mod-timeline';
 import { NoteQueue } from './note-queue';
+import { TransportClock } from './transport-clock';
 import {
-  EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
+  EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions, type EffectReply,
   type InstrumentMessage, type InstrumentProcessorOptions, type InstrumentReply, type MeterMessage, type MeterProcessorOptions, type MeterReply,
 } from './protocol';
 
@@ -114,6 +115,9 @@ class EffectProcessor extends AudioWorkletProcessor {
   private readonly mod: ParamModulation;
   /** Il motore, se il suo rilevatore ascolta il secondo ingresso (sidechain). */
   private keyed: KeyedEffect | null = null;
+  /** Il motore, se segue la battuta, e dove si trova il trasporto. */
+  private readonly follower: TransportFollower | null;
+  private readonly clock = new TransportClock();
   private silence = new Float32Array(128);
   private alive = true;
 
@@ -126,12 +130,16 @@ class EffectProcessor extends AudioWorkletProcessor {
     this.core.setParams(o.params);
     this.mod = new ParamModulation(numberSpecs(effectType(o.type)), o.params);
     this.runner = new EffectRunner(this.core, sampleRate, o.enabled);
+    this.follower = followsTransport(this.core) ? this.core : null;
+    this.clock.set(o.transport);
     listen<EffectMessage>(this.port, {
       params: m => this.mod.setBase(m.params),
       mod: m => this.mod.event(m.param, m.kind, m.value, m.time),
       enabled: m => this.runner.setEnabled(m.enabled),
       tempo: m => this.core.setTempo(m.bpm),
       keyed: m => this.setKeyed(m.keyed),
+      transport: m => this.clock.set(m.anchor),
+      ping: m => this.port.postMessage({ type: 'pong', id: m.id } satisfies EffectReply),
       dispose: () => { this.alive = false; },
     });
   }
@@ -152,8 +160,10 @@ class EffectProcessor extends AudioWorkletProcessor {
       const [keyL = this.silence, keyR = keyL] = inputs[1] ?? [];
       this.keyed.setKey(keyL, keyR);
     }
-    const params = this.mod.paramsAt(currentFrame / sampleRate);
+    const now = currentFrame / sampleRate;
+    const params = this.mod.paramsAt(now);
     if (params) this.core.setParams(params);
+    this.follower?.setTransport(this.clock.at(now));
     this.runner.process(inL, inR, outL, outR);
     return this.alive;
   }

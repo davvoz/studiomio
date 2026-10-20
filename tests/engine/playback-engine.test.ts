@@ -259,6 +259,20 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     expect(r.instruments.created[1].bpm).toBe(140);
   });
 
+  it('gli effetti sanno dove si trova il trasporto: a ogni partenza, giro di loop e salto; fermo allo stop', async () => {
+    const r = await rig();
+    r.store.apply(setLoopRegion({ enabled: true, start: 1, end: 3 }));
+    r.engine.play(0);
+    r.runUntil(1.6);
+    const bar = { bpm: 120, beatsPerBar: 4 };
+    // da 0 a 3 (1.5 s), poi di nuovo da 1
+    expect(r.effects.anchors).toEqual([{ time: 0.05, beat: 0, ...bar }, { time: 1.55, beat: 1, ...bar }]);
+    r.engine.seek(2);
+    expect(r.effects.anchors.at(-1)).toEqual({ time: expect.closeTo(1.65, 9), beat: 2, ...bar });
+    r.engine.stop();
+    expect(r.effects.anchors.at(-1)).toBeNull();
+  });
+
   it('metronomo: un clic per battito, accento sul primo della battuta', async () => {
     const r = await rig();
     r.engine.metronomeOn = true;

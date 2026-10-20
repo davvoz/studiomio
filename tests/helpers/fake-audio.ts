@@ -1,5 +1,6 @@
 import { effectType } from '../../src/devices/registry';
 import type { Instrument, InstrumentHost } from '../../src/engine/players/instrument';
+import type { TransportAnchor } from '../../src/devices/worklet/transport-clock';
 import type { Effect, EffectHost } from '../../src/engine/effect-chain';
 import type { Meter, MeterHost, MeterReading } from '../../src/engine/meters';
 import type { DeviceModulation, ModSink } from '../../src/engine/modulation';
@@ -181,6 +182,9 @@ export class FakeEffect implements Effect {
 
 export class FakeEffects implements EffectHost {
   readonly created: FakeEffect[] = [];
+  /** Gli ancoraggi del trasporto ricevuti (null: fermo). */
+  readonly anchors: (TransportAnchor | null)[] = [];
+  transport(_g: AudioGraph, anchor: TransportAnchor | null) { this.anchors.push(anchor); }
   create(_g: AudioGraph, s: EffectSettings, bpm: number) {
     const e = new FakeEffect(s.type, s, bpm);
     this.created.push(e);

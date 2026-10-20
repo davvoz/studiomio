@@ -74,7 +74,7 @@ describe('processore degli effetti con il sidechain', () => {
   });
 
   const make = (keyed: boolean) => new (processors.get(EFFECT_PROCESSOR)!)({
-    processorOptions: { type: 'compressor', params, enabled: true, bpm: 120, keyed },
+    processorOptions: { type: 'compressor', params, enabled: true, bpm: 120, keyed, transport: null },
   });
   /** Fa suonare il processore: `key` va nel secondo ingresso (null: niente collegato). */
   function play(p: Processor, input: Float32Array, key: Float32Array | null): Float32Array {

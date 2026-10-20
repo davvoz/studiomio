@@ -16,6 +16,7 @@ import { AudioTrackPlayer } from './players/audio-track-player';
 import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
+import { TransportAnchors } from './players/transport-anchors';
 import { audioParamSink, scaledSinks, TrackModulator, type ModSink } from './modulation';
 import { NoteActivity } from './note-activity';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
@@ -79,6 +80,8 @@ export class PlaybackEngine {
   /** Le tracce della versione precedente, per capire cosa è cambiato. */
   private previousTracks = new Map<TrackId, Track>();
   private readonly metronome: Metronome;
+  /** Dove si trova il trasporto, per gli effetti che seguono la battuta. */
+  private readonly anchors: TransportAnchors;
   private readonly scheduler: Scheduler;
   private readonly events = new Emitter<EngineEvents>();
   private readonly timer: Timer;
@@ -103,6 +106,7 @@ export class PlaybackEngine {
     this.tickMs = opts.tickMs ?? 25;
     this.mixer = new MixerGraph(graph, services.effects, graph.destination, services.meters ?? null);
     this.metronome = new Metronome(graph, this.mixer.master, () => this.project!.signature);
+    this.anchors = new TransportAnchors(a => services.effects.transport?.(graph, a), () => this.project?.signature.beatsPerBar ?? 4);
     this.scheduler = new Scheduler(() => this.sources(), opts.lookahead ?? 0.2);
   }
 
@@ -270,6 +274,7 @@ export class PlaybackEngine {
     this.mixer.sync(next);
     const changed = this.syncPlayers(next);
     if (!this.playing) return;
+    if (prev && prev.signature !== next.signature) this.anchors.resend();
     if (!prev || prev.tempo !== next.tempo || prev.loop !== next.loop) this.resume();
     else if (changed.size) this.retake(changed);
   }
@@ -288,6 +293,7 @@ export class PlaybackEngine {
     if (!this.playing) return;
     this.session.reset(this.project?.tracks ?? [], this.clock);
     this.scheduler.stop();
+    this.anchors.stopped();
     for (const m of this.modulators.values()) m.reset();
     this.cancelTimer?.();
     this.cancelTimer = null;
@@ -413,6 +419,7 @@ export class PlaybackEngine {
     for (const { player } of this.players.values()) yield player;
     yield* this.modulators.values();
     yield this.metronome;
+    yield this.anchors;
   }
 
   /** Allinea i player alle tracce; restituisce quelle in cui è cambiato qualcosa che si sente. */

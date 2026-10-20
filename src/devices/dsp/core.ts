@@ -46,6 +46,23 @@ export interface EffectCore {
 
 export type EffectFactory = (sampleRate: number) => EffectCore;
 
+/** Dove si trova il trasporto all'inizio di un blocco: il battito della timeline (in quarti) e
+ *  il tempo con cui avanza. */
+export interface TransportPosition {
+  readonly beat: number;
+  readonly bpm: number;
+  readonly beatsPerBar: number;
+}
+
+/** Un effetto che segue la battuta (es. il Beat Repeat). */
+export interface TransportFollower {
+  /** La posizione del trasporto all'inizio del prossimo `process`; null se è fermo. */
+  setTransport(position: TransportPosition | null): void;
+}
+
+export const followsTransport = (core: object): core is TransportFollower =>
+  typeof (core as Partial<TransportFollower>).setTransport === 'function';
+
 /** Un effetto con il rilevatore che può ascoltare un altro suono (sidechain). */
 export interface KeyedEffect {
   /** Il suono che il rilevatore ascolta nel prossimo `process` (stessa lunghezza dell'ingresso);

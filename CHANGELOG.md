@@ -6,6 +6,16 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Beat Repeat, a new effect like Live's Beat Repeat: in time with the song, every Interval
+  (shifted by Offset sixteenths) and with a given Chance, it captures a slice as long as the
+  Grid and repeats it for the length of the Gate, for stutters, rolls and fills. Variation
+  makes the slices randomly shorter, the repeats can drop in pitch (Pitch, and Discesa every
+  repeat), fade (Decadimento) and go through a band-pass filter, and they add to the sound
+  (Mix), replace it while they play (Inserisci) or play alone (Gate). The Repeat switch repeats
+  right away, from the next grid line, for as long as it stays on: map it to a controller
+  button to play it live. With the transport stopped only Repeat repeats.
+
 ## [0.3.12] - 2026-10-20
 
 ### Added

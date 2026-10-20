@@ -6,10 +6,11 @@ import { effectType, instrumentType } from '../devices/registry';
 import workletUrl from '../devices/worklet/devices.worklet.ts?worker&url';
 import { METER_VALUES } from '../devices/worklet/meter-core';
 import {
-  EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions,
+  EFFECT_PROCESSOR, INSTRUMENT_PROCESSOR, METER_PROCESSOR, type EffectMessage, type EffectProcessorOptions, type EffectReply,
   type InstrumentMessage, type InstrumentProcessorOptions, type InstrumentReply, type MeterMessage,
   type MeterProcessorOptions, type MeterReply, type ModMessage,
 } from '../devices/worklet/protocol';
+import type { TransportAnchor } from '../devices/worklet/transport-clock';
 import type { SampleId } from '../core/id';
 import type { SampleData } from '../devices/dsp/core';
 import type { DeviceSamples, EffectSettings, InstrumentSettings } from '../model/device';
@@ -226,12 +227,19 @@ class WorkletEffect implements Effect {
   private node: AudioWorkletNode | null = null;
   private settings: EffectSettings;
   private bpm: number;
+  private anchor: TransportAnchor | null;
   private disposed = false;
+  private pings = 0;
+  private readonly waiting = new Map<number, () => void>();
 
-  constructor(private readonly ctx: BaseAudioContext, settings: EffectSettings, bpm: number, ready: Promise<void> | null) {
+  constructor(
+    private readonly ctx: BaseAudioContext, settings: EffectSettings, bpm: number, transport: TransportAnchor | null,
+    ready: Promise<void> | null, private readonly onDispose: () => void,
+  ) {
     this.type = settings.type;
     this.settings = settings;
     this.bpm = bpm;
+    this.anchor = transport;
     this.input = ctx.createGain();
     this.post = ctx.createGain();
     this.output = ctx.createGain();
@@ -257,24 +265,46 @@ class WorkletEffect implements Effect {
     this.send({ type: 'tempo', bpm });
   }
 
+  setTransport(anchor: TransportAnchor | null): void {
+    this.anchor = anchor;
+    this.send({ type: 'transport', anchor });
+  }
+
+  /** Si risolve quando il processore ha ricevuto i messaggi mandati finora. */
+  settle(): Promise<void> {
+    if (!this.node) return Promise.resolve();
+    const id = ++this.pings;
+    return new Promise(resolve => {
+      this.waiting.set(id, resolve);
+      this.send({ type: 'ping', id });
+    });
+  }
+
   dispose(): void {
     this.disposed = true;
     this.send({ type: 'dispose' });
     this.node?.disconnect();
     for (const n of [this.input, this.post, this.output]) n.disconnect();
     this.sidechain?.disconnect();
+    for (const resolve of this.waiting.values()) resolve();
+    this.waiting.clear();
+    this.onDispose();
   }
 
   private build(): void {
     if (this.disposed) return;
     const s = this.settings;
     const processorOptions: EffectProcessorOptions = {
-      type: s.type, params: fullEffectParams(s), enabled: s.enabled, bpm: this.bpm, keyed: !!s.sidechain,
+      type: s.type, params: fullEffectParams(s), enabled: s.enabled, bpm: this.bpm, keyed: !!s.sidechain, transport: this.anchor,
     };
     this.node = new AudioWorkletNode(this.ctx, EFFECT_PROCESSOR, {
       numberOfInputs: this.sidechain ? 2 : 1, numberOfOutputs: 1, outputChannelCount: [2],
       channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions,
     });
+    this.node.port.onmessage = (e: MessageEvent<EffectReply>) => {
+      this.waiting.get(e.data.id)?.();
+      this.waiting.delete(e.data.id);
+    };
     // solo il collegamento diretto: quelli verso lo spettro restano
     this.input.disconnect(this.post);
     this.input.connect(this.node);
@@ -287,12 +317,42 @@ class WorkletEffect implements Effect {
   }
 }
 
+/** Gli effetti vivi di un contesto e dove si trova il suo trasporto. */
+interface EffectContext {
+  readonly effects: Set<WorkletEffect>;
+  transport: TransportAnchor | null;
+}
+
 /** Effetti AudioWorklet, per qualunque contesto. */
 export class WorkletEffects implements EffectHost {
+  private readonly contexts = new WeakMap<BaseAudioContext, EffectContext>();
+
   constructor(private readonly worklet: DeviceWorklet) {}
 
   create(graph: AudioGraph, settings: EffectSettings, bpm: number): Effect {
-    return new WorkletEffect(contextOf(graph), settings, bpm, this.worklet.pending(graph));
+    const c = this.context(graph);
+    const effect: WorkletEffect = new WorkletEffect(
+      contextOf(graph), settings, bpm, c.transport, this.worklet.pending(graph), () => c.effects.delete(effect),
+    );
+    c.effects.add(effect);
+    return effect;
+  }
+
+  transport(graph: AudioGraph, anchor: TransportAnchor | null): void {
+    const c = this.context(graph);
+    c.transport = anchor;
+    for (const e of c.effects) e.setTransport(anchor);
+  }
+
+  async settle(graph: AudioGraph): Promise<void> {
+    await Promise.all([...this.context(graph).effects].map(e => e.settle()));
+  }
+
+  private context(graph: AudioGraph): EffectContext {
+    const ctx = contextOf(graph);
+    let c = this.contexts.get(ctx);
+    if (!c) this.contexts.set(ctx, (c = { effects: new Set(), transport: null }));
+    return c;
   }
 }
 
