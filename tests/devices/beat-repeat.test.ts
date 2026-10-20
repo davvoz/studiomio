@@ -142,6 +142,27 @@ describe('Beat Repeat: il pulsante Repeat', () => {
     // al terzo quarto (48000) non riparte: continua lo stesso pezzo
     expect(l[TRIGGER + 3000]).toBe(ramp(SLICE + 3000));
   });
+
+  it('Solo Repeat: spento il pulsante il suono passa com\'è, anche in Gate; acceso ripete', () => {
+    for (const mode of [REPEAT_MODE.mix, REPEAT_MODE.insert, REPEAT_MODE.gate]) {
+      const [l] = play({ mode, only: 1 }, { frames: 2 * BAR });
+      expect(l.every((y, n) => y === ramp(n))).toBe(true);
+    }
+    const on = 10 * BLOCK, off = 40000 - (40000 % BLOCK);
+    const [l] = play({ mode: REPEAT_MODE.gate, only: 1 }, { frames: BAR, changes: [[on, { repeat: 1 }], [off, { repeat: 0 }]] });
+    expect(l[5000]).toBe(ramp(5000));
+    expect(l[SLICE + 100]).toBe(ramp(SLICE + 100)); // il pezzo passa dal vivo, come in Inserisci
+    expect(l[SLICE + SLICE + 100]).toBe(ramp(SLICE + 100));
+    expect(l[off + 500]).toBe(ramp(off + 500));
+    expect(l[TRIGGER + SLICE + 100]).toBe(ramp(TRIGGER + SLICE + 100)); // al terzo quarto niente
+  });
+
+  it('acceso Solo Repeat mentre ripete a tempo, la ripetizione smette', () => {
+    const at = TRIGGER + 2 * SLICE + 64;
+    const [l] = play({ ...INSERT, only: 0 }, { frames: BAR, changes: [[at, { only: 1 }]] });
+    expect(l[TRIGGER + SLICE + 100]).toBe(ramp(TRIGGER + 100));
+    expect(l[at + 1000]).toBe(ramp(at + 1000));
+  });
 });
 
 describe('Beat Repeat: le ripetizioni', () => {

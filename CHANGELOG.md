@@ -16,6 +16,10 @@ Sections: Added, Changed, Fixed.
   project and every press can be undone (except holding a button). Keys that are already
   shortcuts (Space, Tab, Enter, Canc, +, −, Esc, arrows) can't be mapped; a mapped key takes
   over the piano roll's Q, B and F.
+- Beat Repeat: the Solo Repeat switch turns off the repeats in time, so the effect repeats only
+  while Repeat is on; with Repeat off the sound passes untouched, as if the effect were off,
+  even in Gate mode (which then lets the sound through like Inserisci). Map Repeat to a key or
+  to a rack's button macro to play it live.
 
 ## [0.3.13] - 2026-10-21
 

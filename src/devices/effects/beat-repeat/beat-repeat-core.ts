@@ -3,8 +3,9 @@
  * sente passare dal vivo e da lì lo rilegge, un giro dopo l'altro, fino alla fine del Gate.
  * Un giro sfuma nel successivo in pochi millisecondi (niente click), e così l'inizio e la fine;
  * una ripetizione nuova lascia sfumare quella vecchia, per questo le voci sono due.
- * Gli attacchi cadono sulla battuta del trasporto, al campione. Gira nell'AudioWorklet; qui
- * niente Web Audio. */
+ * Gli attacchi cadono sulla battuta del trasporto, al campione. Con "Solo Repeat" niente
+ * ripetizioni a tempo, e in Gate il suono passa come in Inserisci: spento il pulsante, l'effetto
+ * non si sente. Gira nell'AudioWorklet; qui niente Web Audio. */
 import { MIN_BPM } from '../../../core/music-time';
 import { dbToGain, type EffectCore, type TransportFollower, type TransportPosition } from '../../dsp/core';
 import { Noise } from '../../dsp/noise';
@@ -177,6 +178,7 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
   private chance = 1;
   private gateBeats = 2;
   private repeat = false;
+  private only = false;
   private gridBeats = 0.25;
   private variation = 0;
   private filter = false;
@@ -203,6 +205,10 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
     this.chance = v('chance', 100) / 100;
     this.gateBeats = v('gate', 8) / 4;
     this.repeat = v('repeat', 0) === 1;
+    const only = v('only', 0) === 1;
+    // acceso "Solo Repeat", la ripetizione a tempo che suonava smette
+    if (only && !this.only && this.manual === MANUAL.off) this.voices[this.current].release();
+    this.only = only;
     this.gridBeats = (GRIDS[v('grid', 3)] ?? GRIDS[3])[1];
     this.variation = v('variation', 0) / 100;
     this.mode = v('mode', REPEAT_MODE.mix);
@@ -248,7 +254,7 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
 
     const { voices, wet, shape, ringL, ringR } = this;
     const mask = ringL.length - 1;
-    const auto = this.manual === MANUAL.off;
+    const auto = this.manual === MANUAL.off && !this.only;
     for (let i = 0; i < n; i++) {
       const xL = inL[i], xR = inR[i];
       if (pos) {
@@ -272,7 +278,7 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
         yL = this.lp[0].process(this.hp[0].process(yL));
         yR = this.lp[1].process(this.hp[1].process(yR));
       }
-      const d = this.mode === REPEAT_MODE.mix ? 1 : this.mode === REPEAT_MODE.insert ? dry : 0;
+      const d = this.mode === REPEAT_MODE.mix ? 1 : this.mode === REPEAT_MODE.insert || this.only ? dry : 0;
       outL[i] = xL * d + yL;
       outR[i] = xR * d + yR;
       ringL[this.ringPos] = xL;

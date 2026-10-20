@@ -4,8 +4,9 @@
  * calare di volume a ogni giro e passare per un filtro passa-banda; si sommano al suono (Mix),
  * lo sostituiscono mentre suonano (Inserisci) o restano sole (Gate). "Repeat" acceso ripete
  * da subito (sul prossimo pezzo di griglia) finché non si spegne: il pulsante da suonare dal
- * vivo. Segue la battuta del trasporto; da fermo ripete solo con Repeat. Qui c'è solo la
- * descrizione; il suono è in beat-repeat-core.ts. */
+ * vivo. Con "Solo Repeat" ripete soltanto col pulsante: spento, il suono passa com'è, come
+ * se l'effetto fosse spento. Segue la battuta del trasporto; da fermo ripete solo con Repeat.
+ * Qui c'è solo la descrizione; il suono è in beat-repeat-core.ts. */
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam } from '../../params';
 
@@ -36,6 +37,9 @@ const choice = (id: string, label: string, options: readonly string[], def = 0, 
 const num = (id: string, label: string, min: number, max: number, def: number, unit: string, extra: Partial<NumberParam> = {}): NumberParam =>
   ({ kind: 'number', id, label, min, max, default: def, unit, ...extra });
 
+/** I parametri delle ripetizioni a tempo, che con "Solo Repeat" non servono. */
+const AUTO = { when: { param: 'only', is: 0 } } as const;
+
 const index = (list: readonly (readonly [string, ...unknown[]])[], label: string) => list.findIndex(([l]) => l === label);
 
 export const BEAT_REPEAT: DeviceType = {
@@ -45,11 +49,12 @@ export const BEAT_REPEAT: DeviceType = {
     {
       label: 'Quando',
       params: [
-        choice('interval', 'Intervallo', INTERVALS.map(([l]) => l), index(INTERVALS, '1 battuta')),
-        num('offset', 'Offset', 0, 15, 8, '/16', { step: 1 }),
-        num('chance', 'Probabilità', 0, 100, 100, '%', { step: 1 }),
-        num('gate', 'Gate', 1, 64, 8, '/16', { step: 1 }),
+        choice('interval', 'Intervallo', INTERVALS.map(([l]) => l), index(INTERVALS, '1 battuta'), AUTO),
+        num('offset', 'Offset', 0, 15, 8, '/16', { step: 1, ...AUTO }),
+        num('chance', 'Probabilità', 0, 100, 100, '%', { step: 1, ...AUTO }),
+        num('gate', 'Gate', 1, 64, 8, '/16', { step: 1, ...AUTO }),
         choice('repeat', 'Repeat', OFF_ON),
+        choice('only', 'Solo Repeat', OFF_ON),
       ],
     },
     {
