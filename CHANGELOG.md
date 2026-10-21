@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.19] - 2026-10-21
+
 ### Changed
 - Sampler: every zone can now have its own pitch (Transpose, Detune, Key track, Env pitch),
   filter, all three envelopes and LFO, besides loop and Reverse. As before, a zone follows zone 1

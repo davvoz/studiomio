@@ -2,7 +2,7 @@
   "name": "studiomio",
   "productName": "studiomio",
   "private": true,
-  "version": "0.3.18",
+  "version": "0.3.19",
   "description": "DAW con warp in stile Ableton Live",
   "author": "David <ing.casaert@gmail.com>",
   "type": "module",
