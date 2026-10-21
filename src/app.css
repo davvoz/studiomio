@@ -162,7 +162,6 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #1f2328; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px 8px; transition: border-color .12s; }
 .device-panel:hover { border-color: #3a4048; }
 .device-panel.controlled { border-color: #4c88ff; box-shadow: 0 0 0 1px #4c88ff; }
-.device-panel.instrument-panel .device-sections { max-width: 1100px; }
 .device-panel.off .device-sections, .device-panel.off .device-name { opacity: .35; }
 .device-panel.off .device-panel-head { background: #212429; }
 /* compresso: una striscia verticale con il nome, come in Live */
@@ -187,9 +186,8 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-panel-head .mini { padding: 0 7px; font-size: 12px; line-height: 1.6; }
 .device-panel-head .power { color: var(--muted); }
 .device-panel:not(.off) .power { background: var(--accent); color: #141414; border-color: var(--accent); }
+/* le schede vanno a capo nella larghezza che DevicePanel.fitRows calcola, per stare nell'altezza */
 .device-sections { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; }
-.device-sections.grid { display: grid; grid-auto-flow: column; grid-template-rows: auto auto; justify-content: start; align-items: start; }
-.device-panel.instrument-panel .device-sections.grid { max-width: none; }
 .device-section { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 4px 9px 5px; flex: none; }
 .device-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 3px; }
 .device-controls { display: flex; gap: 6px; align-items: flex-start; }
@@ -471,7 +469,6 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 
 /* Drum Machine: griglia dei pad e controlli del pad scelto */
 /* l'editor del pad non va a capo: il pannello si allarga quanto serve invece di farlo uscire */
-.device-panel.instrument-panel .device-sections:has(> .drum-display) { max-width: none; }
 .drum-display { display: flex; gap: 10px; align-items: flex-start; }
 .drum-pads { display: grid; grid-template-columns: repeat(4, 76px); grid-auto-rows: 52px; gap: 4px; flex: none; }
 .drum-pad {
@@ -507,12 +504,10 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drive-shape.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); color: var(--text); border-color: var(--accent); }
 .drive-shape-icon { width: 26px; height: 18px; display: block; }
 /* Wavetable: le sezioni su due righe come un synth grande, gli oscillatori alti quanto due */
-.device-panel.instrument-panel .device-sections:has(> .wt-display) { max-width: none; }
 .wt-display { display: grid; grid-auto-flow: column; grid-template-rows: auto auto; justify-content: start; align-items: start; gap: 6px; }
 .wt-osc { grid-row: span 2; align-self: stretch; display: flex; flex-direction: column; }
 .wt-view { display: block; width: 100%; min-width: 300px; flex: 1 1 0; height: 0; min-height: 80px; margin: 2px 0 5px; border-radius: 6px; border: 1px solid var(--line); cursor: ns-resize; touch-action: none; }
 /* Prisma: pagine, fonti da trascinare, schede, anelli delle modulazioni, matrice */
-.device-panel.instrument-panel .device-sections:has(> .prisma) { max-width: none; }
 .prisma { display: flex; flex-direction: column; gap: 5px; }
 .prisma [hidden] { display: none !important; }
 .prisma-tabs, .prisma-subtabs { display: flex; gap: 2px; }
@@ -577,7 +572,6 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .prisma-slider-fill.negative { background: color-mix(in srgb, #4cb8ff 55%, transparent); }
 .prisma-slider-text { position: relative; text-align: center; font: 10.5px/18px ui-monospace, monospace; color: var(--text); pointer-events: none; white-space: nowrap; }
 /* Sampler: forma d'onda e inviluppi in alto, le schede sotto, l'LFO a destra */
-.device-panel.instrument-panel .device-sections:has(> .smp) { max-width: none; }
 .smp { display: flex; gap: 6px; align-items: stretch; }
 .smp [hidden] { display: none !important; }
 .smp.drop .smp-wave, .smp.browser-drop .smp-wave, .smp.drop .smp-zones, .smp.browser-drop .smp-zones { outline: 2px dashed var(--accent); outline-offset: -2px; }

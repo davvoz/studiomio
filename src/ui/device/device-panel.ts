@@ -32,9 +32,29 @@ export interface DevicePanelOptions {
   readonly onFold?: (folded: boolean) => void;
 }
 
-/** Oltre queste sezioni le schede vanno su due righe che scorrono in orizzontale (come la
- *  catena): un synth grande resta tutto visibile nell'altezza del pannello. */
-const GRID_SECTIONS = 6;
+/** Lo spazio tra le schede (come `gap` di .device-sections). */
+const SECTION_GAP = 6;
+
+/** La larghezza più stretta in cui delle schede larghe `widths`, messe in fila e a capo quando
+ *  non ci stanno più (come fa flex-wrap), occupano al più `rows` righe. */
+export function narrowestWidth(widths: readonly number[], gap: number, rows: number): number {
+  const rowsAt = (width: number) => {
+    let n = 1, x = 0;
+    for (const w of widths) {
+      if (x > 0 && x + gap + w > width) { n++; x = w; } else x += (x > 0 ? gap : 0) + w;
+    }
+    return n;
+  };
+  // la più stretta è sempre larga quanto una riga: una fila di schede di seguito (sono poche)
+  const widest = Math.max(0, ...widths);
+  let best = Infinity;
+  for (let i = 0; i < widths.length; i++) {
+    for (let j = i, row = widths[i]; j < widths.length; row += gap + widths[++j]) {
+      if (row >= widest && row < best && rowsAt(row) <= rows) best = row;
+    }
+  }
+  return Number.isFinite(best) ? Math.ceil(best) : 0;
+}
 
 /** Un dispositivo (strumento o effetto) nella catena: intestazione con nome e preset, poi una
  *  scheda per sezione e un controllo per parametro, tutto dalla descrizione del tipo; oppure
@@ -45,6 +65,7 @@ export class DevicePanel {
   private readonly presets = el<HTMLSelectElement>('select', { className: 'preset', title: 'Preset' });
   private readonly fold = el<HTMLButtonElement>('button', { className: 'mini fold' });
   private readonly save = el<HTMLButtonElement>('button', { className: 'mini save-preset', textContent: '★', title: 'Salva come preset (clic destro sull\'intestazione: aggiorna, elimina)' });
+  private readonly sections = el('div', { className: 'device-sections' });
   private settings: DeviceSettings;
 
   constructor(private readonly options: DevicePanelOptions) {
@@ -81,8 +102,8 @@ export class DevicePanel {
       // doppio clic sul fondo dell'intestazione, come in Live
       head.ondblclick = e => { if (e.target === head) toggle(); };
     }
-    this.element.append(head,
-      el('div', { className: !options.display && sections.length > GRID_SECTIONS ? 'device-sections grid' : 'device-sections' }, ...sections));
+    this.sections.append(...sections);
+    this.element.append(head, this.sections);
     this.setFolded(!!options.folded);
     this.update(settings);
   }
@@ -96,6 +117,24 @@ export class DevicePanel {
     this.element.classList.toggle('folded', folded);
     this.fold.textContent = folded ? '▸' : '▾';
     this.fold.title = folded ? 'Mostra il dispositivo' : 'Comprimi il dispositivo';
+    if (!folded) this.fitRows();
+  }
+
+  /** Le schede vanno a capo per stare nell'altezza del pannello: tante righe quante ne stanno,
+   *  nella larghezza più stretta che le tiene (nel loro ordine, da sinistra a destra e poi
+   *  sotto), invece di una riga lunga con il vuoto sotto. Da rifare quando cambia l'altezza;
+   *  non fa niente finché il pannello non si vede, né con un pannello grafico. */
+  fitRows(): void {
+    if (this.options.display || this.folded) return;
+    const box = this.sections, cards = [...box.children] as HTMLElement[];
+    box.style.maxWidth = '';
+    const sizes = cards.map(c => c.getBoundingClientRect());
+    if (!sizes.length || sizes.some(r => !r.width)) return;
+    const tallest = Math.max(...sizes.map(r => r.height));
+    const room = this.element.getBoundingClientRect().bottom - box.getBoundingClientRect().top
+      - parseFloat(getComputedStyle(this.element).paddingBottom);
+    const rows = Math.max(1, Math.floor((room + SECTION_GAP) / (tallest + SECTION_GAP)));
+    if (rows > 1) box.style.maxWidth = `${narrowestWidth(sizes.map(r => r.width), SECTION_GAP, rows)}px`;
   }
 
   /** Valori, parametri attivi, preset e acceso/spento dalle impostazioni attuali. */

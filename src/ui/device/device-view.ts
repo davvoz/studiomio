@@ -123,6 +123,8 @@ export class DeviceView {
         else this.groupSelection();
       }
     });
+    // le schede dei pannelli vanno a capo nell'altezza della catena: si rifà quando cambia
+    new ResizeObserver(() => this.fitPanels()).observe(this.chain);
     deps.store.onChange(() => this.sync());
     deps.ui?.onChange(() => this.showKeys());
     const dropItem = deps.dropItem;
@@ -282,6 +284,7 @@ export class DeviceView {
       : this.rackElement(owner, item.rack, labels, panelOf, dir => layoutMoveRack(order, racks, item.rack.id, dir).order !== order)));
     if (!effects.length) items.push(el('div', { className: 'device-empty muted', textContent: 'Nessun effetto: "+ Effetto" ne aggiunge uno.' }));
     this.chain.replaceChildren(...items);
+    this.fitPanels();
     this.chain.scrollLeft = scroll;
     this.showControlled();
     this.showSelection();
@@ -292,6 +295,10 @@ export class DeviceView {
     const added = sameOwner && known.size ? effects.filter(e => !known.has(e.id)).at(-1) : undefined;
     const panel = added && this.panels.get(added.id);
     if (panel) this.reveal(panel.element);
+  }
+
+  private fitPanels(): void {
+    for (const panel of this.panels.values()) panel.fitRows();
   }
 
   private update({ track, effects, racks }: ChainSource): void {

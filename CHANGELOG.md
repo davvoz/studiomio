@@ -6,6 +6,12 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- Devices in the chain use the whole height of the panel: their sections wrap onto as many rows
+  as fit, in reading order, so an effect like Beat Repeat is about half as wide instead of one
+  long row with empty space below. Big instruments (Analog, Neuro) read left to right and then
+  down, instead of column by column.
+
 ## [0.3.15] - 2026-10-21
 
 ### Added
