@@ -96,6 +96,16 @@ describe('ProjectCodec', () => {
     expect(p.tracks[0]).not.toHaveProperty('instrument');
   });
 
+  it('un Sampler della versione 11 si apre con il Tune delle zone nel loro Transpose', () => {
+    const { store, sampleId } = setup({ midi: 1, sample: true });
+    const json = JSON.parse(codec.stringify(store.project));
+    json.version = 11;
+    json.tracks[0].instrument = { type: 'sampler', preset: null, params: { z2tune: 5, z2lo: 40, z2hi: 40 }, samples: { sample: sampleId, z2: sampleId } };
+    const params = (codec.decode(json).tracks[0] as MidiTrack).instrument.params;
+    expect(params).toMatchObject({ z2own: 1, z2transpose: 5, z2lo: 40 });
+    expect(params).not.toHaveProperty('z2tune');
+  });
+
   it('le clip salvate prima del reverse si aprono dritte', () => {
     const json = JSON.parse(codec.stringify(richProject()));
     delete json.tracks[0].arrangement[0].clip.reversed;

@@ -6,6 +6,21 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- Sampler: every zone can now have its own pitch (Transpose, Detune, Key track, Env pitch),
+  filter, all three envelopes and LFO, besides loop and Reverse. As before, a zone follows zone 1
+  until you change one of these with the zone selected. The card titles say which zone you are
+  editing. Only the mode, the voice (Poli/Mono/Legato with Glide: one voice serves every zone)
+  and the output stay shared; they are in the new "Voce e uscita" card. Existing projects sound
+  as before.
+- Sampler: the Zone card no longer has Tune and Fine, which did the same as the zone's Transpose
+  and Detune. Projects and saved racks convert them when they open, so every zone keeps its pitch.
+  Projects saved from this version on can't be opened by older versions.
+
+### Fixed
+- Sampler: the Zone card shows the zone's Pan again, and the "Voce e uscita" card shows the
+  Sampler's own Pan (before, the zone's Pan ended up there and the overall Pan was missing).
+
 ## [0.3.18] - 2026-10-21
 
 ### Added

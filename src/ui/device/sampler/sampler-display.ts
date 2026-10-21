@@ -1,9 +1,9 @@
 /* Il pannello del Sampler. In alto, nella scheda Sample, la forma d'onda della zona scelta (con
  * il sample da scegliere o caricare); nella scheda Zone l'editor delle zone sulla tastiera. A
  * destra gli inviluppi disegnati; sotto le schede del sample (con i controlli del modo scelto) o
- * della zona, dell'intonazione, del filtro e dell'uscita; a destra l'LFO. Posizioni, nota base,
- * loop, reverse e inviluppo del volume sono della zona scelta: i loro controlli hanno i nomi dei
- * parametri della prima zona e scrivono in quelli della zona (che, toccati, diventano suoi). Il modo (Classic,
+ * della zona, dell'intonazione, del filtro, della voce e dell'uscita; a destra l'LFO. Tutto,
+ * tranne il modo, la voce e l'uscita, è della zona scelta: i controlli hanno i nomi dei parametri
+ * della prima zona e scrivono in quelli della zona (il cui suono, toccato, diventa suo). Il modo (Classic,
  * One-Shot, Slice) sta nell'intestazione del dispositivo. Un file audio dal disco o un sample dal
  * browser lasciato sul pannello diventa il sample della zona scelta; più file insieme, o lasciati
  * sull'editor delle zone, diventano zone nuove (dal tasto sotto il puntatore). */
@@ -37,8 +37,7 @@ const SAMPLE_CONTROLS: Readonly<Record<number, readonly string[]>> = {
 };
 const SAMPLE_KEYS = new Set(Object.values(SAMPLE_CONTROLS).flat());
 /** I controlli della scheda della zona: cambiando zona si rifanno. */
-const ZONE_CONTROLS: readonly ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'tune', 'fine', 'gain', 'pan'];
-const PER_ZONE = new Set<string>(ZONE_CONTROLS);
+const ZONE_CONTROLS: readonly ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'gain', 'pan'];
 /** Le chiavi che hanno i nomi dei parametri della prima zona e valgono per la zona scelta. */
 const OF_ZONE = FIRST_ZONE_KEYS as ReadonlySet<string>;
 const SOUND = new Set<string>(SOUND_KEYS);
@@ -63,7 +62,9 @@ export class SamplerDisplay implements DeviceDisplay {
   /** I controlli per id del parametro, con la chiave che li ordina (per le zone: "start", "lo"…). */
   private readonly controls = new Map<string, { control: ParamControl; spec: ParamSpec; key: string }>();
   /** I posti dei controlli che valgono per la zona scelta. */
-  private readonly slots = new Map<string, HTMLElement>();
+  private readonly slots = new Map<ZoneKey, HTMLElement>();
+  /** Gli id dei controlli della scheda della zona di adesso (z2lo…), da togliere cambiando zona. */
+  private zoneControls: string[] = [];
   private readonly wave: WaveView;
   private readonly zoneView: ZoneView;
   private readonly envView: EnvView;
@@ -80,8 +81,8 @@ export class SamplerDisplay implements DeviceDisplay {
   private readonly sampleCard: HTMLElement;
   private readonly zoneCard: HTMLElement;
   private readonly zoneTitle = el('span', { className: 'smp-card-title' });
-  private readonly sampleTitle = el('span', { className: 'smp-card-title', textContent: 'Sample' });
-  private readonly envTitle = el('span', { className: 'smp-card-title', textContent: 'Inviluppi' });
+  /** I titoli delle schede che valgono per la zona scelta, con il loro nome ("Filtro" → "Filtro · zona 2"). */
+  private readonly soundTitles: [HTMLElement, string][] = [];
   private values: Record<string, number>;
   private params: ParamValues | null = null;
   private settings: DeviceSettings;
@@ -147,23 +148,25 @@ export class SamplerDisplay implements DeviceDisplay {
       this.wave.canvas, this.zoneView.canvas);
 
     const envCard = el('div', { className: 'smp-card smp-env-card' },
-      el('div', { className: 'smp-card-head' }, this.envTitle, el('div', { className: 'smp-tabs' }, ...ENV_NAMES.map((name, i) => {
+      el('div', { className: 'smp-card-head' }, this.title('Inviluppi'), el('div', { className: 'smp-tabs' }, ...ENV_NAMES.map((name, i) => {
         const b = el<HTMLButtonElement>('button', { className: 'mini', textContent: name, onclick: () => this.showEnv(i + 1) });
         this.envTabs.push(b);
         return b;
       }))), el('div', { className: 'smp-env-body' }, el('div', { className: 'smp-env-box' }, this.envView.canvas), this.envKnobs));
 
     this.sampleCard = el('div', { className: 'smp-card' },
-      el('div', { className: 'smp-card-head' }, this.sampleTitle, this.detect), this.row(...SAMPLE_ORDER));
+      el('div', { className: 'smp-card-head' }, this.title('Sample'), this.detect), this.row(...SAMPLE_ORDER));
     this.sampleCard.classList.add('smp-sample-card');
     const remove = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Togli', title: 'Toglie la zona e il suo sample', onclick: () => this.removeZone(this.zone) });
     this.zoneCard = el('div', { className: 'smp-card smp-zone-card' },
-      el('div', { className: 'smp-card-head' }, this.zoneTitle, remove), this.row(...ZONE_CONTROLS));
-    const pitchCard = this.card('Intonazione', [], this.row('root', 'transpose', 'detune', 'keyTrack', 'voiceMode', 'glide', 'pitchEnv'));
-    const filterCard = this.card('Filtro', [this.power('fOn'), this.control('fType', undefined, true)],
+      el('div', { className: 'smp-card-head' }, this.zoneTitle, remove), this.zoneRow(ZONE_CONTROLS));
+    const pitchCard = this.card(this.title('Intonazione'), [], this.row('root', 'transpose', 'detune', 'keyTrack', 'pitchEnv'));
+    const filterCard = this.card(this.title('Filtro'), [this.power('fOn'), this.control('fType', undefined, true)],
       this.row('fCutoff', 'fRes', 'fDrive', 'fVar', 'fKey', 'fEnv', 'fVel'));
-    const outCard = this.card('Uscita', [], this.row('velocity', 'pan', 'volume'));
-    const lfoCard = this.card('LFO', [this.control('lfoShape', undefined, true)],
+    // ciò che resta di tutto il Sampler: la voce (una voce sola è di tutte le zone) e l'uscita
+    const outCard = this.card(el('span', { className: 'smp-card-title', textContent: 'Voce e uscita' }), [],
+      this.row('voiceMode', 'glide', 'velocity', 'pan', 'volume'));
+    const lfoCard = this.card(this.title('LFO'), [this.control('lfoShape', undefined, true)],
       el('div', { className: 'smp-lfo-grid' }, ...['lfoSync', 'lfoRate', 'lfoDiv', 'lfoTrig', 'lfoFade', 'lfoPitch', 'lfoCutoff', 'lfoVolume', 'lfoPan']
         .map(id => this.control(id))));
     lfoCard.classList.add('smp-lfo-card');
@@ -269,8 +272,9 @@ export class SamplerDisplay implements DeviceDisplay {
   private buildZoneControls(): void {
     const zone = this.zone;
     this.builtZone = zone;
-    for (const [id, c] of [...this.controls]) if (PER_ZONE.has(c.key)) this.controls.delete(id);
-    for (const [key, slot] of this.slots) slot.replaceChildren(this.control(zoneParam(zone, key as ZoneKey), undefined, MENUS.has(key), key));
+    for (const id of this.zoneControls) this.controls.delete(id);
+    this.zoneControls = [...this.slots.keys()].map(key => zoneParam(zone, key));
+    for (const [key, slot] of this.slots) slot.replaceChildren(this.control(zoneParam(zone, key), undefined, MENUS.has(key), key));
     this.zoneTitle.textContent = `Zona ${zone + 1}`;
     this.ctx.controlsChanged();
   }
@@ -403,11 +407,9 @@ export class SamplerDisplay implements DeviceDisplay {
     this.link.hidden = this.zone === 0;
     this.link.classList.toggle('on', follows);
     this.link.title = follows
-      ? 'Loop, reverse e inviluppo del volume di questa zona sono quelli della zona 1. Clic (o cambiane uno) per darle i suoi.'
-      : 'Questa zona ha loop, reverse e inviluppo del volume suoi. Clic: tornano quelli della zona 1.';
-    this.sampleTitle.textContent = rows.length > 1 ? `Sample · zona ${this.zone + 1}` : 'Sample';
-    // l'inviluppo del volume è della zona; filtro e pitch sono di tutte
-    this.envTitle.textContent = rows.length > 1 && view.env === 1 ? `Inviluppi · zona ${this.zone + 1}` : 'Inviluppi';
+      ? 'Il suono di questa zona (loop, intonazione, filtro, inviluppi, LFO) è quello della zona 1. Clic (o cambiane un controllo) per darle il suo.'
+      : 'Questa zona ha il suo suono (loop, intonazione, filtro, inviluppi, LFO). Clic: torna quello della zona 1.';
+    for (const [title, name] of this.soundTitles) title.textContent = rows.length > 1 ? `${name} · zona ${this.zone + 1}` : name;
     const a = this.audio();
     if (!a) {
       this.info.textContent = rows.length > 1 ? `${rows.length} zone` : '';
@@ -559,17 +561,27 @@ export class SamplerDisplay implements DeviceDisplay {
 
   // ---------------------------------------------------------------- controlli
 
-  private card(title: string, head: readonly Node[], ...body: Node[]): HTMLElement {
-    return el('div', { className: 'smp-card' },
-      el('div', { className: 'smp-card-head' }, el('span', { className: 'smp-card-title', textContent: title }), ...head), ...body);
+  private card(title: HTMLElement, head: readonly Node[], ...body: Node[]): HTMLElement {
+    return el('div', { className: 'smp-card' }, el('div', { className: 'smp-card-head' }, title, ...head), ...body);
   }
 
-  /** Una fila di controlli; quelli che valgono per la zona scelta hanno un posto, riempito da buildZoneControls. */
+  /** Il titolo di una scheda che vale per la zona scelta (con più zone dice quale). */
+  private title(name: string): HTMLElement {
+    const title = el('span', { className: 'smp-card-title', textContent: name });
+    this.soundTitles.push([title, name]);
+    return title;
+  }
+
+  /** Una fila di controlli. */
   private row(...ids: string[]): HTMLElement {
-    return el('div', { className: 'device-controls smp-knobs' }, ...ids.map(id => {
-      if (!PER_ZONE.has(id)) return this.control(id);
+    return el('div', { className: 'device-controls smp-knobs' }, ...ids.map(id => this.control(id)));
+  }
+
+  /** La fila della scheda della zona: un posto per controllo, riempito da buildZoneControls. */
+  private zoneRow(keys: readonly ZoneKey[]): HTMLElement {
+    return el('div', { className: 'device-controls smp-knobs' }, ...keys.map(key => {
       const slot = el('span', { className: 'smp-slot' });
-      this.slots.set(id, slot);
+      this.slots.set(key, slot);
       return slot;
     }));
   }
@@ -599,7 +611,7 @@ export class SamplerDisplay implements DeviceDisplay {
   private power(id: string): HTMLElement {
     const b = el<HTMLButtonElement>('button', { className: 'mini smp-power', textContent: '⏻', title: 'Accendi/spegni il filtro' });
     b.dataset.param = id;
-    b.onclick = () => this.ctx.setParams({ [id]: this.values[id] === 1 ? 0 : 1 }, true);
+    b.onclick = () => this.ctx.setParams(this.toZone({ [id]: this.zoneValues()[id] === 1 ? 0 : 1 }), true);
     this.controls.set(id, { control: { element: b, set: v => b.classList.toggle('on', v === 1) }, spec: paramSpec(this.ctx.type, id)!, key: id });
     return b;
   }

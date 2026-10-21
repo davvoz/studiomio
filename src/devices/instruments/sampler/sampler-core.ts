@@ -4,9 +4,10 @@
  * campionamento), dentro la regione Inizio…Fine o la sua fetta; in Classic il loop la tiene
  * finché si tiene la nota, in avanti (con la dissolvenza a potenza costante tra la fine del loop
  * e il pezzo prima dell'inizio) o avanti e indietro. Il suono passa nel filtro di Prisma e
- * nell'inviluppo del volume (della zona), campione per campione; pitch, filtro, LFO e guadagni si calcolano
- * ogni CONTROL_RATE campioni. Una voce che riparte mentre suona (mono, voce rubata) sfuma il
- * suo ultimo valore invece di saltare: niente click. */
+ * nell'inviluppo del volume, campione per campione; pitch, filtro, LFO e guadagni si calcolano
+ * ogni CONTROL_RATE campioni. Loop, intonazione, filtro, inviluppi e LFO sono quelli della
+ * zona della voce. Una voce che riparte mentre suona (mono, voce rubata) sfuma il suo ultimo
+ * valore invece di saltare: niente click. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
 import { VoicePool, type PolyVoice } from '../../dsp/voice-pool';
@@ -53,7 +54,7 @@ class Zone {
   vlo = 1;
   vhi = 127;
   root = 60;
-  /** In semitoni, con i cent. */
+  /** In semitoni, con i cent: il Transpose e il Detune del suono della zona. */
   tune = 0;
   gain = 1;
   pan = 0;
@@ -65,49 +66,7 @@ class Zone {
   loopExit = false;
   xfade = 0;
   reverse = false;
-  amp: EnvShape = envShape(() => 0, 0);
-
-  constructor(readonly index: number) {}
-
-  read(params: Readonly<Record<string, number>>): void {
-    const v = (key: ZoneKey, def: number) => params[zoneSource(params, this.index, key)] ?? def;
-    const lo = v('lo', 0), hi = v('hi', 127), vlo = v('vlo', 1), vhi = v('vhi', 127);
-    this.lo = Math.min(lo, hi);
-    this.hi = Math.max(lo, hi);
-    this.vlo = Math.min(vlo, vhi);
-    this.vhi = Math.max(vlo, vhi);
-    this.root = v('root', 60);
-    this.tune = v('tune', 0) + v('fine', 0) / 100;
-    this.gain = dbToGain(v('gain', 0));
-    this.pan = v('pan', 0) / 100;
-    this.start = clamp01(v('start', 0) / 100);
-    this.end = Math.max(this.start, clamp01(v('end', 100) / 100));
-    this.loopStart = clamp01(v('loopStart', 0) / 100);
-    this.loopEnd = clamp01(v('loopEnd', 100) / 100);
-    this.loop = v('loop', LOOP.off);
-    this.loopExit = v('loopRelease', 0) === LOOP_RELEASE.exit;
-    this.xfade = v('xfade', 0) / 100;
-    this.reverse = v('reverse', 0) === 1;
-    this.amp = envShape(id => v(id as ZoneKey, 0), ENV.amp);
-  }
-
-  /** Se la nota la fa suonare. */
-  plays(pitch: number, velocity: number): boolean {
-    return !!this.sample && pitch >= this.lo && pitch <= this.hi && velocity >= this.vlo && velocity <= this.vhi;
-  }
-}
-
-/** I valori dei parametri, già nelle unità del motore; li leggono tutte le voci. */
-class Settings {
-  readonly zones = Array.from({ length: MAX_ZONES }, (_, i) => new Zone(i));
-  mode = MODE.classic as number;
-  gate = false;
-  /** Gli inizi delle fette (frazioni), più la fine della regione in fondo (della prima zona). */
-  slices: number[] = [];
-  transpose = 0;
   keyTrack = 1;
-  voiceMode = VOICE_MODE.poly as number;
-  glide = 0;
   pitchEnv = 0;
   filterOn = false;
   fType = 0;
@@ -118,7 +77,7 @@ class Settings {
   fKey = 0;
   fEnv = 0;
   fVel = 0;
-  /** Gli inviluppi (quello del volume che suona è della zona). */
+  /** Gli inviluppi di volume, filtro e pitch. */
   readonly envs: EnvShape[] = [ENV.amp, ENV.filter, ENV.pitch].map(() => envShape(() => 0, 0));
   lfoShape = 0;
   lfoRate = 4;
@@ -128,53 +87,117 @@ class Settings {
   lfoCutoff = 0;
   lfoVolume = 0;
   lfoPan = 0;
+  /** L'LFO libero: il giro comune a tutte le voci della zona. */
+  freePhase = 0;
+  freeCycle = 0;
+  private lfoSync = LFO_SYNC.hz as number;
+  private lfoDiv = 0;
+  private lfoHz = 4;
+
+  constructor(readonly index: number) {}
+
+  read(params: Readonly<Record<string, number>>, bpm: number): void {
+    const v = (key: ZoneKey, def: number) => params[zoneSource(params, this.index, key)] ?? def;
+    const lo = v('lo', 0), hi = v('hi', 127), vlo = v('vlo', 1), vhi = v('vhi', 127);
+    this.lo = Math.min(lo, hi);
+    this.hi = Math.max(lo, hi);
+    this.vlo = Math.min(vlo, vhi);
+    this.vhi = Math.max(vlo, vhi);
+    this.root = v('root', 60);
+    this.tune = v('transpose', 0) + v('detune', 0) / 100;
+    this.gain = dbToGain(v('gain', 0));
+    this.pan = v('pan', 0) / 100;
+    this.start = clamp01(v('start', 0) / 100);
+    this.end = Math.max(this.start, clamp01(v('end', 100) / 100));
+    this.loopStart = clamp01(v('loopStart', 0) / 100);
+    this.loopEnd = clamp01(v('loopEnd', 100) / 100);
+    this.loop = v('loop', LOOP.off);
+    this.loopExit = v('loopRelease', 0) === LOOP_RELEASE.exit;
+    this.xfade = v('xfade', 0) / 100;
+    this.reverse = v('reverse', 0) === 1;
+    this.keyTrack = v('keyTrack', 100) / 100;
+    this.pitchEnv = v('pitchEnv', 0);
+    this.filterOn = v('fOn', 0) === 1;
+    this.fType = v('fType', 0);
+    this.fCutoff = v('fCutoff', 6000);
+    this.fRes = v('fRes', 0) / 100;
+    this.fDrive = v('fDrive', 0) / 100;
+    this.fVar = v('fVar', 50) / 100;
+    this.fKey = v('fKey', 0) / 100;
+    this.fEnv = v('fEnv', 0) / 100;
+    this.fVel = v('fVel', 0) / 100;
+    for (const n of [ENV.amp, ENV.filter, ENV.pitch]) this.envs[n - 1] = envShape(id => v(id as ZoneKey, 0), n);
+    this.lfoShape = SHAPES[v('lfoShape', 0)] ?? PRISMA_SHAPE.sine;
+    this.lfoFree = v('lfoTrig', 0) === LFO_TRIG.free;
+    this.lfoFade = v('lfoFade', 0);
+    this.lfoPitch = v('lfoPitch', 0);
+    this.lfoCutoff = v('lfoCutoff', 0) / 100;
+    this.lfoVolume = v('lfoVolume', 0) / 100;
+    this.lfoPan = v('lfoPan', 0) / 100;
+    this.lfoSync = v('lfoSync', LFO_SYNC.hz);
+    this.lfoDiv = v('lfoDiv', 0);
+    this.lfoHz = v('lfoRate', 4);
+    this.setTempo(bpm);
+  }
+
+  setTempo(bpm: number): void {
+    const beats = TEMPO_RATES[this.lfoDiv]?.[1] ?? 1;
+    this.lfoRate = this.lfoSync === LFO_SYNC.tempo ? bpm / 60 / beats : this.lfoHz;
+  }
+
+  /** Il giro dell'LFO libero, `seconds` più avanti. */
+  advance(seconds: number): void {
+    this.freePhase += this.lfoRate * seconds;
+    if (this.freePhase >= 1) {
+      const turns = Math.floor(this.freePhase);
+      this.freePhase -= turns;
+      this.freeCycle += turns;
+    }
+  }
+
+  /** Il valore dell'LFO (0…1) al giro `cycle`, a `phase`. */
+  lfoAt(cycle: number, phase: number): number {
+    const shape = this.lfoShape;
+    return shape === PRISMA_SHAPE.sampleHold || shape === PRISMA_SHAPE.smoothRandom ? randomValue(shape, cycle, phase) : shapeValue(shape, phase);
+  }
+
+  /** Se la nota la fa suonare. */
+  plays(pitch: number, velocity: number): boolean {
+    return !!this.sample && pitch >= this.lo && pitch <= this.hi && velocity >= this.vlo && velocity <= this.vhi;
+  }
+}
+
+/** I valori dei parametri di tutto il Sampler, già nelle unità del motore (il suono è delle
+ *  zone); li leggono tutte le voci. */
+class Settings {
+  readonly zones = Array.from({ length: MAX_ZONES }, (_, i) => new Zone(i));
+  mode = MODE.classic as number;
+  gate = false;
+  /** Gli inizi delle fette (frazioni), più la fine della regione in fondo (della prima zona). */
+  slices: number[] = [];
+  voiceMode = VOICE_MODE.poly as number;
+  glide = 0;
   velocity = 0.5;
   pan = 0;
   gain = 1;
   bpm = 120;
-  /** L'LFO libero: il giro comune a tutte le voci. */
-  freePhase = 0;
-  freeCycle = 0;
-  private params: Readonly<Record<string, number>> = {};
 
   read(params: Readonly<Record<string, number>>): void {
-    this.params = params;
     const v = (id: string) => params[id] ?? 0;
     this.mode = v('mode');
     this.gate = v('trigger') === TRIGGER.gate;
-    for (const z of this.zones) z.read(params);
+    for (const z of this.zones) z.read(params, this.bpm);
     this.slices = this.mode === MODE.slice ? [...sliceStarts(params), this.zones[0].end] : [];
-    this.transpose = v('transpose') + v('detune') / 100;
-    this.keyTrack = (params.keyTrack ?? 100) / 100;
     this.voiceMode = v('voiceMode');
     this.glide = v('glide') / 1000;
-    this.pitchEnv = v('pitchEnv');
-    this.filterOn = v('fOn') === 1;
-    this.fType = v('fType');
-    this.fCutoff = params.fCutoff ?? 6000;
-    this.fRes = v('fRes') / 100;
-    this.fDrive = v('fDrive') / 100;
-    this.fVar = (params.fVar ?? 50) / 100;
-    this.fKey = v('fKey') / 100;
-    this.fEnv = v('fEnv') / 100;
-    this.fVel = v('fVel') / 100;
-    for (const n of [ENV.amp, ENV.filter, ENV.pitch]) this.envs[n - 1] = envShape(v, n);
-    this.lfoShape = SHAPES[v('lfoShape')] ?? PRISMA_SHAPE.sine;
-    this.lfoFree = v('lfoTrig') === LFO_TRIG.free;
-    this.lfoFade = v('lfoFade');
-    this.lfoPitch = v('lfoPitch');
-    this.lfoCutoff = v('lfoCutoff') / 100;
-    this.lfoVolume = v('lfoVolume') / 100;
-    this.lfoPan = v('lfoPan') / 100;
     this.velocity = (params.velocity ?? 50) / 100;
     this.pan = v('pan') / 100;
     this.gain = dbToGain(params.volume ?? -6);
-    this.readRate();
   }
 
   setTempo(bpm: number): void {
     this.bpm = bpm;
-    this.readRate();
+    for (const z of this.zones) z.setTempo(bpm);
   }
 
   /** La prima zona che suona la nota (in Slice la prima zona, che ha le fette), o null. */
@@ -196,18 +219,6 @@ class Settings {
   /** Per la voce sola (MonoPlayer): in Legato le note sovrapposte scivolano. */
   get legato(): boolean {
     return this.voiceMode === VOICE_MODE.legato;
-  }
-
-  private readRate(): void {
-    const p = this.params;
-    const beats = TEMPO_RATES[p.lfoDiv ?? 0]?.[1] ?? 1;
-    this.lfoRate = p.lfoSync === LFO_SYNC.tempo ? this.bpm / 60 / beats : p.lfoRate ?? 4;
-  }
-
-  /** Il valore dell'LFO (0…1) al giro `cycle`, a `phase`. */
-  lfoAt(cycle: number, phase: number): number {
-    const shape = this.lfoShape;
-    return shape === PRISMA_SHAPE.sampleHold || shape === PRISMA_SHAPE.smoothRandom ? randomValue(shape, cycle, phase) : shapeValue(shape, phase);
   }
 }
 
@@ -315,12 +326,12 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     this.pitch = from ?? pitch;
     this.velocity = velocity / 127;
     const note = this.seed();
-    this.lfoPhase = s.lfoFree ? s.freePhase : 0;
-    this.lfoCycle = s.lfoFree ? s.freeCycle : note * 17;
+    this.lfoPhase = z.lfoFree ? z.freePhase : 0;
+    this.lfoCycle = z.lfoFree ? z.freeCycle : note * 17;
     this.age = 0;
-    this.amp.set(z.amp);
-    this.filterEnv.set(s.envs[1]);
-    this.pitchEnv.set(s.envs[2]);
+    this.amp.set(z.envs[0]);
+    this.filterEnv.set(z.envs[1]);
+    this.pitchEnv.set(z.envs[2]);
     this.amp.trigger();
     this.filterEnv.trigger();
     this.pitchEnv.trigger();
@@ -361,7 +372,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       this.countdown -= len;
       const playing = amp.active && !this.done;
       const got = playing ? this.read(len) : 0;
-      if (got && this.s.filterOn) this.filter.process(bufL, bufR, got);
+      if (got && this.zone.filterOn) this.filter.process(bufL, bufR, got);
       for (let j = 0; j < len; j++, i++) {
         let l = 0, r = 0;
         if (j < got) {
@@ -473,15 +484,15 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       this.pitch += (this.target - this.pitch) * k;
       if (Math.abs(this.target - this.pitch) < 1e-3) this.pitch = this.target;
     }
-    this.amp.set(zone.amp);
-    this.filterEnv.set(s.envs[1]);
-    this.pitchEnv.set(s.envs[2]);
+    this.amp.set(zone.envs[0]);
+    this.filterEnv.set(zone.envs[1]);
+    this.pitchEnv.set(zone.envs[2]);
     const fenv = this.filterEnv.next(), penv = this.pitchEnv.next();
 
     // l'LFO, bipolare, che entra in `lfoFade` secondi
-    const ramp = s.lfoFade > 0 ? Math.min(1, this.age / s.lfoFade) : 1;
-    const lfo = (2 * s.lfoAt(this.lfoCycle, this.lfoPhase) - 1) * ramp;
-    this.lfoPhase += s.lfoRate * tick;
+    const ramp = zone.lfoFade > 0 ? Math.min(1, this.age / zone.lfoFade) : 1;
+    const lfo = (2 * zone.lfoAt(this.lfoCycle, this.lfoPhase) - 1) * ramp;
+    this.lfoPhase += zone.lfoRate * tick;
     if (this.lfoPhase >= 1) {
       const turns = Math.floor(this.lfoPhase);
       this.lfoPhase -= turns;
@@ -490,19 +501,19 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     this.age += tick;
 
     const sliced = s.mode === MODE.slice;
-    const semis = (sliced ? 0 : (this.pitch - zone.root) * s.keyTrack) + s.transpose + zone.tune + s.pitchEnv * penv + s.lfoPitch * lfo;
+    const semis = (sliced ? 0 : (this.pitch - zone.root) * zone.keyTrack) + zone.tune + zone.pitchEnv * penv + zone.lfoPitch * lfo;
     const rate = this.data ? this.data.sampleRate / sampleRate : 1;
     this.speed = Math.min(MAX_SPEED, rate * Math.pow(2, semis / 12));
 
-    if (s.filterOn) {
-      const octaves = s.fEnv * FILTER_ENV_OCTAVES * fenv + (s.fKey * (this.pitch - 60)) / 12
-        + s.fVel * FILTER_VEL_OCTAVES * this.velocity + s.lfoCutoff * LFO_CUTOFF_OCTAVES * lfo;
-      this.filter.set(s.fType, s.fCutoff * Math.pow(2, octaves), s.fRes, s.fDrive, s.fVar, 1);
+    if (zone.filterOn) {
+      const octaves = zone.fEnv * FILTER_ENV_OCTAVES * fenv + (zone.fKey * (this.pitch - 60)) / 12
+        + zone.fVel * FILTER_VEL_OCTAVES * this.velocity + zone.lfoCutoff * LFO_CUTOFF_OCTAVES * lfo;
+      this.filter.set(zone.fType, zone.fCutoff * Math.pow(2, octaves), zone.fRes, zone.fDrive, zone.fVar, 1);
     }
 
     const v = this.velocity;
-    const level = (1 - s.velocity + s.velocity * v * v) * (1 - s.lfoVolume * 0.5 * (1 - lfo)) * s.gain * zone.gain;
-    const pan = Math.max(-1, Math.min(1, s.pan + zone.pan + s.lfoPan * lfo));
+    const level = (1 - s.velocity + s.velocity * v * v) * (1 - zone.lfoVolume * 0.5 * (1 - lfo)) * s.gain * zone.gain;
+    const pan = Math.max(-1, Math.min(1, s.pan + zone.pan + zone.lfoPan * lfo));
     const gl = level * (pan > 0 ? 1 - pan : 1), gr = level * (pan < 0 ? 1 + pan : 1);
     if (this.fresh) {
       this.gainL = gl;
@@ -579,15 +590,10 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
   }
 
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
-    const s = this.settings;
     this.pool.render(left, right, from, to);
-    // il giro dell'LFO libero, che le voci prendono quando partono
-    s.freePhase += (s.lfoRate * (to - from)) / this.sampleRate;
-    if (s.freePhase >= 1) {
-      const turns = Math.floor(s.freePhase);
-      s.freePhase -= turns;
-      s.freeCycle += turns;
-    }
+    // il giro dell'LFO libero di ogni zona, che le voci prendono quando partono
+    const seconds = (to - from) / this.sampleRate;
+    for (const z of this.settings.zones) z.advance(seconds);
   }
 
   /** Dove leggono le voci che suonano: la zona più la frazione del suo sample come lo si vede

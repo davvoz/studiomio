@@ -4,7 +4,7 @@ import type { SampleData } from '../../src/devices/dsp/core';
 import { instrumentType } from '../../src/devices/registry';
 import {
   FIRST_SLICE_NOTE, layoutZones, LOOP, LOOP_RELEASE, MAX_ZONES, MODE, noteInName, ownSound, SAMPLE_SLOT, SAMPLER, SLICE, SOUND_KEYS, sliceStarts,
-  sliceValues, spreadRanges, TRIGGER, VOICE_MODE, zoneDefaults, zoneKeys, zoneParam, zoneSlot, zoneSource, type ZoneKey,
+  sliceValues, spreadRanges, TRIGGER, upgradeZoneTune, VOICE_MODE, zoneDefaults, zoneKeys, zoneParam, zoneSlot, zoneSource, type ZoneKey,
 } from '../../src/devices/instruments/sampler/sampler';
 import { SamplerCore } from '../../src/devices/instruments/sampler/sampler-core';
 import { presetParams } from '../../src/devices/user-presets';
@@ -292,7 +292,7 @@ describe('Sampler: zone', () => {
     expect(zoneParam(0, 'start')).toBe('start');
     expect(zoneParam(0, 'lo')).toBe('z1lo');
     expect(zoneParam(2, 'loopEnd')).toBe('z3loopEnd');
-    const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'tune', 'fine', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
+    const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
     for (let i = 0; i < MAX_ZONES; i++) for (const k of keys) expect(paramSpec(SAMPLER, zoneParam(i, k)), `${i} ${k}`).toBeDefined();
     // il suono: quello della prima zona sono i parametri del Sampler
     expect(zoneParam(0, 'e1R')).toBe('e1R');
@@ -329,6 +329,40 @@ describe('Sampler: zone', () => {
     expect(tail({ ...own, [zoneParam(1, 'loop')]: LOOP.forward, [zoneParam(1, 'e1R')]: 0.3 })).toBeGreaterThan(SR * 0.7);
   });
 
+  it('filtro, intonazione e LFO: ogni zona con il suo suono ha i suoi', () => {
+    const own = { [zoneParam(1, 'own')]: 1 };
+    // il filtro della seconda zona chiude le alte; la prima resta aperta
+    const bright = (params: Record<string, number>) => {
+      const { core, queue } = zoned([null, sine(3000, 1)], params);
+      queue.add(60, 100, 0, SR);
+      return rms(run(core, queue, SR / 4).left, SR / 8, SR / 4);
+    };
+    const closed = { fOn: 1, fType: 1, fCutoff: 200 };
+    expect(bright(closed)).toBeLessThan(0.05);
+    // con il suo suono il filtro della seconda zona è il suo, spento
+    expect(bright({ ...closed, ...own, [zoneParam(1, 'fOn')]: 0 })).toBeGreaterThan(0.2);
+    // il Transpose della seconda zona la sposta di un'ottava, la prima no
+    const hz = (params: Record<string, number>, pitch: number) => {
+      const { core, queue } = zoned([sine(440, 1), sine(440, 1)], { ...zoneKeys(0, 0, 59, 48), ...zoneKeys(1, 60, 127, 60), ...params });
+      queue.add(pitch, 100, 0, SR);
+      return zeroCrossHz(run(core, queue, 12000).left, 1000, 12000);
+    };
+    const up = { ...own, [zoneParam(1, 'transpose')]: 12 };
+    expect(hz(up, 48)).toBeCloseTo(440, -1);
+    expect(hz(up, 60)).toBeCloseTo(880, -1);
+    // l'LFO sul volume solo nella seconda zona
+    const wobble = (zone: number) => {
+      const { core, queue } = zoned(zone === 0 ? [level(0.5)] : [null, level(0.5)], {
+        ...own, [zoneParam(1, 'lfoVolume')]: 100, [zoneParam(1, 'lfoRate')]: 8, [zoneParam(1, 'lfoSync')]: 1,
+      });
+      queue.add(60, 100, 0, SR);
+      const out = run(core, queue, SR / 2).left.subarray(SR / 10);
+      return Math.max(...out) - Math.min(...out);
+    };
+    expect(wobble(0)).toBeLessThan(0.01);
+    expect(wobble(1)).toBeGreaterThan(0.2);
+  });
+
   it('due zone sulla stessa nota con inviluppi diversi', () => {
     const { core, queue } = zoned([level(0.3), level(0.4)], {
       e1R: 0.01, [zoneParam(1, 'own')]: 1, [zoneParam(1, 'e1A')]: 0.001, [zoneParam(1, 'e1R')]: 0.5, [zoneParam(1, 'e1S')]: 100,
@@ -339,6 +373,24 @@ describe('Sampler: zone', () => {
     // dopo il rilascio resta solo la seconda, che sfuma piano
     expect(out[SR / 10 + SR * 0.05]).toBeGreaterThan(0.2);
     expect(out[SR / 10 + SR * 0.05]).toBeLessThan(0.4);
+  });
+
+  it('i Tune e Fine delle zone di prima vanno nel Transpose e Detune: ogni zona suona come prima', () => {
+    // prima: la prima zona +2, la seconda +12.3, la terza niente, la quarta senza sample
+    const old = { transpose: -1, z1tune: 2, z2tune: 12, z2fine: 30, z3lo: 40, z4tune: 7 };
+    const samples = { [zoneSlot(0)]: 'a', [zoneSlot(1)]: 'b', [zoneSlot(2)]: 'c' };
+    const before = (i: number) => old.transpose + ([2, 12.3, 0, 7][i] ?? 0);
+    const now = resolveParams(SAMPLER, upgradeZoneTune(old, samples));
+    expect(Object.keys(upgradeZoneTune(old, samples)).filter(k => /^z\d+(tune|fine)$/.test(k))).toEqual([]);
+    for (const i of [0, 1, 2]) {
+      const semis = now[zoneSource(now, i, 'transpose')] + now[zoneSource(now, i, 'detune')] / 100;
+      expect(semis, `zona ${i + 1}`).toBeCloseTo(before(i), 6);
+    }
+    // la zona senza sample non diventa sua per niente
+    expect(now[zoneParam(3, 'own')]).toBe(0);
+    // senza Tune e Fine non cambia nulla
+    const fresh = { transpose: 3 };
+    expect(upgradeZoneTune(fresh)).toBe(fresh);
   });
 
   it('legge la nota scritta nel nome di un file', () => {
@@ -388,8 +440,8 @@ describe('Sampler: zone', () => {
     expect(heard(samples, params, 60, 100)).toBeCloseTo(0.6, 2);
   });
 
-  it('ogni zona ha la sua nota base, il suo tune e il suo volume', () => {
-    const params = { ...zoneKeys(0, 0, 59, 48), ...zoneKeys(1, 60, 127, 60), [zoneParam(1, 'tune')]: 12 };
+  it('ogni zona ha la sua nota base, il suo Transpose e il suo volume', () => {
+    const params = { ...zoneKeys(0, 0, 59, 48), ...zoneKeys(1, 60, 127, 60), [zoneParam(1, 'own')]: 1, [zoneParam(1, 'transpose')]: 12 };
     for (const [pitch, hz] of [[48, 440], [60, 880], [72, 1760]] as const) {
       const { core, queue } = zoned([sine(440, 1), sine(440, 1)], params);
       queue.add(pitch, 100, 0, SR);

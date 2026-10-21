@@ -7,7 +7,8 @@
  * Le posizioni (inizio, fine, loop, fette) sono frazioni del sample come lo si vede: con
  * Reverse il sample è rovesciato e le posizioni valgono sul sample rovesciato.
  * Qui c'è solo la descrizione (parametri e preset); il suono è in sampler-core.ts. */
-import type { DeviceType } from '../../device-type';
+import type { ParamValues } from '../../../model/device';
+import { resolveParams, type DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam, ParamSpec } from '../../params';
 import { TEMPO_RATE, TEMPO_RATES } from '../../rates';
 import { LFO_SYNC, VOICE_MODE, VOICE_MODES } from '../analog/analog';
@@ -21,15 +22,23 @@ export const SAMPLE_SLOT = 'sample';
 /** Le zone al massimo: ognuna un sample, sui tasti da `lo` a `hi` e sulle velocity da `vlo` a
  *  `vhi`, come nel Sampler di Live. Una nota suona tutte le zone che la contengono. */
 export const MAX_ZONES = 32;
-/** I parametri dell'inviluppo del volume, che ogni zona può avere suo. */
-const AMP_ENV_KEYS = ['e1A', 'e1H', 'e1D', 'e1S', 'e1R', 'e1Ac', 'e1Dc', 'e1Rc'] as const;
-/** Come si legge il sample (loop, reverse) e l'inviluppo del volume: le zone dalla seconda in su
- *  li prendono dalla prima finché non hanno i loro (`own`). */
-export const SOUND_KEYS = ['loop', 'xfade', 'loopRelease', 'reverse', ...AMP_ENV_KEYS] as const;
+/** I parametri dei tre inviluppi (volume, filtro, pitch). */
+const ENV_KEYS = ['e1A', 'e1H', 'e1D', 'e1S', 'e1R', 'e1Ac', 'e1Dc', 'e1Rc', 'e2A', 'e2H', 'e2D', 'e2S', 'e2R', 'e2Ac', 'e2Dc', 'e2Rc', 'e3A', 'e3H', 'e3D', 'e3S', 'e3R', 'e3Ac', 'e3Dc', 'e3Rc'] as const;
+/** Il suono di una zona: come si legge il sample (loop, reverse), l'intonazione, il filtro, gli
+ *  inviluppi e l'LFO. Le zone dalla seconda in su li prendono dalla prima finché non hanno i loro
+ *  (`own`). Restano di tutto il Sampler il modo, la voce (Poli, Mono, Legato: una voce sola è di
+ *  tutte le zone) con il glide, e l'uscita. */
+export const SOUND_KEYS = [
+  'loop', 'xfade', 'loopRelease', 'reverse',
+  'transpose', 'detune', 'keyTrack', 'pitchEnv',
+  'fOn', 'fType', 'fCutoff', 'fRes', 'fDrive', 'fVar', 'fKey', 'fEnv', 'fVel',
+  ...ENV_KEYS,
+  'lfoShape', 'lfoSync', 'lfoDiv', 'lfoRate', 'lfoTrig', 'lfoFade', 'lfoPitch', 'lfoCutoff', 'lfoVolume', 'lfoPan',
+] as const;
 /** I parametri di una zona. Quelli della prima per le posizioni, la nota base e il suono sono i
- *  parametri del sample singolo (`start`, `root`, `loop`, `e1A`…), così un Sampler con un solo
+ *  parametri del sample singolo (`start`, `root`, `loop`, `fCutoff`…), così un Sampler con un solo
  *  sample resta com'era. `own` (dalla seconda zona): il suono è suo e non quello della prima. */
-export type ZoneKey = 'lo' | 'hi' | 'vlo' | 'vhi' | 'root' | 'tune' | 'fine' | 'gain' | 'pan' | 'start' | 'end' | 'loopStart' | 'loopEnd'
+export type ZoneKey = 'lo' | 'hi' | 'vlo' | 'vhi' | 'root' | 'gain' | 'pan' | 'start' | 'end' | 'loopStart' | 'loopEnd'
   | 'own' | (typeof SOUND_KEYS)[number];
 /** Le chiavi della zona che per la prima zona sono i parametri con il loro nome. */
 export const FIRST_ZONE_KEYS: ReadonlySet<ZoneKey> = new Set<ZoneKey>(['root', 'start', 'end', 'loopStart', 'loopEnd', ...SOUND_KEYS]);
@@ -119,48 +128,98 @@ const position = (id: string, label: string, def: number, extra: Partial<NumberP
 const looping = { param: 'loop', is: [LOOP.forward, LOOP.pingPong] };
 const filterOn = { param: 'fOn', is: 1 };
 
-/** Inviluppo `n` (1 volume, 2 filtro, 3 pitch): come quelli di Prisma, con le curve. `id` dà il
- *  nome dei parametri (per quello di una zona). */
-const envParams = (n: number, id = (key: string) => key, extra: Partial<NumberParam> = {}): ParamSpec[] => {
+/** Inviluppo `n` (1 volume, 2 filtro, 3 pitch): come quelli di Prisma, con le curve. */
+const envParams = (n: number): ParamSpec[] => {
   const amp = n === ENV.amp;
   return [
-    time(id(`e${n}A`), 'Attack', amp ? 0.001 : 0.005),
-    time(id(`e${n}H`), 'Hold', 0.001),
-    time(id(`e${n}D`), 'Decay', amp ? 1 : 0.5),
-    percent(id(`e${n}S`), 'Sustain', amp ? 100 : 0),
-    time(id(`e${n}R`), 'Release', amp ? 0.05 : 0.3),
-    num(id(`e${n}Ac`), 'Curva A', -100, 100, 0, '', { step: 1 }),
-    num(id(`e${n}Dc`), 'Curva D', -100, 100, 60, '', { step: 1 }),
-    num(id(`e${n}Rc`), 'Curva R', -100, 100, 60, '', { step: 1 }),
-  ].map(p => ({ ...p, ...extra }));
+    time(`e${n}A`, 'Attack', amp ? 0.001 : 0.005),
+    time(`e${n}H`, 'Hold', 0.001),
+    time(`e${n}D`, 'Decay', amp ? 1 : 0.5),
+    percent(`e${n}S`, 'Sustain', amp ? 100 : 0),
+    time(`e${n}R`, 'Release', amp ? 0.05 : 0.3),
+    num(`e${n}Ac`, 'Curva A', -100, 100, 0, '', { step: 1 }),
+    num(`e${n}Dc`, 'Curva D', -100, 100, 60, '', { step: 1 }),
+    num(`e${n}Rc`, 'Curva R', -100, 100, 60, '', { step: 1 }),
+  ];
 };
 
-/** I parametri delle zone (nascosti: si muovono dall'editor delle zone e dalla forma d'onda). */
+const SAMPLE_PARAMS: ParamSpec[] = [
+  choice('mode', 'Modo', MODES),
+  position('start', 'Inizio', 0),
+  position('end', 'Fine', 100),
+  choice('reverse', 'Reverse', ON_OFF),
+  choice('trigger', 'Nota', TRIGGERS, TRIGGER.trigger, { when: { param: 'mode', is: [MODE.oneShot, MODE.slice] } }),
+  choice('loop', 'Loop', LOOPS, LOOP.off, { when: { param: 'mode', is: MODE.classic } }),
+  position('loopStart', 'Loop da', 0, { when: looping }),
+  position('loopEnd', 'Loop a', 100, { when: looping }),
+  num('xfade', 'Fade', 0, 50, 0, '%', { step: 1, when: { param: 'loop', is: LOOP.forward } }),
+  choice('loopRelease', 'Rilascio', LOOP_RELEASES, LOOP_RELEASE.stay, { when: looping }),
+  choice('sliceBy', 'Fette', SLICE_BY, SLICE.transients, { when: { param: 'mode', is: MODE.slice } }),
+  choice('sliceGrid', 'Griglia', SLICE_GRIDS.map(String), 2, { when: { param: 'sliceBy', is: SLICE.grid } }),
+];
+
+const PITCH_PARAMS: ParamSpec[] = [
+  choice('root', 'Nota base', NOTE_NAMES, 60, { when: { param: 'mode', is: [MODE.classic, MODE.oneShot] } }),
+  num('transpose', 'Transpose', -48, 48, 0, 'st', { step: 1 }),
+  num('detune', 'Detune', -50, 50, 0, 'ct', { step: 1 }),
+  { ...percent('keyTrack', 'Key track', 100), when: { param: 'mode', is: [MODE.classic, MODE.oneShot] } },
+  choice('voiceMode', 'Voce', VOICE_MODES),
+  num('glide', 'Glide', 0, 1000, 0, 'ms', { step: 1, when: { param: 'voiceMode', is: [VOICE_MODE.mono, VOICE_MODE.legato] } }),
+  num('pitchEnv', 'Env pitch', -48, 48, 0, 'st', { step: 0.1 }),
+];
+
+const FILTER_PARAMS: ParamSpec[] = [
+  choice('fOn', 'Acceso', ON_OFF),
+  choice('fType', 'Tipo', FILTER_TYPES, FILTER.lp24, { when: filterOn }),
+  num('fCutoff', 'Cutoff', 20, 20000, 6000, 'Hz', { scale: 'log', when: filterOn }),
+  { ...percent('fRes', 'Risonanza', 0), when: filterOn },
+  { ...percent('fDrive', 'Drive', 0), when: filterOn },
+  { ...percent('fVar', 'Var', 50), when: { param: 'fType', is: VAR_FILTERS } },
+  { ...percent('fKey', 'Key track', 0), when: filterOn },
+  { ...percent('fEnv', 'Inviluppo', 0, -100), when: filterOn },
+  { ...percent('fVel', 'Velocity', 0), when: filterOn },
+];
+
+const LFO_PARAMS: ParamSpec[] = [
+  choice('lfoShape', 'Forma', LFO_SHAPES),
+  choice('lfoSync', 'Sincro', ['Tempo', 'Hz'], LFO_SYNC.hz),
+  choice('lfoDiv', 'Divisione', TEMPO_RATES.map(([l]) => l), TEMPO_RATE['1/8'], { when: { param: 'lfoSync', is: LFO_SYNC.tempo } }),
+  num('lfoRate', 'Velocità', 0.05, 30, 4, 'Hz', { scale: 'log', when: { param: 'lfoSync', is: LFO_SYNC.hz } }),
+  choice('lfoTrig', 'Ripartenza', LFO_TRIGS),
+  num('lfoFade', 'Entrata', 0, 5, 0, 's', { step: 0.01 }),
+  num('lfoPitch', '→ Pitch', 0, 12, 0, 'st', { step: 0.01 }),
+  percent('lfoCutoff', '→ Cutoff', 0),
+  percent('lfoVolume', '→ Volume', 0),
+  percent('lfoPan', '→ Pan', 0),
+];
+
+const ENV_PARAMS = [ENV.amp, ENV.filter, ENV.pitch].map(envParams);
+
+/** I parametri della prima zona che le altre hanno uguali, con il loro nome. */
+const FIRST_ZONE = new Map([...SAMPLE_PARAMS, ...PITCH_PARAMS, ...FILTER_PARAMS, ...ENV_PARAMS.flat(), ...LFO_PARAMS].map(p => [p.id, p]));
+
+/** Il parametro `key` della zona `i`: come quello della prima zona, nascosto, e con le condizioni
+ *  sui parametri della zona (es. "Loop da" conta se c'è il loop della zona). */
+const ofZone = (i: number, key: ZoneKey): ParamSpec => {
+  const p = FIRST_ZONE.get(key)!, when = p.when;
+  const zoneWhen = when && FIRST_ZONE_KEYS.has(when.param as ZoneKey) ? { ...when, param: zoneParam(i, when.param as ZoneKey) } : when;
+  return { ...p, id: zoneParam(i, key), hidden: true, ...(zoneWhen ? { when: zoneWhen } : {}) };
+};
+
+/** I parametri delle zone (nascosti: si muovono dall'editor delle zone, dalla forma d'onda e dai
+ *  controlli del pannello quando si guarda la zona). */
 const zoneParams = (): ParamSpec[] => Array.from({ length: MAX_ZONES }, (_, i): ParamSpec[] => {
-  // le etichette sono quelle dei controlli della prima zona: il pannello li mostra al loro posto
   const hidden = { hidden: true };
-  const id = (key: ZoneKey) => zoneParam(i, key);
-  const zoneLooping = { param: id('loop'), is: looping.is };
   const own: ParamSpec[] = i === 0 ? [] : [
-    choice(id('root'), 'Nota base', NOTE_NAMES, 60, { when: { param: 'mode', is: [MODE.classic, MODE.oneShot] }, hidden: true }),
-    position(id('start'), 'Inizio', 0, hidden),
-    position(id('end'), 'Fine', 100, hidden),
-    position(id('loopStart'), 'Loop da', 0, { when: zoneLooping, hidden: true }),
-    position(id('loopEnd'), 'Loop a', 100, { when: zoneLooping, hidden: true }),
-    choice(id('own'), 'Suono proprio', ON_OFF, 0, hidden),
-    choice(id('loop'), 'Loop', LOOPS, LOOP.off, hidden),
-    num(id('xfade'), 'Fade', 0, 50, 0, '%', { step: 1, when: { param: id('loop'), is: LOOP.forward }, hidden: true }),
-    choice(id('loopRelease'), 'Rilascio', LOOP_RELEASES, LOOP_RELEASE.stay, { when: zoneLooping, hidden: true }),
-    choice(id('reverse'), 'Reverse', ON_OFF, 0, hidden),
-    ...envParams(ENV.amp, key => id(key as ZoneKey), hidden),
+    ...(['root', 'start', 'end', 'loopStart', 'loopEnd'] as const).map(k => ofZone(i, k)),
+    choice(zoneParam(i, 'own'), 'Suono proprio', ON_OFF, 0, hidden),
+    ...SOUND_KEYS.map(k => ofZone(i, k)),
   ];
   return [
     choice(zoneParam(i, 'lo'), 'Da', NOTE_NAMES, 0, hidden),
     choice(zoneParam(i, 'hi'), 'A', NOTE_NAMES, 127, hidden),
     num(zoneParam(i, 'vlo'), 'Vel. da', 1, 127, 1, '', { step: 1, ...hidden }),
     num(zoneParam(i, 'vhi'), 'Vel. a', 1, 127, 127, '', { step: 1, ...hidden }),
-    num(zoneParam(i, 'tune'), 'Tune', -48, 48, 0, 'st', { step: 1, ...hidden }),
-    num(zoneParam(i, 'fine'), 'Fine', -50, 50, 0, 'ct', { step: 1, ...hidden }),
     num(zoneParam(i, 'gain'), 'Volume', -36, 12, 0, 'dB', { step: 0.5, ...hidden }),
     num(zoneParam(i, 'pan'), 'Pan', -100, 100, 0, 'pan', { step: 1, ...hidden }),
     ...own,
@@ -180,69 +239,13 @@ export const SAMPLER: DeviceType = {
   type: 'sampler',
   label: 'Sampler',
   sections: [
-    {
-      label: 'Sample',
-      params: [
-        choice('mode', 'Modo', MODES),
-        position('start', 'Inizio', 0),
-        position('end', 'Fine', 100),
-        choice('reverse', 'Reverse', ON_OFF),
-        choice('trigger', 'Nota', TRIGGERS, TRIGGER.trigger, { when: { param: 'mode', is: [MODE.oneShot, MODE.slice] } }),
-        choice('loop', 'Loop', LOOPS, LOOP.off, { when: { param: 'mode', is: MODE.classic } }),
-        position('loopStart', 'Loop da', 0, { when: looping }),
-        position('loopEnd', 'Loop a', 100, { when: looping }),
-        num('xfade', 'Fade', 0, 50, 0, '%', { step: 1, when: { param: 'loop', is: LOOP.forward } }),
-        choice('loopRelease', 'Rilascio', LOOP_RELEASES, LOOP_RELEASE.stay, { when: looping }),
-        choice('sliceBy', 'Fette', SLICE_BY, SLICE.transients, { when: { param: 'mode', is: MODE.slice } }),
-        choice('sliceGrid', 'Griglia', SLICE_GRIDS.map(String), 2, { when: { param: 'sliceBy', is: SLICE.grid } }),
-        ...sliceParams(),
-        ...zoneParams(),
-      ],
-    },
-    {
-      label: 'Intonazione',
-      params: [
-        choice('root', 'Nota base', NOTE_NAMES, 60, { when: { param: 'mode', is: [MODE.classic, MODE.oneShot] } }),
-        num('transpose', 'Transpose', -48, 48, 0, 'st', { step: 1 }),
-        num('detune', 'Detune', -50, 50, 0, 'ct', { step: 1 }),
-        { ...percent('keyTrack', 'Key track', 100), when: { param: 'mode', is: [MODE.classic, MODE.oneShot] } },
-        choice('voiceMode', 'Voce', VOICE_MODES),
-        num('glide', 'Glide', 0, 1000, 0, 'ms', { step: 1, when: { param: 'voiceMode', is: [VOICE_MODE.mono, VOICE_MODE.legato] } }),
-        num('pitchEnv', 'Env pitch', -48, 48, 0, 'st', { step: 0.1 }),
-      ],
-    },
-    {
-      label: 'Filtro',
-      params: [
-        choice('fOn', 'Acceso', ON_OFF),
-        choice('fType', 'Tipo', FILTER_TYPES, FILTER.lp24, { when: filterOn }),
-        num('fCutoff', 'Cutoff', 20, 20000, 6000, 'Hz', { scale: 'log', when: filterOn }),
-        { ...percent('fRes', 'Risonanza', 0), when: filterOn },
-        { ...percent('fDrive', 'Drive', 0), when: filterOn },
-        { ...percent('fVar', 'Var', 50), when: { param: 'fType', is: VAR_FILTERS } },
-        { ...percent('fKey', 'Key track', 0), when: filterOn },
-        { ...percent('fEnv', 'Inviluppo', 0, -100), when: filterOn },
-        { ...percent('fVel', 'Velocity', 0), when: filterOn },
-      ],
-    },
-    { label: 'Inviluppo volume', params: envParams(ENV.amp) },
-    { label: 'Inviluppo filtro', params: envParams(ENV.filter) },
-    { label: 'Inviluppo pitch', params: envParams(ENV.pitch) },
-    {
-      label: 'LFO',
-      params: [
-        choice('lfoShape', 'Forma', LFO_SHAPES),
-        choice('lfoSync', 'Sincro', ['Tempo', 'Hz'], LFO_SYNC.hz),
-        choice('lfoDiv', 'Divisione', TEMPO_RATES.map(([l]) => l), TEMPO_RATE['1/8'], { when: { param: 'lfoSync', is: LFO_SYNC.tempo } }),
-        num('lfoRate', 'Velocità', 0.05, 30, 4, 'Hz', { scale: 'log', when: { param: 'lfoSync', is: LFO_SYNC.hz } }),
-        choice('lfoTrig', 'Ripartenza', LFO_TRIGS),
-        num('lfoFade', 'Entrata', 0, 5, 0, 's', { step: 0.01 }),
-        num('lfoPitch', '→ Pitch', 0, 12, 0, 'st', { step: 0.01 }),
-        percent('lfoCutoff', '→ Cutoff', 0),
-        percent('lfoVolume', '→ Volume', 0),
-        percent('lfoPan', '→ Pan', 0),
-      ],
-    },
+    { label: 'Sample', params: [...SAMPLE_PARAMS, ...sliceParams(), ...zoneParams()] },
+    { label: 'Intonazione', params: PITCH_PARAMS },
+    { label: 'Filtro', params: FILTER_PARAMS },
+    { label: 'Inviluppo volume', params: ENV_PARAMS[0] },
+    { label: 'Inviluppo filtro', params: ENV_PARAMS[1] },
+    { label: 'Inviluppo pitch', params: ENV_PARAMS[2] },
+    { label: 'LFO', params: LFO_PARAMS },
     {
       label: 'Uscita',
       params: [
@@ -317,12 +320,39 @@ export const zoneKeys = (i: number, lo: number, hi: number, root: number): Recor
 
 /** Tutti i parametri della zona `i` ai predefiniti (per una zona nuova o tolta). */
 export const zoneDefaults = (i: number): Record<string, number> => {
-  const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'tune', 'fine', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
+  const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
   // il suono della prima zona sono i parametri del Sampler: resta
   if (i > 0) keys.push('own', ...SOUND_KEYS);
   const specs = SAMPLER.sections.flatMap(s => s.params);
   return Object.fromEntries(keys.map(k => zoneParam(i, k)).map(id => [id, specs.find(p => p.id === id)!.default]));
 };
+
+/** I parametri di un Sampler salvato fino alla 0.3.18, quando le zone avevano Tune e Fine, con
+ *  quei valori nel Transpose e nel Detune del suono della zona (gli stessi parametri di oggi
+ *  altrimenti). Una zona che seguiva la prima e che la conversione cambierebbe prende il suo
+ *  suono, così tutte suonano com'erano. `samples`: i posti dei sample caricati; senza (un rack
+ *  salvato) contano le zone di cui c'è qualche parametro. */
+export function upgradeZoneTune(params: ParamValues, samples?: Readonly<Record<string, unknown>>): ParamValues {
+  const stale = Object.keys(params).filter(k => /^z\d+(tune|fine)$/.test(k));
+  if (!stale.length) return params;
+  const shift = Array.from({ length: MAX_ZONES }, (_, i) => (params[`z${i + 1}tune`] ?? 0) + (params[`z${i + 1}fine`] ?? 0) / 100);
+  const named = new Set(Object.keys(params).map(k => Number(/^z(\d+)[a-zA-Z]/.exec(k)?.[1]) - 1));
+  const used = (i: number) => (samples ? !!samples[zoneSlot(i)] : named.has(i));
+  const v = resolveParams(SAMPLER, params);
+  const out: Record<string, number> = { ...params };
+  for (const k of stale) delete out[k];
+  // il Tune della prima zona va nel Transpose del Sampler, che le zone che la seguono prendono
+  for (let i = 1; i < MAX_ZONES; i++) if (used(i) && (shift[0] || shift[i])) Object.assign(out, ownSound(v, i));
+  for (let i = 0; i < MAX_ZONES; i++) {
+    const now = { ...v, ...out };
+    if (!shift[i] || (i > 0 && now[zoneParam(i, 'own')] !== 1)) continue;
+    const semis = now[zoneParam(i, 'transpose')] + now[zoneParam(i, 'detune')] / 100 + shift[i];
+    const st = Math.max(-48, Math.min(48, Math.round(semis)));
+    out[zoneParam(i, 'transpose')] = st;
+    out[zoneParam(i, 'detune')] = Math.max(-50, Math.min(50, Math.round((semis - st) * 100)));
+  }
+  return out;
+}
 
 /** La nota scritta nel nome di un file ("Piano C3.wav", "bass_f#1", "Vox-Eb2"), come la
  *  scrive Live (C3 = 60), o null. */

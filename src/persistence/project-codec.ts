@@ -1,4 +1,5 @@
 import { asId } from '../core/id';
+import { SAMPLER, upgradeZoneTune } from '../devices/instruments/sampler/sampler';
 import { Tempo, TimeSignature } from '../core/music-time';
 import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
@@ -13,7 +14,7 @@ import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 11;
+export const PROJECT_VERSION = 12;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -81,6 +82,16 @@ const migrations: Record<number, Migration> = {
   9: json => json,
   // 10 → 11: i bus (campo facoltativo) e le mandate delle tracce verso i bus (campo facoltativo)
   10: json => json,
+  // 11 → 12: le zone del Sampler non hanno più Tune e Fine: vanno nel Transpose e Detune della zona
+  11: json => ({
+    ...json,
+    tracks: (json.tracks as JsonObject[]).map(t => {
+      const inst = t.instrument as JsonObject | undefined;
+      if (!inst || inst.type !== SAMPLER.type) return t;
+      const params = upgradeZoneTune(inst.params as Record<string, number>, inst.samples as JsonObject | undefined);
+      return { ...t, instrument: { ...inst, params } };
+    }),
+  }),
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo

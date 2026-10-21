@@ -4,6 +4,7 @@
  * spazio locale. */
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import { rackPresetFrom, type RackPreset } from '../model/rack-preset';
+import { SAMPLER, upgradeZoneTune } from './instruments/sampler/sampler';
 import type { PresetStorage } from './user-presets';
 
 /** Chi conserva i rack: i file (app desktop) o lo spazio locale (browser). */
@@ -41,7 +42,7 @@ export class StorageRacks implements RackBackend {
   }
 
   private async all(): Promise<RackPreset[]> {
-    return (await this.load()).flatMap(r => rackPresetFrom(r) ?? []);
+    return (await this.load()).flatMap(r => readRack(r) ?? []);
   }
 
   private write(racks: readonly RackPreset[]): void {
@@ -74,7 +75,7 @@ export class UserRacks {
     if (!this.backend) return;
     this.racks = [];
     for (const raw of await this.backend.load()) {
-      const rack = rackPresetFrom(raw);
+      const rack = readRack(raw);
       if (rack) this.put(rack);
     }
     this.events.emit('change');
@@ -124,3 +125,12 @@ export const userRacks = ((): UserRacks => {
   const storage = localStorageOrNull();
   return new UserRacks(storage ? new StorageRacks(storage) : null);
 })();
+
+/** Un rack salvato, con i parametri dello strumento scritti da una versione passata portati a
+ *  quelli di adesso (le zone del Sampler fino alla 0.3.18). */
+function readRack(raw: unknown): RackPreset | null {
+  const rack = rackPresetFrom(raw);
+  const inst = rack?.instrument;
+  if (!rack || inst?.type !== SAMPLER.type) return rack;
+  return { ...rack, instrument: { ...inst, params: upgradeZoneTune(inst.params) } };
+}
