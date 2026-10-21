@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.17] - 2026-10-21
+
 ### Added
 - Sampler: each zone can have its own loop (mode, crossfade, release), Reverse and volume
   envelope, so a kit can have a short hi-hat and a long crash in one Sampler. A zone follows
