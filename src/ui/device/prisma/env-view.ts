@@ -27,7 +27,7 @@ export class EnvView {
 
   constructor(
     private readonly values: () => Readonly<Record<string, number>>, private readonly set: (values: ParamValues, final: boolean) => void,
-    /** Il nome dell'inviluppo `env`, scritto nell'angolo (lo usa anche il Sampler). */
+    /** Il nome dell'inviluppo `env`, scritto nell'angolo (vuoto: niente nome, e il disegno sale). */
     private readonly label: (env: number) => string = env => (env === 1 ? 'Env 1 · volume' : `Env ${env}`),
     private readonly fit = false,
   ) {
@@ -67,7 +67,7 @@ export class EnvView {
     const roots = Math.sqrt(e('A')) + Math.sqrt(e('H')) + Math.sqrt(e('D')) + Math.sqrt(e('R'));
     const k = this.frozen ?? (this.fit ? room / (Math.max(FIT_MIN, roots) * FIT_ROOM) : room / (4 * Math.sqrt(MAX_TIME)));
     const px = (t: number) => k * Math.sqrt(Math.max(0, t));
-    const top = PAD + 12, bottom = h - PAD, height = bottom - top;
+    const top = PAD + (this.label(this.env) ? 12 : 0), bottom = h - PAD, height = bottom - top;
     const xA = PAD + px(e('A')), xH = xA + px(e('H')), xD = xH + px(e('D')), xS = xD + sustainW, xR = xS + px(e('R'));
     const yS = bottom - (e('S') / 100) * height;
     return { w, h, k, top, bottom, height, xA, xH, xD, xS, xR, yS, e };
@@ -186,9 +186,11 @@ export class EnvView {
       g.fill();
     }
     g.globalAlpha = 1;
+    const label = this.label(this.env);
+    if (!label) return;
     g.font = '10px system-ui, sans-serif';
     g.fillStyle = LABEL;
-    g.fillText(this.label(this.env), 6, 12);
+    g.fillText(label, 6, 12);
   }
 }
 

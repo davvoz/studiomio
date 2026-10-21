@@ -81,6 +81,7 @@ export class SamplerDisplay implements DeviceDisplay {
   private readonly zoneCard: HTMLElement;
   private readonly zoneTitle = el('span', { className: 'smp-card-title' });
   private readonly sampleTitle = el('span', { className: 'smp-card-title', textContent: 'Sample' });
+  private readonly envTitle = el('span', { className: 'smp-card-title', textContent: 'Inviluppi' });
   private values: Record<string, number>;
   private params: ParamValues | null = null;
   private settings: DeviceSettings;
@@ -119,8 +120,8 @@ export class SamplerDisplay implements DeviceDisplay {
       pitched: () => this.values.mode !== MODE.slice,
       menu: (x, y) => this.zoneMenu(x, y),
     });
-    this.envView = new EnvView(() => this.zoneValues(), (values, final) => ctx.setParams(this.toZone(values), final),
-      env => `Inviluppo ${ENV_NAMES[env - 1].toLowerCase()}${env === 1 && this.rows().length > 1 ? ` · zona ${this.zone + 1}` : ''}`, true);
+    // il nome dell'inviluppo è nella scheda scelta (e la zona nel titolo): il disegno usa tutta l'altezza
+    this.envView = new EnvView(() => this.zoneValues(), (values, final) => ctx.setParams(this.toZone(values), final), () => '', true);
     this.envView.canvas.classList.add('smp-env');
 
     const mode = this.control('mode', v => this.setMode(v));
@@ -145,12 +146,12 @@ export class SamplerDisplay implements DeviceDisplay {
         this.zoneChoice, this.link, this.sampleChoice, load, this.addZones, this.info),
       this.wave.canvas, this.zoneView.canvas);
 
-    const envCard = this.card('Inviluppi', [el('div', { className: 'smp-tabs' }, ...ENV_NAMES.map((name, i) => {
-      const b = el<HTMLButtonElement>('button', { className: 'mini', textContent: name, onclick: () => this.showEnv(i + 1) });
-      this.envTabs.push(b);
-      return b;
-    }))], this.envView.canvas, this.envKnobs);
-    envCard.classList.add('smp-env-card');
+    const envCard = el('div', { className: 'smp-card smp-env-card' },
+      el('div', { className: 'smp-card-head' }, this.envTitle, el('div', { className: 'smp-tabs' }, ...ENV_NAMES.map((name, i) => {
+        const b = el<HTMLButtonElement>('button', { className: 'mini', textContent: name, onclick: () => this.showEnv(i + 1) });
+        this.envTabs.push(b);
+        return b;
+      }))), el('div', { className: 'smp-env-body' }, el('div', { className: 'smp-env-box' }, this.envView.canvas), this.envKnobs));
 
     this.sampleCard = el('div', { className: 'smp-card' },
       el('div', { className: 'smp-card-head' }, this.sampleTitle, this.detect), this.row(...SAMPLE_ORDER));
@@ -405,6 +406,8 @@ export class SamplerDisplay implements DeviceDisplay {
       ? 'Loop, reverse e inviluppo del volume di questa zona sono quelli della zona 1. Clic (o cambiane uno) per darle i suoi.'
       : 'Questa zona ha loop, reverse e inviluppo del volume suoi. Clic: tornano quelli della zona 1.';
     this.sampleTitle.textContent = rows.length > 1 ? `Sample · zona ${this.zone + 1}` : 'Sample';
+    // l'inviluppo del volume è della zona; filtro e pitch sono di tutte
+    this.envTitle.textContent = rows.length > 1 && view.env === 1 ? `Inviluppi · zona ${this.zone + 1}` : 'Inviluppi';
     const a = this.audio();
     if (!a) {
       this.info.textContent = rows.length > 1 ? `${rows.length} zone` : '';
