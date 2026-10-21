@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.15] - 2026-10-21
+
 ### Added
 - Tornado, a factory Audio Effect Rack to play live like Turnado: eight effects in a row, one
   macro each (Stutter, Reverse, Gate, Lo-fi, Filtro, Flanger, Pan, Stop). With a macro at 0
