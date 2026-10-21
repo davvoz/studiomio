@@ -11,6 +11,7 @@ import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
 import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../devices/registry';
 import { userPresets } from '../devices/user-presets';
+import { FACTORY_RACKS } from '../devices/factory-racks';
 import { userRacks } from '../devices/user-racks';
 import { MASTER, type ChainOwner } from '../model/project';
 import { BusTrack } from '../model/track';
@@ -65,7 +66,7 @@ export class App implements Commands, TimelineActions {
   readonly sessionView: SessionView;
   /** Il browser a sinistra: le sue fonti, chi carica ciò che si sceglie, la vista. */
   readonly catalog = new BrowserCatalog<FsFolder>(standardSources({
-    instruments: INSTRUMENT_TYPES, effects: EFFECT_TYPES, user: userPresets, racks: userRacks, project: this.store,
+    instruments: INSTRUMENT_TYPES, effects: EFFECT_TYPES, user: userPresets, racks: userRacks, factoryRacks: FACTORY_RACKS, project: this.store,
   }), indexedDbPlaces);
   private readonly loader: BrowserLoader;
   readonly browser: BrowserView;

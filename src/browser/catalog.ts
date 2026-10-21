@@ -2,6 +2,7 @@
  * l'utente aggiunge, che si ricordano tra un avvio e l'altro. */
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { DeviceType } from '../devices/device-type';
+import type { RackPreset } from '../model/rack-preset';
 import type { BrowserSource } from './item';
 import { deviceSource, kitSource, userPresetsSource, type UserPresetList, type UserRackList } from './device-sources';
 import { folderSource, projectSamplesSource, type FolderReader, type SampleProvider } from './sample-sources';
@@ -17,18 +18,20 @@ export interface StandardSources {
   readonly effects: readonly DeviceType[];
   readonly user: UserPresetList;
   readonly racks?: UserRackList;
+  /** I rack di fabbrica (Tornado…). */
+  readonly factoryRacks?: readonly RackPreset[];
   readonly project: SampleProvider;
 }
 
 /** Le fonti dell'app, come in Live ma solo con ciò che c'è: Strumenti, Batterie (i kit degli
  *  strumenti che danno un nome alle note, cioè la Drum Machine), Effetti audio; poi i luoghi
  *  Progetto corrente e Preset dell'utente. */
-export function standardSources({ instruments, effects, user, racks, project }: StandardSources): BrowserSource[] {
+export function standardSources({ instruments, effects, user, racks, factoryRacks, project }: StandardSources): BrowserSource[] {
   const drums = instruments.filter(t => t.noteNames);
   return [
-    deviceSource({ id: 'instruments', label: 'Strumenti', kind: 'instrument', types: instruments, user, racks }),
+    deviceSource({ id: 'instruments', label: 'Strumenti', kind: 'instrument', types: instruments, user, racks, factoryRacks }),
     ...(drums.length ? [kitSource('drums', 'Batterie', drums, user)] : []),
-    deviceSource({ id: 'effects', label: 'Effetti audio', kind: 'effect', types: effects, user, racks }),
+    deviceSource({ id: 'effects', label: 'Effetti audio', kind: 'effect', types: effects, user, racks, factoryRacks }),
     projectSamplesSource(project),
     userPresetsSource(instruments, effects, user, racks),
   ];

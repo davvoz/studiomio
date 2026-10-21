@@ -7,6 +7,7 @@ import { DELAY } from '../../src/devices/effects/delay/delay';
 import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../../src/devices/registry';
 import { BrowserCatalog, standardSources, type FolderPlaces } from '../../src/browser/catalog';
 import { deviceSource, kitSource, userPresetsSource, type UserPresetList, type UserRackList } from '../../src/browser/device-sources';
+import { FACTORY_RACKS, TORNADO } from '../../src/devices/factory-racks';
 import { MACRO_COUNT } from '../../src/model/rack';
 import type { RackPreset } from '../../src/model/rack-preset';
 import { childrenOf, type BrowserItem } from '../../src/browser/item';
@@ -102,6 +103,22 @@ describe('categorie dei dispositivi', () => {
     // senza rack salvati, nessuna cartella
     expect(names(await deviceSource({ id: 'fx', label: 'FX', kind: 'effect', types: [DELAY], user: user(), racks: { list: () => [] } }).items()))
       .toEqual([DELAY.label]);
+  });
+
+  it('rack di fabbrica: nella cartella dei rack del loro tipo, dopo quelli salvati; non tra i Preset dell\'utente', async () => {
+    const macros = Array.from({ length: MACRO_COUNT }, () => ({ name: null, value: 0, mappings: [] }));
+    const eco: RackPreset = { name: 'Eco', instrument: null, effects: [{ type: 'delay', preset: null, params: {}, enabled: true }], macros };
+    const sources = standardSources({ instruments: [ANALOG], effects: [DELAY], user: user(), racks: { list: () => [eco] }, factoryRacks: FACTORY_RACKS, project: setup().store });
+    const [instruments, effects] = [await sources[0].items(), await sources[1].items()];
+    expect(names(instruments)).toEqual(['Instrument Rack', ANALOG.label]);
+    expect(names(await childrenOf(instruments[0]))).toEqual(['Acido', 'Nebbia', 'Ringhio']);
+    expect(names(await childrenOf(effects[0]))).toEqual(['Eco', 'Tornado']);
+    expect((await childrenOf(effects[0]))[1].payload).toEqual({ kind: 'rack', rack: TORNADO });
+    expect(names(await sources.find(s => s.id === 'user-presets')!.items())).toEqual(['Audio Effect Rack']);
+    // senza rack salvati la cartella c'è lo stesso
+    const fx = deviceSource({ id: 'fx', label: 'FX', kind: 'effect', types: [DELAY], user: user(), racks: { list: () => [] }, factoryRacks: FACTORY_RACKS });
+    expect(names(await fx.items())).toEqual(['Audio Effect Rack', DELAY.label]);
+    expect((await searchSources([fx], 'torn')).map(h => h.item.name)).toEqual(['Tornado']);
   });
 });
 

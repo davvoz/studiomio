@@ -6,6 +6,21 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Tornado, a factory Audio Effect Rack to play live like Turnado: eight effects in a row, one
+  macro each (Stutter, Reverse, Gate, Lo-fi, Filtro, Flanger, Pan, Stop). With a macro at 0
+  its effect is out and the sound passes untouched; turning it brings the effect in harder.
+  Stop is a button: hold it to brake the tape, let go and it spins back up. Find it in Effetti
+  audio › Audio Effect Rack; on the APC40 the 8 Device Control knobs play the macros.
+- Three factory Instrument Racks in Strumenti › Instrument Rack, each an instrument preset with
+  effects and 8 macros that move both:
+  - Acido: Analog's Acid with the 303 knobs (Cutoff, Risonanza, Env Mod, Decay, Accent, Glide),
+    plus Sporco (saturation) and Eco (ping-pong delay and plate).
+  - Nebbia: Wavetable's Pad che respira with Apri, Morph, Respiro, Larghezza, Lentezza, a trance
+    Gate, Eco and Spazio.
+  - Ringhio: Neuro's Neuro ringhio bass with Cutoff, Ringhio, Vocale, a tempo-synced Wobble and
+    its Velocità, Distorsione, Phaser and OTT, with the lows kept mono.
+
 ## [0.3.14] - 2026-10-21
 
 ### Added

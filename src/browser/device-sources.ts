@@ -31,15 +31,18 @@ function onChangeOf(...lists: readonly ({ onChange?(fn: () => void): Unsubscribe
   };
 }
 
-/** La cartella dei rack salvati di un tipo, come in Live: "Instrument Rack" tra gli strumenti
- *  (i rack con lo strumento), "Audio Effect Rack" tra gli effetti; nessuna se non ce ne sono. */
-function rackFolder(prefix: string, kind: DeviceKind, racks: UserRackList | undefined): BrowserItem[] {
-  const list = racks?.list().filter(r => !!r.instrument === (kind === 'instrument')) ?? [];
-  if (!list.length) return [];
+/** La cartella dei rack di un tipo, come in Live: "Instrument Rack" tra gli strumenti (i rack
+ *  con lo strumento), "Audio Effect Rack" tra gli effetti; prima quelli salvati, poi quelli di
+ *  fabbrica; nessuna se non ce ne sono. */
+function rackFolder(prefix: string, kind: DeviceKind, racks: UserRackList | undefined, factory: readonly RackPreset[] = []): BrowserItem[] {
+  const ofKind = (r: RackPreset) => !!r.instrument === (kind === 'instrument');
+  const list = racks?.list().filter(ofKind) ?? [], fixed = factory.filter(ofKind);
+  if (!list.length && !fixed.length) return [];
   const id = `${prefix}/rack`;
+  const item = (r: RackPreset, key: string): BrowserItem => ({ id: `${id}/${key}`, name: r.name, icon: 'rack', payload: { kind: 'rack', rack: r } });
   return [{
     id, name: kind === 'instrument' ? 'Instrument Rack' : 'Audio Effect Rack', icon: 'folder',
-    children: async () => list.map((r): BrowserItem => ({ id: `${id}/${r.name}`, name: r.name, icon: 'rack', payload: { kind: 'rack', rack: r } })),
+    children: async () => [...list.map(r => item(r, r.name)), ...fixed.map(r => item(r, `f:${r.name}`))],
   }];
 }
 
@@ -63,15 +66,17 @@ export interface DeviceSourceOptions {
   readonly user: UserPresetList;
   /** I rack salvati, in una cartella prima dei dispositivi. */
   readonly racks?: UserRackList;
+  /** I rack di fabbrica, nella stessa cartella dopo quelli salvati. */
+  readonly factoryRacks?: readonly RackPreset[];
 }
 
 /** Una categoria di dispositivi, come "Instruments" e "Audio Effects" di Live: i rack salvati,
  *  poi una cartella per dispositivo (che si carica così com'è) con dentro i suoi preset. */
-export function deviceSource({ id, label, kind, types, user, racks }: DeviceSourceOptions): BrowserSource {
+export function deviceSource({ id, label, kind, types, user, racks, factoryRacks }: DeviceSourceOptions): BrowserSource {
   return {
     id, label, section: 'categories',
     items: async () => [
-      ...rackFolder(id, kind, racks),
+      ...rackFolder(id, kind, racks, factoryRacks),
       ...types.map((t): BrowserItem => ({
         id: `${id}/${t.type}`, name: t.label, icon: kind, payload: payload(kind, t, null),
         children: async () => presetItems(`${id}/${t.type}`, kind, t, user),
