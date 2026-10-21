@@ -21,10 +21,19 @@ export const SAMPLE_SLOT = 'sample';
 /** Le zone al massimo: ognuna un sample, sui tasti da `lo` a `hi` e sulle velocity da `vlo` a
  *  `vhi`, come nel Sampler di Live. Una nota suona tutte le zone che la contengono. */
 export const MAX_ZONES = 32;
-/** I parametri di una zona. Quelli della prima per le posizioni e la nota base sono i parametri
- *  del sample singolo (`start`, `root`…), così un Sampler con un solo sample resta com'era. */
-export type ZoneKey = 'lo' | 'hi' | 'vlo' | 'vhi' | 'root' | 'tune' | 'fine' | 'gain' | 'pan' | 'start' | 'end' | 'loopStart' | 'loopEnd';
-const FIRST_ZONE_KEYS: ReadonlySet<ZoneKey> = new Set(['root', 'start', 'end', 'loopStart', 'loopEnd']);
+/** I parametri dell'inviluppo del volume, che ogni zona può avere suo. */
+const AMP_ENV_KEYS = ['e1A', 'e1H', 'e1D', 'e1S', 'e1R', 'e1Ac', 'e1Dc', 'e1Rc'] as const;
+/** Come si legge il sample (loop, reverse) e l'inviluppo del volume: le zone dalla seconda in su
+ *  li prendono dalla prima finché non hanno i loro (`own`). */
+export const SOUND_KEYS = ['loop', 'xfade', 'loopRelease', 'reverse', ...AMP_ENV_KEYS] as const;
+/** I parametri di una zona. Quelli della prima per le posizioni, la nota base e il suono sono i
+ *  parametri del sample singolo (`start`, `root`, `loop`, `e1A`…), così un Sampler con un solo
+ *  sample resta com'era. `own` (dalla seconda zona): il suono è suo e non quello della prima. */
+export type ZoneKey = 'lo' | 'hi' | 'vlo' | 'vhi' | 'root' | 'tune' | 'fine' | 'gain' | 'pan' | 'start' | 'end' | 'loopStart' | 'loopEnd'
+  | 'own' | (typeof SOUND_KEYS)[number];
+/** Le chiavi della zona che per la prima zona sono i parametri con il loro nome. */
+export const FIRST_ZONE_KEYS: ReadonlySet<ZoneKey> = new Set<ZoneKey>(['root', 'start', 'end', 'loopStart', 'loopEnd', ...SOUND_KEYS]);
+const SOUND: ReadonlySet<ZoneKey> = new Set(SOUND_KEYS);
 /** Il posto del sample della zona `i` (da 0): "sample", poi "z2", "z3"… */
 export const zoneSlot = (i: number): string => (i === 0 ? SAMPLE_SLOT : `z${i + 1}`);
 /** La zona di un posto dei sample, o −1. */
@@ -36,8 +45,17 @@ export const zoneOfSlot = (slot: string): number => {
 };
 /** L'id del parametro `key` della zona `i` (da 0): "z1lo", "z2root"… ("root", "start"… per la prima). */
 export const zoneParam = (i: number, key: ZoneKey): string => (i === 0 && FIRST_ZONE_KEYS.has(key) ? key : `z${i + 1}${key}`);
-/** I parametri che un preset non tocca: la mappa delle zone dipende dai sample caricati. */
-const ZONE_PARAM = /^z\d+[a-zA-Z]+$/;
+/** Il parametro da cui la zona `i` prende `key`: il suo, o quello della prima se il suono della
+ *  zona segue la prima. */
+export const zoneSource = (values: Readonly<Record<string, number>>, i: number, key: ZoneKey): string =>
+  zoneParam(i > 0 && SOUND.has(key) && values[zoneParam(i, 'own')] !== 1 ? 0 : i, key);
+/** I valori che rendono suo il suono della zona `i` (copiato dalla prima), se non lo è già. */
+export const ownSound = (values: Readonly<Record<string, number>>, i: number): Record<string, number> =>
+  i === 0 || values[zoneParam(i, 'own')] === 1 ? {}
+    : { [zoneParam(i, 'own')]: 1, ...Object.fromEntries(SOUND_KEYS.map(k => [zoneParam(i, k), values[k]])) };
+/** I parametri che un preset non tocca: la mappa delle zone dipende dai sample caricati (e il
+ *  suono proprio di una zona è di quel sample; quello delle zone che seguono la prima lo cambia). */
+const ZONE_PARAM = /^z\d+[a-zA-Z]\w*$/;
 
 export const MODES = ['Classic', 'One-Shot', 'Slice'] as const;
 export const MODE = { classic: 0, oneShot: 1, slice: 2 } as const;
@@ -101,31 +119,40 @@ const position = (id: string, label: string, def: number, extra: Partial<NumberP
 const looping = { param: 'loop', is: [LOOP.forward, LOOP.pingPong] };
 const filterOn = { param: 'fOn', is: 1 };
 
-/** Inviluppo `n` (1 volume, 2 filtro, 3 pitch): come quelli di Prisma, con le curve. */
-const envParams = (n: number): ParamSpec[] => {
+/** Inviluppo `n` (1 volume, 2 filtro, 3 pitch): come quelli di Prisma, con le curve. `id` dà il
+ *  nome dei parametri (per quello di una zona). */
+const envParams = (n: number, id = (key: string) => key, extra: Partial<NumberParam> = {}): ParamSpec[] => {
   const amp = n === ENV.amp;
   return [
-    time(`e${n}A`, 'Attack', amp ? 0.001 : 0.005),
-    time(`e${n}H`, 'Hold', 0.001),
-    time(`e${n}D`, 'Decay', amp ? 1 : 0.5),
-    percent(`e${n}S`, 'Sustain', amp ? 100 : 0),
-    time(`e${n}R`, 'Release', amp ? 0.05 : 0.3),
-    num(`e${n}Ac`, 'Curva A', -100, 100, 0, '', { step: 1 }),
-    num(`e${n}Dc`, 'Curva D', -100, 100, 60, '', { step: 1 }),
-    num(`e${n}Rc`, 'Curva R', -100, 100, 60, '', { step: 1 }),
-  ];
+    time(id(`e${n}A`), 'Attack', amp ? 0.001 : 0.005),
+    time(id(`e${n}H`), 'Hold', 0.001),
+    time(id(`e${n}D`), 'Decay', amp ? 1 : 0.5),
+    percent(id(`e${n}S`), 'Sustain', amp ? 100 : 0),
+    time(id(`e${n}R`), 'Release', amp ? 0.05 : 0.3),
+    num(id(`e${n}Ac`), 'Curva A', -100, 100, 0, '', { step: 1 }),
+    num(id(`e${n}Dc`), 'Curva D', -100, 100, 60, '', { step: 1 }),
+    num(id(`e${n}Rc`), 'Curva R', -100, 100, 60, '', { step: 1 }),
+  ].map(p => ({ ...p, ...extra }));
 };
 
 /** I parametri delle zone (nascosti: si muovono dall'editor delle zone e dalla forma d'onda). */
 const zoneParams = (): ParamSpec[] => Array.from({ length: MAX_ZONES }, (_, i): ParamSpec[] => {
   // le etichette sono quelle dei controlli della prima zona: il pannello li mostra al loro posto
   const hidden = { hidden: true };
+  const id = (key: ZoneKey) => zoneParam(i, key);
+  const zoneLooping = { param: id('loop'), is: looping.is };
   const own: ParamSpec[] = i === 0 ? [] : [
-    choice(zoneParam(i, 'root'), 'Nota base', NOTE_NAMES, 60, { when: { param: 'mode', is: [MODE.classic, MODE.oneShot] }, hidden: true }),
-    position(zoneParam(i, 'start'), 'Inizio', 0, hidden),
-    position(zoneParam(i, 'end'), 'Fine', 100, hidden),
-    position(zoneParam(i, 'loopStart'), 'Loop da', 0, { when: looping, hidden: true }),
-    position(zoneParam(i, 'loopEnd'), 'Loop a', 100, { when: looping, hidden: true }),
+    choice(id('root'), 'Nota base', NOTE_NAMES, 60, { when: { param: 'mode', is: [MODE.classic, MODE.oneShot] }, hidden: true }),
+    position(id('start'), 'Inizio', 0, hidden),
+    position(id('end'), 'Fine', 100, hidden),
+    position(id('loopStart'), 'Loop da', 0, { when: zoneLooping, hidden: true }),
+    position(id('loopEnd'), 'Loop a', 100, { when: zoneLooping, hidden: true }),
+    choice(id('own'), 'Suono proprio', ON_OFF, 0, hidden),
+    choice(id('loop'), 'Loop', LOOPS, LOOP.off, hidden),
+    num(id('xfade'), 'Fade', 0, 50, 0, '%', { step: 1, when: { param: id('loop'), is: LOOP.forward }, hidden: true }),
+    choice(id('loopRelease'), 'Rilascio', LOOP_RELEASES, LOOP_RELEASE.stay, { when: zoneLooping, hidden: true }),
+    choice(id('reverse'), 'Reverse', ON_OFF, 0, hidden),
+    ...envParams(ENV.amp, key => id(key as ZoneKey), hidden),
   ];
   return [
     choice(zoneParam(i, 'lo'), 'Da', NOTE_NAMES, 0, hidden),
@@ -291,6 +318,8 @@ export const zoneKeys = (i: number, lo: number, hi: number, root: number): Recor
 /** Tutti i parametri della zona `i` ai predefiniti (per una zona nuova o tolta). */
 export const zoneDefaults = (i: number): Record<string, number> => {
   const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'tune', 'fine', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
+  // il suono della prima zona sono i parametri del Sampler: resta
+  if (i > 0) keys.push('own', ...SOUND_KEYS);
   const specs = SAMPLER.sections.flatMap(s => s.params);
   return Object.fromEntries(keys.map(k => zoneParam(i, k)).map(id => [id, specs.find(p => p.id === id)!.default]));
 };

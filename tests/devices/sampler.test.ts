@@ -3,8 +3,8 @@ import { keptOnPreset, paramSpec, resolveParams } from '../../src/devices/device
 import type { SampleData } from '../../src/devices/dsp/core';
 import { instrumentType } from '../../src/devices/registry';
 import {
-  FIRST_SLICE_NOTE, layoutZones, LOOP, LOOP_RELEASE, MAX_ZONES, MODE, noteInName, SAMPLE_SLOT, SAMPLER, SLICE, sliceStarts, sliceValues,
-  spreadRanges, TRIGGER, VOICE_MODE, zoneKeys, zoneParam, zoneSlot, type ZoneKey,
+  FIRST_SLICE_NOTE, layoutZones, LOOP, LOOP_RELEASE, MAX_ZONES, MODE, noteInName, ownSound, SAMPLE_SLOT, SAMPLER, SLICE, SOUND_KEYS, sliceStarts,
+  sliceValues, spreadRanges, TRIGGER, VOICE_MODE, zoneDefaults, zoneKeys, zoneParam, zoneSlot, zoneSource, type ZoneKey,
 } from '../../src/devices/instruments/sampler/sampler';
 import { SamplerCore } from '../../src/devices/instruments/sampler/sampler-core';
 import { presetParams } from '../../src/devices/user-presets';
@@ -294,6 +294,51 @@ describe('Sampler: zone', () => {
     expect(zoneParam(2, 'loopEnd')).toBe('z3loopEnd');
     const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'tune', 'fine', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
     for (let i = 0; i < MAX_ZONES; i++) for (const k of keys) expect(paramSpec(SAMPLER, zoneParam(i, k)), `${i} ${k}`).toBeDefined();
+    // il suono: quello della prima zona sono i parametri del Sampler
+    expect(zoneParam(0, 'e1R')).toBe('e1R');
+    expect(zoneParam(3, 'e1R')).toBe('z4e1R');
+    for (let i = 1; i < MAX_ZONES; i++) {
+      for (const k of ['own', ...SOUND_KEYS] as const) expect(paramSpec(SAMPLER, zoneParam(i, k)), `${i} ${k}`).toBeDefined();
+      expect(Object.keys(zoneDefaults(i))).toContain(zoneParam(i, 'loop'));
+    }
+  });
+
+  it('il suono di una zona è quello della prima finché non diventa suo', () => {
+    const v = resolveParams(SAMPLER, { loop: LOOP.forward, e1R: 2, [zoneParam(1, 'e1R')]: 0.1 });
+    expect(zoneSource(v, 1, 'e1R')).toBe('e1R');
+    expect(zoneSource(v, 1, 'start')).toBe('z2start');
+    const own = ownSound(v, 1);
+    expect(own).toMatchObject({ [zoneParam(1, 'own')]: 1, [zoneParam(1, 'loop')]: LOOP.forward, [zoneParam(1, 'e1R')]: 2 });
+    expect(ownSound({ ...v, ...own }, 1)).toEqual({});
+    expect(zoneSource({ ...v, ...own }, 1, 'e1R')).toBe('z2e1R');
+  });
+
+  it('loop, reverse e inviluppo del volume: le zone seguono la prima, o hanno i loro', () => {
+    const loop = { loop: LOOP.forward, loopStart: 20, loopEnd: 80, e1R: 0.01 };
+    const tail = (params: Record<string, number>) => {
+      const { core, queue } = zoned([null, sine(440, 0.2)], { ...loop, ...params });
+      queue.add(60, 100, 0, SR * 0.5);
+      return lastSound(run(core, queue, SR).left);
+    };
+    // la seconda zona segue la prima: va in loop fino al rilascio
+    expect(tail({})).toBeGreaterThan(SR * 0.5);
+    // con il suo suono (senza loop) finisce con il sample; con il suo rilascio lungo dura di più
+    const own = { [zoneParam(1, 'own')]: 1, [zoneParam(1, 'loopStart')]: 20, [zoneParam(1, 'loopEnd')]: 80 };
+    expect(tail(own)).toBeLessThan(SR * 0.2 + 10);
+    expect(tail({ ...own, [zoneParam(1, 'loop')]: LOOP.forward, [zoneParam(1, 'e1R')]: 0.01 })).toBeLessThan(SR * 0.55);
+    expect(tail({ ...own, [zoneParam(1, 'loop')]: LOOP.forward, [zoneParam(1, 'e1R')]: 0.3 })).toBeGreaterThan(SR * 0.7);
+  });
+
+  it('due zone sulla stessa nota con inviluppi diversi', () => {
+    const { core, queue } = zoned([level(0.3), level(0.4)], {
+      e1R: 0.01, [zoneParam(1, 'own')]: 1, [zoneParam(1, 'e1A')]: 0.001, [zoneParam(1, 'e1R')]: 0.5, [zoneParam(1, 'e1S')]: 100,
+    });
+    queue.add(60, 100, 0, SR / 10);
+    const out = run(core, queue, SR / 2).left;
+    expect(out[2000]).toBeCloseTo(0.7, 2);
+    // dopo il rilascio resta solo la seconda, che sfuma piano
+    expect(out[SR / 10 + SR * 0.05]).toBeGreaterThan(0.2);
+    expect(out[SR / 10 + SR * 0.05]).toBeLessThan(0.4);
   });
 
   it('legge la nota scritta nel nome di un file', () => {
@@ -391,8 +436,8 @@ describe('Sampler: zone', () => {
   });
 
   it('i preset non toccano la mappa delle zone, e quelli salvati non la contengono', () => {
-    const params = { ...zoneKeys(1, 40, 40, 40), root: 36, fCutoff: 500, start: 10 };
-    expect(keptOnPreset(SAMPLER, params)).toEqual({ ...zoneKeys(1, 40, 40, 40), root: 36 });
+    const params = { ...zoneKeys(1, 40, 40, 40), root: 36, fCutoff: 500, start: 10, [zoneParam(1, 'own')]: 1, [zoneParam(1, 'e1R')]: 2 };
+    expect(keptOnPreset(SAMPLER, params)).toEqual({ ...zoneKeys(1, 40, 40, 40), root: 36, [zoneParam(1, 'own')]: 1, [zoneParam(1, 'e1R')]: 2 });
     expect(presetParams(SAMPLER, params)).toEqual({ fCutoff: 500, start: 10 });
   });
 });

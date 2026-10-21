@@ -1,15 +1,17 @@
 /* Il pannello del Sampler. In alto, nella scheda Sample, la forma d'onda della zona scelta (con
  * il sample da scegliere o caricare); nella scheda Zone l'editor delle zone sulla tastiera. A
  * destra gli inviluppi disegnati; sotto le schede del sample (con i controlli del modo scelto) o
- * della zona, dell'intonazione, del filtro e dell'uscita; a destra l'LFO. Il modo (Classic,
+ * della zona, dell'intonazione, del filtro e dell'uscita; a destra l'LFO. Posizioni, nota base,
+ * loop, reverse e inviluppo del volume sono della zona scelta: i loro controlli hanno i nomi dei
+ * parametri della prima zona e scrivono in quelli della zona (che, toccati, diventano suoi). Il modo (Classic,
  * One-Shot, Slice) sta nell'intestazione del dispositivo. Un file audio dal disco o un sample dal
  * browser lasciato sul pannello diventa il sample della zona scelta; più file insieme, o lasciati
  * sull'editor delle zone, diventano zone nuove (dal tasto sotto il puntatore). */
 import type { SampleId } from '../../../core/id';
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import {
-  ENV_NAMES, FIRST_SLICE_NOTE, layoutZones, MAX_ZONES, MODE, SENSITIVITY, SLICE, SLICE_COUNT, sliceValues, spreadRanges,
-  zoneDefaults, zoneKeys, zoneMap, zoneParam, zoneSlot, type ZoneKey,
+  ENV_NAMES, FIRST_SLICE_NOTE, FIRST_ZONE_KEYS, layoutZones, MAX_ZONES, MODE, ownSound, SENSITIVITY, SLICE, SLICE_COUNT, SOUND_KEYS,
+  sliceValues, spreadRanges, zoneDefaults, zoneKeys, zoneMap, zoneParam, zoneSlot, zoneSource, type ZoneKey,
 } from '../../../devices/instruments/sampler/sampler';
 import type { ParamSpec } from '../../../devices/params';
 import { sampleAt, type DeviceSettings, type ParamValues } from '../../../model/device';
@@ -34,12 +36,12 @@ const SAMPLE_CONTROLS: Readonly<Record<number, readonly string[]>> = {
   [MODE.slice]: ['sliceBy', 'sliceGrid', SENSITIVITY, 'trigger', 'reverse'],
 };
 const SAMPLE_KEYS = new Set(Object.values(SAMPLE_CONTROLS).flat());
-/** I controlli della scheda della zona. */
+/** I controlli della scheda della zona: cambiando zona si rifanno. */
 const ZONE_CONTROLS: readonly ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'tune', 'fine', 'gain', 'pan'];
-/** I controlli che valgono per la zona scelta: cambiandola si rifanno. */
-const PER_ZONE = new Set<string>([...ZONE_CONTROLS, 'root', 'start', 'end', 'loopStart', 'loopEnd']);
-/** Le posizioni nel sample: la forma d'onda le muove per la zona che mostra. */
-const POSITIONS = new Set(['start', 'end', 'loopStart', 'loopEnd']);
+const PER_ZONE = new Set<string>(ZONE_CONTROLS);
+/** Le chiavi che hanno i nomi dei parametri della prima zona e valgono per la zona scelta. */
+const OF_ZONE = FIRST_ZONE_KEYS as ReadonlySet<string>;
+const SOUND = new Set<string>(SOUND_KEYS);
 /** Le scelte che stanno meglio in un menu che in fila di pulsanti. */
 const MENUS = new Set(['loop', 'loopRelease', 'sliceBy', 'sliceGrid', 'root', 'voiceMode', 'fType', 'lfoShape', 'lfoDiv', 'lo', 'hi']);
 /** I controlli che, quando non contano, si tolgono invece di attenuarsi (stanno allo stesso posto). */
@@ -71,18 +73,21 @@ export class SamplerDisplay implements DeviceDisplay {
   private readonly zoneChoice = el<HTMLSelectElement>('select', { className: 'smp-zone-pick', title: 'La zona che si guarda' });
   private readonly sampleChoice = el<HTMLSelectElement>('select', { className: 'smp-sample', title: 'Il sample della zona (tra quelli del progetto)' });
   private readonly addZones = el<HTMLButtonElement>('button', { className: 'mini', textContent: '+ Zone…', title: 'Carica dei file audio in zone nuove, un tasto ciascuno (o sulle note scritte nei nomi)' });
+  /** Il suono della zona scelta: come la prima o suo. */
+  private readonly link = el<HTMLButtonElement>('button', { className: 'mini smp-link', textContent: 'Come zona 1' });
   private readonly info = el('span', { className: 'smp-info muted' });
   private readonly detect = el<HTMLButtonElement>('button', { className: 'mini smp-detect', textContent: 'Rileva', title: 'Trova le fette ai transienti (con la sensibilità scelta)' });
   private readonly sampleCard: HTMLElement;
   private readonly zoneCard: HTMLElement;
   private readonly zoneTitle = el('span', { className: 'smp-card-title' });
+  private readonly sampleTitle = el('span', { className: 'smp-card-title', textContent: 'Sample' });
   private values: Record<string, number>;
   private params: ParamValues | null = null;
   private settings: DeviceSettings;
   private enabled = true;
   /** La zona per cui sono fatti i controlli che dipendono dalla zona. */
   private builtZone = -1;
-  /** I valori come li vede la forma d'onda (le posizioni della zona che mostra). */
+  /** I valori come li vede la zona scelta (vedi zoneValues). */
   private shownValues: { values: Record<string, number>; zone: number; out: Record<string, number> } | null = null;
   /** Il pannello è stato nel documento: quando ne esce smette di guardare le voci. */
   private shown = false;
@@ -93,7 +98,7 @@ export class SamplerDisplay implements DeviceDisplay {
     this.values = resolveParams(ctx.type, ctx.settings.params);
     const set = (values: ParamValues, final: boolean) => ctx.setParams(values, final);
     this.wave = new WaveView({
-      values: () => this.waveValues(),
+      values: () => this.zoneValues(),
       audio: () => this.audio(),
       name: () => this.sampleName(this.zone),
       set: (values, final) => ctx.setParams(this.toZone(values), final),
@@ -114,7 +119,8 @@ export class SamplerDisplay implements DeviceDisplay {
       pitched: () => this.values.mode !== MODE.slice,
       menu: (x, y) => this.zoneMenu(x, y),
     });
-    this.envView = new EnvView(() => this.values, set, env => `Inviluppo ${ENV_NAMES[env - 1].toLowerCase()}`);
+    this.envView = new EnvView(() => this.zoneValues(), (values, final) => ctx.setParams(this.toZone(values), final),
+      env => `Inviluppo ${ENV_NAMES[env - 1].toLowerCase()}${env === 1 && this.rows().length > 1 ? ` · zona ${this.zone + 1}` : ''}`, true);
     this.envView.canvas.classList.add('smp-env');
 
     const mode = this.control('mode', v => this.setMode(v));
@@ -126,13 +132,17 @@ export class SamplerDisplay implements DeviceDisplay {
       zones: el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Zone', title: 'I sample sulla tastiera: tasti e velocity di ogni zona', onclick: () => this.showTab('zones') }),
     };
     this.zoneChoice.onchange = () => this.selectZone(Number(this.zoneChoice.value));
+    this.link.onclick = () => {
+      const zone = this.zone, own = ownSound(this.values, zone);
+      ctx.setParams(Object.keys(own).length ? own : { [zoneParam(zone, 'own')]: 0 }, true);
+    };
     this.sampleChoice.onchange = () => this.assign((this.sampleChoice.value || null) as SampleId | null);
     const load = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Carica…', title: 'Carica un file audio nella zona scelta', onclick: () => this.pickFiles(files => this.loadFiles(files), false) });
     this.addZones.onclick = () => this.pickFiles(files => this.newZones(files, this.nextKey()));
     this.detect.onclick = () => this.findSlices(this.values[SENSITIVITY], true);
     const waveBox = el('div', { className: 'smp-wave-box' },
       el('div', { className: 'smp-wave-bar' }, el('div', { className: 'smp-tabs' }, this.tabs.sample, this.tabs.zones),
-        this.zoneChoice, this.sampleChoice, load, this.addZones, this.info),
+        this.zoneChoice, this.link, this.sampleChoice, load, this.addZones, this.info),
       this.wave.canvas, this.zoneView.canvas);
 
     const envCard = this.card('Inviluppi', [el('div', { className: 'smp-tabs' }, ...ENV_NAMES.map((name, i) => {
@@ -142,7 +152,8 @@ export class SamplerDisplay implements DeviceDisplay {
     }))], this.envView.canvas, this.envKnobs);
     envCard.classList.add('smp-env-card');
 
-    this.sampleCard = this.card('Sample', [this.detect], this.row(...SAMPLE_ORDER));
+    this.sampleCard = el('div', { className: 'smp-card' },
+      el('div', { className: 'smp-card-head' }, this.sampleTitle, this.detect), this.row(...SAMPLE_ORDER));
     this.sampleCard.classList.add('smp-sample-card');
     const remove = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Togli', title: 'Toglie la zona e il suo sample', onclick: () => this.removeZone(this.zone) });
     this.zoneCard = el('div', { className: 'smp-card smp-zone-card' },
@@ -196,10 +207,10 @@ export class SamplerDisplay implements DeviceDisplay {
     // la zona scelta non c'è più (tolta): si passa alla prima che c'è
     if (view.zone !== 0 && !sampleAt(settings, zoneSlot(view.zone))) view.zone = this.rows()[0]?.index ?? 0;
     if (this.zone !== this.builtZone) this.buildZoneControls();
-    const shown = new Set(SAMPLE_CONTROLS[this.values.mode] ?? []);
+    const shown = new Set(SAMPLE_CONTROLS[this.values.mode] ?? []), values = this.zoneValues();
     for (const [id, { control, spec, key }] of this.controls) {
-      control.set(this.values[id]);
-      const active = paramActive(spec, this.values);
+      control.set(values[id]);
+      const active = paramActive(spec, values);
       setActive(control, active);
       control.element.hidden = (SAMPLE_KEYS.has(key) && !shown.has(key)) || (SWAPPED.has(key) && !active);
     }
@@ -355,23 +366,27 @@ export class SamplerDisplay implements DeviceDisplay {
     return (id && this.ctx.samples?.list().find(s => s.id === id)?.name) || null;
   }
 
-  /** I valori per la forma d'onda: le posizioni sono quelle della zona che mostra. */
-  private waveValues(): Record<string, number> {
+  /** I valori come li vede la zona scelta: posizioni, nota base e suono (vedi OF_ZONE) sono i
+   *  suoi, sotto i nomi dei parametri della prima zona. */
+  private zoneValues(): Record<string, number> {
     const zone = this.zone;
     if (zone === 0) return this.values;
     const cached = this.shownValues;
     if (cached?.values === this.values && cached.zone === zone) return cached.out;
     const out = { ...this.values };
-    for (const key of POSITIONS) out[key] = this.values[zoneParam(zone, key as ZoneKey)];
+    for (const key of OF_ZONE) out[key] = this.values[zoneSource(this.values, zone, key as ZoneKey)];
     this.shownValues = { values: this.values, zone, out };
     return out;
   }
 
-  /** I valori della forma d'onda nei parametri della zona che mostra. */
+  /** Valori con i nomi della prima zona nei parametri della zona scelta. Toccando il suono di una
+   *  zona che segue la prima, la zona prende il suo (dalla prima) e poi il cambio. */
   private toZone(values: ParamValues): ParamValues {
     const zone = this.zone;
     if (zone === 0) return values;
-    return Object.fromEntries(Object.entries(values).map(([id, v]) => [POSITIONS.has(id) ? zoneParam(zone, id as ZoneKey) : id, v]));
+    const out: Record<string, number> = Object.keys(values).some(id => SOUND.has(id)) ? ownSound(this.values, zone) : {};
+    for (const [id, v] of Object.entries(values)) out[OF_ZONE.has(id) ? zoneParam(zone, id as ZoneKey) : id] = v;
+    return out;
   }
 
   private refreshSample(): void {
@@ -383,6 +398,13 @@ export class SamplerDisplay implements DeviceDisplay {
     this.zoneChoice.replaceChildren(...rows.map(r => el('option', { value: String(r.index), textContent: `Zona ${r.index + 1} · ${r.name}` })));
     this.zoneChoice.value = String(this.zone);
     this.zoneChoice.hidden = rows.length < 2 || this.values.mode === MODE.slice;
+    const follows = this.values[zoneParam(this.zone, 'own')] !== 1;
+    this.link.hidden = this.zone === 0;
+    this.link.classList.toggle('on', follows);
+    this.link.title = follows
+      ? 'Loop, reverse e inviluppo del volume di questa zona sono quelli della zona 1. Clic (o cambiane uno) per darle i suoi.'
+      : 'Questa zona ha loop, reverse e inviluppo del volume suoi. Clic: tornano quelli della zona 1.';
+    this.sampleTitle.textContent = rows.length > 1 ? `Sample · zona ${this.zone + 1}` : 'Sample';
     const a = this.audio();
     if (!a) {
       this.info.textContent = rows.length > 1 ? `${rows.length} zone` : '';
@@ -556,8 +578,8 @@ export class SamplerDisplay implements DeviceDisplay {
       ? (v: number, final: boolean) => this.findSlices(v, final)
       : id === 'sliceBy'
         ? (v: number) => this.setSliceBy(v)
-        : change ? (v: number) => change(v) : (v: number, final: boolean) => this.ctx.setParams({ [id]: v }, final);
-    const control = controlFor(spec, this.values[id], onChange, { menu });
+        : change ? (v: number) => change(v) : (v: number, final: boolean) => this.ctx.setParams(this.toZone({ [id]: v }), final);
+    const control = controlFor(spec, this.zoneValues()[id], onChange, { menu });
     this.controls.set(id, { control, spec, key });
     return control.element;
   }

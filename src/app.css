@@ -602,10 +602,12 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .smp-wave, .smp-zones { display: block; width: 100%; flex: 1 1 0; min-height: 0; border-radius: 6px; border: 1px solid var(--line); touch-action: none; }
 .smp-zone-pick { font-size: 12px; padding: 1px 4px; max-width: 190px; }
 .smp-slot { display: contents; }
-.smp-env-card { width: 300px; flex: none; }
+.smp-env-card { width: 320px; flex: none; }
+.smp-link { padding: 0 7px; font-size: 11.5px; color: var(--muted); }
+.smp-link.on { background: var(--accent); color: #141414; border-color: var(--accent); }
 .smp-env-card .smp-knobs { justify-content: space-between; }
 .smp-env-card .knob { width: 52px; }
-.smp-env { display: block; width: 100%; min-width: 0; height: 46px; border-radius: 6px; border: 1px solid var(--line); touch-action: none; }
+.smp-env { display: block; width: 100%; min-width: 0; flex: 1 1 0; min-height: 88px; border-radius: 6px; border: 1px solid var(--line); touch-action: none; }
 .smp-sample-card, .smp-zone-card { min-width: 222px; }
 .smp-detect { padding: 0 7px; font-size: 11.5px; }
 .smp-lfo-card { flex: none; }

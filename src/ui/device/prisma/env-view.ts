@@ -1,7 +1,8 @@
 /* Un inviluppo di Prisma disegnato, con le maniglie: la fine dell'attacco, dell'hold e del
  * rilascio si trascinano in orizzontale (il tempo), quella del decay anche in verticale (il
  * sustain); i pallini a metà di attacco, decay e rilascio si trascinano in verticale per
- * curvarli. Il tempo è disegnato in radice quadrata: i tempi brevi restano larghi. */
+ * curvarli. Il tempo è disegnato in radice quadrata: i tempi brevi restano larghi. Con `fit` la
+ * scala del tempo si adatta all'inviluppo, che riempie la larghezza (ferma mentre si trascina). */
 import { bend } from '../../../devices/instruments/prisma/shapes';
 import type { ParamValues } from '../../../model/device';
 import { el } from '../../dom';
@@ -9,6 +10,9 @@ import { ACCENT, BACKGROUND, drag, fit, GRID, LABEL } from './canvas';
 
 const MAX_TIME = 10, MIN_TIME = 0.001;
 const PAD = 8, HANDLE = 4, HIT = 9;
+/** Con `fit`: la somma delle radici dei tempi che riempie la larghezza almeno (un decay di 1 s),
+ *  così un inviluppo cortissimo non diventa enorme, e il margine lasciato a destra. */
+const FIT_MIN = 1, FIT_ROOM = 1.1;
 
 type Handle = 'A' | 'H' | 'D' | 'R' | 'Ac' | 'Dc' | 'Rc';
 
@@ -18,11 +22,14 @@ export class EnvView {
   });
   private env = 1;
   private hot: Handle | null = null;
+  /** La scala del tempo, ferma mentre si trascina una maniglia (con `fit`). */
+  private frozen: number | null = null;
 
   constructor(
     private readonly values: () => Readonly<Record<string, number>>, private readonly set: (values: ParamValues, final: boolean) => void,
     /** Il nome dell'inviluppo `env`, scritto nell'angolo (lo usa anche il Sampler). */
     private readonly label: (env: number) => string = env => (env === 1 ? 'Env 1 · volume' : `Env ${env}`),
+    private readonly fit = false,
   ) {
     const c = this.canvas;
     c.addEventListener('pointerdown', e => this.press(e));
@@ -54,13 +61,16 @@ export class EnvView {
   /** Le misure del disegno: dove sono i punti, con questi valori. */
   private layout(v: Readonly<Record<string, number>>) {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
-    const sustainW = w * 0.12, seg = (w - 2 * PAD - sustainW) / 4;
-    const px = (t: number) => seg * Math.sqrt(Math.max(0, t) / MAX_TIME);
     const e = (p: string) => v[`e${this.env}${p}`];
+    const sustainW = w * 0.12, room = w - 2 * PAD - sustainW;
+    // pixel per radice di secondo: quattro tratti da MAX_TIME, o quanto serve per riempire
+    const roots = Math.sqrt(e('A')) + Math.sqrt(e('H')) + Math.sqrt(e('D')) + Math.sqrt(e('R'));
+    const k = this.frozen ?? (this.fit ? room / (Math.max(FIT_MIN, roots) * FIT_ROOM) : room / (4 * Math.sqrt(MAX_TIME)));
+    const px = (t: number) => k * Math.sqrt(Math.max(0, t));
     const top = PAD + 12, bottom = h - PAD, height = bottom - top;
     const xA = PAD + px(e('A')), xH = xA + px(e('H')), xD = xH + px(e('D')), xS = xD + sustainW, xR = xS + px(e('R'));
     const yS = bottom - (e('S') / 100) * height;
-    return { w, h, seg, top, bottom, height, xA, xH, xD, xS, xR, yS, e };
+    return { w, h, k, top, bottom, height, xA, xH, xD, xS, xR, yS, e };
   }
 
   private handles(v: Readonly<Record<string, number>>): [Handle, number, number][] {
@@ -97,9 +107,10 @@ export class EnvView {
     const x0 = h === 'A' ? PAD : h === 'H' ? L.xA : h === 'D' ? L.xH : L.xS;
     const r = this.canvas.getBoundingClientRect();
     const timeAt = (clientX: number) => {
-      const dx = Math.max(0, clientX - r.left - x0) / L.seg;
-      return Math.max(MIN_TIME, Math.min(MAX_TIME, MAX_TIME * dx * dx));
+      const dx = Math.max(0, clientX - r.left - x0) / L.k;
+      return Math.max(MIN_TIME, Math.min(MAX_TIME, dx * dx));
     };
+    if (this.fit) this.frozen = L.k;
     let last: ParamValues = {};
     drag(e, this.canvas, (_dx, dy, m) => {
       const fine = m.shiftKey ? 0.25 : 1;
@@ -116,7 +127,11 @@ export class EnvView {
         }
       }
       this.set(last, false);
-    }, () => this.set(last, true));
+    }, () => {
+      this.frozen = null;
+      this.set(last, true);
+      this.paint(true);
+    });
   }
 
   paint(enabled: boolean): void {

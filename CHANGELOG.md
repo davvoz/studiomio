@@ -6,6 +6,20 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Sampler: each zone can have its own loop (mode, crossfade, release), Reverse and volume
+  envelope, so a kit can have a short hi-hat and a long crash in one Sampler. A zone follows
+  zone 1 until you change one of these controls with it selected; then it keeps its own. The
+  "Come zona 1" button next to the zone menu shows which is which and links the zone back.
+  Existing projects and presets sound as before.
+
+### Changed
+- Sampler: the envelope drawing is taller and zooms to the envelope, filling the width instead
+  of squeezing short times into the left corner. The zoom holds still while you drag a handle.
+
+### Fixed
+- Browser › Batterie lists only the Drum Machine kits, not the Sampler presets.
+
 ## [0.3.16] - 2026-10-21
 
 ### Changed

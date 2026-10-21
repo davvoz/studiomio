@@ -4,7 +4,7 @@
  * campionamento), dentro la regione Inizio…Fine o la sua fetta; in Classic il loop la tiene
  * finché si tiene la nota, in avanti (con la dissolvenza a potenza costante tra la fine del loop
  * e il pezzo prima dell'inizio) o avanti e indietro. Il suono passa nel filtro di Prisma e
- * nell'inviluppo del volume, campione per campione; pitch, filtro, LFO e guadagni si calcolano
+ * nell'inviluppo del volume (della zona), campione per campione; pitch, filtro, LFO e guadagni si calcolano
  * ogni CONTROL_RATE campioni. Una voce che riparte mentre suona (mono, voce rubata) sfuma il
  * suo ultimo valore invece di saltare: niente click. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
@@ -16,7 +16,7 @@ import { PrismaFilter } from '../prisma/prisma-filter';
 import { LFO_SHAPE as PRISMA_SHAPE, randomValue, shapeValue } from '../prisma/shapes';
 import {
   ENV, FILTER_ENV_OCTAVES, FILTER_VEL_OCTAVES, FIRST_SLICE_NOTE, LFO_CUTOFF_OCTAVES, LFO_SYNC, LFO_TRIG, LOOP,
-  LOOP_RELEASE, MAX_ZONES, MODE, sliceStarts, TRIGGER, VOICE_MODE, zoneOfSlot, zoneParam, type ZoneKey,
+  LOOP_RELEASE, MAX_ZONES, MODE, sliceStarts, TRIGGER, VOICE_MODE, zoneOfSlot, zoneSource, type ZoneKey,
 } from './sampler';
 
 const CONTROL_RATE = 32;
@@ -43,10 +43,9 @@ const envShape = (v: (id: string) => number, n: number): EnvShape => ({
   attackCurve: v(`e${n}Ac`), decayCurve: v(`e${n}Dc`), releaseCurve: v(`e${n}Rc`),
 });
 
-const ZONE_KEYS: readonly ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'tune', 'fine', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
-
-/** Una zona: il suo sample e i suoi valori, già nelle unità del motore. Restano gli stessi
- *  oggetti (si aggiornano), così una voce che suona segue i cambi della sua zona. */
+/** Una zona: il suo sample e i suoi valori, già nelle unità del motore (il suono, se la zona
+ *  segue la prima, è quello della prima). Restano gli stessi oggetti (si aggiornano), così una
+ *  voce che suona segue i cambi della sua zona. */
 class Zone {
   sample: SampleData | null = null;
   lo = 0;
@@ -62,14 +61,16 @@ class Zone {
   end = 1;
   loopStart = 0;
   loopEnd = 1;
-  private readonly ids: Readonly<Record<ZoneKey, string>>;
+  loop = LOOP.off as number;
+  loopExit = false;
+  xfade = 0;
+  reverse = false;
+  amp: EnvShape = envShape(() => 0, 0);
 
-  constructor(readonly index: number) {
-    this.ids = Object.fromEntries(ZONE_KEYS.map(k => [k, zoneParam(index, k)])) as Record<ZoneKey, string>;
-  }
+  constructor(readonly index: number) {}
 
   read(params: Readonly<Record<string, number>>): void {
-    const v = (key: ZoneKey, def: number) => params[this.ids[key]] ?? def;
+    const v = (key: ZoneKey, def: number) => params[zoneSource(params, this.index, key)] ?? def;
     const lo = v('lo', 0), hi = v('hi', 127), vlo = v('vlo', 1), vhi = v('vhi', 127);
     this.lo = Math.min(lo, hi);
     this.hi = Math.max(lo, hi);
@@ -83,6 +84,11 @@ class Zone {
     this.end = Math.max(this.start, clamp01(v('end', 100) / 100));
     this.loopStart = clamp01(v('loopStart', 0) / 100);
     this.loopEnd = clamp01(v('loopEnd', 100) / 100);
+    this.loop = v('loop', LOOP.off);
+    this.loopExit = v('loopRelease', 0) === LOOP_RELEASE.exit;
+    this.xfade = v('xfade', 0) / 100;
+    this.reverse = v('reverse', 0) === 1;
+    this.amp = envShape(id => v(id as ZoneKey, 0), ENV.amp);
   }
 
   /** Se la nota la fa suonare. */
@@ -95,11 +101,7 @@ class Zone {
 class Settings {
   readonly zones = Array.from({ length: MAX_ZONES }, (_, i) => new Zone(i));
   mode = MODE.classic as number;
-  reverse = false;
   gate = false;
-  loop = LOOP.off as number;
-  loopExit = false;
-  xfade = 0;
   /** Gli inizi delle fette (frazioni), più la fine della regione in fondo (della prima zona). */
   slices: number[] = [];
   transpose = 0;
@@ -116,6 +118,7 @@ class Settings {
   fKey = 0;
   fEnv = 0;
   fVel = 0;
+  /** Gli inviluppi (quello del volume che suona è della zona). */
   readonly envs: EnvShape[] = [ENV.amp, ENV.filter, ENV.pitch].map(() => envShape(() => 0, 0));
   lfoShape = 0;
   lfoRate = 4;
@@ -138,11 +141,7 @@ class Settings {
     this.params = params;
     const v = (id: string) => params[id] ?? 0;
     this.mode = v('mode');
-    this.reverse = v('reverse') === 1;
     this.gate = v('trigger') === TRIGGER.gate;
-    this.loop = v('loop');
-    this.loopExit = v('loopRelease') === LOOP_RELEASE.exit;
-    this.xfade = v('xfade') / 100;
     for (const z of this.zones) z.read(params);
     this.slices = this.mode === MODE.slice ? [...sliceStarts(params), this.zones[0].end] : [];
     this.transpose = v('transpose') + v('detune') / 100;
@@ -319,7 +318,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     this.lfoPhase = s.lfoFree ? s.freePhase : 0;
     this.lfoCycle = s.lfoFree ? s.freeCycle : note * 17;
     this.age = 0;
-    this.amp.set(s.envs[0]);
+    this.amp.set(z.amp);
     this.filterEnv.set(s.envs[1]);
     this.pitchEnv.set(s.envs[2]);
     this.amp.trigger();
@@ -393,7 +392,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     const { s, bufL, bufR, zone } = this;
     const data = this.data!;
     const L = data.channels[0], R = data.channels[1] ?? L, stereo = R !== L;
-    const n = L.length, last = n - 1, reverse = s.reverse;
+    const n = L.length, last = n - 1, reverse = zone.reverse;
     let a: number, b: number;
     if (this.sliceA >= 0) {
       a = this.sliceA;
@@ -403,16 +402,16 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       b = Math.max(a + 2, Math.min(n, Math.round(zone.end * n)));
     }
     // il loop (solo Classic): dentro la regione, lungo almeno MIN_LOOP
-    let la = 0, lb = 0, xf = 0, looping = s.mode === MODE.classic && s.loop !== LOOP.off && !(this.released && s.loopExit);
+    let la = 0, lb = 0, xf = 0, looping = s.mode === MODE.classic && zone.loop !== LOOP.off && !(this.released && zone.loopExit);
     if (looping) {
       la = Math.max(a, Math.min(b - MIN_LOOP, Math.floor(zone.loopStart * n)));
       lb = Math.max(la + MIN_LOOP, Math.min(b, Math.round(zone.loopEnd * n)));
       // oltre la fine del loop (l'ha spostata la manopola) si va fino alla fine della regione
       looping = lb - la >= MIN_LOOP && this.pos <= lb;
-      if (looping && s.loop === LOOP.forward) xf = Math.min(s.xfade * (lb - la), la - a);
+      if (looping && zone.loop === LOOP.forward) xf = Math.min(zone.xfade * (lb - la), la - a);
     }
     if (!looping) this.dir = 1;
-    const span = lb - la, pingPong = s.loop === LOOP.pingPong, speed = this.speed;
+    const span = lb - la, pingPong = zone.loop === LOOP.pingPong, speed = this.speed;
     let pos = this.pos, dir = this.dir;
     for (let j = 0; j < len; j++) {
       if (!looping && pos >= b) {
@@ -474,7 +473,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       this.pitch += (this.target - this.pitch) * k;
       if (Math.abs(this.target - this.pitch) < 1e-3) this.pitch = this.target;
     }
-    this.amp.set(s.envs[0]);
+    this.amp.set(zone.amp);
     this.filterEnv.set(s.envs[1]);
     this.pitchEnv.set(s.envs[2]);
     const fenv = this.filterEnv.next(), penv = this.pitchEnv.next();
