@@ -64,6 +64,13 @@ describe('categorie dei dispositivi', () => {
     expect(sources.map(s => s.section)).toEqual(['categories', 'categories', 'categories', 'places', 'places']);
   });
 
+  it('Batterie ha solo i kit della Drum Machine, non i preset degli altri strumenti (es. il Sampler)', async () => {
+    const drums = standardSources({ instruments: INSTRUMENT_TYPES, effects: [], user: user(), project: setup().store })[1];
+    const items = await drums.items();
+    expect(items.every(i => i.payload?.kind === 'instrument' && i.payload.type === DRUMS.type)).toBe(true);
+    expect(names(items)).toEqual(DRUMS.presets.map(p => p.name));
+  });
+
   it('Preset dell\'utente: una cartella per i dispositivi che ne hanno, e si rilegge quando cambiano', async () => {
     const presets: Record<string, Preset[]> = { delay: [{ name: 'Eco', params: {} }] };
     const u = user(presets);

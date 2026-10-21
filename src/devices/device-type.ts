@@ -18,6 +18,9 @@ export interface DeviceType {
   /** Per gli effetti che possono ascoltare un'altra traccia (sidechain): il motore riceve quel
    *  suono come secondo ingresso, per il rilevatore. */
   readonly sidechain?: boolean;
+  /** Per gli strumenti i cui preset sono kit di batteria (la Drum Machine): finiscono anche in
+   *  Batterie, nel browser. */
+  readonly kit?: boolean;
   /** Per gli strumenti che danno un nome alle note (la drum machine: un pad per nota): con
    *  questi valori dei parametri (e questi nomi dei sample caricati, per posto), il nome di
    *  ogni nota che suona qualcosa. */

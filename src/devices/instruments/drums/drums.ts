@@ -224,6 +224,7 @@ export const DRUMS: DeviceType = {
     { label: 'Uscita', params: [percent('velocity', 'Velocity', 70), num('volume', 'Volume', -36, 6, -4, 'dB', { step: 0.5 })] },
   ],
   presets: PRESETS,
+  kit: true,
   noteNames: (values, samples) => new Map(padNames(values, samples).map((name, i) => [padNote(i), name])),
 };
 

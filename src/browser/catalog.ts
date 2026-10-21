@@ -23,11 +23,10 @@ export interface StandardSources {
   readonly project: SampleProvider;
 }
 
-/** Le fonti dell'app, come in Live ma solo con ciò che c'è: Strumenti, Batterie (i kit degli
- *  strumenti che danno un nome alle note, cioè la Drum Machine), Effetti audio; poi i luoghi
- *  Progetto corrente e Preset dell'utente. */
+/** Le fonti dell'app, come in Live ma solo con ciò che c'è: Strumenti, Batterie (i kit della
+ *  Drum Machine), Effetti audio; poi i luoghi Progetto corrente e Preset dell'utente. */
 export function standardSources({ instruments, effects, user, racks, factoryRacks, project }: StandardSources): BrowserSource[] {
-  const drums = instruments.filter(t => t.noteNames);
+  const drums = instruments.filter(t => t.kit);
   return [
     deviceSource({ id: 'instruments', label: 'Strumenti', kind: 'instrument', types: instruments, user, racks, factoryRacks }),
     ...(drums.length ? [kitSource('drums', 'Batterie', drums, user)] : []),
