@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.18] - 2026-10-21
+
 ### Added
 - Five new factory Audio Effect Racks in Effetti audio › Audio Effect Rack. With every macro at
   0 the sound passes untouched:
