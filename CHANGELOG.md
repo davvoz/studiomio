@@ -6,6 +6,30 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Five new factory Audio Effect Racks in Effetti audio › Audio Effect Rack. With every macro at
+  0 the sound passes untouched:
+  - Fade to Grey: a transition like Live's. Turn Fade and the sound narrows into a grey wash:
+    the filters close in from both sides, echo and reverb grow, the stereo image shrinks and
+    the level drops. Eco, Tempo eco, Coda, Scuro and Risonanza shape the wash.
+  - Dub: a King Tubby send delay with Lancio (feedback that runs away on its own), Tempo, Scuro,
+    a sweeping high-pass, Molla (spring-like reverb) and Nastro.
+  - French Touch: the resonant filter-house sweep, with Pompa (quarter-note sidechain pump),
+    Phaser, Sporco and Colla.
+  - Cassetta: a worn tape with Wow, Nastro, Bit, Opaco, Stretto and a Stop button that brakes it.
+  - Muro: a shoegaze wall of sound with Fuzz, Leva (vibrato arm), Risucchio (reverse swell), Eco,
+    an endless reverb and Larghezza.
+- Four new factory Instrument Racks in Strumenti › Instrument Rack:
+  - Nuova onda: a new-wave polysynth (Analog) with ensemble chorus, ping-pong echo and hall.
+  - Ossigeno: Oxygène-style string machine (Wavetable) through a slow phaser.
+  - Hoover: the rave hoover (Wavetable) with Swoop, Glide, PWM, Larghezza and Ottava sotto.
+  - Jump: 80s polysynth brass (Analog) with Morso, Gonfia (brass swell), Spessore and Colla.
+
+### Fixed
+- Sampler: the bottom row of controls was cut off at the bottom of the device panel. The panel
+  now fits its height, and the envelope knobs sit beside the drawing, which is about twice as
+  tall as before.
+
 ## [0.3.17] - 2026-10-21
 
 ### Added

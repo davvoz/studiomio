@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { paramSpec, resolveParams } from '../../src/devices/device-type';
 import { followsTransport } from '../../src/devices/dsp/core';
-import { ACIDO, FACTORY_RACKS, NEBBIA, RINGHIO, TORNADO } from '../../src/devices/factory-racks';
+import {
+  ACIDO, CASSETTA, DUB, FACTORY_RACKS, FADE_TO_GREY, FRENCH_TOUCH, HOOVER, JUMP, MURO, NEBBIA, NUOVA_ONDA, OSSIGENO, RINGHIO, TORNADO,
+} from '../../src/devices/factory-racks';
+import type { RackPreset } from '../../src/model/rack-preset';
 import { effectType, instrumentType } from '../../src/devices/registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from '../../src/devices/worklet/cores';
 import type { DeviceSettings, EffectSettings } from '../../src/model/device';
@@ -16,10 +19,10 @@ import { setup } from '../helpers/fixtures';
 const SR = 48000, BLOCK = 128, BPM = 120;
 const BPS = BPM / 60 / SR;
 
-/** Il Tornado su una traccia audio nuova. */
-function tornado() {
+/** Un Audio Effect Rack (il Tornado) su una traccia audio nuova. */
+function tornado(preset: RackPreset = TORNADO) {
   const s = setup();
-  s.store.apply(loadRack(null, TORNADO));
+  s.store.apply(loadRack(null, preset));
   const track = () => s.store.project.tracks[0] as AudioTrack;
   return { ...s, track, rack: track().racks[0].id, macro: (i: number, v: number) => s.store.apply(setMacro(track().id, track().racks[0].id, i, v)) };
 }
@@ -59,10 +62,26 @@ function play(effects: readonly EffectSettings[], frames: number) {
 }
 
 const maxDiff = (a: Float32Array, b: Float32Array) => a.reduce((m, x, i) => Math.max(m, Math.abs(x - b[i])), 0);
+const peakOf = (x: Float32Array) => x.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+
+/** Lo scarto più piccolo tra l'uscita e l'ingresso ritardato di 0…64 campioni (la latenza dei
+ *  dispositivi con l'oversampling, che ritardano anche il suono asciutto), e quel ritardo. */
+function delayedDiff(out: Float32Array, input: Float32Array): { diff: number; lag: number } {
+  let best = { diff: Infinity, lag: 0 };
+  for (let lag = 0; lag <= 64; lag++) {
+    let m = 0;
+    for (let i = lag; i < out.length; i++) m = Math.max(m, Math.abs(out[i] - input[i - lag]));
+    if (m < best.diff) best = { diff: m, lag };
+  }
+  return best;
+}
 
 describe('rack di fabbrica', () => {
   it('sono rack validi: ogni parametro esiste, ogni mappatura resta dentro la corsa del suo parametro', () => {
-    expect(FACTORY_RACKS.map(r => r.name)).toEqual(['Tornado', 'Acido', 'Nebbia', 'Ringhio']);
+    expect(FACTORY_RACKS.map(r => r.name)).toEqual([
+      'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro',
+      'Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump',
+    ]);
     for (const rack of FACTORY_RACKS) {
       expect(rack.macros).toHaveLength(MACRO_COUNT);
       // da un file si rileggerebbe uguale
@@ -112,7 +131,45 @@ describe('rack di fabbrica', () => {
     }
   });
 
-  for (const preset of [ACIDO, NEBBIA, RINGHIO]) {
+  for (const preset of [FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO]) {
+    it(`${preset.name}: con le macro a 0 il suono passa com'è`, () => {
+      const t = tornado(preset);
+      for (let i = 0; i < MACRO_COUNT; i++) t.macro(i, 0);
+      const effects = t.track().effects;
+      const { outL, outR } = play(effects, SR * 4);
+      // il Drive a Dry/Wet 0 lascia il suono asciutto, passato però per il suo sovracampionamento
+      // (che lo sposta di una frazione di campione): il confronto è con quello
+      const dry = play(effects.filter(e => e.type === 'drive'), SR * 4);
+      const l = delayedDiff(outL, dry.outL), r = delayedDiff(outR, dry.outR);
+      expect(l.diff).toBeLessThan(1e-4);
+      expect(r).toEqual({ diff: expect.any(Number), lag: l.lag });
+      expect(r.diff).toBeLessThan(1e-4);
+    });
+
+    it(`${preset.name}: con le macro dove partono e tutte a 127 cambia il suono e non esplode`, () => {
+      // Fade to Grey parte con Fade a 0: il suono è com'è finché non lo si gira
+      for (const value of preset === FADE_TO_GREY ? [MACRO_MAX] : [null, MACRO_MAX]) {
+        const t = tornado(preset);
+        if (value !== null) for (let i = 0; i < MACRO_COUNT; i++) t.macro(i, value);
+        const { inL, outL, outR } = play(t.track().effects, SR * 4);
+        const peak = Math.max(peakOf(outL), peakOf(outR));
+        expect(Number.isFinite(peak) && peak < 2, `${preset.name}, macro ${value ?? 'di partenza'}: ${peak}`).toBe(true);
+        expect(delayedDiff(outL, inL).diff, `${preset.name}, macro ${value ?? 'di partenza'}`).toBeGreaterThan(0.05);
+      }
+    });
+  }
+
+  it('Fade to Grey: a fondo corsa il suono si spegne in una scia più bassa e più stretta', () => {
+    const t = tornado(FADE_TO_GREY);
+    t.macro(0, MACRO_MAX);
+    const { inL, inR, outL, outR } = play(t.track().effects, SR * 4);
+    const rms = (x: Float32Array) => Math.sqrt(x.reduce((s, v) => s + v * v, 0) / x.length);
+    const side = (l: Float32Array, r: Float32Array) => rms(l.map((v, i) => (v - r[i]) / 2));
+    expect(rms(outL)).toBeLessThan(rms(inL) * 0.5);
+    expect(side(outL, outR) / rms(outL)).toBeLessThan(side(inL, inR) / rms(inL));
+  });
+
+  for (const preset of [ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP]) {
     it(`${preset.name}: lo strumento e gli effetti in un Instrument Rack, le macro dove partono`, () => {
       const s = setup();
       s.store.apply(loadRack(null, preset));

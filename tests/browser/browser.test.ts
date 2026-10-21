@@ -118,8 +118,8 @@ describe('categorie dei dispositivi', () => {
     const sources = standardSources({ instruments: [ANALOG], effects: [DELAY], user: user(), racks: { list: () => [eco] }, factoryRacks: FACTORY_RACKS, project: setup().store });
     const [instruments, effects] = [await sources[0].items(), await sources[1].items()];
     expect(names(instruments)).toEqual(['Instrument Rack', ANALOG.label]);
-    expect(names(await childrenOf(instruments[0]))).toEqual(['Acido', 'Nebbia', 'Ringhio']);
-    expect(names(await childrenOf(effects[0]))).toEqual(['Eco', 'Tornado']);
+    expect(names(await childrenOf(instruments[0]))).toEqual(['Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump']);
+    expect(names(await childrenOf(effects[0]))).toEqual(['Eco', 'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro']);
     expect((await childrenOf(effects[0]))[1].payload).toEqual({ kind: 'rack', rack: TORNADO });
     expect(names(await sources.find(s => s.id === 'user-presets')!.items())).toEqual(['Audio Effect Rack']);
     // senza rack salvati la cartella c'è lo stesso
