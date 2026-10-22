@@ -5,6 +5,7 @@ import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import type { KeyMap, KeyTarget } from '../model/key-map';
 import { DEFAULT_LAUNCH_QUANTUM } from '../model/launch';
+import { checkMidiMap, MIXER_CONTROLS, type MidiMap, type MidiMapping, type MidiTarget, type MixerControl } from '../model/midi-map';
 import { Project, type ChainOwner } from '../model/project';
 import { MACRO_MODES, type DeviceKey, type Macro, type MacroMode, type Rack, type RackList } from '../model/rack';
 import type { SampleRef } from '../model/sample';
@@ -132,6 +133,7 @@ export class ProjectCodec {
       // senza bus il file resta come lo scrivevano le versioni di prima
       ...(p.buses.length ? { buses: p.buses.map(b => this.encodeTrack(b)) } : {}),
       ...encodeKeyMap(p.keyMap),
+      ...encodeMidiMap(p.midiMap),
     };
   }
 
@@ -172,6 +174,7 @@ export class ProjectCodec {
         tracks: r.array('tracks').map(t => this.decodeTrack(t)),
         buses: r.has('buses') ? r.array('buses').map(b => this.decodeTrack(b) as BusTrack) : undefined,
         keyMap: r.has('keyMap') ? r.array('keyMap').map(decodeKeyMapping) : undefined,
+        midiMap: r.has('midiMap') ? decodeMidiMap(r) : undefined,
       });
     } catch (e) {
       // regole del modello violate (es. slot e scene non corrispondono): errore di formato
@@ -309,15 +312,49 @@ const decodeRack = (r: JsonReader): Rack => ({
 
 /** La tastiera si scrive solo se è mappata (e solo ciò che vale: rack e dispositivi che ci sono). */
 const encodeKeyMap = (map: KeyMap): JsonObject => (map.length ? {
-  keyMap: map.map(({ key, target: t }): JsonObject => (t.kind === 'macro'
-    ? { key, kind: t.kind, owner: t.owner, rack: t.rack, index: t.index }
-    : { key, kind: t.kind, owner: t.owner, device: t.device, param: t.param })),
+  keyMap: map.map(({ key, target }): JsonObject => ({ key, ...encodeTarget(target) })),
 } : {});
 
 const decodeKeyMapping = (r: JsonReader): { key: string; target: KeyTarget } => {
+  const target = decodeTarget(r);
+  if (target.kind !== 'macro' && target.kind !== 'param') return r.get('kind').fail(`mappatura della tastiera sconosciuta: ${target.kind}`);
+  return { key: r.str('key'), target };
+};
+
+/** Il MIDI come la tastiera: il controllo (tipo, canale, numero) accanto al bersaglio. */
+const encodeMidiMap = (map: MidiMap): JsonObject => (map.length ? {
+  midiMap: map.map(({ control: c, target }): JsonObject => ({ type: c.type, channel: c.channel, number: c.number, ...encodeTarget(target) })),
+} : {});
+
+const decodeMidiMap = (r: JsonReader): MidiMap => {
+  const map = r.array('midiMap').map((m): MidiMapping => {
+    const type = m.str('type');
+    if (type !== 'cc' && type !== 'note') return m.get('type').fail(`controllo MIDI sconosciuto: ${type}`);
+    return { control: { type, channel: m.int('channel'), number: m.int('number') }, target: decodeTarget(m) };
+  });
+  checkMidiMap(map);
+  return map;
+};
+
+const encodeTarget = (t: MidiTarget): JsonObject => {
+  switch (t.kind) {
+    case 'macro': return { kind: t.kind, owner: t.owner, rack: t.rack, index: t.index };
+    case 'param': return { kind: t.kind, owner: t.owner, device: t.device, param: t.param };
+    case 'mixer': return { kind: t.kind, owner: t.owner, mixer: t.control };
+    case 'send': return { kind: t.kind, owner: t.owner, bus: t.bus };
+  }
+};
+
+const decodeTarget = (r: JsonReader): MidiTarget => {
   const owner = r.str('owner') as ChainOwner;
   const kind = r.str('kind');
-  if (kind === 'macro') return { key: r.str('key'), target: { kind, owner, rack: asId(r.str('rack')), index: r.int('index') } };
-  if (kind === 'param') return { key: r.str('key'), target: { kind, owner, device: r.str('device') as DeviceKey, param: r.str('param') } };
-  return r.get('kind').fail(`mappatura della tastiera sconosciuta: ${kind}`);
+  if (kind === 'macro') return { kind, owner, rack: asId(r.str('rack')), index: r.int('index') };
+  if (kind === 'param') return { kind, owner, device: r.str('device') as DeviceKey, param: r.str('param') };
+  if (kind === 'mixer') {
+    const control = r.str('mixer') as MixerControl;
+    if (!MIXER_CONTROLS.includes(control)) return r.get('mixer').fail(`controllo del mixer sconosciuto: ${control}`);
+    return { kind, owner, control };
+  }
+  if (kind === 'send') return { kind, owner: asId(owner), bus: asId(r.str('bus')) };
+  return r.get('kind').fail(`mappatura sconosciuta: ${kind}`);
 };

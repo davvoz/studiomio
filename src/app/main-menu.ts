@@ -87,6 +87,7 @@ export function mainMenu(app: App): Menu[] {
           { label: 'Metronomo', shortcut: 'Ctrl+Maiusc+M', checked: engine.metronomeOn, run: () => app.toggleMetronome() },
           { label: 'Segui la testina', shortcut: 'Ctrl+Maiusc+F', checked: app.ui.follow, run: () => app.toggleFollow() },
           { label: 'Mappa la tastiera del computer', shortcut: 'Ctrl+K', checked: app.ui.keyMapping, run: () => app.toggleKeyMap() },
+          { label: 'Mappa il MIDI', shortcut: 'Ctrl+M', checked: app.ui.midiMapping, run: () => app.toggleMidiMap() },
           SEPARATOR,
           name ? { label: `Controller MIDI: ${name}`, checked: true, disabled: true, run: () => {} }
             : surfaces.enabled ? { label: 'Controller MIDI: collega un APC40 mkII o un Launchpad', disabled: true, run: () => {} }

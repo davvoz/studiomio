@@ -244,6 +244,25 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 }
 .device-view.key-mapping [data-param]:not(.mapped) { position: relative; outline: 1px dashed color-mix(in srgb, var(--keys) 60%, transparent); border-radius: 6px; cursor: pointer; }
 .device-view.key-mapping [data-param].key-chosen { outline: 2px solid var(--keys); background: color-mix(in srgb, var(--keys) 22%, transparent); }
+
+/* il MIDI (MIDI): il controllo MIDI di un controllo in alto a destra (sui pulsanti una riga sotto,
+ * il nome solo con MIDI acceso); con MIDI acceso si vedono i controlli che si possono mappare e
+ * quello che aspetta il controllo. Un cursore non mostra il nome: lo porta il suo involucro */
+:root { --midi: #5cc8ff; }
+.transport .midi-map.on { background: var(--midi); border-color: var(--midi); }
+.midi-slot { position: relative; display: flex; align-items: center; min-width: 0; }
+.header .controls .midi-slot { flex: 1; }
+.fader-row .midi-slot { height: 100%; }
+[data-midi-target][data-midi] { position: relative; }
+[data-midi-target][data-midi]:not(.mapped):not(button)::after,
+body.midi-mapping button[data-midi-target][data-midi]::after {
+  content: attr(data-midi); position: absolute; top: -2px; right: 2px; z-index: 1; font-size: 9px; font-weight: 700; white-space: nowrap;
+  color: #141414; background: var(--midi); border-radius: 3px; padding: 0 3px; line-height: 13px; pointer-events: none;
+}
+body.midi-mapping button[data-midi-target][data-midi]::after { top: -9px; right: -4px; }
+button[data-midi-target][data-midi] { box-shadow: inset 0 -2px var(--midi); }
+body.midi-mapping [data-midi-target]:not(.mapped) { outline: 1px dashed color-mix(in srgb, var(--midi) 60%, transparent); outline-offset: 1px; border-radius: 6px; cursor: pointer; }
+body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi); background: color-mix(in srgb, var(--midi) 22%, transparent); }
 .inactive { opacity: .3; }
 .choice select { font-size: 12px; padding: 2px 4px; margin-top: 8px; }
 .header .controls .fx { padding: 1px 6px; font-size: 11px; }

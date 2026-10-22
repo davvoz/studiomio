@@ -15,6 +15,7 @@ import { MidiClip } from '../model/midi-clip';
 import { Project, type ChainOwner, type LoopRegion } from '../model/project';
 import type { SampleRef } from '../model/sample';
 import { withoutParamKeysOf } from '../model/key-map';
+import { withoutParamControlsOf } from '../model/midi-map';
 import { withoutMappingsOf } from '../model/rack';
 import { AudioTrack, BusTrack, busLetter, GroupTrack, MidiTrack, type MixerSettings, type Track } from '../model/track';
 import { edit, type Edit } from './project-store';
@@ -133,9 +134,10 @@ export const setInstrument = (id: TrackId, settings: InstrumentSettings): Edit =
       const racks = settings.type === t.instrument.type ? t.racks : withoutMappingsOf(t.racks, INSTRUMENT_DEVICE);
       return t.withInstrument(settings).withChain(t.effects, racks);
     });
-    // un altro strumento ha altri parametri: i loro tasti non valgono più
+    // un altro strumento ha altri parametri: i loro tasti e controlli MIDI non valgono più
     const same = before instanceof MidiTrack && before.instrument.type === settings.type;
-    return same ? next : next.updatingKeyMap(map => withoutParamKeysOf(map, id, INSTRUMENT_DEVICE));
+    return same ? next : next.updatingKeyMap(map => withoutParamKeysOf(map, id, INSTRUMENT_DEVICE))
+      .updatingMidiMap(map => withoutParamControlsOf(map, id, INSTRUMENT_DEVICE));
   });
 
 export const setInstrumentParam = (id: TrackId, param: string, value: number): Edit =>

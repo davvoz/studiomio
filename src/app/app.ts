@@ -43,11 +43,13 @@ import { groupSelectedTracks, ungroupSelectedTrack } from '../ui/track-groups';
 import { TrackHeaders } from '../ui/track-headers';
 import { MenuBar } from '../ui/menu-bar';
 import { TransportBar } from '../ui/transport-bar';
+import { MidiTargets } from '../ui/midi-targets';
 import { UiState } from '../ui/ui-state';
 import { PeakStore } from '../ui/waveform';
 import { AudioSystem } from './audio-system';
 import { BrowserLoader } from './browser-loader';
 import { KeyMapper } from './key-mapper';
+import { MidiMapper } from './midi-mapper';
 import { mainMenu } from './main-menu';
 import { ProjectSession } from './project-session';
 import { SamplePreview } from './sample-preview';
@@ -204,6 +206,8 @@ export class App implements Commands, TimelineActions {
     });
     // prima delle scorciatoie: i tasti mappati sulle macro e sui parametri
     new KeyMapper(this.store, this.ui, t => this.say(t));
+    new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t));
+    new MidiTargets(this.store, this.ui, t => this.say(t));
     bindKeys(document, this, KEYMAP);
     // chiudere la finestra con modifiche non salvate chiede conferma (in Electron la chiede il processo principale)
     addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });
@@ -380,6 +384,25 @@ export class App implements Commands, TimelineActions {
     const on = !this.ui.keyMapping;
     this.ui.setKeyMapping(on);
     if (on) this.say('KEY: clicca una macro o un parametro di un dispositivo, poi premi il tasto che lo muoverà (Canc lo toglie, Esc per finire).');
+  }
+
+  /** Accendendo MIDI, se il MIDI non è ancora attivo lo si attiva (la prima volta il browser chiede il permesso). */
+  toggleMidiMap(): void {
+    const on = !this.ui.midiMapping;
+    this.ui.setMidiMapping(on);
+    if (!on) return;
+    this.run(async () => {
+      try {
+        if (!this.surfaces.enabled) await this.surfaces.enable();
+      } catch (e) {
+        this.ui.setMidiMapping(false);
+        throw e;
+      }
+      const inputs = this.surfaces.mappingInputs;
+      this.say(inputs.length
+        ? `MIDI: clicca una macro, un parametro o un controllo del mixer, poi muovi la manopola, il fader o il pad che lo muoverà (Canc lo toglie, Esc per finire). Ingressi: ${inputs.join(', ')}.`
+        : "MIDI: nessun controller MIDI collegato (oltre all'APC40 e ai Launchpad, che hanno la loro mappa). Collegalo quando vuoi, si ascolta da solo.");
+    });
   }
 
   /** Carica una voce del browser dove la si lascia o, senza, dove si sta lavorando. */

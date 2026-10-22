@@ -6,6 +6,7 @@ import { deviceSampleIds, withSidechain, type DeviceSettings } from './device';
 import type { EffectList } from './effect-list';
 import { checkKeyMap, NO_KEYS, type KeyMap, type KeyTarget } from './key-map';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
+import { checkMidiMap, NO_MIDI, type MidiMap, type MidiTarget } from './midi-map';
 import { checkRacks, findRack, NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
 import type { SampleRef } from './sample';
 import { BusTrack, DEFAULT_MIXER, GroupTrack, type MixerSettings, type Track } from './track';
@@ -51,6 +52,8 @@ export interface ProjectProps {
   readonly launchQuantization: string;
   /** I tasti del computer sulle macro e sui parametri (assenti: nessuno). */
   readonly keyMap?: KeyMap;
+  /** I controlli MIDI sulle macro, sui parametri e sul mixer (assenti: nessuno). */
+  readonly midiMap?: MidiMap;
 }
 
 const NO_BUSES: readonly BusTrack[] = [];
@@ -67,6 +70,8 @@ export class Project {
   private allChannels: readonly Track[] | null = null;
   /** Le mappature della tastiera che valgono, calcolate alla prima richiesta. */
   private liveKeys: KeyMap | null = null;
+  /** Le mappature MIDI che valgono, calcolate alla prima richiesta. */
+  private liveMidi: MidiMap | null = null;
 
   private constructor(props: ProjectProps) {
     this.props = props;
@@ -135,6 +140,34 @@ export class Project {
     if (keyMap === before) return this;
     checkKeyMap(keyMap);
     return this.with({ keyMap: keyMap.length ? keyMap : undefined });
+  }
+
+  /** Le mappature MIDI i cui bersagli ci sono (le altre, come per la tastiera, aspettano un
+   *  "Annulla" che li riporti). */
+  get midiMap(): MidiMap {
+    const all = this.props.midiMap ?? NO_MIDI;
+    if (this.liveMidi) return this.liveMidi;
+    const live = all.filter(m => this.hasMidiTarget(m.target));
+    return (this.liveMidi = live.length === all.length ? all : live);
+  }
+
+  hasMidiTarget(t: MidiTarget): boolean {
+    if (t.kind === 'macro' || t.kind === 'param') return this.hasKeyTarget(t);
+    if (t.kind === 'send') {
+      const track = this.track(t.owner);
+      return !!track && !(track instanceof BusTrack) && this.buses.some(b => b.id === t.bus);
+    }
+    if (t.owner === MASTER) return t.control === 'volume' || t.control === 'mute';
+    return !!this.track(t.owner);
+  }
+
+  /** Le mappature MIDI (fn riceve tutte quelle scritte, anche quelle che non valgono). */
+  updatingMidiMap(fn: (map: MidiMap) => MidiMap): Project {
+    const before = this.props.midiMap ?? NO_MIDI;
+    const midiMap = fn(before);
+    if (midiMap === before) return this;
+    checkMidiMap(midiMap);
+    return this.with({ midiMap: midiMap.length ? midiMap : undefined });
   }
 
   /** La traccia, o il bus, con questo id. */

@@ -8,6 +8,7 @@ import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../.
 import { DEFAULT_INSTRUMENT, sampleAt, type EffectSettings, type ParamValues } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
 import { keyLabel, keyOf, sameTarget, type KeyTarget } from '../../model/key-map';
+import { encodeMidiTarget } from '../../model/midi-map';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
 import {
   chainItems, macroIndex, macroName, macroOf, moveDevice as layoutMove, moveRack as layoutMoveRack, rackOf, type DeviceKey, type Rack,
@@ -472,7 +473,10 @@ export class DeviceView {
     for (const e of panel.element.querySelectorAll<HTMLElement>('[data-param]')) this.markKey(e, { kind: 'param', owner, device, param: e.dataset.param! });
   }
 
+  /** Il tasto del controllo e, con MIDI acceso, il bersaglio da scegliere (vedi ui/midi-targets). */
   private markKey(e: HTMLElement, target: KeyTarget): void {
+    const midi = encodeMidiTarget(target);
+    if (e.dataset.midiTarget !== midi) e.dataset.midiTarget = midi;
     const key = keyOf(this.deps.store.project.keyMap, target);
     if (key) e.dataset.key = keyLabel(key);
     else delete e.dataset.key;

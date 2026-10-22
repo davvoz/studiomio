@@ -6,6 +6,20 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- MIDI mapping for any controller, like Live's MIDI Map: turn on MIDI in the control bar (Ctrl+M,
+  or Opzioni › Mappa il MIDI), click a control, then move the knob or fader or hit the pad that
+  will move it (Canc removes it, Esc turns MIDI off). It maps rack macros, instrument and effect
+  parameters, and the mixer: track volume, pan, sends, mute and solo, master volume and mute.
+  A CC sets the control to its position (volume follows Live's fader, 0 dB at about 85%; pan
+  centres at 64; mute, solo, switches and buttons are on from 64 up). A note works like a KEY
+  press: switches and menus step, knobs jump end to end, button macros stay on while the note is
+  held, mute and solo flip, volume goes between 0 dB and −∞. Controls are told apart by channel
+  and number, whichever port they come from. One control can move several targets. Mappings are
+  saved with the project, and a fader move is a single undo step. The APC40 mkII and Launchpads
+  keep their own mapping; the other MIDI inputs are opened only while MIDI is on or the project
+  has mappings (on Windows an open port can't be used by other programs).
+
 ## [0.3.22] - 2026-10-22
 
 ### Added

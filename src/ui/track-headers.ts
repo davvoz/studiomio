@@ -14,7 +14,7 @@ import { clickTrack, type UiState } from './ui-state';
 import { el } from './dom';
 import { renameInline } from './inline-rename';
 import { LevelMeter, type MeterBoard } from './meters/meter-board';
-import { addEffectItems, fxButton, setFxCount, setVolume, volumeSlider } from './mixer-controls';
+import { addEffectItems, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 
 export interface HeaderActions {
   /** Apre la catena dei dispositivi (strumento ed effetti) di una traccia o del master. */
@@ -128,8 +128,9 @@ class HeaderRow {
     this.element.addEventListener('pointerdown', e => clickTrack(ui, id, e, () => store.project.visibleTracks.map(t => t.id)));
     const isGroup = store.project.track(id) instanceof GroupTrack;
     if (isGroup) this.fold = el<HTMLButtonElement>('button', { className: 'fold', onclick: () => toggleFold(store, this.track() as GroupTrack) });
-    const toggle = (label: string, title: string, flag: 'mute' | 'solo') =>
-      el<HTMLButtonElement>('button', { textContent: label, title, onclick: () => this.mixer({ [flag]: !this.track().mixer[flag] }) });
+    const toggle = (label: string, title: string, flag: 'mute' | 'solo') => midiTarget(
+      el<HTMLButtonElement>('button', { textContent: label, title, onclick: () => this.mixer({ [flag]: !this.track().mixer[flag] }) }),
+      { kind: 'mixer', owner: id, control: flag });
     this.mute = toggle('M', 'Mute', 'mute');
     this.solo = toggle('S', 'Solo', 'solo');
     this.volume = volumeSlider(store, 0, `vol-${id}`, (volumeDb, merge) => this.mixer({ volumeDb }, merge));
@@ -140,7 +141,7 @@ class HeaderRow {
     this.element.classList.toggle('group', isGroup);
     this.element.append(
       el('div', { className: 'top' }, ...(this.fold ? [this.fold] : []), this.name, this.badge),
-      el('div', { className: 'controls' }, this.mute, this.solo, this.volume, this.fx),
+      el('div', { className: 'controls' }, this.mute, this.solo, midiSlot(this.volume, { kind: 'mixer', owner: id, control: 'volume' }), this.fx),
       meter.element);
     this.element.oncontextmenu = e => {
       e.preventDefault();

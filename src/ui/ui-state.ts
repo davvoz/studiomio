@@ -1,6 +1,7 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { PlacementId, TrackId } from '../core/id';
 import { sameTarget, type KeyTarget } from '../model/key-map';
+import { sameMidiTarget, type MidiTarget } from '../model/midi-map';
 import type { ChainOwner } from '../model/project';
 import { TimelineGeometry } from './timeline/geometry';
 
@@ -36,6 +37,8 @@ export class UiState {
   private _controlled: ControlledDevice | null = null;
   private _keyMapping = false;
   private _keyTarget: KeyTarget | null = null;
+  private _midiMapping = false;
+  private _midiTarget: MidiTarget | null = null;
   private readonly events = new Emitter<UiEvents>();
 
   get geometry(): TimelineGeometry { return this._geometry; }
@@ -59,6 +62,11 @@ export class UiState {
   get keyMapping(): boolean { return this._keyMapping; }
   /** Il bersaglio scelto con KEY acceso, che aspetta il suo tasto. */
   get keyTarget(): KeyTarget | null { return this._keyTarget; }
+  /** "MIDI" acceso (Ctrl+M): un clic su una macro, un parametro o un controllo del mixer lo
+   *  sceglie, il controllo MIDI mosso dopo lo muove. Intanto i controlli mappati non muovono niente. */
+  get midiMapping(): boolean { return this._midiMapping; }
+  /** Il bersaglio scelto con MIDI acceso, che aspetta il suo controllo. */
+  get midiTarget(): MidiTarget | null { return this._midiTarget; }
 
   onChange(fn: () => void): Unsubscribe {
     return this.events.on('change', fn);
@@ -134,10 +142,35 @@ export class UiState {
     this.events.emit('change');
   }
 
+  /** KEY e MIDI non sono accesi insieme. */
   setKeyMapping(on: boolean): void {
     if (on === this._keyMapping) return;
     this._keyMapping = on;
     this._keyTarget = null;
+    if (on) this.stopMidiMapping();
+    this.events.emit('change');
+  }
+
+  setMidiMapping(on: boolean): void {
+    if (on === this._midiMapping) return;
+    this._midiMapping = on;
+    this._midiTarget = null;
+    if (on) {
+      this._keyMapping = false;
+      this._keyTarget = null;
+    }
+    this.events.emit('change');
+  }
+
+  private stopMidiMapping(): void {
+    this._midiMapping = false;
+    this._midiTarget = null;
+  }
+
+  chooseMidiTarget(t: MidiTarget | null): void {
+    const c = this._midiTarget;
+    if (!this._midiMapping || c === t || (c && t && sameMidiTarget(c, t))) return;
+    this._midiTarget = t;
     this.events.emit('change');
   }
 

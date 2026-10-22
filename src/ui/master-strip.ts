@@ -5,7 +5,7 @@ import type { ProjectStore } from '../store/project-store';
 import { showContextMenu } from './context-menu';
 import { el } from './dom';
 import { LevelMeter, PeakReadout, type MeterBoard } from './meters/meter-board';
-import { addEffectItems, fxButton, setFxCount, setVolume, volumeSlider } from './mixer-controls';
+import { addEffectItems, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 import type { HeaderActions } from './track-headers';
 
 /** La riga del master in fondo all'arrangement, come in Live: a sinistra mute, volume ed
@@ -21,7 +21,7 @@ export class MasterStrip {
   constructor(store: ProjectStore, actions: HeaderActions, meters: MeterBoard) {
     const open = () => actions.openDevices(MASTER);
     const toggleMute = () => store.apply(setMasterMixer({ mute: !store.project.master.mute }));
-    this.mute = el<HTMLButtonElement>('button', { textContent: 'M', title: 'Mute del master', onclick: toggleMute });
+    this.mute = midiTarget(el<HTMLButtonElement>('button', { textContent: 'M', title: 'Mute del master', onclick: toggleMute }), { kind: 'mixer', owner: MASTER, control: 'mute' });
     this.volume = volumeSlider(store, store.project.master.volumeDb, 'vol-master',
       (volumeDb, mergeKey) => store.apply(setMasterMixer({ volumeDb }), mergeKey ? { mergeKey } : {}));
     this.fx = fxButton(0, 'Effetti del master', open);
@@ -31,7 +31,7 @@ export class MasterStrip {
     meters.attach(MASTER, peak);
     this.header.append(
       el('div', { className: 'top' }, el('span', { className: 'track-name', textContent: 'Master' }), peak.element),
-      el('div', { className: 'controls' }, this.mute, this.volume, this.fx),
+      el('div', { className: 'controls' }, this.mute, midiSlot(this.volume, { kind: 'mixer', owner: MASTER, control: 'volume' }), this.fx),
       meter.element);
     this.lane.onclick = open;
     const menu = (e: MouseEvent) => {

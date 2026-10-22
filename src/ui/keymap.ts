@@ -33,6 +33,8 @@ export interface Commands {
   searchBrowser(): void;
   /** Mappa la tastiera del computer sulle macro e sui parametri (Ctrl+K, come in Live). */
   toggleKeyMap(): void;
+  /** Mappa il MIDI di un controller qualsiasi sulle macro, sui parametri e sul mixer (Ctrl+M, come in Live). */
+  toggleMidiMap(): void;
 }
 
 export interface Binding<C = Commands> {
@@ -78,6 +80,7 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'f', ctrl: true, run: c => c.searchBrowser() },
   { key: 'f', ctrl: true, shift: true, run: c => c.toggleFollow() },
   { key: 'k', ctrl: true, run: c => c.toggleKeyMap() },
+  { key: 'm', ctrl: true, run: c => c.toggleMidiMap() },
 ];
 
 /** Campi in cui si scrive: lì tutti i tasti sono loro. */

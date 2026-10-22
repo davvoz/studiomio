@@ -38,10 +38,11 @@ export const holdKey = (key: string, down: boolean): Edit =>
     return p;
   });
 
-const macroAt = (p: Project, t: KeyTarget): Macro | undefined =>
+export const macroAt = (p: Project, t: KeyTarget): Macro | undefined =>
   (t.kind === 'macro' ? findRack(p.racksOf(t.owner), t.rack)?.macros[t.index] : undefined);
 
-function press(p: Project, ctx: EditContext, t: KeyTarget): Project {
+/** Un tasto (o una nota MIDI) premuto su un bersaglio. */
+export function press(p: Project, ctx: EditContext, t: KeyTarget): Project {
   if (t.kind === 'macro') {
     const m = macroAt(p, t);
     if (!m || macroMode(m) === 'button') return p;

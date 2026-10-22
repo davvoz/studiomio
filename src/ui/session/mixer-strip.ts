@@ -5,6 +5,7 @@
 import type { TrackId } from '../../core/id';
 import type { NumberParam } from '../../devices/params';
 import { instrumentType } from '../../devices/registry';
+import type { MidiTarget } from '../../model/midi-map';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
 import { BusTrack, GroupTrack, MidiTrack, SEND_OFF_DB, type Track } from '../../model/track';
 import { setMasterMixer, setMixer, setSend } from '../../store/edits';
@@ -12,7 +13,7 @@ import type { ProjectStore } from '../../store/project-store';
 import { controlFor, type ParamControl } from '../device/controls';
 import { el } from '../dom';
 import { LevelMeter, PeakReadout, type MeterBoard } from '../meters/meter-board';
-import { fxButton, setFxCount, setVolume, volumeSlider } from '../mixer-controls';
+import { fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from '../mixer-controls';
 
 const PAN: NumberParam = { kind: 'number', id: 'pan', label: 'Pan', min: -50, max: 50, default: 0, unit: 'pan', step: 1 };
 
@@ -28,10 +29,10 @@ export interface StripActions {
   openDevices(owner: ChainOwner): void;
 }
 
-/** Fader verticale, il suo misuratore e il valore in dB. */
-function faderBlock(volume: HTMLInputElement, meter: LevelMeter, db: HTMLElement): HTMLElement {
+/** Fader verticale (che si mappa sul MIDI come `target`), il suo misuratore e il valore in dB. */
+function faderBlock(volume: HTMLInputElement, target: MidiTarget, meter: LevelMeter, db: HTMLElement): HTMLElement {
   volume.classList.add('vertical');
-  return el('div', { className: 'fader-block' }, el('div', { className: 'fader-row' }, volume, meter.element), db);
+  return el('div', { className: 'fader-block' }, el('div', { className: 'fader-row' }, midiSlot(volume, target), meter.element), db);
 }
 
 export class TrackStrip {
@@ -59,14 +60,17 @@ export class TrackStrip {
       if (final) store.endMerge();
     });
     this.volume = volumeSlider(store, 0, `vol-${id}`, (volumeDb, merge) => mixer({ volumeDb }, merge));
-    const toggle = (text: string, flag: 'mute' | 'solo') =>
-      el<HTMLButtonElement>('button', { textContent: text, title: flag === 'mute' ? 'Mute' : 'Solo', onclick: () => mixer({ [flag]: !current().mixer[flag] }) });
+    const toggle = (text: string, flag: 'mute' | 'solo') => midiTarget(
+      el<HTMLButtonElement>('button', { textContent: text, title: flag === 'mute' ? 'Mute' : 'Solo', onclick: () => mixer({ [flag]: !current().mixer[flag] }) }),
+      { kind: 'mixer', owner: id, control: flag });
     this.mute = toggle('M', 'mute');
     this.solo = toggle('S', 'solo');
     this.element.dataset.track = id;
     const meter = new LevelMeter('strip-meter', () => meters.resetClip(id));
     this.detach = meters.attach(id, meter);
-    this.element.append(this.sendBox, this.badge, this.fx, this.pan.element, faderBlock(this.volume, meter, this.db), el('div', { className: 'strip-ms' }, this.mute, this.solo));
+    midiTarget(this.pan.element, { kind: 'mixer', owner: id, control: 'pan' });
+    this.element.append(this.sendBox, this.badge, this.fx, this.pan.element,
+      faderBlock(this.volume, { kind: 'mixer', owner: id, control: 'volume' }, meter, this.db), el('div', { className: 'strip-ms' }, this.mute, this.solo));
   }
 
   /** `buses`: i bus del progetto, per le manopole delle mandate. */
@@ -97,6 +101,7 @@ export class TrackStrip {
         if (final) this.store.endMerge();
       });
       control.element.title = `Mandata verso ${b.name}, in dB (doppio clic: chiusa)`;
+      midiTarget(control.element, { kind: 'send', owner: this.id, bus: b.id });
       return { bus: b.id, control };
     });
     this.sendBox.replaceChildren(...this.sends.map(s => s.control.element));
@@ -117,12 +122,14 @@ export class MasterStripView {
   constructor(store: ProjectStore, actions: StripActions, meters: MeterBoard) {
     this.fx = fxButton(0, 'Effetti del master', () => actions.openDevices(MASTER));
     this.volume = volumeSlider(store, 0, 'vol-master', (volumeDb, mergeKey) => store.apply(setMasterMixer({ volumeDb }), mergeKey ? { mergeKey } : {}));
-    this.mute = el<HTMLButtonElement>('button', { textContent: 'M', title: 'Mute del master', onclick: () => store.apply(setMasterMixer({ mute: !store.project.master.mute })) });
+    this.mute = midiTarget(el<HTMLButtonElement>('button', { textContent: 'M', title: 'Mute del master', onclick: () => store.apply(setMasterMixer({ mute: !store.project.master.mute })) }),
+      { kind: 'mixer', owner: MASTER, control: 'mute' });
     const reset = () => meters.resetClip(MASTER);
     const meter = new LevelMeter('strip-meter', reset), peak = new PeakReadout(reset);
     meters.attach(MASTER, meter);
     meters.attach(MASTER, peak);
-    this.element.append(el('div', { className: 'strip-badge' }, 'Master'), this.fx, peak.element, faderBlock(this.volume, meter, this.db), el('div', { className: 'strip-ms' }, this.mute));
+    this.element.append(el('div', { className: 'strip-badge' }, 'Master'), this.fx, peak.element,
+      faderBlock(this.volume, { kind: 'mixer', owner: MASTER, control: 'volume' }, meter, this.db), el('div', { className: 'strip-ms' }, this.mute));
   }
 
   update(p: Project): void {

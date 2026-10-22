@@ -1,5 +1,6 @@
 /* Controlli del mixer usati sia dalle intestazioni delle tracce sia dal master. */
 import { EFFECT_TYPES } from '../devices/registry';
+import { encodeMidiTarget, type MidiTarget } from '../model/midi-map';
 import type { ChainOwner } from '../model/project';
 import { addEffect } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
@@ -14,6 +15,16 @@ export function volumeSlider(store: ProjectStore, value: number, mergeKey: strin
   vol.ondblclick = () => set(0);
   return vol;
 }
+
+/** Il controllo si può mappare sul MIDI: porta il suo bersaglio (vedi midi-targets). */
+export function midiTarget<E extends HTMLElement>(e: E, target: MidiTarget): E {
+  e.dataset.midiTarget = encodeMidiTarget(target);
+  return e;
+}
+
+/** Un cursore non mostra il nome del suo controllo MIDI: lo porta un involucro. */
+export const midiSlot = (input: HTMLInputElement, target: MidiTarget): HTMLElement =>
+  midiTarget(el('span', { className: 'midi-slot' }, input), target);
 
 /** "FX" con il numero degli effetti della catena; un clic la apre. */
 export function fxButton(count: number, title: string, open: () => void): HTMLButtonElement {

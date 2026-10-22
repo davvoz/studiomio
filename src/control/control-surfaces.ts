@@ -3,7 +3,8 @@
  * li si mette nel modo per i programmi (Ableton mode, DAW mode) e li si lega alla session, senza
  * mappature da fare. Uno alla volta: se ce ne sono due, vince il primo dell'elenco. Web MIDI con
  * il SysEx c'è in Chrome ed Edge: la prima volta il browser chiede il permesso (pulsante 🎛),
- * poi all'avvio si collega da solo. */
+ * poi all'avvio si collega da solo. Le altre porte d'ingresso (un controller qualsiasi, una
+ * tastiera) vanno alle mappature MIDI (vedi app/midi-mapper), ma si aprono solo se servono. */
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import { Apc40 } from './apc40/apc40';
 import { PORT_NAME } from './apc40/protocol';
@@ -21,7 +22,7 @@ const MAX_REVIVALS = 2;
 /** Quanti messaggi MIDI tiene il registro per il report. */
 const HISTORY = 400;
 
-type SurfaceEvents = { change: [] };
+type SurfaceEvents = { change: []; midi: [data: Uint8Array] };
 
 /** Un tipo di controller: come lo si riconosce, a quali porte si parla, chi lo guida. */
 interface Driver {
@@ -97,6 +98,9 @@ export class ControlSurfaces {
   /** Gli ultimi messaggi MIDI, per il report. */
   private readonly history: string[] = [];
   private readonly startedAt = performance.now();
+  /** Le porte d'ingresso che non sono di un controller della session, ascoltate per le mappature. */
+  private readonly free = new Map<string, MIDIInput>();
+  private mapping = false;
   private readonly drivers: readonly Driver[];
   private readonly events = new Emitter<SurfaceEvents>();
 
@@ -142,6 +146,29 @@ export class ControlSurfaces {
     void this.scan();
   }
 
+  /** Si ascoltano le porte d'ingresso degli altri controller, per le mappature MIDI? Solo se
+   *  servono (MIDI acceso o mappature nel progetto): su Windows una porta aperta non la può usare
+   *  un altro programma. */
+  get listening(): boolean {
+    return this.mapping;
+  }
+
+  set listening(on: boolean) {
+    if (on === this.mapping) return;
+    this.mapping = on;
+    void this.scan();
+  }
+
+  /** I nomi delle porte ascoltate per le mappature. */
+  get mappingInputs(): string[] {
+    return [...this.free.values()].map(p => p.name ?? p.id);
+  }
+
+  /** Un messaggio da una porta ascoltata per le mappature. */
+  onMidi(fn: (data: Uint8Array) => void): Unsubscribe {
+    return this.events.on('midi', fn);
+  }
+
   /** Le porte MIDI che il browser vede (per capire cosa non va dalla console). */
   ports(): { input: string[]; output: string[] } {
     const list = (ports: Iterable<MIDIPort>) => [...ports].map(p => `${p.name} [${p.id}] ${p.state}/${p.connection}`);
@@ -158,6 +185,7 @@ export class ControlSurfaces {
       'Porte d\'ingresso:', ...this.ports().input.map(p => `  ${p}`),
       'Porte d\'uscita:', ...this.ports().output.map(p => `  ${p}`),
       c ? `Collegato: ${c.driver.name}` : 'Collegato: nessun controller',
+      `Ingressi per le mappature MIDI: ${this.mapping ? this.mappingInputs.join(', ') || 'nessuno' : 'chiusi (nessuna mappatura)'}`,
     ];
     if (c) {
       lines.push(`  uscita: ${c.output.name} [${c.output.id}]`);
@@ -202,7 +230,7 @@ export class ControlSurfaces {
       window.addEventListener('pagehide', () => this.disconnect());
     }
     await this.scan();
-    if (!this.conn && !this.unknownSaid) {
+    if (!this.conn && !this.unknownSaid && !this.mapping) {
       this.host.say('Controller: nessun APC40 mkII o Launchpad (X, Mini MK3, Pro MK3, MK2) collegato. Collegalo quando vuoi, si attiva da solo.');
     }
     this.events.emit('change');
@@ -230,8 +258,13 @@ export class ControlSurfaces {
     }
     if (!found) this.unknownLaunchpad([...allInputs, ...allOutputs]);
     const ports = found ? [found.output.id, ...found.inputs.map(p => p.id)].join('|') : '';
-    if (this.conn && this.conn.ports === ports) return;
+    const claimed = new Set(found ? [...found.inputs, ...found.others].map(p => p.id) : []);
+    const free = allInputs.filter(p => !claimed.has(p.id));
+    if (this.conn && this.conn.ports === ports) return this.listenFree(free);
+    // prima si scollega il controller (che smette di ascoltare le sue porte), poi le porte libere
+    // passano alle mappature, poi un controller nuovo prende le sue
     if (this.conn) this.disconnect();
+    this.listenFree(free);
     if (!found) return;
     const { driver, output } = found;
     this.connecting = true;
@@ -301,6 +334,36 @@ export class ControlSurfaces {
     this.host.say(model
       ? `Controller: non trovo la porta DAW del ${model.name} (dalla console: studiomio.surfaces.ports()).`
       : `Controller: "${lp.name}" non è un Launchpad che studiomio conosce (X, Mini MK3, Pro MK3, MK2).`);
+  }
+
+  /** Ascolta per le mappature le porte libere (tutte, se servono; nessuna, se no). Una porta che
+   *  passa a un controller della session la ascolta lui; una che non serve più si chiude. */
+  private listenFree(ports: readonly MIDIInput[]): void {
+    const wanted = this.mapping ? ports : [];
+    let changed = false;
+    for (const [id, input] of this.free) {
+      if (wanted.some(p => p.id === id)) continue;
+      input.onmidimessage = null;
+      this.free.delete(id);
+      changed = true;
+      if (!this.mapping) void input.close().catch(() => {});
+    }
+    for (const input of wanted) {
+      if (this.free.has(input.id)) continue;
+      this.free.set(input.id, input);
+      changed = true;
+      input.onmidimessage = e => {
+        if (!e.data) return;
+        this.record('← (mappature)', input.name, e.data);
+        if (this.log) console.log(`MIDI ← ${input.name} [${input.id}] (mappature): ${hex(e.data)}`);
+        this.events.emit('midi', e.data);
+      };
+      input.open().catch(e => {
+        console.warn(`MIDI: non riesco ad aprire l'ingresso ${input.name} [${input.id}]`, e);
+        this.host.say(`MIDI: non riesco ad aprire ${input.name} (lo sta usando un altro programma?).`);
+      });
+    }
+    if (changed) this.events.emit('change');
   }
 
   private record(direction: string, port: string | null | undefined, data: ArrayLike<number>): void {

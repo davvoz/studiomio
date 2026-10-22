@@ -18,6 +18,7 @@ export class TransportBar {
   private readonly metro: HTMLButtonElement;
   private readonly follow: HTMLButtonElement;
   private readonly keys: HTMLButtonElement;
+  private readonly midi: HTMLButtonElement;
 
   constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, commands: Commands) {
     this.play = button('▶', 'Play / Stop (Spazio)', () => commands.togglePlay(), 'play');
@@ -33,9 +34,11 @@ export class TransportBar {
     this.follow = button('↦ Segui', '', () => commands.toggleFollow(), 'follow');
     this.keys = button('KEY', 'Mappa la tastiera del computer sulle macro dei rack e sui parametri dei dispositivi (Ctrl+K)',
       () => commands.toggleKeyMap(), 'key-map');
+    this.midi = button('MIDI', 'Mappa il MIDI di un controller qualsiasi sulle macro, sui parametri e sul mixer (Ctrl+M)',
+      () => commands.toggleMidiMap(), 'midi-map');
     this.element.append(
       group(this.play, button('■', 'Stop e torna all\'inizio (Invio)', () => commands.stopAndRewind()), this.pos, this.follow),
-      group(labelled('BPM', this.bpm), this.loop, this.metro, this.keys),
+      group(labelled('BPM', this.bpm), this.loop, this.metro, this.keys, this.midi),
     );
     store.onChange(() => this.render());
     ui.onChange(() => this.render());
@@ -63,6 +66,7 @@ export class TransportBar {
     this.loop.classList.toggle('on', p.loop.enabled);
     this.metro.classList.toggle('on', this.engine.metronomeOn);
     this.keys.classList.toggle('on', this.ui.keyMapping);
+    this.midi.classList.toggle('on', this.ui.midiMapping);
     const paused = this.ui.followPaused;
     this.follow.classList.toggle('on', this.ui.following);
     this.follow.classList.toggle('paused', paused);
