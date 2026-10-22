@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.21] - 2026-10-22
+
 ### Fixed
 - Browser, User presets: the Instrument Rack and Audio Effect Rack folders no longer get mixed up
   (they opened and highlighted together and both showed the same racks).
