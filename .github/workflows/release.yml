@@ -46,12 +46,16 @@ jobs:
 
       # la release si crea in un colpo solo con tutti i file: electron-builder li caricava in
       # parallelo e ne creava due per tag (o una a metà, senza latest.yml per gli aggiornamenti).
-      # Il testo è la sezione della versione nel CHANGELOG.md.
+      # Il testo è la sezione della versione nel CHANGELOG.md. La copia con il nome fisso serve al
+      # link diretto del README (releases/latest/download/studiomio-setup.exe); gli aggiornamenti
+      # usano quella con la versione, scritta in latest.yml.
       - shell: bash
         run: |
           v="${GITHUB_REF_NAME#v}"
           node scripts/changelog.mjs notes "$v" > release-notes.md
+          cp "release/studiomio-setup-$v.exe" release/studiomio-setup.exe
           gh release create "$GITHUB_REF_NAME" --title "$v" --notes-file release-notes.md \
-            "release/studiomio-setup-$v.exe" "release/studiomio-setup-$v.exe.blockmap" release/latest.yml
+            "release/studiomio-setup-$v.exe" "release/studiomio-setup-$v.exe.blockmap" release/latest.yml \
+            release/studiomio-setup.exe
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
