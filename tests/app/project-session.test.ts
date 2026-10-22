@@ -80,6 +80,37 @@ describe('ProjectSession', () => {
     expect([session.changed, session.saved]).toEqual([false, false]); // non perde nulla, ma non è su disco
   });
 
+  it('raccogli e salva in ZIP: un altro utente lo apre e lo salva nella sua cartella', async () => {
+    const disk = new MemoryDirectory('Brano');
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    const { audio } = fakeAudio();
+    const session = new ProjectSession(store, audio, async () => disk);
+    await session.importFiles([fileOf('voce.wav')], null, 0);
+    await session.addAudio('scarto.wav', { channels: [new Float32Array(10)], sampleRate: 44100 }, new Uint8Array([9]));
+    await session.save();
+    store.apply(addTrack('audio'));
+
+    const zip = await session.collectAndSave();
+    expect(zip.name).toBe('Brano.zip');
+    expect(session.changed).toBe(false); // su disco: salva anche la cartella
+
+    const other = new MemoryDirectory('Suo');
+    const theirs = new ProjectStore(Project.empty('q', randomIds), randomIds);
+    const them = fakeAudio();
+    const received = new ProjectSession(theirs, them.audio, async () => other);
+    await received.openArchive(zip);
+    expect(theirs.project.id).toBe(store.project.id);
+    expect(theirs.project.tracks).toHaveLength(2);
+    expect(theirs.project.samples.map(s => s.file)).toEqual(['audio/voce.wav']); // lo scarto non viaggia
+    expect(them.loaded.size).toBe(1);
+    expect([received.name, received.saved, received.changed]).toEqual(['Brano', false, false]);
+
+    await received.save(); // non è su disco: chiede la cartella
+    expect(received.saved).toBe(true);
+    expect(await other.list('audio')).toEqual(['voce.wav']);
+    expect(await other.exists(PROJECT_FILE)).toBe(true);
+  });
+
   it('aprire una cartella senza progetto è un errore chiaro', async () => {
     const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
     const session = new ProjectSession(store, fakeAudio().audio, async () => new MemoryDirectory('Vuota'));

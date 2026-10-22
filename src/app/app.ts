@@ -107,7 +107,7 @@ export class App implements Commands, TimelineActions {
     this.arrangement = new ArrangementView({
       store: this.store, ui: this.ui, engine: this.audio.engine, peaks: this.peaks,
       openClip: (track, id) => this.openClip(placementRef(track, id)),
-      dropFiles: (files, track, beat) => this.run(() => this.session.importFiles(files, track, beat)),
+      dropFiles: (files, track, beat) => this.dropFiles(files, () => this.session.importFiles(files, track, beat)),
       dropItem,
       contextMenu: (hit, x, y) => showContextMenu(x, y, timelineMenu(this, hit)),
       rulerMenu: (x, y) => showContextMenu(x, y, rulerMenu(this)),
@@ -151,7 +151,7 @@ export class App implements Commands, TimelineActions {
       store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard,
       openClip: ref => this.openClip(ref),
       openDevices: owner => this.openDevices(owner),
-      importToSlot: (files, track, slot) => this.run(() => this.session.importFilesToSlots(files, track, slot)),
+      importToSlot: (files, track, slot) => this.dropFiles(files, () => this.session.importFilesToSlots(files, track, slot)),
       addTrack: kind => this.addTrack(kind),
       exportScene: index => this.exportScene(index),
       sceneToArrangement: index => this.sceneToArrangement(index),
@@ -439,6 +439,32 @@ export class App implements Commands, TimelineActions {
   open(): void { this.run(async () => { if (await this.closeProject()) await this.session.open(); }); }
   save(): void { this.run(() => this.session.save()); }
   saveAs(): void { this.run(() => this.session.saveAs()); }
+
+  /** Raccogli e salva: il progetto in un file ZIP da passare a un altro utente. */
+  collectAndSave(): void {
+    this.run(async () => {
+      const file = await this.session.collectAndSave();
+      download(file, file.name);
+    });
+  }
+
+  /** Chiede un progetto in un file ZIP e lo apre. */
+  chooseArchive(): void {
+    const picker = Object.assign(document.createElement('input'), { type: 'file', accept: '.zip,application/zip' });
+    picker.onchange = () => { if (picker.files?.[0]) this.openArchive(picker.files[0]); };
+    picker.click();
+  }
+
+  openArchive(file: File): void {
+    this.run(async () => { if (await this.closeProject()) await this.session.openArchive(file); });
+  }
+
+  /** Uno ZIP lasciato nella finestra è un progetto da aprire, gli altri file audio da importare. */
+  private dropFiles(files: File[], importAudio: () => Promise<void>): void {
+    const archive = files.find(f => /\.zip$/i.test(f.name));
+    if (archive) this.openArchive(archive);
+    else this.run(importAudio);
+  }
 
   /** Chiede dei file audio e li importa (come se li si trascinasse). */
   chooseAudioFiles(): void {

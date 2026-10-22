@@ -22,9 +22,11 @@ export function mainMenu(app: App): Menu[] {
       items: () => [
         { label: 'Nuovo progetto', shortcut: 'Ctrl+N', run: () => app.newProject() },
         { label: 'Apri progetto…', shortcut: 'Ctrl+O', run: () => app.open() },
+        { label: 'Apri progetto da ZIP…', run: () => app.chooseArchive() },
         SEPARATOR,
         { label: 'Salva', shortcut: 'Ctrl+S', run: () => app.save() },
         { label: 'Salva con nome…', shortcut: 'Ctrl+Maiusc+S', run: () => app.saveAs() },
+        { label: 'Raccogli e salva in ZIP…', run: () => app.collectAndSave() },
         SEPARATOR,
         { label: 'Importa audio…', run: () => app.chooseAudioFiles() },
         { label: 'Esporta il mix in WAV…', run: () => app.exportMix() },

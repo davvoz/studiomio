@@ -1,12 +1,13 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
+import { zipParts } from '../dsp/codec/zip';
 import type { AudioData } from '../dsp/types';
 import { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
 import { MemoryDirectory, type Directory } from '../persistence/directory';
 import { FsAccessDirectory } from '../persistence/fs-access-directory';
-import { ProjectFolder } from '../persistence/project-folder';
+import { ProjectFolder, safeFileName, unpackProject } from '../persistence/project-folder';
 import type { ProjectStore } from '../store/project-store';
 import { starterProject } from '../store/edits';
 import { importSample } from '../store/selection-edits';
@@ -125,6 +126,17 @@ export class ProjectSession {
     const dir = await this.pickDirectory();
     const folder = new ProjectFolder(dir);
     if (!(await folder.hasProject())) throw new Error(`"${dir.name}" non contiene un progetto studiomio`);
+    await this.openFolder(folder, true, `Aperto "${dir.name}".`);
+  }
+
+  /** Apre un progetto ricevuto in un file ZIP (vedi `collectAndSave`). Resta in memoria finché
+   *  non lo si salva: "Salva" chiede la cartella in cui metterlo. */
+  async openArchive(file: File): Promise<void> {
+    const dir = await unpackProject(new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.zip$/i, ''));
+    await this.openFolder(new ProjectFolder(dir), false, `Aperto "${dir.name}" da ${file.name}: salvalo per scegliere la sua cartella.`);
+  }
+
+  private async openFolder(folder: ProjectFolder, onDisk: boolean, opened: string): Promise<void> {
     const { project, missing } = await folder.load();
     this.audio.engine.stop();
     for (const s of project.samples) {
@@ -132,13 +144,11 @@ export class ProjectSession {
       await this.audio.addSample(s.id, await this.decode(await folder.readAudio(s)));
     }
     this.folder = folder;
-    this.onDisk = true;
+    this.onDisk = onDisk;
     this.store.load(project);
     this.savedVersion = project;
     this.events.emit('change');
-    this.say(missing.length
-      ? `Aperto "${dir.name}". Mancano ${missing.length} file audio: ${missing.map(s => s.file).join(', ')}`
-      : `Aperto "${dir.name}".`);
+    this.say(missing.length ? `${opened} Mancano ${missing.length} file audio: ${missing.map(s => s.file).join(', ')}` : opened);
   }
 
   async save(): Promise<void> {
@@ -155,6 +165,18 @@ export class ProjectSession {
     this.onDisk = true;
     await this.folder.save(this.store.project);
     this.markSaved();
+  }
+
+  /** Raccogli e salva: salva (se il progetto è già su disco) e mette il progetto in un file ZIP
+   *  da passare ad altri, con tutti e soli i file audio che usa. Chi lo riceve lo apre con
+   *  `openArchive`, o lo estrae e apre la cartella. */
+  async collectAndSave(): Promise<File> {
+    if (this.onDisk) await this.save();
+    const entries = await this.folder.archive(this.store.project, this.name);
+    const file = new File(zipParts(entries) as Uint8Array<ArrayBuffer>[], `${safeFileName(this.name)}.zip`, { type: 'application/zip' });
+    const audio = entries.length - 1;
+    this.say(`Raccolto "${this.name}" in ${file.name}: ${audio} file audio, ${(file.size / 1e6).toFixed(1)} MB.`);
+    return file;
   }
 
   private markSaved(): void {

@@ -6,6 +6,16 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- File › Raccogli e salva in ZIP…: puts the whole project in one file you can pass to another
+  user. The ZIP holds the project and all the audio it uses (and only that: unused files and the
+  backup stay out). If the project is already on disk it's saved first. A missing audio file
+  stops it and names the file.
+- File › Apri progetto da ZIP… (or drop the ZIP on the window) opens a project received this
+  way, with no need to unzip it. It opens as an unsaved project: Salva asks for the folder to put
+  it in. ZIPs made by hand also work (compressed by Windows Explorer, 7-Zip or the Finder, with or
+  without the project folder inside). Unzipped, the ZIP is an ordinary project folder.
+
 ## [0.3.21] - 2026-10-22
 
 ### Fixed
