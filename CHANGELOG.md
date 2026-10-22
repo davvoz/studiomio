@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.22] - 2026-10-22
+
 ### Added
 - File › Raccogli e salva in ZIP…: puts the whole project in one file you can pass to another
   user. The ZIP holds the project and all the audio it uses (and only that: unused files and the
