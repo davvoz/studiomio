@@ -96,7 +96,13 @@ describe('categorie dei dispositivi', () => {
     expect(names(effects)).toEqual(['Audio Effect Rack', DELAY.label]);
     expect(await childrenOf(instruments[0])).toMatchObject([{ name: 'Basso', icon: 'rack', payload: { kind: 'rack', rack: synth } }]);
     const mine = sources.find(s => s.id === 'user-presets')!;
-    expect(names(await mine.items())).toEqual(['Instrument Rack', 'Audio Effect Rack']);
+    const folders = await mine.items();
+    expect(names(folders)).toEqual(['Instrument Rack', 'Audio Effect Rack']);
+    // le due cartelle nella stessa fonte: id diversi, ognuna con i suoi rack
+    expect(folders[0].id).not.toBe(folders[1].id);
+    expect(names(await childrenOf(folders[0]))).toEqual(['Basso']);
+    expect(names(await childrenOf(folders[1]))).toEqual(['Eco']);
+    expect(new Set((await Promise.all(folders.map(childrenOf))).flat().map(i => i.id)).size).toBe(2);
     // i rack salvati cambiati: le fonti si rileggono
     let changed = 0;
     const off = sources[1].onChange!(() => changed++);

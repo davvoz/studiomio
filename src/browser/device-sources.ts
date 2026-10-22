@@ -38,7 +38,8 @@ function rackFolder(prefix: string, kind: DeviceKind, racks: UserRackList | unde
   const ofKind = (r: RackPreset) => !!r.instrument === (kind === 'instrument');
   const list = racks?.list().filter(ofKind) ?? [], fixed = factory.filter(ofKind);
   if (!list.length && !fixed.length) return [];
-  const id = `${prefix}/rack`;
+  // il tipo nell'id: tra i Preset dell'utente le due cartelle stanno nella stessa fonte
+  const id = `${prefix}/rack:${kind}`;
   const item = (r: RackPreset, key: string): BrowserItem => ({ id: `${id}/${key}`, name: r.name, icon: 'rack', payload: { kind: 'rack', rack: r } });
   return [{
     id, name: kind === 'instrument' ? 'Instrument Rack' : 'Audio Effect Rack', icon: 'folder',
