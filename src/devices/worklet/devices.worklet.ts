@@ -48,6 +48,9 @@ class InstrumentProcessor extends AudioWorkletProcessor {
   private readonly core: InstrumentCore;
   private readonly queue = new NoteQueue();
   private readonly mod: ParamModulation;
+  /** Il motore, se segue la battuta (il sequencer), e dove si trova il trasporto. */
+  private readonly follower: TransportFollower | null;
+  private readonly clock = new TransportClock();
   private readonly heads = new Float32Array(32);
   private headCount = 0;
   private untilHeads = 0;
@@ -62,12 +65,15 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     const setSample = playsSamples(core) ? core.setSample.bind(core) : () => {};
     for (const [slot, sample] of Object.entries(o.samples ?? {})) setSample(slot, sample);
     core.setTempo?.(o.bpm);
+    this.follower = followsTransport(core) ? core : null;
+    this.clock.set(o.transport);
     listen<InstrumentMessage>(this.port, {
       note: m => this.queue.add(m.pitch, m.velocity, Math.round(m.on * sampleRate), Math.round(m.off * sampleRate)),
       params: m => this.mod.setBase(m.params),
       mod: m => this.mod.event(m.param, m.kind, m.value, m.time),
       sample: m => setSample(m.slot, m.sample),
       tempo: m => core.setTempo?.(m.bpm),
+      transport: m => this.clock.set(m.anchor),
       stop: () => {
         this.queue.clear();
         this.core.silence();
@@ -82,8 +88,10 @@ class InstrumentProcessor extends AudioWorkletProcessor {
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const [left, right = left] = outputs[0];
     // le manopole e le modulazioni valgono dall'inizio del blocco
-    const params = this.mod.paramsAt(currentFrame / sampleRate);
+    const now = currentFrame / sampleRate;
+    const params = this.mod.paramsAt(now);
     if (params) this.core.setParams(params);
+    this.follower?.setTransport(this.clock.at(now));
     this.queue.renderBlock(this.core, left, right, currentFrame);
     if (this.core.playheads) this.postHeads(left.length);
     return this.alive;

@@ -1,4 +1,5 @@
 import type { CoreFactory, EffectFactory } from '../dsp/core';
+import { StepSequencer } from '../dsp/step-sequencer';
 import { AutoFilterCore } from '../effects/auto-filter/auto-filter-core';
 import { AutoPanCore } from '../effects/auto-pan/auto-pan-core';
 import { BeatRepeatCore } from '../effects/beat-repeat/beat-repeat-core';
@@ -27,9 +28,10 @@ import { WavetableCore } from '../instruments/wavetable/wavetable-core';
 /** I motori DSP degli strumenti, per tipo: aggiungere un synth è aggiungere una riga qui e
  *  la sua descrizione in registry.ts. */
 export const INSTRUMENT_CORES: Readonly<Record<string, CoreFactory>> = {
-  analog: sampleRate => new AnalogCore(sampleRate),
+  // i synth a una voce con il sequencer a passi davanti (vedi devices/sequencer.ts)
+  analog: sampleRate => new StepSequencer(new AnalogCore(sampleRate), sampleRate),
   drums: sampleRate => new DrumCore(sampleRate),
-  neuro: sampleRate => new NeuroCore(sampleRate),
+  neuro: sampleRate => new StepSequencer(new NeuroCore(sampleRate), sampleRate),
   prisma: sampleRate => new PrismaCore(sampleRate),
   sampler: sampleRate => new SamplerCore(sampleRate),
   wavetable: sampleRate => new WavetableCore(sampleRate),

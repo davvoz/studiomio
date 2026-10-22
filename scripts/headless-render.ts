@@ -5,8 +5,8 @@
  * Audio). Serve a misurare un progetto (loudness, spettro, picchi) mentre lo si costruisce;
  * può dare anche le tracce separate (stem). */
 import { resolveParams } from '../src/devices/device-type';
-import { dbToGain, playsSamples, type EffectCore, type InstrumentCore, type SampleData } from '../src/devices/dsp/core';
-import type { NumberParam } from '../src/devices/params';
+import { dbToGain, followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type SampleData } from '../src/devices/dsp/core';
+import type { ParamSpec } from '../src/devices/params';
 import { paramsOf } from '../src/devices/device-type';
 import { effectType, instrumentType } from '../src/devices/registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from '../src/devices/worklet/cores';
@@ -20,9 +20,10 @@ import type { MidiClip } from '../src/model/midi-clip';
 import { audibleTracks } from '../src/engine/mixer-graph';
 import type { Project } from '../src/model/project';
 import type { MidiTrack } from '../src/model/track';
-import type { SampleId } from '../src/core/id';
+import type { SampleId, TrackId } from '../src/core/id';
 
 const BLOCK = 128;
+const SILENCE = new Float32Array(BLOCK);
 
 /** Un WAV (PCM 8/16/24/32 o float 32/64, anche "extensible") in canali float. */
 export function decodeWav(bytes: Uint8Array): SampleData {
@@ -59,23 +60,30 @@ export function decodeWav(bytes: Uint8Array): SampleData {
   throw new Error('nessun dato audio');
 }
 
-const numberSpecs = (t: ReturnType<typeof effectType>): Map<string, NumberParam> =>
-  new Map((t ? paramsOf(t) : []).flatMap(p => (p.kind === 'number' ? [[p.id, p] as const] : [])));
+/** I parametri che le modulazioni muovono: tutti, numeri e scelte, come nell'AudioWorklet. */
+const modSpecs = (t: ReturnType<typeof effectType>): Map<string, ParamSpec> => new Map((t ? paramsOf(t) : []).map(p => [p.id, p] as const));
 
-/** Una catena di effetti come nell'AudioWorklet: un motore, le sue modulazioni, il bypass. */
+/** Il suono di un blocco di una traccia dopo i suoi effetti e prima del volume: quello che
+ *  ascolta il sidechain (vedi model/sidechain.ts). */
+type KeySource = (track: TrackId) => { readonly l: Float32Array; readonly r: Float32Array } | undefined;
+
+/** Una catena di effetti come nell'AudioWorklet: un motore, le sue modulazioni, il bypass; il
+ *  compressore in sidechain ascolta la traccia sorgente nello stesso blocco (le tracce si
+ *  calcolano in ordine: una sorgente che viene dopo arriva con un blocco di ritardo). */
 class Chain {
-  readonly fx: { id: string; core: EffectCore; runner: EffectRunner; mod: ParamModulation }[];
+  readonly fx: { id: string; core: EffectCore; runner: EffectRunner; mod: ParamModulation; key: TrackId | undefined }[];
   private readonly tmpL = new Float32Array(BLOCK);
   private readonly tmpR = new Float32Array(BLOCK);
 
-  constructor(effects: readonly EffectSettings[], bpm: number, sampleRate: number) {
+  constructor(effects: readonly EffectSettings[], bpm: number, sampleRate: number, private readonly keys: KeySource = () => undefined) {
     this.fx = effects.flatMap(e => {
       const factory = EFFECT_CORES[e.type], type = effectType(e.type);
       if (!factory || !type) return [];
       const params = resolveParams(type, e.params), core = factory(sampleRate);
       core.setTempo(bpm);
       core.setParams(params);
-      return [{ id: e.id, core, runner: new EffectRunner(core, sampleRate, e.enabled), mod: new ParamModulation(numberSpecs(type), params) }];
+      const key = type.sidechain && isKeyed(core) ? e.sidechain : undefined;
+      return [{ id: e.id, core, runner: new EffectRunner(core, sampleRate, e.enabled), mod: new ParamModulation(modSpecs(type), params), key }];
     });
   }
 
@@ -83,6 +91,10 @@ class Chain {
     for (const f of this.fx) {
       const p = f.mod.paramsAt(time);
       if (p) f.core.setParams(p);
+      if (f.key && isKeyed(f.core)) {
+        const k = this.keys(f.key);
+        f.core.setKey(k?.l ?? SILENCE, k?.r ?? SILENCE);
+      }
       f.runner.process(l, r, this.tmpL, this.tmpR);
       l.set(this.tmpL);
       r.set(this.tmpR);
@@ -106,11 +118,16 @@ class TrackRender {
   readonly curves: MixerCurves = { volume: [], pan: [] };
   readonly fader: number;
   readonly pan: number;
+  readonly bpm: number;
   readonly l = new Float32Array(BLOCK);
   readonly r = new Float32Array(BLOCK);
 
-  constructor(readonly track: MidiTrack, project: Project, samples: ReadonlyMap<SampleId, SampleData>, readonly sampleRate: number, readonly audible: boolean) {
+  constructor(
+    readonly track: MidiTrack, project: Project, samples: ReadonlyMap<SampleId, SampleData>, readonly sampleRate: number, readonly audible: boolean,
+    keys: KeySource,
+  ) {
     const bpm = project.tempo.bpm, spb = 60 / bpm;
+    this.bpm = bpm;
     const it = instrumentType(track.instrument.type);
     const params = it ? resolveParams(it, track.instrument.params) : {};
     this.core = INSTRUMENT_CORES[track.instrument.type](sampleRate);
@@ -119,8 +136,8 @@ class TrackRender {
       for (const [slot, id] of Object.entries(track.instrument.samples ?? {})) this.core.setSample(slot, samples.get(id) ?? null);
     }
     this.core.setParams(params);
-    this.instMod = new ParamModulation(numberSpecs(it), params);
-    this.chain = new Chain(track.effects, bpm, sampleRate);
+    this.instMod = new ParamModulation(modSpecs(it), params);
+    this.chain = new Chain(track.effects, bpm, sampleRate, keys);
     this.fader = dbToGain(track.mixer.volumeDb);
     this.pan = track.mixer.pan;
 
@@ -164,6 +181,8 @@ class TrackRender {
     const time = frame / sampleRate;
     const p = this.instMod.paramsAt(time);
     if (p) this.core.setParams(p);
+    // il trasporto parte dal battito 0 e non salta: come la timeline suonata dall'inizio
+    if (followsTransport(this.core)) this.core.setTransport({ beat: (time * this.bpm) / 60, bpm: this.bpm, beatsPerBar: 4 });
     this.queue.renderBlock(this.core, l, r, frame);
     this.chain.process(l, r, time);
     if (!this.audible) return;
@@ -205,8 +224,11 @@ export function renderProject(
   const endBeats = Math.max(...project.tracks.map(t => t.arrangementEnd));
   const frames = Math.ceil((endBeats * spb + (opts.tail ?? 2)) * sampleRate / BLOCK) * BLOCK;
   const audible = audibleTracks(project.tracks);
+  const byId = new Map<TrackId, TrackRender>();
+  const keys: KeySource = id => byId.get(id);
   const tracks = project.tracks.filter(t => 'instrument' in t)
-    .map(t => new TrackRender(t as MidiTrack, project, samples, sampleRate, audible.has(t.id)));
+    .map(t => new TrackRender(t as MidiTrack, project, samples, sampleRate, audible.has(t.id), keys));
+  for (const t of tracks) byId.set(t.track.id, t);
   const master = new Chain(project.masterEffects, project.tempo.bpm, sampleRate);
   const masterGain = project.master.mute ? 0 : dbToGain(project.master.volumeDb);
   const left = new Float32Array(frames), right = new Float32Array(frames);

@@ -106,7 +106,10 @@ export class PlaybackEngine {
     this.tickMs = opts.tickMs ?? 25;
     this.mixer = new MixerGraph(graph, services.effects, graph.destination, services.meters ?? null);
     this.metronome = new Metronome(graph, this.mixer.master, () => this.project!.signature);
-    this.anchors = new TransportAnchors(a => services.effects.transport?.(graph, a), () => this.project?.signature.beatsPerBar ?? 4);
+    this.anchors = new TransportAnchors(a => {
+      services.effects.transport?.(graph, a);
+      services.instruments.transport?.(graph, a);
+    }, () => this.project?.signature.beatsPerBar ?? 4);
     this.scheduler = new Scheduler(() => this.sources(), opts.lookahead ?? 0.2);
   }
 

@@ -1,5 +1,6 @@
 import type { InstrumentSettings } from '../../model/device';
 import type { AudioGraph, AudioNodeLike } from '../audio-graph';
+import type { TransportAnchor } from '../../devices/worklet/transport-clock';
 import type { DeviceModulation } from '../modulation';
 
 /** Uno strumento che suona nel grafo audio: riceve note a orari precisi del contesto audio
@@ -32,6 +33,9 @@ export interface InstrumentHost {
   /** Prepara il grafo (es. carica il modulo AudioWorklet). */
   prepare(graph: AudioGraph): Promise<void>;
   create(graph: AudioGraph, settings: InstrumentSettings, bpm: number): Instrument;
+  /** Dove si trova il trasporto del grafo (null: fermo), per gli strumenti che seguono la
+   *  battuta (il sequencer): vale anche per quelli creati dopo. */
+  transport?(graph: AudioGraph, anchor: TransportAnchor | null): void;
   /** Si risolve quando gli strumenti del grafo hanno ricevuto tutto quello che è stato
    *  mandato loro: serve prima di un export offline. */
   settle(graph: AudioGraph): Promise<void>;

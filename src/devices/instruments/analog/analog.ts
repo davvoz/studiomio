@@ -6,6 +6,7 @@
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam } from '../../params';
 import { TEMPO_RATE, TEMPO_RATES } from '../../rates';
+import { SEQUENCER_SECTION } from '../../sequencer';
 
 export const WAVES = ['Saw', 'Square', 'Triangle', 'Sine'] as const;
 export const FILTER_TYPES = ['Low-pass', 'Band-pass', 'High-pass'] as const;
@@ -87,6 +88,7 @@ export const ANALOG: DeviceType = {
         percent('lfoCutoff', '→ Cutoff', 0),
       ],
     },
+    SEQUENCER_SECTION,
     {
       label: 'Uscita',
       params: [percent('velocity', 'Velocity', 60), num('volume', 'Volume', -36, 6, -8, 'dB', { step: 0.5 })],

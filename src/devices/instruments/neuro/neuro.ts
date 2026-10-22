@@ -11,6 +11,7 @@
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam, ParamSpec } from '../../params';
 import { TEMPO_RATE as LFO_RATE, TEMPO_RATES as LFO_RATES } from '../../rates';
+import { SEQUENCER_SECTION } from '../../sequencer';
 import { MAX_UNISON, WAVES } from '../analog/analog';
 
 export const NEURO_VOICE_MODES = ['Mono', 'Legato'] as const;
@@ -162,6 +163,7 @@ export const NEURO: DeviceType = {
     },
     { label: 'LFO 1', params: lfoParams(1, LFO_RATE['1/4']) },
     { label: 'LFO 2', params: lfoParams(2, LFO_RATE['1/16']) },
+    SEQUENCER_SECTION,
     { label: 'Uscita', params: [num('volume', 'Volume', -36, 6, -8, 'dB', { step: 0.5 })] },
   ],
   presets: [

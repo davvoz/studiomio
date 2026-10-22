@@ -21,6 +21,8 @@ export interface InstrumentProcessorOptions {
   /** I sample caricati, per posto (vedi SamplePlayer). */
   readonly samples: Readonly<Record<string, SampleData>>;
   readonly bpm: number;
+  /** Dove si trova il trasporto (null se fermo), per gli strumenti che seguono la battuta. */
+  readonly transport: TransportAnchor | null;
 }
 
 export type InstrumentMessage =
@@ -30,6 +32,8 @@ export type InstrumentMessage =
   /** Un sample nuovo (o null: tolto) al posto `slot`. */
   | { readonly type: 'sample'; readonly slot: string; readonly sample: SampleData | null }
   | { readonly type: 'tempo'; readonly bpm: number }
+  /** Un ancoraggio nuovo del trasporto, o null: si è fermato. */
+  | { readonly type: 'transport'; readonly anchor: TransportAnchor | null }
   /** Toglie le note programmate e spegne quelle che suonano. */
   | { readonly type: 'stop' }
   /** Taglia all'istante `at`: le note dopo spariscono, quelle a cavallo finiscono lì. */

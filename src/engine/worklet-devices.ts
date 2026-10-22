@@ -55,17 +55,19 @@ class WorkletInstrument implements Instrument {
   private node: AudioWorkletNode | null = null;
   private settings: InstrumentSettings;
   private bpm: number;
+  private anchor: TransportAnchor | null;
   private pings = 0;
   private readonly waiting = new Map<number, () => void>();
   private heads: readonly number[] = [];
 
   constructor(
-    private readonly ctx: BaseAudioContext, settings: InstrumentSettings, bpm: number, ready: Promise<void> | null,
-    private readonly source: SampleSource, private readonly onDispose: () => void,
+    private readonly ctx: BaseAudioContext, settings: InstrumentSettings, bpm: number, transport: TransportAnchor | null,
+    ready: Promise<void> | null, private readonly source: SampleSource, private readonly onDispose: () => void,
   ) {
     this.type = settings.type;
     this.settings = settings;
     this.bpm = bpm;
+    this.anchor = transport;
     this.output = ctx.createGain();
     if (ready) ready.then(() => this.build(), e => console.error('strumento non disponibile', e));
     else this.build();
@@ -86,6 +88,11 @@ class WorkletInstrument implements Instrument {
   setTempo(bpm: number): void {
     this.bpm = bpm;
     this.send({ type: 'tempo', bpm });
+  }
+
+  setTransport(anchor: TransportAnchor | null): void {
+    this.anchor = anchor;
+    this.send({ type: 'transport', anchor });
   }
 
   stopAll(): void {
@@ -136,7 +143,7 @@ class WorkletInstrument implements Instrument {
   private build(): void {
     const processorOptions: InstrumentProcessorOptions = {
       type: this.settings.type, params: fullParams(this.settings), samples: samplesOf(this.settings.samples, this.source),
-      bpm: this.bpm,
+      bpm: this.bpm, transport: this.anchor,
     };
     this.node = new AudioWorkletNode(this.ctx, INSTRUMENT_PROCESSOR, {
       numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2], processorOptions,
@@ -179,9 +186,15 @@ export class DeviceWorklet {
   }
 }
 
+/** Gli strumenti vivi di un contesto e dove si trova il suo trasporto. */
+interface InstrumentContext {
+  readonly instruments: Set<WorkletInstrument>;
+  transport: TransportAnchor | null;
+}
+
 /** Strumenti AudioWorklet, per qualunque contesto (dal vivo o offline). */
 export class WorkletInstruments implements InstrumentHost {
-  private readonly live = new WeakMap<BaseAudioContext, Set<WorkletInstrument>>();
+  private readonly contexts = new WeakMap<BaseAudioContext, InstrumentContext>();
 
   constructor(private readonly worklet: DeviceWorklet, private readonly samples: SampleSource = () => undefined) {}
 
@@ -190,17 +203,29 @@ export class WorkletInstruments implements InstrumentHost {
   }
 
   create(graph: AudioGraph, settings: InstrumentSettings, bpm: number): Instrument {
-    const ctx = contextOf(graph);
-    let set = this.live.get(ctx);
-    if (!set) this.live.set(ctx, (set = new Set()));
-    const all = set;
-    const instrument: WorkletInstrument = new WorkletInstrument(ctx, settings, bpm, this.worklet.pending(graph), this.samples, () => all.delete(instrument));
-    all.add(instrument);
+    const c = this.context(graph);
+    const instrument: WorkletInstrument = new WorkletInstrument(
+      contextOf(graph), settings, bpm, c.transport, this.worklet.pending(graph), this.samples, () => c.instruments.delete(instrument),
+    );
+    c.instruments.add(instrument);
     return instrument;
   }
 
+  transport(graph: AudioGraph, anchor: TransportAnchor | null): void {
+    const c = this.context(graph);
+    c.transport = anchor;
+    for (const i of c.instruments) i.setTransport(anchor);
+  }
+
   async settle(graph: AudioGraph): Promise<void> {
-    await Promise.all([...(this.live.get(contextOf(graph)) ?? [])].map(i => i.settle()));
+    await Promise.all([...this.context(graph).instruments].map(i => i.settle()));
+  }
+
+  private context(graph: AudioGraph): InstrumentContext {
+    const ctx = contextOf(graph);
+    let c = this.contexts.get(ctx);
+    if (!c) this.contexts.set(ctx, (c = { instruments: new Set(), transport: null }));
+    return c;
   }
 }
 

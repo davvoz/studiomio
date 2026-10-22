@@ -6,6 +6,19 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Analog and Neuro have a step sequencer, like a 303 that writes its own lines (new Sequencer
+  section, off by default: existing projects sound as before). Turned on, the synth doesn't play
+  the notes it receives: while a note is held it plays a pattern of steps locked to the bar,
+  transposed to that note, so a clip only has to hold the root (or the chords of a progression).
+  Pattern picks one of 128 patterns (a new one starts at the top of the loop, as on a 303);
+  Densità adds notes without moving the others (eighth-note offbeats first, the gaps between the
+  kicks), Altezza widens the scale in order (Scala: Frigio, Frigio e tritono, Minore, Ottave,
+  Quinte), Accenti and Slide set how many of each, plus Passi (1–32), Velocità (1/8, 1/16,
+  1/16T, 1/32), Ottava, Gate and Battere › "Lascia alla cassa" (no steps on the beat). Map
+  Pattern and Densità to rack macros and the line changes while you turn them. A clip can switch
+  the sequencer on with its own modulation.
+
 ## [0.3.19] - 2026-10-21
 
 ### Changed
