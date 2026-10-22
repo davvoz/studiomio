@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.23] - 2026-10-22
+
 ### Added
 - MIDI mapping for any controller, like Live's MIDI Map: turn on MIDI in the control bar (Ctrl+M,
   or Opzioni › Mappa il MIDI), click a control, then move the knob or fader or hit the pad that
