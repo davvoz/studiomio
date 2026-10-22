@@ -18,6 +18,16 @@ Sections: Added, Changed, Fixed.
   1/16T, 1/32), Ottava, Gate and Battere › "Lascia alla cassa" (no steps on the beat). Map
   Pattern and Densità to rack macros and the line changes while you turn them. A clip can switch
   the sequencer on with its own modulation.
+- Factory racks from the "Rave illegale" live:
+  - Levare (Instrument Rack): Neuro offbeat bass with Cutoff, Morso, Coda, Sub, Ringhio,
+    Distorsione, Vocale and Rumble; its sequencer is set up (off) to leave the downbeat to the kick.
+  - 303 (Instrument Rack): Analog in Legato with Cutoff, Risonanza, Env Mod, Decay, Accento,
+    Glide, and Pattern and Follia for the step sequencer (turn it on in the Sequencer section).
+  - Acido FX (Audio Effect Rack): Distorsione, Taglio (step gate), Phaser, Eco, Spazio and a
+    Ripeti button.
+  - Macchina (Audio Effect Rack): Ripeti 1/8, 1/16 and 1/32, Al contrario and Stop nastro
+    buttons, then Sottrazione (high-pass), Muro (low-pass) and Lo-fi. All at 0, the sound passes
+    unchanged.
 
 ## [0.3.19] - 2026-10-21
 

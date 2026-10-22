@@ -9,7 +9,9 @@
  * passare il suono com'è, e partono dove sono già utili.
  *
  * Gli Instrument Rack partono da un preset dello strumento e ci aggiungono effetti; le macro
- * muovono insieme strumento ed effetti, e partono dove il suono è già bello. */
+ * muovono insieme strumento ed effetti, e partono dove il suono è già bello.
+ *
+ * Levare, 303, Acido FX e Macchina vengono dal live "Rave illegale" (src/demo/rave-live.ts). */
 import type { DeviceType } from './device-type';
 import type { RackPreset, SavedDevice, SavedEffect, SavedMacro } from '../model/rack-preset';
 import { MACRO_COUNT, type MacroMode } from '../model/rack';
@@ -21,7 +23,8 @@ import { BEAT_REPEAT, GRIDS, INTERVALS, REPEAT_MODE } from './effects/beat-repea
 import { CHORUS, CHORUS_MODE, CHORUS_SYNC } from './effects/chorus/chorus';
 import { COMPRESSOR } from './effects/compressor/compressor';
 import { DELAY, DIVISIONS } from './effects/delay/delay';
-import { DRIVE } from './effects/drive/drive';
+import { DRIVE, SHAPE } from './effects/drive/drive';
+import { BAND, bandParam, EQ } from './effects/eq/eq';
 import { GATE, pattern, STEP_RATES } from './effects/gate/gate';
 import { MULTIBAND } from './effects/multiband/multiband';
 import { PHASER } from './effects/phaser/phaser';
@@ -30,10 +33,11 @@ import { REVERB } from './effects/reverb/reverb';
 import { REVERSE, REVERSE_LENGTHS } from './effects/reverse/reverse';
 import { STEREO } from './effects/stereo/stereo';
 import { BRAKE_CURVE, BRAKE_DIVISIONS, STARTS, TAPE_STOP, TAPE_SYNC } from './effects/tape-stop/tape-stop';
-import { ANALOG } from './instruments/analog/analog';
+import { ANALOG, VOICE_MODE as ANALOG_VOICE } from './instruments/analog/analog';
 import { MOD_DEST as NEURO_DEST, NEURO, LFO_SHAPE as NEURO_LFO } from './instruments/neuro/neuro';
 import { LFO_SYNC, MOD_DEST, TABLE, VOICE_MODE, WAVETABLE, LFO_SHAPE as WT_LFO } from './instruments/wavetable/wavetable';
 import { TEMPO_RATE } from './rates';
+import { SEQ_RATE, SEQ_SCALE } from './sequencer';
 
 const index = (list: readonly (readonly [string, ...unknown[]])[], label: string) => list.findIndex(([l]) => l === label);
 
@@ -46,6 +50,19 @@ function device(type: DeviceType, preset: string | null, params: Readonly<Record
 
 const effect = (type: DeviceType, preset: string | null, params?: Readonly<Record<string, number>>): SavedEffect =>
   ({ ...device(type, preset, params), enabled: true });
+
+/** Un EQ: un passa-alto a `low` Hz (24 dB) e delle campane [frequenza, guadagno, Q]. */
+function eqOf(low: number, bells: readonly (readonly [freq: number, gain: number, q: number])[]): SavedEffect {
+  const params: Record<string, number> = { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: low, [bandParam(0, 'slope')]: 1 };
+  bells.forEach(([freq, gain, q], i) => Object.assign(params, {
+    [bandParam(i + 1, 'type')]: BAND.bell, [bandParam(i + 1, 'freq')]: freq, [bandParam(i + 1, 'gain')]: gain, [bandParam(i + 1, 'q')]: q,
+  }));
+  return effect(EQ, null, params);
+}
+
+/** Il Beat Repeat da suonare a pulsante: spento lascia passare il suono com'è. */
+const repeatButton = (grid: string): SavedEffect =>
+  effect(BEAT_REPEAT, null, { only: 1, repeat: 0, grid: index(GRIDS, grid), mode: REPEAT_MODE.insert, decay: 8, volume: 0 });
 
 /** Un parametro mosso da una macro: il dispositivo (per posto nel rack), il parametro, il suo
  *  valore a 0 e a 127. */
@@ -317,6 +334,53 @@ export const MURO: RackPreset = (() => {
   ]);
 })();
 
+/** La 303 del rave: la distorsione dura, il gate a passi che la taglia, phaser, eco puntato e
+ *  un buio corto; Ripeti è un pulsante (un Beat Repeat a 1/16 finché lo si tiene). */
+export const ACIDO_FX: RackPreset = (() => {
+  const DIRT = 0, CHOP = 1, SWIRL = 2, ECHO = 3, ROOM = 4, REPEAT = 5;
+  return rack('Acido FX', null, [
+    effect(DRIVE, null, { shape: SHAPE.hard, drive: 16, bias: 12, color: 25, low: 15, split: 150, tone: 9000, mix: 0, oversampling: 0 }),
+    effect(GATE, null, { ...pattern('x.xx .xx. x.xx .x.x'), rate: index(STEP_RATES, '1/16'), gate: 70, release: 15, depth: 0 }),
+    effect(PHASER, null, { mix: 0 }),
+    effect(DELAY, null, { division: index(DIVISIONS, '1/8.'), pingPong: 1, feedback: 35, lowCut: 350, highCut: 4000, mix: 0 }),
+    effect(REVERB, null, { size: 60, decay: 1.6, predelay: 10, damping: 4500, lowCut: 300, mix: 0 }),
+    repeatButton('1/16'),
+  ], [
+    { name: 'Distorsione', value: 70, moves: [[DIRT, 'mix', 0, 100], [DIRT, 'drive', 4, 26]] },
+    { name: 'Taglio', moves: [[CHOP, 'depth', 0, 100]] },
+    { name: 'Phaser', moves: [[SWIRL, 'mix', 0, 60]] },
+    { name: 'Eco', value: 30, moves: [[ECHO, 'mix', 0, 40], [ECHO, 'feedback', 20, 65]] },
+    { name: 'Spazio', value: 15, moves: [[ROOM, 'mix', 0, 40]] },
+    { name: 'Ripeti', mode: 'button', moves: [[REPEAT, 'repeat', 0, 1]] },
+  ]);
+})();
+
+/** La macchina del master del rave: tre Ripeti, Al contrario e Stop nastro a pulsante, la
+ *  Sottrazione (il passa-alto che toglie cassa e basso prima di ridare tutto), il Muro
+ *  (passa-basso) e il Lo-fi. A 0 il suono passa com'è. */
+export const MACCHINA: RackPreset = (() => {
+  const R8 = 0, R16 = 1, R32 = 2, BACK = 3, BRAKE = 4, LOW = 5, HIGH = 6, BITS = 7;
+  return rack('Macchina', null, [
+    repeatButton('1/8'),
+    repeatButton('1/16'),
+    repeatButton('1/32'),
+    effect(REVERSE, null, { reverse: 1, length: index(REVERSE_LENGTHS, '1/4'), mix: 0 }),
+    effect(TAPE_STOP, null, { sync: TAPE_SYNC.tempo, division: index(BRAKE_DIVISIONS, '1/2'), start: index(STARTS, 'Subito'), curve: BRAKE_CURVE.smooth, spin: 300 }),
+    effect(AUTO_FILTER, null, { type: FILTER_TYPE.highPass, slope: 1, freq: 20, resonance: 10, mix: 0 }),
+    effect(AUTO_FILTER, null, { type: FILTER_TYPE.lowPass, slope: 1, freq: 20000, resonance: 15, mix: 0 }),
+    effect(REDUX, null, { mix: 0, bits: 16, rate: 48000 }),
+  ], [
+    { name: 'Ripeti 1/8', mode: 'button', moves: [[R8, 'repeat', 0, 1]] },
+    { name: 'Ripeti 1/16', mode: 'button', moves: [[R16, 'repeat', 0, 1]] },
+    { name: 'Ripeti 1/32', mode: 'button', moves: [[R32, 'repeat', 0, 1]] },
+    { name: 'Al contrario', mode: 'button', moves: [[BACK, 'mix', 0, 100]] },
+    { name: 'Stop nastro', mode: 'button', moves: [[BRAKE, 'stop', 0, 1]] },
+    { name: 'Sottrazione', moves: [[LOW, 'mix', 0, 100], [LOW, 'freq', 20, 700]] },
+    { name: 'Muro', moves: [[HIGH, 'mix', 0, 100], [HIGH, 'freq', 20000, 350]] },
+    { name: 'Lo-fi', moves: [[BITS, 'mix', 0, 100], [BITS, 'bits', 16, 6], [BITS, 'rate', 48000, 6000]] },
+  ]);
+})();
+
 // ---------------------------------------------------------------- Instrument Rack
 
 /** Il polysynth della new wave: due dente di sega e un'ottava di quadra, il filtro che morde un
@@ -416,8 +480,67 @@ export const JUMP: RackPreset = (() => {
   ]);
 })();
 
+/** Il basso in levare del rave: Neuro a una voce, due denti di sega e una quadra appena
+ *  scordata, il filtro che morde con l'inviluppo di modulazione, il sub pulito sotto il
+ *  crossover; i bassi in mono. Il sequencer è pronto (spento): acceso lascia il battere alla
+ *  cassa. Nel live pompa in sidechain sulla cassa: qui il compressore non c'è (va messo dopo,
+ *  con la cassa come sidechain). */
+export const LEVARE: RackPreset = (() => {
+  const SYNTH = 0, ROOM = 2;
+  return rack('Levare', device(NEURO, null, {
+    oscA: 0, oscB: 1, oscBSemi: 0, oscBFine: -7, mix: 35, unison: 1,
+    filterType: 0, cutoff: 900, resonance: 25, drive: 30, keyTrack: 40,
+    dist: 20, sub: 70, subOctave: 0, crossover: 120,
+    voiceMode: 0, glide: 0, attack: 0.002, decay: 0.18, sustain: 40, release: 0.07, velocity: 30,
+    mAttack: 0.001, mDecay: 0.1, mSustain: 0, mRelease: 0.05, envDest: NEURO_DEST.cutoff, envAmount: 45,
+    volume: -6,
+    seqKick: 1, seqDensity: 70, seqRange: 25, seqScale: SEQ_SCALE['Frigio e tritono'], seqSlide: 0, seqAccent: 25, seqGate: 60, seqPattern: 11,
+  }), [
+    eqOf(35, [[250, -2.5, 1], [2500, 1.5, 1]]),
+    effect(REVERB, null, { size: 75, decay: 1.2, predelay: 0, diffusion: 90, damping: 2500, lowCut: 30, width: 0, mix: 0 }),
+    effect(STEREO, null, { monoFreq: 150 }),
+  ], [
+    { name: 'Cutoff', value: 60, moves: [[SYNTH, 'cutoff', 150, 8000]] },
+    { name: 'Morso', value: 60, moves: [[SYNTH, 'envAmount', 0, 80], [SYNTH, 'mDecay', 0.04, 0.25]] },
+    { name: 'Coda', value: 60, moves: [[SYNTH, 'decay', 0.06, 0.6], [SYNTH, 'release', 0.02, 0.3]] },
+    { name: 'Sub', value: 87, moves: [[SYNTH, 'sub', 20, 100]] },
+    { name: 'Ringhio', moves: [[SYNTH, 'fm', 0, 55], [SYNTH, 'fold', 0, 45]] },
+    { name: 'Distorsione', value: 50, moves: [[SYNTH, 'dist', 0, 70], [SYNTH, 'drive', 15, 70]] },
+    { name: 'Vocale', moves: [[SYNTH, 'formant', 0, 80], [SYNTH, 'vowel', 0, 100]] },
+    // il basso in una stanza piccola e scura, mono: il rimbombo sotto la cassa
+    { name: 'Rumble', moves: [[ROOM, 'mix', 0, 40], [ROOM, 'decay', 1.2, 2.5]] },
+  ]);
+})();
+
+/** La 303 che si scrive da sola: l'Analog in Legato con glide e accento, e il sequencer a passi
+ *  pronto (Frigio e tritono, sedicesimi; si accende nella sezione Sequencer, e con il trasporto
+ *  che va basta tenere la tonica). Pattern sceglie il giro, Follia lo porta da poche note a una
+ *  linea frenetica. Da mettere davanti ad Acido FX. */
+export const TRECENTOTRE: RackPreset = (() => {
+  const SYNTH = 0;
+  return rack('303', device(ANALOG, null, {
+    oscA: 0, mix: 0, voiceMode: ANALOG_VOICE.legato, glide: 60, accent: 70,
+    cutoff: 420, resonance: 80, filterEnv: 66, keyTrack: 20,
+    fDecay: 0.18, fSustain: 0, fRelease: 0.08, sustain: 100, release: 0.05, velocity: 35, volume: -11,
+    seqScale: SEQ_SCALE['Frigio e tritono'], seqRate: SEQ_RATE['1/16'], seqLength: 16, seqGate: 55,
+  }), [
+    eqOf(95, [[160, -4, 1.2], [622, 2.5, 1]]),
+  ], [
+    { name: 'Cutoff', value: 55, moves: [[SYNTH, 'cutoff', 90, 3500]] },
+    { name: 'Risonanza', value: 90, moves: [[SYNTH, 'resonance', 30, 95]] },
+    { name: 'Env Mod', value: 76, moves: [[SYNTH, 'filterEnv', 10, 100]] },
+    { name: 'Decay', value: 40, moves: [[SYNTH, 'fDecay', 0.04, 1]] },
+    { name: 'Accento', value: 90, moves: [[SYNTH, 'accent', 0, 100]] },
+    { name: 'Glide', value: 38, moves: [[SYNTH, 'glide', 0, 200]] },
+    // il giro del sequencer: uno nuovo entra all'inizio del giro
+    { name: 'Pattern', moves: [[SYNTH, 'seqPattern', 0, 127]] },
+    // da un acido minimale (poche note, la tonica) a uno frenetico (pieno, largo, slide, accenti)
+    { name: 'Follia', value: 40, moves: [[SYNTH, 'seqDensity', 25, 100], [SYNTH, 'seqRange', 5, 85], [SYNTH, 'seqSlide', 5, 55], [SYNTH, 'seqAccent', 15, 60]] },
+  ]);
+})();
+
 /** I rack di fabbrica, in ordine. */
 export const FACTORY_RACKS: readonly RackPreset[] = [
-  TORNADO, FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO,
-  ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP,
+  TORNADO, FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO, ACIDO_FX, MACCHINA,
+  ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE,
 ];

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { paramSpec, resolveParams } from '../../src/devices/device-type';
 import { followsTransport } from '../../src/devices/dsp/core';
 import {
-  ACIDO, CASSETTA, DUB, FACTORY_RACKS, FADE_TO_GREY, FRENCH_TOUCH, HOOVER, JUMP, MURO, NEBBIA, NUOVA_ONDA, OSSIGENO, RINGHIO, TORNADO,
+  ACIDO, ACIDO_FX, CASSETTA, DUB, FACTORY_RACKS, FADE_TO_GREY, FRENCH_TOUCH, HOOVER, JUMP, LEVARE, MACCHINA, MURO, NEBBIA, NUOVA_ONDA,
+  OSSIGENO, RINGHIO, TORNADO, TRECENTOTRE,
 } from '../../src/devices/factory-racks';
 import type { RackPreset } from '../../src/model/rack-preset';
 import { effectType, instrumentType } from '../../src/devices/registry';
@@ -79,8 +80,8 @@ function delayedDiff(out: Float32Array, input: Float32Array): { diff: number; la
 describe('rack di fabbrica', () => {
   it('sono rack validi: ogni parametro esiste, ogni mappatura resta dentro la corsa del suo parametro', () => {
     expect(FACTORY_RACKS.map(r => r.name)).toEqual([
-      'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro',
-      'Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump',
+      'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina',
+      'Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump', 'Levare', '303',
     ]);
     for (const rack of FACTORY_RACKS) {
       expect(rack.macros).toHaveLength(MACRO_COUNT);
@@ -131,7 +132,7 @@ describe('rack di fabbrica', () => {
     }
   });
 
-  for (const preset of [FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO]) {
+  for (const preset of [FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO, ACIDO_FX, MACCHINA]) {
     it(`${preset.name}: con le macro a 0 il suono passa com'è`, () => {
       const t = tornado(preset);
       for (let i = 0; i < MACRO_COUNT; i++) t.macro(i, 0);
@@ -147,8 +148,8 @@ describe('rack di fabbrica', () => {
     });
 
     it(`${preset.name}: con le macro dove partono e tutte a 127 cambia il suono e non esplode`, () => {
-      // Fade to Grey parte con Fade a 0: il suono è com'è finché non lo si gira
-      for (const value of preset === FADE_TO_GREY ? [MACRO_MAX] : [null, MACRO_MAX]) {
+      // Fade to Grey parte con Fade a 0 e Macchina con tutto a 0: il suono è com'è finché non li si gira
+      for (const value of [FADE_TO_GREY, MACCHINA].includes(preset) ? [MACRO_MAX] : [null, MACRO_MAX]) {
         const t = tornado(preset);
         if (value !== null) for (let i = 0; i < MACRO_COUNT; i++) t.macro(i, value);
         const { inL, outL, outR } = play(t.track().effects, SR * 4);
@@ -169,7 +170,7 @@ describe('rack di fabbrica', () => {
     expect(side(outL, outR) / rms(outL)).toBeLessThan(side(inL, inR) / rms(inL));
   });
 
-  for (const preset of [ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP]) {
+  for (const preset of [ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE]) {
     it(`${preset.name}: lo strumento e gli effetti in un Instrument Rack, le macro dove partono`, () => {
       const s = setup();
       s.store.apply(loadRack(null, preset));
