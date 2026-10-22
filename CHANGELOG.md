@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.20] - 2026-10-22
+
 ### Added
 - Analog and Neuro have a step sequencer, like a 303 that writes its own lines (new Sequencer
   section, off by default: existing projects sound as before). Turned on, the synth doesn't play
