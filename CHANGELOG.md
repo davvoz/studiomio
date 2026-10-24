@@ -6,6 +6,11 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- With Windows display scaling above 100% (125%, 150%…) the drawings of the devices grew wider
+  at every redraw, without end: Prisma's wavetables, envelopes and LFOs stretched forever and
+  the Sampler's waveform turned into a white box. They now keep their size at any scaling.
+
 ## [0.3.25] - 2026-10-24
 
 ### Added
