@@ -12,9 +12,9 @@ import {
   envelopeValueAt, INSTRUMENT_DEVICE, parseTargetKey, targetKey, withEnvelope, type ModTarget,
 } from '../../src/model/envelope';
 import { MidiClip } from '../../src/model/midi-clip';
-import { Project } from '../../src/model/project';
+import { MASTER, Project } from '../../src/model/project';
 import { ProjectCodec } from '../../src/persistence/project-codec';
-import { addEffect, addMidiClip, addTrack, resizePlacement, setEffectParam, setSlot, updateClip } from '../../src/store/edits';
+import { addEffect, addMidiClip, addTrack, resizePlacement, setEffectParam, setLoopRegion, setMasterAutomation, setSlot, updateClip } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 import { groupDevices, mapMacro, setMacroMode, setMappingRange } from '../../src/store/rack-edits';
 import { macroParam } from '../../src/model/rack';
@@ -364,5 +364,93 @@ describe('modulazione a scatto (macro interruttore e pulsante)', () => {
     s.ramp(-0.4, 1);
     s.ramp(-1, 2);
     expect(events.map(e => [e.value, +e.time.toFixed(6)])).toEqual([[0, 0], [-1, +(1 + 0.1 / 0.6).toFixed(6)]]);
+  });
+});
+
+describe('curve del master sulla timeline', () => {
+  /** Il rig con un delay sul master (feedback e mix); `fx` il suo id. */
+  function masterRig() {
+    const r = rig();
+    r.store.apply(addEffect(MASTER, 'delay', 'Delay'));
+    const fx = r.store.project.masterEffects[0].id;
+    // l'ultimo effetto creato è quello del master (le tracce non ne hanno)
+    const delay = (param: string) => r.effects.created.at(-1)!.modulation.events.filter(e => e.param === param);
+    return { ...r, fx, delay };
+  }
+
+  it('nel modello: una curva per bersaglio, nella scala; senza punti sparisce; il mixer no', () => {
+    const { store, fx } = masterRig();
+    const target: ModTarget = { kind: 'device', device: fx, param: 'feedback' };
+    store.apply(setMasterAutomation(target, pts([4, -2], [0, 0])));
+    expect(store.project.masterCurve(target)?.points).toEqual(pts([0, 0], [4, -1]));
+    store.apply(setMasterAutomation(target, []));
+    expect(store.project.masterAutomation).toEqual([]);
+    expect(() => store.project.withMasterAutomation(VOLUME, pts([0, 0]))).toThrow();
+  });
+
+  it('si salvano con il progetto; un file senza si apre', () => {
+    const { store, fx } = masterRig();
+    const target: ModTarget = { kind: 'device', device: fx, param: 'mix' };
+    store.apply(setMasterAutomation(target, pts([0, 0], [16, 0.5])));
+    const codec = new ProjectCodec();
+    const json = JSON.parse(codec.stringify(store.project));
+    expect(json.masterAutomation).toEqual({ [`${fx}:mix`]: [[0, 0], [16, 0.5]] });
+    expect(codec.decode(json).masterCurve(target)?.points).toEqual(pts([0, 0], [16, 0.5]));
+    delete json.masterAutomation;
+    expect(codec.decode(json).masterAutomation).toEqual([]);
+  });
+
+  it('un parametro di un effetto del master segue la curva nei battiti della timeline, anche senza clip', () => {
+    const r = masterRig();
+    r.store.apply(setMasterAutomation({ kind: 'device', device: r.fx, param: 'feedback' }, pts([2, 0], [6, 0.8])));
+    r.engine.play(0);
+    r.runUntil(4);
+    const ev = r.delay('feedback');
+    expect(replay(ev, 0, r.at(1))).toBe(0); // prima del primo punto vale il primo
+    expect(replay(ev, 0, r.at(4))).toBeCloseTo(0.4, 4);
+    expect(replay(ev, 0, r.at(7))).toBeCloseTo(0.8, 4); // dopo l'ultimo resta l'ultimo
+    r.engine.stop();
+    expect(replay(r.delay('feedback'), 0, 99)).toBe(0); // fermo: neutro
+  });
+
+  it('con il loop della timeline la curva riparte dall\'inizio del loop a ogni giro', () => {
+    const r = masterRig();
+    r.store.apply(setLoopRegion({ enabled: true, start: 0, end: 4 }));
+    r.store.apply(setMasterAutomation({ kind: 'device', device: r.fx, param: 'feedback' }, pts([0, 0], [4, 1])));
+    r.engine.play(0);
+    r.runUntil(4.3);
+    const ev = r.delay('feedback');
+    expect(replay(ev, 0, r.at(3))).toBeCloseTo(0.75, 4);
+    expect(replay(ev, 0, r.at(5))).toBeCloseTo(0.25, 4); // secondo giro: di nuovo al battito 1
+  });
+
+  it('togliere la curva mentre suona: dopo la riprogrammazione il parametro torna neutro', () => {
+    const r = masterRig();
+    const target: ModTarget = { kind: 'device', device: r.fx, param: 'feedback' };
+    r.store.apply(setMasterAutomation(target, pts([0, -0.5])));
+    r.engine.play(0);
+    r.runUntil(1);
+    expect(replay(r.delay('feedback'), 0, 1)).toBe(-0.5);
+    r.store.apply(setMasterAutomation(target, []));
+    r.runUntil(2);
+    const ev = r.delay('feedback');
+    expect(replay(ev, 0, 1.02)).toBe(-0.5); // fino alla ripartenza tiene il valore: nessun salto
+    expect(replay(ev, 0, 1.2)).toBe(0);
+  });
+
+  it('una curva su una macro pulsante di un rack del master la fa scattare, come premerla', () => {
+    const r = masterRig();
+    r.store.apply(groupDevices(MASTER, [r.fx]));
+    const rack = r.store.project.masterRacks[0].id;
+    r.store.apply(mapMacro(MASTER, rack, 0, r.fx, 'mix'));
+    r.store.apply(setMacroMode(MASTER, rack, 0, 'button'));
+    // premuta dal battito 2 al 3, come il Ripeti o lo Stop nastro prima di un drop
+    r.store.apply(setMasterAutomation({ kind: 'device', device: rack, param: macroParam(0) }, pts([0, 0], [2, 0], [2, 1], [3, 1], [3, 0])));
+    r.engine.play(0);
+    r.runUntil(3);
+    const mix = r.delay('mix');
+    expect(replay(mix, 0, r.at(1.9))).toBe(0);
+    expect(replay(mix, 0, r.at(2.5))).toBe(1);
+    expect(replay(mix, 0, r.at(3.5))).toBe(0);
   });
 });

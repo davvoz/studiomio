@@ -10,7 +10,7 @@ import {
   newEffect, withParam, withParams, withPreset, withSample, withSidechain, type EffectSettings, type InstrumentSettings, type ParamValues,
 } from '../model/device';
 import * as chain from '../model/effect-list';
-import { INSTRUMENT_DEVICE } from '../model/envelope';
+import { INSTRUMENT_DEVICE, type EnvelopePoint, type ModTarget } from '../model/envelope';
 import { MidiClip } from '../model/midi-clip';
 import { Project, type ChainOwner, type LoopRegion } from '../model/project';
 import type { SampleRef } from '../model/sample';
@@ -28,6 +28,11 @@ export const setTempo = (bpm: number): Edit => edit('Tempo', p => (p.tempo.bpm =
 export const renameProject = (name: string): Edit => edit('Rinomina progetto', p => p.withName(name));
 
 export const setLoopRegion = (patch: Partial<LoopRegion>): Edit => edit('Regione di loop', p => p.withLoop(patch));
+
+/** La curva del master su un parametro di un suo effetto o una macro di un suo rack (battiti
+ *  della timeline); senza punti la toglie. */
+export const setMasterAutomation = (target: ModTarget, points: readonly EnvelopePoint[]): Edit =>
+  edit(points.length ? 'Curva del master' : 'Cancella la curva del master', p => p.withMasterAutomation(target, points));
 
 export const setLaunchQuantization = (id: string): Edit =>
   edit('Quantizzazione del lancio', p => (p.launchQuantization === id ? p : p.withLaunchQuantization(id)));

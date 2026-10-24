@@ -3,6 +3,7 @@ import { Tempo, TimeSignature, type Beats } from '../core/music-time';
 import { AudioClip } from './audio-clip';
 import type { Color } from './clip';
 import { deviceSampleIds, withSidechain, type DeviceSettings } from './device';
+import { sameTarget, withEnvelope, type ClipEnvelope, type EnvelopePoint, type ModTarget } from './envelope';
 import type { EffectList } from './effect-list';
 import { checkKeyMap, NO_KEYS, type KeyMap, type KeyTarget } from './key-map';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
@@ -48,6 +49,9 @@ export interface ProjectProps {
   readonly masterEffects: EffectList;
   /** I rack della catena del master (assenti: nessuno). */
   readonly masterRacks?: RackList;
+  /** Le curve del master sulla timeline (assenti: nessuna): come le modulazioni delle clip, ma nei
+   *  battiti della timeline, su un parametro di un effetto del master o una macro di un suo rack. */
+  readonly masterAutomation?: readonly ClipEnvelope[];
   /** Quantizzazione del lancio delle clip della session (un id di LAUNCH_QUANTA). */
   readonly launchQuantization: string;
   /** I tasti del computer sulle macro e sui parametri (assenti: nessuno). */
@@ -57,6 +61,7 @@ export interface ProjectProps {
 }
 
 const NO_BUSES: readonly BusTrack[] = [];
+const NO_AUTOMATION: readonly ClipEnvelope[] = [];
 
 /** Radice del modello. Immutabile: ogni modifica restituisce un nuovo progetto che
  *  condivide con il vecchio tutte le parti non toccate (utile per annulla/ripeti e per
@@ -117,6 +122,7 @@ export class Project {
   get master(): MixerSettings { return this.props.master; }
   get masterEffects(): EffectList { return this.props.masterEffects; }
   get masterRacks(): RackList { return this.props.masterRacks ?? NO_RACKS; }
+  get masterAutomation(): readonly ClipEnvelope[] { return this.props.masterAutomation ?? NO_AUTOMATION; }
   get launchQuantization(): string { return this.props.launchQuantization; }
 
   /** Le mappature della tastiera i cui rack e dispositivi ci sono (le altre aspettano un
@@ -205,6 +211,19 @@ export class Project {
   withSignature(signature: TimeSignature): Project { return this.with({ signature }); }
   withMaster(patch: Partial<MixerSettings>): Project { return this.with({ master: { ...this.master, ...patch } }); }
   withLaunchQuantization(id: string): Project { return this.with({ launchQuantization: id }); }
+
+  /** La curva del master su `target` (battiti della timeline); senza punti la toglie. Un
+   *  bersaglio che non c'è più resta nel file, e non suona, finché un "Annulla" non lo riporta. */
+  withMasterAutomation(target: ModTarget, points: readonly EnvelopePoint[]): Project {
+    if (target.kind !== 'device') throw new Error('il master si modula solo sui dispositivi');
+    const list = withEnvelope(this.masterAutomation, target, points);
+    return this.with({ masterAutomation: list.length ? list : undefined });
+  }
+
+  /** La curva del master su `target`, se c'è. */
+  masterCurve(target: ModTarget): ClipEnvelope | undefined {
+    return this.masterAutomation.find(e => sameTarget(e.target, target));
+  }
 
   withLoop(patch: Partial<LoopRegion>): Project {
     const loop = { ...this.loop, ...patch };

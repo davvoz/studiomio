@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Master automation on the timeline: curves in timeline beats on the master's effect parameters
+  and on the macros of its racks (Macchina, Tornado…), like clip envelopes but for the whole mix.
+  They move the knob from where it is, play live and in "Esporta il mix in WAV…", restart with
+  each pass of the timeline loop, flip switch and button macros past halfway as if pressed, and
+  go back to neutral when the transport stops. They're saved with the project.
+
 ## [0.3.23] - 2026-10-22
 
 ### Added

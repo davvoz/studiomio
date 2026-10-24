@@ -11,7 +11,7 @@ import { MACRO_MODES, type DeviceKey, type Macro, type MacroMode, type Rack, typ
 import type { SampleRef } from '../model/sample';
 import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
 import { AudioTrack, BusTrack, GroupTrack, MidiTrack, type MixerSettings, type Sends, type Track, type TrackProps } from '../model/track';
-import { defaultClipCodecs, type ClipCodec } from './clip-codecs';
+import { decodeEnvelopes, defaultClipCodecs, encodeEnvelopes, type ClipCodec } from './clip-codecs';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
@@ -126,6 +126,7 @@ export class ProjectCodec {
       master: encodeMixer(p.master),
       masterEffects: p.masterEffects.map(encodeEffect),
       ...encodeRacks('masterRacks', p.masterRacks),
+      ...(p.masterAutomation.length ? { masterAutomation: encodeEnvelopes(p.masterAutomation) } : {}),
       launchQuantization: p.launchQuantization,
       scenes: p.scenes.map(s => ({ id: s.id, name: s.name, ...(s.color ? { color: s.color } : {}) })),
       samples: p.samples.map(encodeSample),
@@ -168,6 +169,7 @@ export class ProjectCodec {
         master: decodeMixer(r.get('master')),
         masterEffects: r.array('masterEffects').map(decodeEffect),
         masterRacks: decodeRacks(r, 'masterRacks'),
+        masterAutomation: r.has('masterAutomation') ? decodeEnvelopes(r.get('masterAutomation')) : undefined,
         launchQuantization: r.str('launchQuantization'),
         scenes: r.array('scenes').map(s => ({ id: asId(s.str('id')), name: s.str('name'), ...(s.has('color') ? { color: s.str('color') } : {}) })),
         samples: r.array('samples').map(decodeSample),

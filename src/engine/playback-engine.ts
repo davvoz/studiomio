@@ -5,7 +5,7 @@ import { INSTRUMENT_DEVICE, type ModTarget } from '../model/envelope';
 import { mappingSpec, mappingTravel } from '../devices/rack-params';
 import { launchQuantumBeats } from '../model/launch';
 import { findRack, isSwitchMacro, MACRO_MAX, macroIndex, type Rack } from '../model/rack';
-import type { ChainOwner, Project } from '../model/project';
+import { MASTER, type ChainOwner, type Project } from '../model/project';
 import { GroupTrack, type AudioTrack, type MidiTrack, type Track } from '../model/track';
 import type { AudioGraph } from './audio-graph';
 import type { EffectHost, EffectMonitor } from './effect-chain';
@@ -17,7 +17,7 @@ import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
 import { TransportAnchors } from './players/transport-anchors';
-import { audioParamSink, scaledSinks, switchSink, TrackModulator, type ModSink } from './modulation';
+import { audioParamSink, MasterModulator, scaledSinks, switchSink, TrackModulator, type ModSink } from './modulation';
 import { NoteActivity } from './note-activity';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
 import { Scheduler, type ScheduledSource } from './scheduler';
@@ -98,6 +98,8 @@ export class PlaybackEngine {
   private readonly activity = new Map<TrackId, NoteActivity>();
   /** Le modulazioni delle clip, una sorgente per traccia. */
   private readonly modulators = new Map<TrackId, TrackModulator>();
+  /** Le curve del master sulla timeline. */
+  private readonly masterModulator: MasterModulator;
 
   constructor(private readonly graph: AudioGraph, private readonly services: EngineServices, opts: EngineOptions = {}) {
     this.timer = opts.timer ?? intervalTimer;
@@ -111,6 +113,7 @@ export class PlaybackEngine {
       services.instruments.transport?.(graph, a);
     }, () => this.project?.signature.beatsPerBar ?? 4);
     this.scheduler = new Scheduler(() => this.sources(), opts.lookahead ?? 0.2);
+    this.masterModulator = new MasterModulator([], target => this.modSink(MASTER, target), () => this.graph.currentTime);
   }
 
   get playing(): boolean {
@@ -276,10 +279,13 @@ export class PlaybackEngine {
     this.project = next;
     this.mixer.sync(next);
     const changed = this.syncPlayers(next);
+    // le curve del master si riprendono anche se cambia la sua catena (i bersagli sono lì)
+    const curves = this.masterModulator.update(next.masterAutomation);
+    const master = curves || (!!prev && (prev.masterEffects !== next.masterEffects || prev.masterRacks !== next.masterRacks) && next.masterAutomation.length > 0);
     if (!this.playing) return;
     if (prev && prev.signature !== next.signature) this.anchors.resend();
     if (!prev || prev.tempo !== next.tempo || prev.loop !== next.loop) this.resume();
-    else if (changed.size) this.retake(changed);
+    else if (changed.size || master) this.retake(changed, master);
   }
 
   play(from: Beats = this.cursor): void {
@@ -298,6 +304,7 @@ export class PlaybackEngine {
     this.scheduler.stop();
     this.anchors.stopped();
     for (const m of this.modulators.values()) m.reset();
+    this.masterModulator.reset();
     this.cancelTimer?.();
     this.cancelTimer = null;
     this.events.emit('state', false);
@@ -367,12 +374,12 @@ export class PlaybackEngine {
     this.scheduler.advance(now);
   }
 
-  /** Solo le tracce `ids` (modificate, o con l'audio appena arrivato) riprendono da un attimo
-   *  dopo; le altre continuano senza accorgersene. */
-  private retake(ids: Iterable<TrackId>): void {
+  /** Solo le tracce `ids` (modificate, o con l'audio appena arrivato) e, con `master`, le curve
+   *  del master riprendono da un attimo dopo; le altre continuano senza accorgersene. */
+  private retake(ids: Iterable<TrackId>, master = false): void {
     const now = this.graph.currentTime;
     this.scheduler.advance(now);
-    const sources: ScheduledSource[] = [];
+    const sources: ScheduledSource[] = master ? [this.masterModulator] : [];
     for (const id of ids) {
       this.missed.delete(id);
       const player = this.players.get(id)?.player, mod = this.modulators.get(id);
@@ -396,24 +403,26 @@ export class PlaybackEngine {
     this.modulators.get(id)?.cut(time);
   }
 
-  /** Dove va una modulazione della traccia: il canale del mixer, lo strumento, un effetto o la
-   *  macro di un rack (che muove i parametri mappati). */
-  private modSink(track: TrackId, target: ModTarget): ModSink | null {
-    if (target.kind === 'mixer') return audioParamSink(this.mixer.modulation(track, target.param));
-    const rack = findRack(this.project?.track(track)?.racks ?? [], target.device as DeviceId);
-    if (rack) return this.macroSink(track, rack, macroIndex(target.param));
+  /** Dove va una modulazione di una traccia o del master: il canale del mixer (solo le tracce), lo
+   *  strumento, un effetto o la macro di un rack (che muove i parametri mappati). */
+  private modSink(owner: ChainOwner, target: ModTarget): ModSink | null {
+    if (target.kind === 'mixer') return owner === MASTER ? null : audioParamSink(this.mixer.modulation(owner, target.param));
+    const racks = owner === MASTER ? this.project?.masterRacks : this.project?.track(owner)?.racks;
+    const rack = findRack(racks ?? [], target.device as DeviceId);
+    if (rack) return this.macroSink(owner, rack, macroIndex(target.param));
+    if (target.device === INSTRUMENT_DEVICE && owner === MASTER) return null;
     const device = target.device === INSTRUMENT_DEVICE
-      ? this.players.get(track)?.player.instrumentModulation?.()
-      : this.mixer.effect(track, target.device)?.modulation;
+      ? this.players.get(owner as TrackId)?.player.instrumentModulation?.()
+      : this.mixer.effect(owner, target.device)?.modulation;
     return device?.sink(target.param) ?? null;
   }
 
-  private macroSink(track: TrackId, rack: Rack, index: number): ModSink | null {
+  private macroSink(owner: ChainOwner, rack: Rack, index: number): ModSink | null {
     const macro = rack.macros[index], project = this.project;
     if (!macro || !project) return null;
     const sink = scaledSinks(macro.mappings.flatMap(m => {
-      const spec = mappingSpec(project, track, m);
-      const sink = spec && this.modSink(track, { kind: 'device', device: m.device, param: m.param });
+      const spec = mappingSpec(project, owner, m);
+      const sink = spec && this.modSink(owner, { kind: 'device', device: m.device, param: m.param });
       return sink ? [{ sink, scale: mappingTravel(spec, m) }] : [];
     }));
     // un interruttore o un pulsante scatta, come quando lo si preme
@@ -423,6 +432,7 @@ export class PlaybackEngine {
   private *sources(): Iterable<ScheduledSource> {
     for (const { player } of this.players.values()) yield player;
     yield* this.modulators.values();
+    yield this.masterModulator;
     yield this.metronome;
     yield this.anchors;
   }

@@ -2,7 +2,8 @@
  * quali tratti di clip suonano in ogni finestra di programmazione e per le loro curve programma
  * in anticipo scalini e rampe sui bersagli: gli AudioParam del canale (volume e pan) o i
  * parametri dei dispositivi nell'AudioWorklet. Fuori dalle clip (e dove una clip non ha la
- * curva) ogni bersaglio torna neutro. */
+ * curva) ogni bersaglio torna neutro. Un MasterModulator fa lo stesso con le curve del master
+ * sulla timeline. */
 import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import { envelopeValueAt, scaleKindOf, scaleOf, targetKey, type ClipEnvelope, type ModScaleKind, type ModTarget } from '../model/envelope';
@@ -11,7 +12,7 @@ import type { AudioParamLike } from './audio-graph';
 import { timeAtClock, type ScheduledSource, type ScheduleWindow } from './scheduler';
 import { placementSegments, type Segment } from './segments';
 import type { Program } from './session';
-import { piecesInWindow, type Piece } from './track-content';
+import { piecesInWindow } from './track-content';
 
 /** Dove va una modulazione: riceve scalini e rampe con l'istante (secondi del contesto). */
 export interface ModSink {
@@ -94,32 +95,30 @@ const neutralOf = (t: ModTarget) => OUTPUT[scaleKindOf(t)].map(scaleOf(t).neutra
 /** Vero se qualche clip della traccia (timeline o slot) ha delle modulazioni. */
 const hasEnvelopes = (t: Track) => t.arrangement.some(p => p.clip.envelopes.length) || t.slots.some(c => !!c?.envelopes.length);
 
-/** Le modulazioni di una traccia, programmate insieme al resto (è una sorgente dello scheduler). */
-export class TrackModulator implements ScheduledSource {
-  private track: Track;
-  private active: boolean;
-  private readonly segments = new WeakMap<Placement, Segment[]>();
+/** Un tratto in cui una curva suona: da `start` a `end` (orologio continuo) il battito della curva
+ *  va da `contentStart` in avanti, senza salti. */
+interface CurveSpan {
+  readonly start: number;
+  readonly end: number;
+  readonly contentStart: number;
+}
+
+/** Ciò che le sorgenti di curve hanno in comune: programmano scalini e rampe sui bersagli e se li
+ *  ricordano, per riportarli neutri quando la curva finisce, si cambia qualcosa o ci si ferma. */
+abstract class CurveModulator implements ScheduledSource {
   /** I bersagli già toccati, per riportarli neutri. */
   private readonly touched = new Map<string, { readonly target: ModTarget; sink: ModSink }>();
   /** Dopo una riprogrammazione: bersagli che tengono il valore di prima finché la prima
-   *  finestra nuova non li riprende (o, se la clip non ha più la curva, li riporta neutri). */
+   *  finestra nuova non li riprende (o, se la curva non c'è più, li riporta neutri). */
   private stale = false;
 
   constructor(
-    track: Track,
-    private readonly programs: () => readonly Program[],
     private readonly sinkOf: (target: ModTarget) => ModSink | null,
     private readonly now: () => number,
-  ) {
-    this.track = track;
-    this.active = hasEnvelopes(track);
-  }
+  ) {}
 
-  update(track: Track): void {
-    if (track === this.track) return;
-    this.track = track;
-    this.active = hasEnvelopes(track);
-  }
+  /** Le curve che suonano nella finestra, ciascuna con il suo tratto. */
+  protected abstract curves(w: ScheduleWindow): Iterable<{ readonly envelopes: readonly ClipEnvelope[]; readonly span: CurveSpan }>;
 
   schedule(w: ScheduleWindow): void {
     if (this.stale) {
@@ -129,9 +128,8 @@ export class TrackModulator implements ScheduledSource {
       const t = w.timeAt(w.from);
       for (const { target, sink } of this.touched.values()) sink.set(neutralOf(target), t);
     }
-    if (!this.active) return;
-    for (const piece of piecesInWindow(this.track as Track<Clip>, this.programs(), w, p => this.segmentsOf(p))) {
-      for (const env of piece.clip.envelopes) this.play(env, piece, w);
+    for (const { envelopes, span } of this.curves(w)) {
+      for (const env of envelopes) this.play(env, span, w);
     }
   }
 
@@ -169,14 +167,14 @@ export class TrackModulator implements ScheduledSource {
   /** La parte della curva che cade nella finestra: uno scalino all'inizio (lo stesso valore della
    *  rampa che arriva lì, quindi nessun salto), le rampe verso i punti, la rampa fino alla fine
    *  della finestra; dove il tratto finisce, il bersaglio torna neutro. */
-  private play(env: ClipEnvelope, piece: Piece, w: ScheduleWindow): void {
-    const from = Math.max(w.from + w.shift, piece.start), to = Math.min(w.to + w.shift, piece.end);
+  private play(env: ClipEnvelope, span: CurveSpan, w: ScheduleWindow): void {
+    const from = Math.max(w.from + w.shift, span.start), to = Math.min(w.to + w.shift, span.end);
     if (to - from <= EPS || !env.points.length) return;
     const sink = this.sinkFor(env.target);
     if (!sink) return;
     const out = OUTPUT[scaleKindOf(env.target)];
-    const time = (c: number) => timeAtClock(w, piece.start + (c - piece.contentStart));
-    const c0 = piece.contentStart + (from - piece.start), c1 = piece.contentStart + (to - piece.start);
+    const time = (c: number) => timeAtClock(w, span.start + (c - span.contentStart));
+    const c0 = span.contentStart + (from - span.start), c1 = span.contentStart + (to - span.start);
     let prevC = c0, prevV = envelopeValueAt(env.points, c0);
     sink.set(out.map(prevV), time(c0));
     const rampTo = (c: number, v: number) => {
@@ -190,7 +188,7 @@ export class TrackModulator implements ScheduledSource {
     };
     for (const p of env.points) if (p.beat > c0 && p.beat < c1) rampTo(p.beat, p.value);
     rampTo(c1, envelopeValueAt(env.points, c1));
-    if (Math.abs(to - piece.end) <= EPS) sink.set(neutralOf(env.target), time(c1));
+    if (Math.abs(to - span.end) <= EPS) sink.set(neutralOf(env.target), time(c1));
   }
 
   private sinkFor(target: ModTarget): ModSink | null {
@@ -198,10 +196,65 @@ export class TrackModulator implements ScheduledSource {
     if (sink) this.touched.set(targetKey(target), { target, sink });
     return sink;
   }
+}
+
+/** Le modulazioni di una traccia, programmate insieme al resto (è una sorgente dello scheduler). */
+export class TrackModulator extends CurveModulator {
+  private track: Track;
+  private active: boolean;
+  private readonly segments = new WeakMap<Placement, Segment[]>();
+
+  constructor(
+    track: Track,
+    private readonly programs: () => readonly Program[],
+    sinkOf: (target: ModTarget) => ModSink | null,
+    now: () => number,
+  ) {
+    super(sinkOf, now);
+    this.track = track;
+    this.active = hasEnvelopes(track);
+  }
+
+  update(track: Track): void {
+    if (track === this.track) return;
+    this.track = track;
+    this.active = hasEnvelopes(track);
+  }
+
+  protected *curves(w: ScheduleWindow): Iterable<{ readonly envelopes: readonly ClipEnvelope[]; readonly span: CurveSpan }> {
+    if (!this.active) return;
+    for (const piece of piecesInWindow(this.track as Track<Clip>, this.programs(), w, p => this.segmentsOf(p))) {
+      yield { envelopes: piece.clip.envelopes, span: piece };
+    }
+  }
 
   private segmentsOf(p: Placement): Segment[] {
     let s = this.segments.get(p);
     if (!s) this.segments.set(p, (s = placementSegments(p)));
     return s;
+  }
+}
+
+/** Le curve del master sulla timeline: suonano per tutta la corsa del trasporto (a ogni giro di
+ *  loop ripartono dall'inizio del loop), sui dispositivi e sulle macro della catena del master. */
+export class MasterModulator extends CurveModulator {
+  private lanes: readonly ClipEnvelope[];
+
+  constructor(lanes: readonly ClipEnvelope[], sinkOf: (target: ModTarget) => ModSink | null, now: () => number) {
+    super(sinkOf, now);
+    this.lanes = lanes;
+  }
+
+  /** Le curve nuove; vero se sono cambiate. */
+  update(lanes: readonly ClipEnvelope[]): boolean {
+    if (lanes === this.lanes) return false;
+    this.lanes = lanes;
+    return true;
+  }
+
+  protected *curves(w: ScheduleWindow): Iterable<{ readonly envelopes: readonly ClipEnvelope[]; readonly span: CurveSpan }> {
+    if (!this.lanes.length) return;
+    // nella corsa il battito b della timeline suona all'orologio b + shift
+    yield { envelopes: this.lanes, span: { start: w.runStart + w.shift, end: w.runEnd + w.shift, contentStart: w.runStart } };
   }
 }

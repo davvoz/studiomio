@@ -22,10 +22,14 @@ const encodeBase = (c: Clip): JsonObject => ({
   region: { start: c.region.start, end: c.region.end },
   loop: { enabled: c.loop.enabled, start: c.loop.start, end: c.loop.end },
   // le modulazioni solo se ci sono: { "mixer:volume": [[battito, valore], …] }
-  ...(c.envelopes.length ? { envelopes: Object.fromEntries(c.envelopes.map(e => [targetKey(e.target), e.points.map(p => [p.beat, p.value])])) } : {}),
+  ...(c.envelopes.length ? { envelopes: encodeEnvelopes(c.envelopes) } : {}),
 });
 
-const decodeEnvelopes = (r: JsonReader): ClipEnvelope[] =>
+/** Le curve come oggetto JSON: { "bersaglio": [[battito, valore], …] } (clip e master). */
+export const encodeEnvelopes = (envelopes: readonly ClipEnvelope[]): JsonObject =>
+  Object.fromEntries(envelopes.map(e => [targetKey(e.target), e.points.map(p => [p.beat, p.value])]));
+
+export const decodeEnvelopes = (r: JsonReader): ClipEnvelope[] =>
   r.keys().map(key => ({
     target: parseTargetKey(key) ?? r.get(key).fail(`modulazione sconosciuta: ${key}`),
     points: r.array(key).map(p => {
