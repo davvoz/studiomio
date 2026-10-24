@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.25] - 2026-10-24
+
 ### Added
 - The master automation can now be drawn and seen: the "A" button in the master row (or
   right-click › "Mostra l'automazione") opens a row under it. On the left pick the effect (or
