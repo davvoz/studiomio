@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.26] - 2026-10-24
+
 ### Fixed
 - With Windows display scaling above 100% (125%, 150%…) the drawings of the devices grew wider
   at every redraw, without end: Prisma's wavetables, envelopes and LFOs stretched forever and
