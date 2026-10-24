@@ -26,6 +26,7 @@ import { notesBottom, paintRoll, ROLL } from './roll-painter';
 import { RollPanel } from './roll-panel';
 import { wheelTime } from '../envelopes/envelope-lane';
 import { ModulationEditor } from '../envelopes/modulation-editor';
+import { targetDevices, trackChain } from '../envelopes/mod-targets';
 
 export interface PianoRollDeps {
   readonly store: ProjectStore;
@@ -115,13 +116,15 @@ export class PianoRoll implements RollHost {
     const roll = this;
     this.mods = new ModulationEditor({
       get axis() { return roll._axis; },
-      clip: () => roll.clip(),
+      curves: () => roll.clip(),
+      span: () => { const c = roll.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },
       grid: () => roll.grid,
       signature: () => deps.store.project.signature,
       playhead: () => { const t = roll.target(); return t ? playheadIn(t.found, deps.engine) : null; },
-      commit: (label, fn) => roll.commit(label, c => fn(c) as MidiClip),
+      commit: (label, target, points) => roll.commit(label, c => c.withEnvelope(target, points) as MidiClip),
       wheel: (e, x) => roll.setAxis(wheelTime(e, x, roll._axis)),
-      track: () => roll.target()?.track ?? null,
+      devices: () => { const t = roll.target()?.track ?? null; return t && targetDevices(t); },
+      chain: () => { const t = roll.target()?.track ?? null; return t && trackChain(t); },
       layout: visible => roll.element.classList.toggle('with-lane', visible),
     });
     this.panel.element.append(this.mods.controls);

@@ -1,15 +1,14 @@
 /* L'editor delle modulazioni di una clip, come il riquadro "Envelopes" di Live: nel pannello
  * della clip due menu (dispositivo e parametro) e sotto l'editor la corsia con la curva. Lo
- * usano sia il piano roll sia l'editor audio. */
+ * usano il piano roll, l'editor audio e l'automazione del master sulla timeline. */
 import { sameTarget, targetKey, type ModTarget } from '../../model/envelope';
-import type { Track } from '../../model/track';
 import { el } from '../dom';
 import { EnvelopeLane, type LaneHost } from './envelope-lane';
-import { deviceKeyOf, targetDevices, type TargetDevice } from './mod-targets';
+import { deviceKeyOf, type TargetDevice } from './mod-targets';
 
 export interface ModulationHost extends LaneHost {
-  /** La traccia della clip aperta. */
-  track(): Track | null;
+  /** I dispositivi che si possono modulare (null: niente di aperto). */
+  devices(): TargetDevice[] | null;
   /** La corsia si è mostrata o nascosta: l'editor fa spazio. */
   layout(laneVisible: boolean): void;
 }
@@ -33,19 +32,19 @@ export class ModulationEditor {
   /** Com'erano dispositivi e modulazioni quando i menu sono stati riempiti. */
   private builtFor = '';
 
-  constructor(private readonly host: ModulationHost) {
+  constructor(private readonly host: ModulationHost, title = 'Modulazioni') {
     this.lane = new EnvelopeLane(host, on => this.drawButton.classList.toggle('on', on));
     this.drawButton = el<HTMLButtonElement>('button', {
       className: 'mini', textContent: '✎', title: 'Disegno a scalini sulla griglia', onclick: () => this.lane.setDraw(!this.lane.draw),
     });
     this.clearButton = el<HTMLButtonElement>('button', {
       className: 'mini', textContent: '×', title: 'Cancella la modulazione di questo parametro',
-      onclick: () => { const t = this.target; if (t) host.commit('Cancella modulazione', c => c.withEnvelope(t, [])); },
+      onclick: () => { const t = this.target; if (t) host.commit('Cancella modulazione', t, []); },
     });
     this.device.onchange = () => this.chooseDevice(this.device.value);
     this.param.onchange = () => this.choose(this.paramTargets().find(t => targetKey(t) === this.param.value) ?? null);
     this.controls.append(
-      el('div', { className: 'mod-head' }, el('span', { textContent: 'Modulazioni' }), this.drawButton, this.clearButton),
+      el('div', { className: 'mod-head' }, el('span', { textContent: title }), this.drawButton, this.clearButton),
       this.device, this.param);
   }
 
@@ -57,28 +56,28 @@ export class ModulationEditor {
   /** Una clip appena aperta: si resta sul parametro di prima se la traccia ce l'ha, altrimenti si
    *  mostra la prima modulazione della clip, se ne ha. */
   opened(): void {
-    const clip = this.host.clip(), track = this.host.track();
+    const curves = this.host.curves(), devices = this.host.devices();
     this.builtFor = '';
-    if (!clip || !track) return this.choose(null);
-    const valid = (t: ModTarget | null) => !!t && this.targetsOf(targetDevices(track)).some(x => sameTarget(x, t));
+    if (!curves || !devices) return this.choose(null);
+    const valid = (t: ModTarget | null) => !!t && this.targetsOf(devices).some(x => sameTarget(x, t));
     const keep = valid(this.target) ? this.target : null;
-    const first = clip.envelopes.map(e => e.target).find(t => valid(t)) ?? null;
-    this.choose(keep && (clip.envelope(keep) || !first) ? keep : first);
+    const first = curves.envelopes.map(e => e.target).find(t => valid(t)) ?? null;
+    this.choose(keep && (curves.envelope(keep) || !first) ? keep : first);
   }
 
-  /** Allinea menu e corsia alla clip e alla traccia (dopo ogni modifica del progetto). */
+  /** Allinea menu e corsia alle curve e ai dispositivi (dopo ogni modifica del progetto). */
   sync(): void {
-    const clip = this.host.clip(), track = this.host.track();
-    if (!clip || !track) return;
-    const devices = targetDevices(track);
-    const shape = [...devices.map(d => `${d.key}=${d.label}`), '|', ...clip.envelopes.map(e => targetKey(e.target))].join(',');
+    const curves = this.host.curves(), devices = this.host.devices();
+    if (!curves || !devices) return;
+    const shape = [...devices.map(d => `${d.key}=${d.label}`), '|', ...curves.envelopes.map(e => targetKey(e.target))].join(',');
     if (shape !== this.builtFor) {
       this.builtFor = shape;
       this.devices = devices;
-      if (this.target && !this.targetsOf(devices).some(t => sameTarget(t, this.target!))) this.target = null;
+      // il dispositivo del parametro non c'è più: la corsia si chiude
+      if (this.target && !this.targetsOf(devices).some(t => sameTarget(t, this.target!))) return this.choose(null);
       this.fill();
     }
-    this.clearButton.disabled = !(this.target && clip.envelope(this.target));
+    this.clearButton.disabled = !(this.target && curves.envelope(this.target));
     this.lane.invalidate();
   }
 
@@ -102,9 +101,9 @@ export class ModulationEditor {
   private chooseDevice(key: string): void {
     const device = this.devices.find(d => d.key === key);
     if (!device) return this.choose(null);
-    const clip = this.host.clip();
+    const curves = this.host.curves();
     const params = device.sections.flatMap(s => s.params.map(p => p.target));
-    this.choose(params.find(t => clip?.envelope(t)) ?? params[0] ?? null);
+    this.choose(params.find(t => curves?.envelope(t)) ?? params[0] ?? null);
   }
 
   private targetsOf(devices: readonly TargetDevice[]): ModTarget[] {
@@ -118,8 +117,8 @@ export class ModulationEditor {
 
   /** I due menu, con il segno sui dispositivi e i parametri che hanno una modulazione. */
   private fill(): void {
-    const clip = this.host.clip();
-    const has = (t: ModTarget) => !!clip?.envelope(t);
+    const curves = this.host.curves();
+    const has = (t: ModTarget) => !!curves?.envelope(t);
     this.device.replaceChildren(
       el('option', { value: NONE, textContent: '— nessuna —' }),
       ...this.devices.map(d => el('option', {

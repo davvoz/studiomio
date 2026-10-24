@@ -6,6 +6,18 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- The master automation can now be drawn and seen: the "A" button in the master row (or
+  right-click › "Mostra l'automazione") opens a row under it. On the left pick the effect (or
+  rack) and the parameter (or macro), on the right draw the curve on the timeline, with its zoom
+  and scrolling: click adds a point, drag moves it, double-click deletes it, ✎ paints steps on
+  the grid, × clears the curve. The "A" button has a dot when the master has curves, and effects
+  with a curve show a ● in the master row and in the menus.
+
+### Fixed
+- Modulation editor: deleting the effect whose curve is shown closes the lane instead of leaving
+  it on a parameter that no longer exists.
+
 ## [0.3.24] - 2026-10-24
 
 ### Added

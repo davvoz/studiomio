@@ -5,6 +5,7 @@
   --text: #e8eaee;
   --muted: #9aa0aa;
   --accent: #ff9d2e;
+  --master-curve: #5ec8e5;
   --line: #2c3138;
   --header-w: 210px;
   --ruler-h: 30px;
@@ -61,7 +62,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .transport .follow.paused { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); color: var(--text); border-color: var(--accent); }
 
 /* ---------------------------------------------------------------- arrangement */
-.arrangement { display: grid; grid-template-columns: var(--header-w) 1fr; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
+.arrangement { display: grid; grid-template-columns: var(--header-w) 1fr; grid-template-rows: minmax(0, 1fr) auto auto; min-height: 0; }
 .headers { display: grid; grid-template-rows: var(--ruler-h) 1fr var(--hscroll-h); border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
 .header-add { display: flex; gap: 4px; padding: 3px 6px; border-bottom: 1px solid var(--line); }
 .header-add button { padding: 1px 8px; font-size: 12px; }
@@ -339,6 +340,18 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 .master-lane .chip { border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; background: var(--panel-2); font-size: 12px; }
 .master-lane .chip.off { opacity: .45; text-decoration: line-through; }
 .master-lane .arrow { color: var(--muted); }
+.master-lane .chip.automated::after { content: ' ●'; color: var(--master-curve); font-size: 10px; }
+/* l'automazione del master: menu a sinistra, la corsia con la curva sotto la timeline */
+.master-header .controls .auto { position: relative; }
+.master-header .controls .auto.has:not(.on)::after {
+  content: ''; position: absolute; right: -2px; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: var(--master-curve);
+}
+.master-auto-header { height: 104px; padding: 4px 8px; border-top: 1px solid var(--line); border-right: 1px solid var(--line); background: var(--panel); overflow: hidden; }
+.master-auto-header .mod-controls { margin-top: 0; padding-top: 0; border-top: none; }
+.master-auto-lane { position: relative; height: 104px; min-width: 0; border-top: 1px solid var(--line); background: #15171a; overflow: hidden; }
+.master-auto-lane .mod-lane { height: 100%; border-top: none; }
+.master-auto-hint { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-size: 12px; }
+.master-auto-header[hidden], .master-auto-lane[hidden], .master-auto-hint[hidden] { display: none; }
 
 /* ---------------------------------------------------------------- misuratori di livello */
 .level-meter { position: absolute; right: 5px; top: 6px; height: calc(100% - 12px); width: 10px; border-radius: 2px; cursor: pointer; }

@@ -1,13 +1,32 @@
 /* Cosa si può modulare sulla traccia di una clip, per i menu dell'editor delle modulazioni:
  * il mixer (volume e pan), lo strumento e gli effetti, con i loro parametri (numeri e scelte:
- * una scelta, come un interruttore, scatta quando la curva la sposta oltre metà strada). */
+ * una scelta, come un interruttore, scatta quando la curva la sposta oltre metà strada). Sul
+ * master gli effetti e le macro dei suoi rack, per le sue curve sulla timeline. */
 import type { DeviceId } from '../../core/id';
 import { paramSpec, resolveParams, type DeviceType } from '../../devices/device-type';
 import { paramFromUnit, paramToUnit, type ChoiceParam } from '../../devices/params';
 import { effectType, instrumentType } from '../../devices/registry';
+import type { EffectSettings, InstrumentSettings } from '../../model/device';
 import { INSTRUMENT_DEVICE, scaleKindOf, type ModScaleKind, type ModTarget } from '../../model/envelope';
-import { chainItems, macroName, macroParam, rackName, type DeviceKey, type Rack } from '../../model/rack';
+import { MASTER, type Project } from '../../model/project';
+import { chainItems, macroName, macroParam, rackName, type DeviceKey, type Rack, type RackList } from '../../model/rack';
 import { MidiTrack, type Track } from '../../model/track';
+
+/** Una catena di dispositivi da modulare: quella di una traccia o quella del master. */
+export interface ModChain {
+  readonly instrument?: InstrumentSettings;
+  readonly effects: readonly EffectSettings[];
+  /** I dispositivi nell'ordine del suono (lo strumento per primo, se c'è). */
+  readonly chainKeys: readonly DeviceKey[];
+  readonly racks: RackList;
+}
+
+export const trackChain = (track: Track): ModChain => ({
+  instrument: track instanceof MidiTrack ? track.instrument : undefined,
+  effects: track.effects, chainKeys: track.chainKeys, racks: track.racks,
+});
+
+export const masterChain = (p: Project): ModChain => ({ effects: p.masterEffects, chainKeys: p.chainKeys(MASTER), racks: p.masterRacks });
 
 export interface TargetParam {
   readonly target: ModTarget;
@@ -55,11 +74,17 @@ function deviceTargets(key: string, label: string, type: DeviceType | undefined)
 
 /** I dispositivi della traccia, nell'ordine in cui il suono li attraversa (il mixer per primo);
  *  un rack viene prima dei suoi dispositivi, con le sue macro. */
-export function targetDevices(track: Track): TargetDevice[] {
+export const targetDevices = (track: Track): TargetDevice[] => [MIXER, ...chainTargets(trackChain(track))];
+
+/** Gli effetti del master e le macro dei suoi rack (il suo volume non si modula). */
+export const masterTargetDevices = (p: Project): TargetDevice[] => chainTargets(masterChain(p));
+
+/** I dispositivi di una catena, nell'ordine del suono; un rack prima dei suoi dispositivi. */
+function chainTargets(chain: ModChain): TargetDevice[] {
   const types = new Map<DeviceKey, { type: DeviceType | undefined; name: string }>();
-  if (track instanceof MidiTrack) types.set(INSTRUMENT_DEVICE, { type: instrumentType(track.instrument.type), name: track.instrument.type });
-  for (const e of track.effects) types.set(e.id, { type: effectType(e.type), name: e.type });
-  const out: TargetDevice[] = [MIXER];
+  if (chain.instrument) types.set(INSTRUMENT_DEVICE, { type: instrumentType(chain.instrument.type), name: chain.instrument.type });
+  for (const e of chain.effects) types.set(e.id, { type: effectType(e.type), name: e.type });
+  const out: TargetDevice[] = [];
   const seen = new Map<string, number>();
   const device = (key: DeviceKey) => {
     const { type, name } = types.get(key)!;
@@ -69,7 +94,7 @@ export function targetDevices(track: Track): TargetDevice[] {
     const d = deviceTargets(key, `${type?.label ?? name}${n > 1 ? ` ${n}` : ''}`, type);
     if (d) out.push(d);
   };
-  for (const item of chainItems(track.chainKeys, track.racks)) {
+  for (const item of chainItems(chain.chainKeys, chain.racks)) {
     if (item.kind === 'device') device(item.key);
     else {
       out.push(rackTargets(item.rack, (k, param) => { const t = types.get(k)?.type; return t && paramSpec(t, param)?.label; }));
@@ -102,11 +127,11 @@ const FORMATS: { readonly [K in ModScaleKind]: (v: number) => string } = {
   param: v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.round(Math.abs(v) * 100)} %`,
 };
 
-/** Come si scrive un valore della curva; per una scelta (con la traccia) anche l'opzione che si
- *  sente con quella modulazione: "On · +60 %". */
-export function formatModValue(target: ModTarget, value: number, track?: Track | null): string {
+/** Come si scrive un valore della curva; per una scelta (con la sua catena) anche l'opzione che
+ *  si sente con quella modulazione: "On · +60 %". */
+export function formatModValue(target: ModTarget, value: number, chain?: ModChain | null): string {
   const text = FORMATS[scaleKindOf(target)](value);
-  const choice = track ? choiceTarget(track, target) : null;
+  const choice = chain ? choiceTarget(chain, target) : null;
   return choice ? `${choice.spec.options[choice.heard(value)]} · ${text}` : text;
 }
 
@@ -118,13 +143,11 @@ export interface ChoiceTarget {
   heard(offset: number): number;
 }
 
-/** Il bersaglio come scelta, se è una scelta di un dispositivo della traccia (null per il mixer,
+/** Il bersaglio come scelta, se è una scelta di un dispositivo della catena (null per il mixer,
  *  le macro e i parametri numerici). */
-export function choiceTarget(track: Track, target: ModTarget): ChoiceTarget | null {
+export function choiceTarget(chain: ModChain, target: ModTarget): ChoiceTarget | null {
   if (target.kind !== 'device') return null;
-  const settings = target.device === INSTRUMENT_DEVICE
-    ? (track instanceof MidiTrack ? track.instrument : undefined)
-    : track.effects.find(e => e.id === target.device);
+  const settings = target.device === INSTRUMENT_DEVICE ? chain.instrument : chain.effects.find(e => e.id === target.device);
   if (!settings) return null;
   const type = target.device === INSTRUMENT_DEVICE ? instrumentType(settings.type) : effectType(settings.type);
   const spec = type && paramSpec(type, target.param);

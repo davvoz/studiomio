@@ -1,9 +1,11 @@
+import type { DeviceId } from '../core/id';
 import { effectType } from '../devices/registry';
 import { MASTER, type Project } from '../model/project';
 import { setMasterMixer } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { showContextMenu } from './context-menu';
 import { el } from './dom';
+import type { MasterAutomation } from './master-automation';
 import { LevelMeter, PeakReadout, type MeterBoard } from './meters/meter-board';
 import { addEffectItems, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 import type { HeaderActions } from './track-headers';
@@ -18,7 +20,7 @@ export class MasterStrip {
   private readonly volume: HTMLInputElement;
   private readonly fx: HTMLButtonElement;
 
-  constructor(store: ProjectStore, actions: HeaderActions, meters: MeterBoard) {
+  constructor(store: ProjectStore, actions: HeaderActions, meters: MeterBoard, automation: MasterAutomation) {
     const open = () => actions.openDevices(MASTER);
     const toggleMute = () => store.apply(setMasterMixer({ mute: !store.project.master.mute }));
     this.mute = midiTarget(el<HTMLButtonElement>('button', { textContent: 'M', title: 'Mute del master', onclick: toggleMute }), { kind: 'mixer', owner: MASTER, control: 'mute' });
@@ -31,7 +33,7 @@ export class MasterStrip {
     meters.attach(MASTER, peak);
     this.header.append(
       el('div', { className: 'top' }, el('span', { className: 'track-name', textContent: 'Master' }), peak.element),
-      el('div', { className: 'controls' }, this.mute, midiSlot(this.volume, { kind: 'mixer', owner: MASTER, control: 'volume' }), this.fx),
+      el('div', { className: 'controls' }, this.mute, midiSlot(this.volume, { kind: 'mixer', owner: MASTER, control: 'volume' }), this.fx, automation.button),
       meter.element);
     this.lane.onclick = open;
     const menu = (e: MouseEvent) => {
@@ -39,6 +41,7 @@ export class MasterStrip {
       e.stopPropagation();
       showContextMenu(e.clientX, e.clientY, [
         { label: 'Effetti del master', run: open },
+        { label: automation.isOpen ? 'Nascondi l\'automazione' : 'Mostra l\'automazione', run: () => automation.toggle() },
         ...addEffectItems(store, MASTER, open),
         { label: store.project.master.mute ? 'Togli il mute' : 'Mute', run: toggleMute },
       ]);
@@ -53,9 +56,13 @@ export class MasterStrip {
     this.mute.classList.toggle('on', p.master.mute);
     setVolume(this.volume, p.master.volumeDb);
     setFxCount(this.fx, p.masterEffects.length);
+    // gli effetti con una curva (anche sulle macro del loro rack) hanno il pallino
+    const curved = new Set(p.masterAutomation.flatMap(c => (c.target.kind === 'device' ? [c.target.device] : [])));
+    const automated = (id: DeviceId) => curved.has(id) || p.masterRacks.some(r => curved.has(r.id) && r.devices.includes(id));
     const chips = p.masterEffects.map(e => {
       const label = effectType(e.type)?.label ?? e.type;
-      return el('span', { className: e.enabled ? 'chip' : 'chip off', textContent: e.preset ? `${label} · ${e.preset}` : label });
+      const className = `${e.enabled ? 'chip' : 'chip off'}${automated(e.id) ? ' automated' : ''}`;
+      return el('span', { className, textContent: e.preset ? `${label} · ${e.preset}` : label });
     });
     this.lane.replaceChildren(...(chips.length
       ? chips.flatMap((c, i) => (i ? [el('span', { className: 'arrow', textContent: '→' }), c] : [c]))

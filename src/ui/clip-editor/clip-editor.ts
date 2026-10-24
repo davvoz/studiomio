@@ -17,6 +17,7 @@ import { editorCursor, editorGestureFor, editorHit, type EditorGesture, type Edi
 import { LAYOUT, paintEditor } from './editor-painter';
 import { wheelTime } from '../envelopes/envelope-lane';
 import { ModulationEditor } from '../envelopes/modulation-editor';
+import { targetDevices, trackChain } from '../envelopes/mod-targets';
 
 export interface ClipEditorDeps {
   readonly store: ProjectStore;
@@ -64,13 +65,15 @@ export class ClipEditor implements EditorHost {
     const editor = this;
     this.mods = new ModulationEditor({
       get axis() { return editor._axis; },
-      clip: () => editor.clip(),
+      curves: () => editor.clip(),
+      span: () => { const c = editor.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },
       grid: () => gridStep(editor._axis.pxPerBeat, deps.store.project.signature, 10),
       signature: () => deps.store.project.signature,
       playhead: () => { const t = editor.target(); return t ? playheadIn(t.found, deps.engine) : null; },
-      commit: (label, fn) => editor.commit(label, c => fn(c) as AudioClip),
+      commit: (label, target, points) => editor.commit(label, c => c.withEnvelope(target, points) as AudioClip),
       wheel: (e, x) => editor.setAxis(wheelTime(e, x, editor._axis)),
-      track: () => editor.target()?.found.track ?? null,
+      devices: () => { const t = editor.target()?.found.track ?? null; return t && targetDevices(t); },
+      chain: () => { const t = editor.target()?.found.track ?? null; return t && trackChain(t); },
       layout: visible => editor.element.classList.toggle('with-lane', visible),
     });
     // subito sotto nome e informazioni: le opzioni del warp sono lunghe e lo nasconderebbero

@@ -1,12 +1,12 @@
 /* La corsia di una modulazione, sotto l'editor della clip (piano roll o audio) e allineata al
- * suo asse dei battiti: la curva con i suoi punti, la linea neutra, la griglia. Gesti: clic nel
+ * suo asse dei battiti, o sotto il master e allineata alla timeline: la curva con i suoi punti,
+ * la linea neutra, la griglia. Gesti: clic nel
  * vuoto aggiunge un punto e lo trascina, trascinare un punto lo sposta (Alt: senza griglia,
  * Maiusc: fine), doppio clic lo elimina; in modo disegno si dipingono scalini sulla griglia.
  * Ogni gesto è un passo di annullamento. */
 import type { Beats, TimeSignature } from '../../core/music-time';
-import type { Clip } from '../../model/clip';
-import type { Track } from '../../model/track';
-import { envelopeValueAt, scaleOf, type EnvelopePoint, type ModScale, type ModTarget } from '../../model/envelope';
+import type { Color } from '../../model/clip';
+import { envelopeValueAt, scaleOf, type ClipEnvelope, type EnvelopePoint, type ModScale, type ModTarget } from '../../model/envelope';
 import type { BeatAxis } from '../clip-editor/clip-geometry';
 import { paintBeatGrid } from '../clip-editor/clip-frame';
 import { SEPARATOR, showContextMenu } from '../context-menu';
@@ -14,23 +14,33 @@ import { el } from '../dom';
 import { Surface } from '../surface';
 import { snapTo } from '../timeline/geometry';
 import { COLORS, withAlpha } from '../timeline/painters';
-import { choiceTarget, formatModValue } from './mod-targets';
+import { choiceTarget, formatModValue, type ModChain } from './mod-targets';
+
+/** Le curve che la corsia mostra: quelle di una clip, o quelle del master. */
+export interface LaneCurves {
+  readonly color: Color;
+  readonly envelopes: readonly ClipEnvelope[];
+  envelope(target: ModTarget): ClipEnvelope | undefined;
+}
 
 /** Ciò che la corsia usa dell'editor che la ospita. */
 export interface LaneHost {
   readonly axis: BeatAxis;
-  clip(): Clip | null;
+  /** Le curve (null: niente di aperto); lo stesso oggetto finché non cambiano. */
+  curves(): LaneCurves | null;
+  /** La parte che suona, nei battiti dell'asse: fuori è più scura (assente: tutta). */
+  span?(): { readonly start: Beats; readonly end: Beats } | null;
   /** Il passo della griglia (e dell'aggancio). */
   grid(): Beats;
   signature(): TimeSignature;
-  /** Il battito della clip che suona adesso, se suona. */
+  /** Il battito che suona adesso, se suona. */
   playhead(): Beats | null;
-  /** Modifica la clip (un passo di annullamento). */
-  commit(label: string, fn: (c: Clip) => Clip): void;
+  /** Sostituisce i punti della curva su `target`; senza punti la toglie (un passo di annullamento). */
+  commit(label: string, target: ModTarget, points: readonly EnvelopePoint[]): void;
   /** La rotella sulla corsia scorre e zooma il tempo come nell'editor. */
   wheel(e: WheelEvent, x: number): void;
-  /** La traccia della clip: per una scelta la corsia mostra l'opzione che si sente. */
-  track?(): Track | null;
+  /** La catena modulata: per una scelta la corsia mostra l'opzione che si sente. */
+  chain?(): ModChain | null;
 }
 
 /** La rotella sulla corsia: Ctrl zooma il tempo, altrimenti lo scorre. */
@@ -99,7 +109,7 @@ export class EnvelopeLane {
   private hover: { x: number; y: number } | null = null;
   private drawMode = false;
   private dirty = true;
-  private last: { axis: BeatAxis; clip: Clip | null; playhead: Beats | null } | null = null;
+  private last: { axis: BeatAxis; curves: LaneCurves | null; playhead: Beats | null } | null = null;
 
   constructor(private readonly host: LaneHost, private readonly onDrawMode: (on: boolean) => void) {
     this.element.append(this.surface.canvas);
@@ -134,12 +144,12 @@ export class EnvelopeLane {
   /** Ridisegna se qualcosa è cambiato (da chiamare a ogni fotogramma dell'editor). */
   frame(): void {
     if (!this.target || this.element.hidden) return;
-    const state = { axis: this.host.axis, clip: this.host.clip(), playhead: this.host.playhead() };
+    const state = { axis: this.host.axis, curves: this.host.curves(), playhead: this.host.playhead() };
     const l = this.last;
-    if (!this.dirty && l && l.axis === state.axis && l.clip === state.clip && l.playhead === state.playhead) return;
+    if (!this.dirty && l && l.axis === state.axis && l.curves === state.curves && l.playhead === state.playhead) return;
     this.dirty = false;
     this.last = state;
-    this.paint(state.clip, state.playhead);
+    this.paint(state.curves, state.playhead);
   }
 
   // ---------------------------------------------------------------- geometria
@@ -161,7 +171,7 @@ export class EnvelopeLane {
 
   private points(): readonly EnvelopePoint[] {
     if (this.drag) return this.drag.points;
-    return (this.target && this.host.clip()?.envelope(this.target)?.points) || [];
+    return (this.target && this.host.curves()?.envelope(this.target)?.points) || [];
   }
 
   private pointAt(x: number, y: number): number {
@@ -228,7 +238,7 @@ export class EnvelopeLane {
 
   private commit(label: string, points: readonly EnvelopePoint[]): void {
     const target = this.target;
-    if (target) this.host.commit(label, c => c.withEnvelope(target, points));
+    if (target) this.host.commit(label, target, points);
   }
 
   private bind(canvas: HTMLCanvasElement): void {
@@ -237,7 +247,7 @@ export class EnvelopeLane {
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
     canvas.addEventListener('pointerdown', e => {
-      if (e.button !== 0 || !this.target || !this.host.clip()) return;
+      if (e.button !== 0 || !this.target || !this.host.curves()) return;
       e.preventDefault();
       canvas.setPointerCapture(e.pointerId);
       const { x, y } = pos(e), pts = this.points();
@@ -293,19 +303,21 @@ export class EnvelopeLane {
 
   // ---------------------------------------------------------------- disegno
 
-  private paint(clip: Clip | null, playhead: Beats | null): void {
+  private paint(curves: LaneCurves | null, playhead: Beats | null): void {
     const { g, width: w, height: h } = this.surface;
     const target = this.target!, axis = this.host.axis, scale = this.scale;
     g.fillStyle = '#15171a';
     g.fillRect(0, 0, w, h);
-    if (!clip) return;
+    if (!curves) return;
     paintBeatGrid(g, axis, w, 0, h, this.host.grid(), this.host.signature());
     // fuori da ciò che suona: più scuro
-    const end = clip.loop.enabled ? clip.loop.end : clip.region.end;
-    const x0 = axis.beatToX(clip.region.start), x1 = axis.beatToX(end);
-    g.fillStyle = 'rgba(0,0,0,0.42)';
-    g.fillRect(0, 0, Math.max(0, x0), h);
-    g.fillRect(x1, 0, Math.max(0, w - x1), h);
+    const span = this.host.span?.();
+    if (span) {
+      const x0 = axis.beatToX(span.start), x1 = axis.beatToX(span.end);
+      g.fillStyle = 'rgba(0,0,0,0.42)';
+      g.fillRect(0, 0, Math.max(0, x0), h);
+      g.fillRect(x1, 0, Math.max(0, w - x1), h);
+    }
     // la linea neutra (nessuna modulazione)
     const ny = Math.round(this.valueToY(scale.neutral)) + 0.5;
     g.strokeStyle = 'rgba(255,255,255,0.22)';
@@ -315,7 +327,7 @@ export class EnvelopeLane {
     g.lineTo(w, ny);
     g.stroke();
     g.setLineDash([]);
-    const pts = this.points(), color = clip.color;
+    const pts = this.points(), color = curves.color;
     g.font = '10.5px system-ui, sans-serif';
     if (!pts.length) {
       g.fillStyle = COLORS.rulerText;
@@ -353,8 +365,8 @@ export class EnvelopeLane {
     // il valore sotto il puntatore (o del punto trascinato)
     if (this.hover) {
       const v = this.drag ? null : this.yToValue(this.hover.y);
-      const track = this.host.track?.() ?? null;
-      const text = formatModValue(target, v ?? envelopeValueAt(pts, axis.xToBeat(this.hover.x)), track);
+      const chain = this.host.chain?.() ?? null;
+      const text = formatModValue(target, v ?? envelopeValueAt(pts, axis.xToBeat(this.hover.x)), chain);
       g.fillStyle = '#e8eaee';
       g.fillText(text, Math.min(w - 110, this.hover.x + 10), Math.max(12, Math.min(h - 4, this.hover.y - 6)));
     }
@@ -367,8 +379,8 @@ export class EnvelopeLane {
   /** Per una scelta (un interruttore, un menu): a scalini, l'opzione che si sente davvero con la
    *  curva e la manopola dov'è, all'altezza in cui quell'opzione è esatta. */
   private paintHeardChoice(pts: readonly EnvelopePoint[], w: number): void {
-    const track = this.host.track?.(), target = this.target;
-    const choice = track && target ? choiceTarget(track, target) : null;
+    const chain = this.host.chain?.(), target = this.target;
+    const choice = chain && target ? choiceTarget(chain, target) : null;
     if (!choice) return;
     const { g } = this.surface, axis = this.host.axis, last = choice.spec.options.length - 1;
     const yOf = (option: number) => this.valueToY((last ? option / last : 0) - choice.baseUnit);

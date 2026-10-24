@@ -36,6 +36,7 @@ import { PianoRoll } from '../ui/piano-roll/piano-roll';
 import { bindKeys, KEYMAP, type Commands } from '../ui/keymap';
 import { ArrangementView } from '../ui/timeline/arrangement-view';
 import { resolveSelection } from '../ui/timeline/planning';
+import { MasterAutomation } from '../ui/master-automation';
 import { MasterStrip } from '../ui/master-strip';
 import { SessionView } from '../ui/session/session-view';
 import { MeterBoard } from '../ui/meters/meter-board';
@@ -161,11 +162,12 @@ export class App implements Commands, TimelineActions {
       dropItem,
     });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
-    const master = new MasterStrip(this.store, headerActions, meters);
+    const automation = new MasterAutomation(this.store, this.ui, this.audio.engine);
+    const master = new MasterStrip(this.store, headerActions, meters, automation);
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this);
     const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
     const main = this.arrangementArea;
-    main.append(headers.element, this.arrangement.element, master.header, master.lane);
+    main.append(headers.element, this.arrangement.element, master.header, master.lane, automation.header, automation.lane);
     // il master della timeline riceve gli effetti dal browser
     // sul master solo effetti: niente strumenti né Instrument Rack
     const masterAccepts = (p: BrowserItem['payload']) => p?.kind === 'effect' || (p?.kind === 'rack' && !p.rack.instrument);

@@ -19,7 +19,7 @@ import { ProjectStore } from '../../src/store/project-store';
 import { groupDevices, mapMacro, setMacroMode, setMappingRange } from '../../src/store/rack-edits';
 import { macroParam } from '../../src/model/rack';
 import { paintStep, simplify } from '../../src/ui/envelopes/envelope-lane';
-import { choiceTarget, formatModValue, targetDevices } from '../../src/ui/envelopes/mod-targets';
+import { choiceTarget, formatModValue, masterChain, masterTargetDevices, targetDevices, trackChain } from '../../src/ui/envelopes/mod-targets';
 import { BRAKE_CURVES, TAPE_STOP } from '../../src/devices/effects/tape-stop/tape-stop';
 import { FakeEffects, FakeGraph, FakeInstruments, type FakeParam } from '../helpers/fake-audio';
 
@@ -296,7 +296,7 @@ describe('modulazioni delle scelte nell\'editor', () => {
     r.store.apply(addEffect(r.t(0), 'tapeStop', 'Tape Stop'));
     r.store.apply(addEffect(r.t(0), 'gate', 'Gate'));
     const [tape, gate] = r.store.project.tracks[0].effects.map(e => e.id);
-    return { r, tape, gate, track: () => r.store.project.tracks[0] };
+    return { r, tape, gate, track: () => r.store.project.tracks[0], chain: () => trackChain(r.store.project.tracks[0]) };
   }
 
   it('i menu degli inviluppi mostrano anche le scelte, non i parametri del solo pannello grafico', () => {
@@ -309,16 +309,16 @@ describe('modulazioni delle scelte nell\'editor', () => {
   });
 
   it('il valore sotto il puntatore dice anche l\'opzione che si sente, dalla manopola di adesso', () => {
-    const { r, tape, track } = withTapeStop();
+    const { r, tape, chain } = withTapeStop();
     const stop: ModTarget = { kind: 'device', device: tape, param: 'stop' };
-    expect(formatModValue(stop, 0.6, track())).toBe('On · +60 %');
-    expect(formatModValue(stop, 0.3, track())).toBe('Off · +30 %');
+    expect(formatModValue(stop, 0.6, chain())).toBe('On · +60 %');
+    expect(formatModValue(stop, 0.3, chain())).toBe('Off · +30 %');
     r.store.apply(setEffectParam(r.t(0), tape, 'stop', 1));
-    expect(formatModValue(stop, -0.6, track())).toBe('Off · −60 %');
-    expect(choiceTarget(track(), stop)!.heard(0.2)).toBe(1);
+    expect(formatModValue(stop, -0.6, chain())).toBe('Off · −60 %');
+    expect(choiceTarget(chain(), stop)!.heard(0.2)).toBe(1);
     // i numeri e il mixer restano come prima
-    expect(formatModValue({ kind: 'device', device: tape, param: 'spin' }, 0.6, track())).toBe('+60 %');
-    expect(choiceTarget(track(), VOLUME)).toBeNull();
+    expect(formatModValue({ kind: 'device', device: tape, param: 'spin' }, 0.6, chain())).toBe('+60 %');
+    expect(choiceTarget(chain(), VOLUME)).toBeNull();
   });
 
   it('nel motore la curva di una scelta arriva all\'effetto come quella di un numero', () => {
@@ -386,6 +386,18 @@ describe('curve del master sulla timeline', () => {
     store.apply(setMasterAutomation(target, []));
     expect(store.project.masterAutomation).toEqual([]);
     expect(() => store.project.withMasterAutomation(VOLUME, pts([0, 0]))).toThrow();
+  });
+
+  it('nei menu dell\'automazione: gli effetti del master e le macro dei suoi rack, senza mixer', () => {
+    const { store, fx } = masterRig();
+    store.apply(addEffect(MASTER, 'tapeStop', 'Tape Stop'));
+    const tape = store.project.masterEffects[1].id;
+    store.apply(groupDevices(MASTER, [fx]));
+    const rack = store.project.masterRacks[0].id;
+    expect(masterTargetDevices(store.project).map(d => d.key)).toEqual([rack, fx, tape]);
+    expect(masterTargetDevices(store.project)[0].sections[0].params[0].target).toEqual({ kind: 'device', device: rack, param: macroParam(0) });
+    // una scelta del master dice l'opzione che si sente, come sulle tracce
+    expect(formatModValue({ kind: 'device', device: tape, param: 'stop' }, 0.6, masterChain(store.project))).toBe('On · +60 %');
   });
 
   it('si salvano con il progetto; un file senza si apre', () => {
