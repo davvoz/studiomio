@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.24] - 2026-10-24
+
 ### Added
 - Master automation on the timeline: curves in timeline beats on the master's effect parameters
   and on the macros of its racks (Macchina, Tornado…), like clip envelopes but for the whole mix.
