@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.27] - 2026-10-25
+
 ### Added
 - The device view (instruments and effects) can be made taller by dragging its top edge, like
   the piano roll; the height is remembered and a double click brings back the starting one.
