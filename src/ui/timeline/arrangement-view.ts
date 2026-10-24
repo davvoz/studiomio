@@ -83,7 +83,10 @@ export class ArrangementView implements GestureHost {
       this.ruler.resize(rulerWrap.clientWidth, rulerWrap.clientHeight);
       this.lanes.resize(lanesWrap.clientWidth, lanesWrap.clientHeight);
       this.overlay.resize(lanesWrap.clientWidth, lanesWrap.clientHeight);
+      // ridimensionare svuota i canvas: si ridisegnano subito, non al frame dopo (resterebbero
+      // neri a ogni frame mentre l'area in basso si alza o si chiude)
       this.invalidate();
+      this.paint();
     }).observe(lanesWrap);
 
     this.bindLanes(this.overlay.canvas);
@@ -144,6 +147,11 @@ export class ArrangementView implements GestureHost {
   // ---------------------------------------------------------------- disegno
 
   private readonly frame = () => {
+    this.paint();
+    requestAnimationFrame(this.frame);
+  };
+
+  private paint(): void {
     const { project } = this.store;
     const engine = this.deps.engine;
     // durante un gesto la vista sta ferma: scorrere sotto il mouse sposterebbe ciò che si trascina
@@ -163,8 +171,7 @@ export class ArrangementView implements GestureHost {
     o.g.clearRect(0, 0, o.width, o.height);
     this.gesture?.paint(o.g, this.geo);
     paintPlayhead(o.g, this.geo, o.height, engine.position, engine.playing ? engine.position : null);
-    requestAnimationFrame(this.frame);
-  };
+  }
 
   // ---------------------------------------------------------------- puntatore
 

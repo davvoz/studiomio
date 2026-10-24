@@ -147,8 +147,11 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 
 /* ---------------------------------------------------------------- dispositivi (strumento ed effetti) */
 .bottom { min-width: 0; }
-.device-view { height: 372px; min-width: 0; border-top: 2px solid var(--accent); background: var(--panel); display: flex; flex-direction: column; outline: none; }
+.device-view { height: min(var(--device-h, 372px), calc(100vh - 220px)); min-height: 372px; position: relative; min-width: 0; border-top: 2px solid var(--accent); background: var(--panel); display: flex; flex-direction: column; outline: none; }
 .device-view[hidden] { display: none; }
+/* ridotta all'intestazione (trascinata in giù oltre l'altezza minima): dal bordo si riapre */
+.device-view.folded { height: auto; min-height: 0; }
+.device-view.folded > .device-chain { display: none; }
 .device-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .device-head [hidden] { display: none; }
 .device-title { font-weight: 600; margin-right: auto; padding-left: 9px; border-left: 4px solid var(--color, var(--accent)); }

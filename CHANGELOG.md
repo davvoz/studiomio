@@ -6,6 +6,16 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- The device view (instruments and effects) can be made taller by dragging its top edge, like
+  the piano roll; the height is remembered and a double click brings back the starting one.
+  Dragging it further down once it is at its smallest folds it: the view slides down until only
+  its title bar is left (let go earlier and it comes back up). Drag the edge up again to bring
+  it back.
+
+### Fixed
+- The timeline no longer goes black for a moment while the area below it is resized.
+
 ## [0.3.26] - 2026-10-24
 
 ### Fixed

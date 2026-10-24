@@ -25,6 +25,7 @@ import { addEffectToRack, groupDevices, mapMacro, moveDevice, ungroupRack, unmap
 import { acceptBrowserDrops } from '../browser/browser-drag';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
+import { addHeightHandle, DEVICE_HEIGHT } from '../editor-height';
 import { DevicePanel } from './device-panel';
 import { DEVICE_DISPLAYS, NO_SPECTRUM, type DeviceDisplay, type SpectrumTap } from './displays';
 import { RackPanel } from './rack-panel';
@@ -114,7 +115,16 @@ export class DeviceView {
       textContent: '⇤⇥', title: 'Comprimi tutti i dispositivi (o riaprili, se sono già tutti compressi)', onclick: () => this.foldAll(),
     });
     const close = el<HTMLButtonElement>('button', { className: 'close', textContent: '×', title: 'Chiudi (Esc)', onclick: () => this.close() });
-    this.element.append(el('div', { className: 'device-head' }, this.backButton, this.title, foldAll, add, close), this.chain);
+    const head = el('div', { className: 'device-head' }, this.backButton, this.title, foldAll, add, close);
+    this.element.append(head, this.chain);
+    // trascinata in giù oltre l'altezza minima resta solo l'intestazione; dal bordo si riapre
+    const view = this.element;
+    addHeightHandle(view, DEVICE_HEIGHT, {
+      get folded() { return view.classList.contains('folded'); },
+      get foldedHeight() { return head.offsetHeight + view.clientTop; },
+      fold: () => view.classList.add('folded'),
+      unfold: () => view.classList.remove('folded'),
+    });
     this.element.addEventListener('keydown', e => {
       if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
@@ -152,6 +162,7 @@ export class DeviceView {
     this.back = back;
     this.builtFor = '';
     this.element.hidden = false;
+    this.element.classList.remove('folded');
     this.sync();
     this.element.focus({ preventScroll: true });
     return true;
