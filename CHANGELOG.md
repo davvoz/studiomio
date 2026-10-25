@@ -6,6 +6,22 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- The knobs of instruments and effects now follow the automation while it plays: when a clip
+  curve or a master curve moves a parameter, its pointer and number show the value you hear (in
+  red, with an arc from where the knob is set), then go back when the curve ends or playback
+  stops. It works through rack macros too (the macro and the parameters it moves), and choices
+  show the option the curve picks.
+- The APC40 mkII follows the automation too: the LED rings of the 8 Device Control knobs show
+  the value you hear while a curve plays (the Launchpad Pro MK3's device faders do the same).
+  Turning a knob starts from that value, without jumps, and sets the parameter so you hear
+  where the knob is.
+
+### Fixed
+- On the APC40 mkII the LED rings of the Device Control knobs could stay dark after choosing a
+  track (only a knob whose value kept changing lit up) until you moved to another device and
+  back. A moment after a device, bank or track is chosen, all 8 rings are now sent again.
+
 ## [0.3.27] - 2026-10-25
 
 ### Added

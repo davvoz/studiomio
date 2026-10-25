@@ -142,6 +142,7 @@ export class App implements Commands, TimelineActions {
       importSample: file => this.session.importSampleFile(file),
       sampleAudio: id => this.audio.library.get(id),
       playheads: track => this.audio.engine.playheads(track),
+      modulation: (owner, target) => this.audio.engine.modulationAt(owner, target),
       say: t => this.say(t),
       dropItem,
       ui: this.ui,

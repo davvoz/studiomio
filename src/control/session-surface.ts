@@ -7,12 +7,13 @@
 import type { DeviceId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { MAX_BPM, MIN_BPM } from '../core/music-time';
-import { visibleParamsOf, type DeviceType } from '../devices/device-type';
-import { paramFromUnit, type ParamSpec } from '../devices/params';
+import { resolveParams, visibleParamsOf, type DeviceType } from '../devices/device-type';
+import { paramFromUnit, paramToUnit, type ParamSpec } from '../devices/params';
 import { mappingSpec } from '../devices/rack-params';
 import { effectType, instrumentType } from '../devices/registry';
 import { groupSlotState, type TrackSessionState } from '../engine/session';
 import type { DeviceSettings } from '../model/device';
+import type { ModTarget } from '../model/envelope';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import { chainItems, MACRO_MAX, macroName, macroOf, macroParam, rackName, type DeviceKey, type Rack } from '../model/rack';
 import { GroupTrack, MidiTrack, type Track } from '../model/track';
@@ -32,6 +33,9 @@ export interface SurfaceEngine {
   stopTrack(track: TrackId): void;
   stopAllClips(): void;
   sessionState(track: Track): TrackSessionState;
+  /** Dove una curva che suona porta adesso un parametro (spostamento della manopola, −1 … +1),
+   *  o null: anelli e fader mostrano il valore che si sente. */
+  modulationAt?(owner: ChainOwner, target: ModTarget): number | null;
 }
 
 /** Cosa mostra l'area in basso dell'app. */
@@ -371,12 +375,25 @@ export abstract class SessionSurface {
     return { owner, chain, index, device, bank, banks, params: all.slice(bank * PARAMS_PER_BANK, (bank + 1) * PARAMS_PER_BANK) };
   }
 
-  /** Il parametro `i` del banco del dispositivo controllato, portato a `unit` (0..1). Un
-   *  parametro mosso da una macro non si tocca: lo si dice. */
+  /** Lo spostamento che una curva dà adesso al parametro del dispositivo controllato (0: nessuno). */
+  private offsetOf(c: Controlled, spec: ParamSpec): number {
+    return this.host.engine.modulationAt?.(c.owner, { kind: 'device', device: c.device.key as DeviceId, param: spec.id }) ?? 0;
+  }
+
+  /** Dove sta il parametro del dispositivo controllato (0..1), con la curva che suona: anelli e
+   *  fader mostrano il valore che si sente, come le manopole sullo schermo. */
+  protected heardUnit(c: Controlled, spec: ParamSpec): number {
+    const base = paramToUnit(spec, resolveParams(c.device.type, c.device.settings.params)[spec.id]);
+    return clamp(base + this.offsetOf(c, spec), 0, 1);
+  }
+
+  /** Il parametro `i` del banco del dispositivo controllato, portato a `unit` (0..1): il valore
+   *  che si sente, quindi con una curva che suona la manopola va dove serve perché si senta
+   *  quello (niente salti). Un parametro mosso da una macro non si tocca: lo si dice. */
   protected turnParam(i: number, unit: number): void {
     const c = this.controlled(), spec = c?.params[i];
     if (!c || !spec) return;
-    const v = paramFromUnit(spec, unit);
+    const v = paramFromUnit(spec, unit - this.offsetOf(c, spec));
     const { rack, key } = c.device;
     const macro = rack ? null : macroOf(this.project.racksOf(c.owner), key as DeviceKey, spec.id);
     if (macro) return this.host.say(`${this.label}: ${spec.label} lo muove la macro ${macro.index + 1} di ${rackName(macro.rack)}.`);

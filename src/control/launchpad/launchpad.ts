@@ -9,8 +9,6 @@
  *  - MK2: Mixer porta il mixer sulla griglia (righe di stop, mute, solo; fader di volume e pan).
  * I LED li decide il programma a ogni giro; le animazioni (pulsa, lampeggia) le fa il controller.
  * Il controller non conosce Web MIDI: riceve i messaggi con `receive` e manda con `out`. */
-import { resolveParams } from '../../devices/device-type';
-import { paramToUnit } from '../../devices/params';
 import type { Track } from '../../model/track';
 import { setMixer } from '../../store/edits';
 import { dbToFader, faderToDb, knobToPan, panToKnob } from '../mixer-scale';
@@ -409,10 +407,9 @@ export class Launchpad extends SessionSurface {
   private faderValues(layout: Layout): (number | undefined)[] {
     if (layout === 'device') {
       const dev = this.controlled();
-      const values = dev ? resolveParams(dev.device.type, dev.device.settings.params) : {};
       return Array.from({ length: SIZE }, (_, i) => {
         const spec = dev?.params[i];
-        return spec ? Math.round(paramToUnit(spec, values[spec.id]) * 127) : undefined;
+        return dev && spec ? Math.round(this.heardUnit(dev, spec) * 127) : undefined;
       });
     }
     return this.ringTracks().map(t => (!t ? undefined : layout === 'pan' ? panToKnob(t.mixer.pan) : dbToFader(t.mixer.volumeDb)));

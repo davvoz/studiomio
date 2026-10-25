@@ -17,7 +17,7 @@ import type { Edit, ProjectStore } from '../../store/project-store';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
 import { editInline, renameInline } from '../inline-rename';
-import { controlFor, type ParamControl } from './controls';
+import { controlFor, registerControl, type ParamControl } from './controls';
 
 export interface RackPanelOptions {
   readonly store: ProjectStore;
@@ -116,9 +116,9 @@ export class RackPanel {
     const mode = macroMode(m);
     const control = mode === 'knob'
       ? controlFor(spec, m.value, (v, final) => this.merge(set(v), `macro-${o.rack.id}-${index}`, final))
-      : new MacroSwitch(spec.label, m.value, mode,
+      : registerControl(new MacroSwitch(spec.label, m.value, mode,
         // l'interruttore è un passo di annullamento; il pulsante tenuto premuto no (si disfa da solo)
-        on => (mode === 'toggle' ? this.apply(set(on ? MACRO_MAX : 0)) : o.store.apply(set(on ? MACRO_MAX : 0), { transient: true })));
+        on => (mode === 'toggle' ? this.apply(set(on ? MACRO_MAX : 0)) : o.store.apply(set(on ? MACRO_MAX : 0), { transient: true }))));
     this.macros.push(control);
     const e = control.element;
     e.classList.add('macro');
@@ -272,11 +272,13 @@ export class RackPanel {
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** Una macro interruttore o pulsante: un tasto che si illumina quando è acceso. L'interruttore
- *  cambia a ogni clic; il pulsante è acceso finché lo si tiene premuto. */
+ *  cambia a ogni clic; il pulsante è acceso finché lo si tiene premuto. Una curva che lo fa
+ *  scattare (oltre metà strada) lo accende o lo spegne finché dura. */
 class MacroSwitch implements ParamControl {
   readonly element = el('div', { className: 'macro-switch' });
   private readonly key: HTMLButtonElement;
   private on = false;
+  private flipped = false;
 
   constructor(label: string, value: number, mode: 'toggle' | 'button', press: (on: boolean) => void) {
     this.key = el<HTMLButtonElement>('button', {
@@ -300,6 +302,19 @@ class MacroSwitch implements ParamControl {
 
   set(value: number): void {
     this.on = value >= MACRO_MAX / 2;
-    this.key.classList.toggle('on', this.on);
+    this.render();
+  }
+
+  /** Come nel motore (switchSink): acceso scatta in giù a −½, spento scatta in su a +½. */
+  modulate(offset: number): void {
+    const flipped = this.on ? offset <= -0.5 : offset >= 0.5;
+    if (flipped === this.flipped) return;
+    this.flipped = flipped;
+    this.render();
+  }
+
+  private render(): void {
+    this.key.classList.toggle('on', this.on !== this.flipped);
+    this.key.classList.toggle('automated', this.flipped);
   }
 }

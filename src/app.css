@@ -6,6 +6,8 @@
   --muted: #9aa0aa;
   --accent: #ff9d2e;
   --master-curve: #5ec8e5;
+  /* il valore che una curva fa sentire su manopole e scelte */
+  --auto: #ff5c6c;
   --line: #2c3138;
   --header-w: 210px;
   --ruler-h: 30px;
@@ -220,6 +222,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .macro-key { width: 34px; height: 34px; margin: 3px 0 4px; padding: 0; border-radius: 6px; background: #2c2836; border: 2px solid #4a4360; touch-action: none; }
 .macro-key.button { border-radius: 50%; }
 .macro-key.on { background: var(--macro); border-color: var(--macro); box-shadow: 0 0 10px color-mix(in srgb, var(--macro) 55%, transparent); }
+.macro-key.automated { border-color: var(--auto); }
 .rack.mapping .macro { cursor: pointer; border-radius: 6px; }
 .rack.mapping .macro.chosen { background: color-mix(in srgb, var(--macro) 28%, transparent); outline: 1px solid var(--macro); }
 /* `contain: size`: la lista lunga scorre al suo posto, non allunga il rack */
@@ -283,12 +286,16 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 .knob.active .knob-value, .knob:focus-visible .knob-value { stroke: #ffc27a; }
 .knob-readout { font: 11px/1.2 ui-monospace, monospace; color: var(--text); white-space: nowrap; }
 .knob-label { font-size: 11px; color: var(--muted); text-align: center; white-space: nowrap; margin-top: 1px; }
+.knob-auto { fill: none; stroke: var(--auto); stroke-width: 4; stroke-linecap: round; }
+.knob.automated .knob-pointer { stroke: var(--auto); }
+.knob.automated .knob-readout, select.automated { color: var(--auto); }
 .choice { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 6px; }
 /* da tre opzioni (al massimo quattro, poi è un menu) i pulsanti vanno su due colonne: una scelta
  * non è mai più alta di una manopola */
 .choice-buttons { display: grid; gap: 2px; }
 .choice-buttons:has(> :nth-child(3)) { grid-template-columns: repeat(2, auto); }
 .choice-buttons button { padding: 1px 8px; font-size: 11px; border-radius: 3px; min-width: 70px; }
+.choice-buttons button.heard { box-shadow: inset 0 0 0 2px var(--auto); }
 
 /* ---------------------------------------------------------------- menu contestuale */
 .context-menu {

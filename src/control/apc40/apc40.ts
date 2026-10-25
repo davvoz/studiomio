@@ -6,8 +6,6 @@
  * che suona, lampeggio per quella in coda (lo fa il controller); si manda solo ciò che cambia.
  * Il controller non conosce Web MIDI: riceve i messaggi con `receive` e manda con `out`. */
 import type { DeviceId, TrackId } from '../../core/id';
-import { resolveParams } from '../../devices/device-type';
-import { paramToUnit } from '../../devices/params';
 import { MASTER } from '../../model/project';
 import { slotRef, type ClipRef } from '../../store/clip-ref';
 import { setEffectEnabled, setMasterMixer, setMixer } from '../../store/edits';
@@ -28,6 +26,9 @@ const MAX_SEND = 32;
 const HANDSHAKE_MS = 1000;
 /** Live manda la challenge due dei suoi giri (100 ms) dopo la presentazione. */
 const CHALLENGE_DELAY_MS = 200;
+/** Dopo quanto si rimandano gli anelli delle manopole Device a un dispositivo appena scelto: il
+ *  controller può perdere quelli mandati subito (si spengono, finché il valore non cambia). */
+const RINGS_AGAIN_MS = 250;
 
 /** L'avvio, come in Live: si chiede l'identità, ci si presenta, si fa la challenge, poi si lavora. */
 type Phase = 'identity' | 'challenge' | 'ready';
@@ -54,12 +55,16 @@ export class Apc40 extends SessionSurface {
   private challengeSent = false;
   /** Il device ID del controller, dalla sua risposta d'identità (Live fa lo stesso). */
   private device = 0;
+  /** Il dispositivo (e banco) delle manopole Device l'ultima volta, e quando rimandarne gli anelli. */
+  private ringsOf = '';
+  private ringsAgainAt = Infinity;
 
   /** Il controller è appena stato collegato: gli si chiede chi è (vedi `handshake`). */
   start(): void {
     this.stopped = false;
     this.sent.clear();
     this.touched.clear();
+    this.ringsOf = '';
     this.phase = 'identity';
     this.phaseAt = this.now();
     this.out([...IDENTITY_REQUEST]);
@@ -154,6 +159,8 @@ export class Apc40 extends SessionSurface {
 
   private release(note: number): void {
     if (note === NOTE.shift) this.shift = false;
+    // scelta una traccia (o il master), gli anelli si rimandano anche dopo il rilascio
+    if (note === NOTE.trackSelect || note === NOTE.master) this.ringsAgainAt = this.now() + RINGS_AGAIN_MS;
   }
 
   /** Con Shift (o con Bank acceso) le frecce spostano il riquadro di una pagina intera. */
@@ -302,11 +309,11 @@ export class Apc40 extends SessionSurface {
     // il dispositivo controllato
     const dev = this.controlled();
     ui.setControlledDevice(dev ? { owner: dev.owner, device: dev.device.key } : null);
-    const values = dev ? resolveParams(dev.device.type, dev.device.settings.params) : {};
+    this.ringsAgain(dev ? `${dev.owner}/${dev.device.key}/${dev.bank}` : '');
     for (let i = 0; i < PARAMS_PER_BANK; i++) {
       const spec = dev?.params[i];
       leds.set(ccKey(CC.deviceRing + i), spec ? (bipolar(spec) ? RING.pan : RING.volume) : RING.off);
-      leds.set(ccKey(CC.deviceKnob + i), spec ? Math.round(paramToUnit(spec, values[spec.id]) * 127) : 0);
+      leds.set(ccKey(CC.deviceKnob + i), dev && spec ? Math.round(this.heardUnit(dev, spec) * 127) : 0);
     }
     note(NOTE.deviceLeft, !!dev && dev.index > 0);
     note(NOTE.deviceRight, !!dev && dev.index < dev.chain.length - 1);
@@ -317,6 +324,22 @@ export class Apc40 extends SessionSurface {
     note(NOTE.clipDeviceView, this.host.detail === 'devices');
     note(NOTE.detailView, this.host.detail !== null);
     return leds;
+  }
+
+  /** Cambiato il dispositivo delle manopole (`shown`), poco dopo i suoi anelli (tipo e valore) si
+   *  rimandano tutti, anche quelli che non sono cambiati: l'APC40 può aver perso i primi, e un
+   *  anello perso resterebbe spento finché il suo valore non cambia. */
+  private ringsAgain(shown: string): void {
+    if (shown !== this.ringsOf) {
+      this.ringsOf = shown;
+      this.ringsAgainAt = this.now() + RINGS_AGAIN_MS;
+    } else if (this.now() >= this.ringsAgainAt) {
+      this.ringsAgainAt = Infinity;
+      for (let i = 0; i < PARAMS_PER_BANK; i++) {
+        this.sent.delete(ccKey(CC.deviceRing + i));
+        this.sent.delete(ccKey(CC.deviceKnob + i));
+      }
+    }
   }
 }
 

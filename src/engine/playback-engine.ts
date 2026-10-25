@@ -1,7 +1,7 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { ClipId, DeviceId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
-import { INSTRUMENT_DEVICE, type ModTarget } from '../model/envelope';
+import { INSTRUMENT_DEVICE, scaleOf, targetKey, type ModTarget } from '../model/envelope';
 import { mappingSpec, mappingTravel } from '../devices/rack-params';
 import { launchQuantumBeats } from '../model/launch';
 import { findRack, isSwitchMacro, MACRO_MAX, macroIndex, type Rack } from '../model/rack';
@@ -17,6 +17,7 @@ import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
 import { TransportAnchors } from './players/transport-anchors';
+import { ModTraces } from './mod-trace';
 import { audioParamSink, MasterModulator, scaledSinks, switchSink, TrackModulator, type ModSink } from './modulation';
 import { NoteActivity } from './note-activity';
 import type { PlayerContext, TrackPlayer } from './players/track-player';
@@ -100,6 +101,8 @@ export class PlaybackEngine {
   private readonly modulators = new Map<TrackId, TrackModulator>();
   /** Le curve del master sulla timeline. */
   private readonly masterModulator: MasterModulator;
+  /** Ciò che le curve hanno programmato su ogni bersaglio, per le manopole che le seguono. */
+  private readonly traces: ModTraces;
 
   constructor(private readonly graph: AudioGraph, private readonly services: EngineServices, opts: EngineOptions = {}) {
     this.timer = opts.timer ?? intervalTimer;
@@ -114,6 +117,7 @@ export class PlaybackEngine {
     }, () => this.project?.signature.beatsPerBar ?? 4);
     this.scheduler = new Scheduler(() => this.sources(), opts.lookahead ?? 0.2);
     this.masterModulator = new MasterModulator([], target => this.modSink(MASTER, target), () => this.graph.currentTime);
+    this.traces = new ModTraces(() => this.graph.currentTime);
   }
 
   get playing(): boolean {
@@ -340,6 +344,13 @@ export class PlaybackEngine {
     return this.players.get(track)?.player.playheads?.() ?? [];
   }
 
+  /** Dove una curva porta adesso il bersaglio di una traccia o del master, nella scala del suo
+   *  tipo (per un parametro: lo spostamento della manopola, −1 … +1); null se nessuna curva l'ha
+   *  mai toccato. Una macro dà la sua curva, i parametri che muove il loro spostamento. */
+  modulationAt(owner: ChainOwner, target: ModTarget): number | null {
+    return this.traces.current(`${owner}|${targetKey(target)}`);
+  }
+
   /** Fa sentire subito una nota con lo strumento della traccia (piano roll, tastiera). */
   audition(track: TrackId, pitch: number, velocity = 100, seconds = 0.3): void {
     this.players.get(track)?.player.audition?.(pitch, velocity, seconds);
@@ -404,8 +415,14 @@ export class PlaybackEngine {
   }
 
   /** Dove va una modulazione di una traccia o del master: il canale del mixer (solo le tracce), lo
-   *  strumento, un effetto o la macro di un rack (che muove i parametri mappati). */
+   *  strumento, un effetto o la macro di un rack (che muove i parametri mappati). Ciò che riceve
+   *  resta anche nella sua traccia, per l'interfaccia. */
   private modSink(owner: ChainOwner, target: ModTarget): ModSink | null {
+    const sink = this.destination(owner, target);
+    return sink && this.traces.wrap(`${owner}|${targetKey(target)}`, scaleOf(target).neutral, sink);
+  }
+
+  private destination(owner: ChainOwner, target: ModTarget): ModSink | null {
     if (target.kind === 'mixer') return owner === MASTER ? null : audioParamSink(this.mixer.modulation(owner, target.param));
     const racks = owner === MASTER ? this.project?.masterRacks : this.project?.track(owner)?.racks;
     const rack = findRack(racks ?? [], target.device as DeviceId);

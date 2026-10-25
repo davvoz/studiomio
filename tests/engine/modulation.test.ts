@@ -290,6 +290,67 @@ describe('modulazioni nel motore', () => {
   });
 });
 
+describe('le manopole seguono le curve', () => {
+  it('il motore dice dove una curva porta adesso un parametro; stop: di nuovo neutro', () => {
+    const r = rig();
+    r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
+    const fx = r.store.project.tracks[0].effects[0].id;
+    const feedback: ModTarget = { kind: 'device', device: fx, param: 'feedback' };
+    r.editClip(c => c.withEnvelope(CUTOFF, pts([0, 0], [4, 0.4])).withEnvelope(VOLUME, pts([0, 1], [2, 0])));
+    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBeNull(); // mai suonata
+    r.engine.play(0);
+    r.runUntil(r.at(2));
+    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBeCloseTo(0.2, 4);
+    expect(r.engine.modulationAt(r.t(0), VOLUME)).toBeCloseTo(0, 4);
+    r.runUntil(r.at(5)); // secondo giro del loop della clip
+    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBeCloseTo(0.1, 4);
+    expect(r.engine.modulationAt(r.t(0), feedback)).toBeNull(); // senza curva
+    expect(r.engine.modulationAt(r.t(1), CUTOFF)).toBeNull(); // un'altra traccia
+    r.engine.stop();
+    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBe(0);
+  });
+
+  it('una curva su una macro: la macro e i parametri mappati, ciascuno della sua parte di corsa', () => {
+    const r = rig();
+    r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
+    const fx = r.store.project.tracks[0].effects[0].id;
+    r.store.apply(groupDevices(r.t(0), [INSTRUMENT_DEVICE, fx]));
+    const rack = r.store.project.tracks[0].racks[0].id;
+    r.store.apply(mapMacro(r.t(0), rack, 0, INSTRUMENT_DEVICE, 'cutoff'));
+    r.store.apply(mapMacro(r.t(0), rack, 0, fx, 'mix'));
+    r.store.apply(setMappingRange(r.t(0), fx, 'mix', { min: 100, max: 50 }));
+    const macro: ModTarget = { kind: 'device', device: rack, param: macroParam(0) };
+    r.editClip(c => c.withEnvelope(macro, pts([0, 0], [4, 0.4])));
+    r.engine.play(0);
+    r.runUntil(r.at(2));
+    expect(r.engine.modulationAt(r.t(0), macro)).toBeCloseTo(0.2, 4);
+    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBeCloseTo(0.2, 4);
+    expect(r.engine.modulationAt(r.t(0), { kind: 'device', device: fx, param: 'mix' })).toBeCloseTo(-0.1, 4);
+  });
+
+  it('la curva tolta mentre suona: la manopola torna dov\'è dopo la riprogrammazione', () => {
+    const r = rig();
+    r.editClip(c => c.withEnvelope(CUTOFF, pts([0, 0.5])));
+    r.engine.play(0);
+    r.runUntil(1);
+    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBe(0.5);
+    r.editClip(c => c.withEnvelope(CUTOFF, []));
+    r.runUntil(1.5);
+    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBe(0);
+  });
+
+  it('le curve del master muovono gli effetti del master', () => {
+    const r = rig();
+    r.store.apply(addEffect(MASTER, 'delay', 'Delay'));
+    const fx = r.store.project.masterEffects[0].id;
+    const mix: ModTarget = { kind: 'device', device: fx, param: 'mix' };
+    r.store.apply(setMasterAutomation(mix, pts([0, 0], [8, -0.8])));
+    r.engine.play(0);
+    r.runUntil(r.at(4));
+    expect(r.engine.modulationAt(MASTER, mix)).toBeCloseTo(-0.4, 4);
+  });
+});
+
 describe('modulazioni delle scelte nell\'editor', () => {
   function withTapeStop() {
     const r = rig();

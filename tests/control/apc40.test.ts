@@ -13,7 +13,7 @@ import { MASTER, Project, type ChainOwner } from '../../src/model/project';
 import type { MidiTrack, Track } from '../../src/model/track';
 import { addEffect, addTrack, setSlot } from '../../src/store/edits';
 import { groupDevices, mapMacro } from '../../src/store/rack-edits';
-import { INSTRUMENT_DEVICE } from '../../src/model/envelope';
+import { INSTRUMENT_DEVICE, targetKey, type ModTarget } from '../../src/model/envelope';
 import { ProjectStore } from '../../src/store/project-store';
 import { setSceneColor } from '../../src/store/session-edits';
 import { UiState } from '../../src/ui/ui-state';
@@ -28,12 +28,17 @@ class FakeEngine implements SurfaceEngine {
   metronomeOn = false;
   readonly calls: string[] = [];
   readonly states = new Map<TrackId, TrackSessionState>();
+  /** Le curve che suonano: lo spostamento di ogni bersaglio ("proprietario|chiave"). */
+  readonly curves = new Map<string, number>();
   launchSlot(track: TrackId, slot: number) { this.calls.push(`slot ${track} ${slot}`); }
   launchScene(index: number) { this.calls.push(`scene ${index}`); }
   stopTrack(track: TrackId) { this.calls.push(`stop ${track}`); }
   stopAllClips() { this.calls.push('stop all'); }
   sessionState(track: Track): TrackSessionState {
     return this.states.get(track.id) ?? { playing: null, queued: null, followsArrangement: true };
+  }
+  modulationAt(owner: ChainOwner, target: ModTarget): number | null {
+    return this.curves.get(`${owner}|${targetKey(target)}`) ?? null;
   }
 }
 
@@ -475,6 +480,74 @@ describe('APC40 sulla session', () => {
     r.apc.tick();
     expect(r.store.project.tracks[0].effects[0].params.mix).toBe(100);
     expect(r.said.at(-1)).toContain('macro 2');
+  });
+
+  it('scelto un dispositivo, poco dopo gli anelli Device si rimandano tutti (l\'APC40 può perdere i primi)', () => {
+    const r = rig();
+    r.start();
+    const knobs = () => r.out.filter(m => m[0] === 0xb0 && m[1] >= CC.deviceKnob && m[1] < CC.deviceRing + 8).length;
+    r.press(NOTE.trackSelect, 0);
+    r.settle();
+    const first = knobs();
+    expect(first).toBe(16); // tipo e valore delle 8 manopole
+    r.release(NOTE.trackSelect, 0);
+    r.settle();
+    expect(knobs()).toBe(first); // non subito
+    r.advance(300);
+    r.settle();
+    expect(knobs()).toBe(first + 16); // poi tutti, anche quelli rimasti uguali
+    r.advance(1000);
+    r.settle();
+    expect(knobs()).toBe(first + 16); // e una volta sola
+    // al dispositivo dopo: i suoi anelli, e di nuovo poco dopo
+    r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
+    r.press(NOTE.deviceRight);
+    r.settle();
+    const moved = knobs();
+    r.advance(300);
+    r.settle();
+    expect(knobs()).toBe(moved + 16);
+  });
+
+  it('con una curva che suona l\'anello mostra il valore che si sente, e la manopola parte da lì', () => {
+    const r = rig();
+    r.start();
+    r.press(NOTE.trackSelect, 0);
+    const synth = instrumentType((r.store.project.tracks[0] as MidiTrack).instrument.type)!;
+    const i = paramsOf(synth).slice(0, 8).findIndex(p => p.kind === 'number');
+    const spec = paramsOf(synth)[i];
+    const base = paramToUnit(spec, resolveParams(synth, {})[spec.id]);
+    expect(r.ring(CC.deviceKnob + i)).toBe(Math.round(base * 127));
+    const offset = base > 0.5 ? -0.25 : 0.25;
+    r.engine.curves.set(`${r.t(0)}|instrument:${spec.id}`, offset);
+    expect(r.ring(CC.deviceKnob + i)).toBe(Math.round((base + offset) * 127));
+    // girata: il parametro va dove serve perché si senta il valore della manopola
+    r.advance(1000);
+    const heard = Math.round((base + offset) * 127) + 3;
+    r.cc(CC.deviceKnob + i, heard);
+    r.apc.tick();
+    expect((r.store.project.tracks[0] as MidiTrack).instrument.params[spec.id]).toBeCloseTo(paramFromUnit(spec, heard / 127 - offset), 9);
+    // finita la curva l'anello torna al parametro
+    r.engine.curves.delete(`${r.t(0)}|instrument:${spec.id}`);
+    r.advance(1000);
+    expect(r.ring(CC.deviceKnob + i)).toBe(Math.round(paramToUnit(spec, paramFromUnit(spec, heard / 127 - offset)) * 127));
+  });
+
+  it('una curva su una macro: l\'anello della macro la segue', () => {
+    const r = rig();
+    r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
+    const delay = r.store.project.tracks[0].effects[0].id;
+    r.store.apply(groupDevices(r.t(0), [INSTRUMENT_DEVICE, delay]));
+    const rack = r.store.project.tracks[0].racks[0];
+    r.store.apply(mapMacro(r.t(0), rack.id, 2, delay, 'mix'));
+    r.start();
+    r.press(NOTE.trackSelect, 0);
+    expect(r.ui.controlledDevice).toEqual({ owner: r.t(0), device: rack.id });
+    const before = r.ring(CC.deviceKnob + 2)!;
+    r.engine.curves.set(`${r.t(0)}|${rack.id}:macro3`, 0.5); // la terza macro
+    const macro = r.store.project.tracks[0].racks[0].macros[2].value / 127;
+    expect(r.ring(CC.deviceKnob + 2)).toBe(Math.round(Math.min(1, macro + 0.5) * 127));
+    expect(r.ring(CC.deviceKnob + 2)).not.toBe(before);
   });
 
   it('Device Lock: le manopole restano sul dispositivo anche cambiando traccia', () => {

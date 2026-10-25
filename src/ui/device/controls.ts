@@ -9,7 +9,26 @@ export type ParamChange = (value: number, final: boolean) => void;
 export interface ParamControl {
   readonly element: HTMLElement;
   set(value: number): void;
+  /** Lo spostamento di una curva che suona, in frazioni della corsa (0: nessuno): il controllo
+   *  mostra il valore che si sente, la manopola resta dov'è. */
+  modulate?(offset: number): void;
 }
+
+/** I controlli per elemento, per chi trova i parametri dal loro `data-param` (le curve). */
+const CONTROLS = new WeakMap<Element, ParamControl>();
+
+/** Il controllo di un elemento, se ne è uno. */
+export const controlOf = (element: Element): ParamControl | undefined => CONTROLS.get(element);
+
+/** Fa trovare il controllo dal suo elemento (vedi controlOf). */
+export function registerControl<C extends ParamControl>(control: C): C {
+  CONTROLS.set(control.element, control);
+  return control;
+}
+
+/** Sotto questo spostamento una curva non si mostra. */
+const NO_OFFSET = 1e-4;
+const offsetOf = (offset: number) => (Math.abs(offset) < NO_OFFSET ? 0 : offset);
 
 const SVG = 'http://www.w3.org/2000/svg';
 /** La manopola copre 270°, da −135° (minimo) a +135° (massimo). */
@@ -39,18 +58,21 @@ function svg(tag: string, attrs: Record<string, string>): SVGElement {
 }
 
 /** Manopola: trascinare in verticale (Maiusc per la regolazione fine), rotella, doppio clic
- *  per tornare al valore predefinito. */
+ *  per tornare al valore predefinito. Mossa da una curva, l'indice e il numero vanno al valore
+ *  che si sente e un arco unisce la manopola a lì. */
 class Knob implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'knob', tabIndex: 0 });
   private readonly valueArc = svg('path', { class: 'knob-value' });
+  private readonly autoArc = svg('path', { class: 'knob-auto' });
   private readonly pointer = svg('line', { class: 'knob-pointer', x1: '20', y1: '20', x2: '20', y2: '7' });
   private readonly readout = Object.assign(document.createElement('div'), { className: 'knob-readout' });
   private value: number;
+  private offset = 0;
 
   constructor(private readonly spec: NumberParam, value: number, private readonly onChange: ParamChange) {
     this.value = value;
     const face = svg('svg', { viewBox: '0 0 40 40', class: 'knob-face' });
-    face.append(svg('path', { class: 'knob-track', d: arc(-SWEEP / 2, SWEEP / 2) }), this.valueArc, this.pointer);
+    face.append(svg('path', { class: 'knob-track', d: arc(-SWEEP / 2, SWEEP / 2) }), this.valueArc, this.autoArc, this.pointer);
     this.element.append(face, this.readout, Object.assign(document.createElement('div'), { className: 'knob-label', textContent: spec.label }));
     this.element.title = `${spec.label}: doppio clic per il valore predefinito`;
     this.bind();
@@ -60,6 +82,13 @@ class Knob implements ParamControl {
   set(value: number): void {
     if (value === this.value) return;
     this.value = value;
+    this.render();
+  }
+
+  modulate(offset: number): void {
+    offset = offsetOf(offset);
+    if (offset === this.offset) return;
+    this.offset = offset;
     this.render();
   }
 
@@ -104,21 +133,28 @@ class Knob implements ParamControl {
   }
 
   private render(): void {
-    const deg = -SWEEP / 2 + paramToUnit(this.spec, this.value) * SWEEP;
+    const unit = paramToUnit(this.spec, this.value), heard = Math.max(0, Math.min(1, unit + this.offset));
+    const deg = -SWEEP / 2 + unit * SWEEP;
     // con un minimo negativo (es. inviluppo −100..100) l'arco parte dallo zero
     const zero = this.spec.min < 0 && this.spec.max > 0 ? -SWEEP / 2 + paramToUnit(this.spec, 0) * SWEEP : -SWEEP / 2;
     this.valueArc.setAttribute('d', deg >= zero ? arc(zero, Math.max(zero + 0.01, deg)) : arc(deg, zero));
-    this.pointer.setAttribute('transform', `rotate(${deg} 20 20)`);
-    this.readout.textContent = formatParam(this.spec, this.value);
+    const moved = heard !== unit;
+    this.element.classList.toggle('automated', moved);
+    this.autoArc.setAttribute('d', moved ? knobArc(unit, heard, R) : '');
+    this.pointer.setAttribute('transform', `rotate(${-SWEEP / 2 + heard * SWEEP} 20 20)`);
+    this.readout.textContent = formatParam(this.spec, moved ? paramFromUnit(this.spec, heard) : this.value);
   }
 }
 
-/** Scelta tra poche opzioni: pulsanti affiancati. */
+/** Scelta tra poche opzioni: pulsanti affiancati. Mossa da una curva, si segna anche l'opzione
+ *  che si sente. */
 class Choice implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'choice' });
   private readonly buttons: HTMLButtonElement[];
+  private value = 0;
+  private offset = 0;
 
-  constructor(spec: ChoiceParam, value: number, onChange: ParamChange) {
+  constructor(private readonly spec: ChoiceParam, value: number, onChange: ParamChange) {
     this.buttons = spec.options.map((o, i) => Object.assign(document.createElement('button'), {
       textContent: o, onclick: () => { this.set(i); onChange(i, true); },
     }));
@@ -129,16 +165,39 @@ class Choice implements ParamControl {
   }
 
   set(value: number): void {
-    this.buttons.forEach((b, i) => b.classList.toggle('on', i === value));
+    this.value = value;
+    this.render();
+  }
+
+  modulate(offset: number): void {
+    offset = offsetOf(offset);
+    if (offset === this.offset) return;
+    this.offset = offset;
+    this.render();
+  }
+
+  private render(): void {
+    const heard = heardOption(this.spec, this.value, this.offset);
+    this.buttons.forEach((b, i) => {
+      b.classList.toggle('on', i === this.value);
+      b.classList.toggle('heard', i === heard && heard !== this.value);
+    });
   }
 }
 
-/** Scelta tra molte opzioni (es. le divisioni del delay): un menu a tendina. */
+/** L'opzione che si sente con la scelta `value` spostata di `offset` (come la calcola il motore). */
+const heardOption = (spec: ChoiceParam, value: number, offset: number) =>
+  (offset ? paramFromUnit(spec, paramToUnit(spec, value) + offset) : value);
+
+/** Scelta tra molte opzioni (es. le divisioni del delay): un menu a tendina. Mossa da una curva,
+ *  mostra l'opzione che si sente. */
 class ChoiceMenu implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'choice' });
   private readonly select = document.createElement('select');
+  private value = 0;
+  private offset = 0;
 
-  constructor(spec: ChoiceParam, value: number, onChange: ParamChange) {
+  constructor(private readonly spec: ChoiceParam, value: number, onChange: ParamChange) {
     this.select.append(...spec.options.map((o, i) => Object.assign(document.createElement('option'), { value: String(i), textContent: o })));
     this.select.onchange = () => onChange(Number(this.select.value), true);
     this.element.append(this.select, Object.assign(document.createElement('div'), { className: 'knob-label', textContent: spec.label }));
@@ -146,7 +205,21 @@ class ChoiceMenu implements ParamControl {
   }
 
   set(value: number): void {
-    this.select.value = String(value);
+    this.value = value;
+    this.render();
+  }
+
+  modulate(offset: number): void {
+    offset = offsetOf(offset);
+    if (offset === this.offset) return;
+    this.offset = offset;
+    this.render();
+  }
+
+  private render(): void {
+    const heard = heardOption(this.spec, this.value, this.offset);
+    this.select.value = String(heard);
+    this.select.classList.toggle('automated', heard !== this.value);
   }
 }
 
@@ -166,7 +239,7 @@ export function controlFor(spec: ParamSpec, value: number, onChange: ParamChange
   const control = options.menu && spec.kind === 'choice' ? new ChoiceMenu(spec, value, onChange)
     : (MAKERS[spec.kind] as (s: ParamSpec, v: number, c: ParamChange) => ParamControl)(spec, value, onChange);
   control.element.dataset.param = spec.id;
-  return control;
+  return registerControl(control);
 }
 
 /** Attenua un controllo che con i valori attuali non conta (es. i ms con il delay a tempo). */

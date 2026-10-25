@@ -7,6 +7,7 @@ import { deviceTypeAt } from '../../devices/rack-params';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, sampleAt, type EffectSettings, type ParamValues } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
+import type { ModTarget } from '../../model/envelope';
 import { keyLabel, keyOf, sameTarget, type KeyTarget } from '../../model/key-map';
 import { encodeMidiTarget } from '../../model/midi-map';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
@@ -26,6 +27,7 @@ import { acceptBrowserDrops } from '../browser/browser-drag';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
 import { addHeightHandle, DEVICE_HEIGHT } from '../editor-height';
+import { controlOf, type ParamControl } from './controls';
 import { DevicePanel } from './device-panel';
 import { DEVICE_DISPLAYS, NO_SPECTRUM, type DeviceDisplay, type SpectrumTap } from './displays';
 import { RackPanel } from './rack-panel';
@@ -53,6 +55,9 @@ export interface DeviceViewDeps {
   readonly dropItem?: (item: BrowserItem, target: LoadTarget) => void;
   /** Per mappare la tastiera del computer (KEY acceso e il bersaglio scelto). */
   readonly ui?: UiState;
+  /** Dove una curva che suona porta adesso un parametro (spostamento della manopola, −1 … +1),
+   *  o null: le manopole la seguono. */
+  readonly modulation?: (owner: ChainOwner, target: ModTarget) => number | null;
 }
 
 /** La chiave del pannello dello strumento (gli effetti usano il loro id). */
@@ -103,6 +108,8 @@ export class DeviceView {
   private builtOwner: ChainOwner | null = null;
   /** "Map" acceso su un rack, con la macro scelta (null: nessuna). */
   private mapMode: { readonly rack: DeviceId; readonly macro: number | null } | null = null;
+  /** I controlli che le curve possono muovere, con il loro bersaglio (null: da rifare). */
+  private curveControls: { readonly control: ParamControl; readonly target: ModTarget }[] | null = null;
 
   constructor(private readonly deps: DeviceViewDeps) {
     this.backButton.onclick = () => this.back?.();
@@ -140,6 +147,34 @@ export class DeviceView {
     deps.ui?.onChange(() => this.showKeys());
     const dropItem = deps.dropItem;
     if (dropItem) acceptBrowserDrops(this.element, item => this.owner && dropItem(item, { kind: 'chain', owner: this.owner }), { accept: () => !!this.owner });
+    if (deps.modulation) this.followCurves(deps.modulation);
+  }
+
+  /** A ogni fotogramma le manopole della catena aperta vanno dove le portano le curve che suonano
+   *  (della clip o del master, anche attraverso le macro). */
+  private followCurves(at: (owner: ChainOwner, target: ModTarget) => number | null): void {
+    const frame = () => {
+      requestAnimationFrame(frame);
+      const owner = this.owner;
+      if (!owner || this.element.classList.contains('folded')) return;
+      this.curveControls ??= this.findCurveControls();
+      for (const { control, target } of this.curveControls) control.modulate!(at(owner, target) ?? 0);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  /** I controlli dei dispositivi e le macro dei rack della catena costruita. */
+  private findCurveControls(): { control: ParamControl; target: ModTarget }[] {
+    const out: { control: ParamControl; target: ModTarget }[] = [];
+    const add = (device: string, elements: Iterable<HTMLElement>) => {
+      for (const e of elements) {
+        const control = controlOf(e);
+        if (control?.modulate) out.push({ control, target: { kind: 'device', device: device as DeviceId, param: e.dataset.param! } });
+      }
+    };
+    for (const [key, panel] of this.panels) add(key, panel.element.querySelectorAll<HTMLElement>('[data-param]'));
+    for (const [rack, panel] of this.rackPanels) add(rack, panel.element.querySelectorAll<HTMLElement>('.macro[data-param]'));
+    return out;
   }
 
   get isOpen(): boolean {
@@ -269,6 +304,7 @@ export class DeviceView {
     const scroll = sameOwner ? this.chain.scrollLeft : 0;
     const known = new Set(this.panels.keys());
     this.builtFor = shape;
+    this.curveControls = null;
     this.panels.clear();
     this.displays.clear();
     this.rackPanels.clear();
@@ -575,7 +611,7 @@ export class DeviceView {
       type, settings: track.instrument, sampleRate: this.deps.sampleRate,
       setParams: (values, final) => this.displayParams(track.id, INSTRUMENT, values, final,
         v => setInstrumentParams(track.id, v), `param-${track.id}`),
-      controlsChanged: () => { this.markMapped(INSTRUMENT); this.markKeys(INSTRUMENT); },
+      controlsChanged: () => { this.markMapped(INSTRUMENT); this.markKeys(INSTRUMENT); this.curveControls = null; },
       openSpectrum: () => NO_SPECTRUM,
       audition: (pitch, velocity) => audition(track.id, pitch, velocity),
       playedNotes: this.deps.playedNotes(track.id),
@@ -627,7 +663,7 @@ export class DeviceView {
     const display = DEVICE_DISPLAYS[e.type]?.({
       type, settings: e, sampleRate: this.deps.sampleRate,
       setParams: (values, final) => this.displayParams(owner, id, values, final, v => setEffectParams(owner, id, v), `fx-${id}`),
-      controlsChanged: () => { this.markMapped(id); this.markKeys(id); },
+      controlsChanged: () => { this.markMapped(id); this.markKeys(id); this.curveControls = null; },
       openSpectrum: () => this.deps.spectrum(owner, id),
       audition: () => {},
       playedNotes: () => [],
