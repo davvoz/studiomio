@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.28] - 2026-10-25
+
 ### Added
 - The knobs of instruments and effects now follow the automation while it plays: when a clip
   curve or a master curve moves a parameter, its pointer and number show the value you hear (in
