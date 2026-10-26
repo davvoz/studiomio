@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.29] - 2026-10-26
+
 ### Added
 - Tracks can be dragged to change their order: grab a track header in the arrangement (or a
   column head in the session) and drop it where the line shows. A group moves with its tracks.
