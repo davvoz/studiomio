@@ -5,7 +5,7 @@ import { sidechainSources } from '../../src/model/sidechain';
 import { BusTrack, SEND_OFF_DB } from '../../src/model/track';
 import { ProjectCodec } from '../../src/persistence/project-codec';
 import {
-  addBus, addEffect, removeTrack, renameTrack, setEffectSidechain, setMixer, setSend, starterProject,
+  addBus, addEffect, moveBus, removeTrack, renameTrack, setBusFolded, setEffectSidechain, setMixer, setSend, starterProject,
 } from '../../src/store/edits';
 import { FakeEffects, FakeGain, FakeGraph, FakeMeters } from '../helpers/fake-audio';
 import { setup } from '../helpers/fixtures';
@@ -78,6 +78,29 @@ describe('bus', () => {
     expect(back.buses.map(b => b.name)).toEqual(['A Bus', 'B Bus']);
     expect(back.track(r.b)!.send(r.busB)).toBe(-3.5);
     expect(back.effectsOf(r.busB)[0].type).toBe('delay');
+  });
+
+  it('si spostano tra i bus; le mandate restano', () => {
+    const r = withBuses();
+    r.store.apply(setSend(r.a, r.busA, -6));
+    r.store.apply(moveBus(r.busA, 1));
+    expect(r.store.project.buses.map(b => b.id)).toEqual([r.busB, r.busA]);
+    expect(r.store.project.track(r.a)!.send(r.busA)).toBe(-6);
+    const before = r.store.project;
+    r.store.apply(moveBus(r.busA, 1));
+    expect(r.store.project).toBe(before);
+  });
+
+  it('si comprimono e si espandono; compressi si salvano così', () => {
+    const r = withBuses();
+    r.store.apply(setBusFolded(r.busB, true));
+    expect((r.store.project.track(r.busB) as BusTrack).folded).toBe(true);
+    expect((r.store.project.track(r.busA) as BusTrack).folded).toBe(false);
+    const back = codec.parse(codec.stringify(r.store.project));
+    expect(back.buses.map(b => b.folded)).toEqual([false, true]);
+    r.store.apply(setBusFolded(r.busB, false));
+    expect(JSON.parse(codec.stringify(r.store.project)).buses.some((b: object) => 'folded' in b)).toBe(false);
+    expect(() => r.store.apply(setBusFolded(r.a, true))).toThrow();
   });
 
   it('i progetti di prima (formato 10, senza bus) si aprono come erano', () => {

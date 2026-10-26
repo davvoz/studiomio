@@ -1,5 +1,3 @@
-import type { DeviceId } from '../core/id';
-import { effectType } from '../devices/registry';
 import { MASTER, type Project } from '../model/project';
 import { setMasterMixer } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
@@ -11,7 +9,8 @@ import { addEffectItems, fxButton, midiSlot, midiTarget, setFxCount, setVolume, 
 import type { HeaderActions } from './track-headers';
 
 /** La riga del master in fondo all'arrangement, come in Live: a sinistra mute, volume ed
- *  effetti (allineati alle intestazioni delle tracce), a destra la sua catena in breve.
+ *  effetti (allineati alle intestazioni delle tracce), a destra una corsia vuota; un clic su
+ *  tutte e due (fuori dai controlli) apre la sua catena.
  *  I controlli si costruiscono una volta e poi si aggiornano, così un trascinamento continua. */
 export class MasterStrip {
   readonly header = el('div', { className: 'header master-header' });
@@ -36,6 +35,11 @@ export class MasterStrip {
       el('div', { className: 'controls' }, this.mute, midiSlot(this.volume, { kind: 'mixer', owner: MASTER, control: 'volume' }), this.fx, automation.button),
       meter.element);
     this.lane.onclick = open;
+    // un clic sull'intestazione (non sui suoi controlli) apre gli effetti, come FX
+    this.header.title = 'Master: un clic apre gli effetti';
+    this.header.onclick = e => {
+      if (!(e.target as HTMLElement).closest('button, input, .midi-slot, .level-meter')) open();
+    };
     const menu = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -56,16 +60,5 @@ export class MasterStrip {
     this.mute.classList.toggle('on', p.master.mute);
     setVolume(this.volume, p.master.volumeDb);
     setFxCount(this.fx, p.masterEffects.length);
-    // gli effetti con una curva (anche sulle macro del loro rack) hanno il pallino
-    const curved = new Set(p.masterAutomation.flatMap(c => (c.target.kind === 'device' ? [c.target.device] : [])));
-    const automated = (id: DeviceId) => curved.has(id) || p.masterRacks.some(r => curved.has(r.id) && r.devices.includes(id));
-    const chips = p.masterEffects.map(e => {
-      const label = effectType(e.type)?.label ?? e.type;
-      const className = `${e.enabled ? 'chip' : 'chip off'}${automated(e.id) ? ' automated' : ''}`;
-      return el('span', { className, textContent: e.preset ? `${label} · ${e.preset}` : label });
-    });
-    this.lane.replaceChildren(...(chips.length
-      ? chips.flatMap((c, i) => (i ? [el('span', { className: 'arrow', textContent: '→' }), c] : [c]))
-      : [el('span', { className: 'muted', textContent: 'Nessun effetto sul master: un clic per aggiungerne' })]));
   }
 }

@@ -15,7 +15,9 @@ import { sceneClips } from '../../model/scene-export';
 import { BusTrack, GroupTrack, type Track } from '../../model/track';
 import { setClipColor, setTrackColor, slotRef, type ClipRef } from '../../store/clip-ref';
 import { copySlotClip, pasteToSlot, type Clipboard } from '../../store/clipboard';
-import { addBus, removeTrack, renameTrack, setLaunchQuantization, type TrackKind } from '../../store/edits';
+import {
+  addBus, moveBus, moveTrack, removeTrack, renameTrack, setBusFolded, setLaunchQuantization, type TrackDrop, type TrackKind,
+} from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import {
   captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, insertScene, moveSlotClip, newSlotMidiClip, renameScene,
@@ -28,6 +30,7 @@ import { renameInline } from '../inline-rename';
 import { bindKeys, type Binding } from '../keymap';
 import type { MeterBoard } from '../meters/meter-board';
 import { addEffectItems } from '../mixer-controls';
+import { canStartTrackDrag, startTrackDrag, type DropSpot } from '../track-drag';
 import { groupMenuItems, newTrackHereItems, toggleFold } from '../track-groups';
 import { clickTrack, type UiState } from '../ui-state';
 import { MasterStripView, TrackStrip } from './mixer-strip';
@@ -93,10 +96,17 @@ const slotKey = (track: TrackId, slot: number) => `${track}:${slot}`;
  *  (con `T` tracce) viene dopo lo spazio, accanto al master. */
 const busColumn = (T: number, i: number) => T + 2 + i;
 
+/** La larghezza della colonna di un bus: stretta se è compresso. */
+const busWidth = (b: BusTrack) => (b.folded ? 'var(--session-folded)' : 'var(--session-col)');
+
+/** Per ogni bus la distanza dal bordo destro: il master e i bus che vengono dopo di lui. */
+const busRights = (buses: readonly BusTrack[]): string[] =>
+  buses.map((_, i) => `calc(var(--session-master) + 2px${buses.slice(i + 1).map(b => ` + ${busWidth(b)} + 2px`).join('')})`);
+
 /** Un bus resta fermo accanto al master, come in Live, mentre le tracce scorrono sotto. */
-function pinBus(e: HTMLElement, buses: number, i: number): HTMLElement {
+function pinBus(e: HTMLElement, right: string): HTMLElement {
   e.classList.add('bus-pinned');
-  e.style.setProperty('--bus-right', `calc(var(--session-master) + 2px + ${buses - 1 - i} * (var(--session-col) + 2px))`);
+  e.style.setProperty('--bus-right', right);
   return e;
 }
 
@@ -273,10 +283,10 @@ export class SessionView {
    *  tracce); i bus stanno a destra, accanto al master. */
   private render(): void {
     const p = this.deps.store.project, tracks = p.visibleTracks;
-    const T = tracks.length, B = p.buses.length, S = p.scenes.length;
+    const T = tracks.length, B = p.buses.length, S = p.scenes.length, rights = busRights(p.buses);
     // lo spazio che avanza sta tra le tracce e i bus: bus e master restano sul bordo destro
     const cols = (n: number) => (n ? `repeat(${n}, var(--session-col)) ` : '');
-    this.grid.style.gridTemplateColumns = `${cols(T)}minmax(0, 1fr) ${cols(B)}var(--session-master)`;
+    this.grid.style.gridTemplateColumns = `${cols(T)}minmax(0, 1fr) ${p.buses.map(b => `${busWidth(b)} `).join('')}var(--session-master)`;
     this.grid.style.gridTemplateRows = `auto repeat(${S}, var(--session-row)) auto 1fr auto`;
     if (this.quantize.value !== p.launchQuantization) this.quantize.value = p.launchQuantization;
     if (this.selected && !(tracks.some(t => t.id === this.selected!.track) && this.selected.slot < S)) this.selected = null;
@@ -293,15 +303,24 @@ export class SessionView {
     });
     p.buses.forEach((b, i) => {
       const col = busColumn(T, i);
-      cells.push(pinBus(place(this.busHead(b), row.head, col), B, i));
-      // niente slot: la colonna resta vuota fino al mixer
-      const lane = pinBus(place(el('div', { className: 'bus-lane' }), row.scene(0), col), B, i);
+      cells.push(pinBus(place(this.busHead(b), row.head, col), rights[i]));
+      // niente slot: la colonna resta vuota fino al mixer (compressa, con il nome in verticale)
+      const lane = pinBus(place(el('div', { className: 'bus-lane' }), row.scene(0), col), rights[i]);
       lane.style.gridRowEnd = String(row.stop(S) + 1);
       lane.style.setProperty('--color', b.color);
+      if (b.folded) {
+        lane.classList.add('folded');
+        lane.title = `${b.name}: un clic espande il bus`;
+        lane.append(el('span', { className: 'bus-lane-name', textContent: b.name }));
+        lane.onclick = () => this.apply(setBusFolded(b.id, false));
+      }
       cells.push(lane);
     });
     const masterCol = T + B + 2;
-    cells.push(place(el('div', { className: 'session-head master-head', textContent: 'Master' }), row.head, masterCol));
+    cells.push(place(el('div', {
+      className: 'session-head master-head', textContent: 'Master', title: 'Master: un clic apre gli effetti',
+      onclick: () => this.deps.openDevices(MASTER),
+    }), row.head, masterCol));
     p.scenes.forEach((scene, s) => cells.push(place(this.sceneCell(scene, s), row.scene(s), masterCol)));
     cells.push(place(el('button', {
       className: 'stop-all', textContent: '■ Ferma tutte', title: 'Ferma tutte le clip al prossimo confine',
@@ -339,7 +358,7 @@ export class SessionView {
 
   /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano. */
   private renderStrips(S: number): void {
-    const p = this.deps.store.project, T = p.visibleTracks.length, B = p.buses.length;
+    const p = this.deps.store.project, T = p.visibleTracks.length, B = p.buses.length, rights = busRights(p.buses);
     const tracks = [...p.visibleTracks, ...p.buses];
     const alive = new Set(tracks.map(t => t.id));
     for (const [id, strip] of this.strips) {
@@ -358,11 +377,53 @@ export class SessionView {
         this.grid.append(strip.element);
       }
       strip.update(t, p.buses);
+      strip.element.classList.toggle('folded', t instanceof BusTrack && t.folded);
       if (i < T) place(strip.element, row.mixer(S), i + 1);
-      else pinBus(place(strip.element, row.mixer(S), busColumn(T, i - T)), B, i - T);
+      else pinBus(place(strip.element, row.mixer(S), busColumn(T, i - T)), rights[i - T]);
     });
     this.master.update(p);
     place(this.master.element, row.mixer(S), T + B + 2);
+  }
+
+  // ---------------------------------------------------------------- spostare le colonne
+
+  /** Una testa presa con il mouse e trascinata sposta la sua traccia (o il suo bus, tra i bus). */
+  private dragColumn(id: TrackId, head: HTMLElement, e: PointerEvent): void {
+    if (!canStartTrackDrag(e)) return;
+    const bus = this.deps.store.project.buses.findIndex(b => b.id === id);
+    if (bus < 0) startTrackDrag(e, { source: head, spotAt: m => this.trackSpot(id, m), drop: drop => this.apply(moveTrack(id, drop)) });
+    else startTrackDrag(e, { source: head, spotAt: m => this.busSpot(bus, m), drop: to => this.apply(moveBus(id, to)) });
+  }
+
+  /** La linea tra le colonne, alta quanto la griglia che si vede. */
+  private columnLine(x: number): DropSpot<never>['line'] {
+    const box = this.scroll.getBoundingClientRect();
+    return { x: x - 1, y: box.top, width: 2, height: box.height };
+  }
+
+  /** Dove andrebbe la traccia `id` lasciata in `e`: nella metà sinistra di una colonna prima di
+   *  lei, nella destra dopo (in cima alle tracce, se è un gruppo aperto); dopo l'ultima, o sopra
+   *  i bus e il master, in fondo. */
+  private trackSpot(id: TrackId, e: PointerEvent): DropSpot<TrackDrop> | null {
+    const p = this.deps.store.project, tracks = p.visibleTracks;
+    const heads = tracks.map(t => this.heads.get(t.id)!.getBoundingClientRect());
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.bus-pinned, .master-head, .scene, .master-strip, .stop-all');
+    const i = heads.findIndex(r => e.clientX < r.right + 2);
+    if (over || i < 0) return { drop: { end: true }, line: this.columnLine(heads.at(-1)!.right + 1) };
+    const t = tracks[i], r = heads[i];
+    if (t.id === id || p.isInGroup(t.id, id)) return null;
+    if (e.clientX < r.left + r.width / 2) return { drop: { before: t.id }, line: this.columnLine(r.left - 1) };
+    return { drop: t instanceof GroupTrack && !t.folded ? { first: t.id } : { after: t.id }, line: this.columnLine(r.right + 1) };
+  }
+
+  /** Dove andrebbe il bus di indice `from` lasciato in `e`: il suo indice tra gli altri bus. */
+  private busSpot(from: number, e: PointerEvent): DropSpot<number> | null {
+    const heads = this.deps.store.project.buses.map(b => this.heads.get(b.id)!.getBoundingClientRect());
+    let at = heads.findIndex(r => e.clientX < r.left + r.width / 2);
+    if (at < 0) at = heads.length;
+    if (at === from || at === from + 1) return null;
+    const x = at < heads.length ? heads[at].left - 1 : heads.at(-1)!.right + 1;
+    return { drop: at > from ? at - 1 : at, line: this.columnLine(x) };
   }
 
   private clickTrack(id: TrackId, e: MouseEvent): void {
@@ -370,13 +431,24 @@ export class SessionView {
     clickTrack(this.deps.ui, id, e, () => [...p.visibleTracks, ...p.buses].map(t => t.id));
   }
 
-  /** L'intestazione di un bus: come quella di una traccia, ma un bus non ha clip né gruppi. */
+  /** L'intestazione di un bus: come quella di una traccia, ma un bus non ha clip né gruppi; ▾
+   *  comprime la sua colonna. */
   private busHead(b: BusTrack): HTMLElement {
     const name = el('span', { className: 'session-track-name', textContent: b.name });
-    const head = el('div', { className: 'session-head bus', title: `${b.name}: un clic apre gli effetti, doppio clic rinomina` }, name);
+    const fold = () => this.apply(setBusFolded(b.id, !b.folded));
+    const head = el('div', {
+      className: `session-head bus${b.folded ? ' folded' : ''}`,
+      title: `${b.name}: un clic apre gli effetti, doppio clic rinomina, trascina per spostarlo`,
+    }, el('button', {
+      className: 'fold', textContent: b.folded ? '▸' : '▾', title: b.folded ? 'Espandi il bus' : 'Comprimi il bus: la sua colonna si stringe',
+      onclick: (e: MouseEvent) => { e.stopPropagation(); fold(); },
+    }), name);
     head.style.setProperty('--color', b.color);
     head.dataset.track = b.id;
-    head.onpointerdown = e => this.clickTrack(b.id, e);
+    head.onpointerdown = e => {
+      this.clickTrack(b.id, e);
+      this.dragColumn(b.id, head, e);
+    };
     head.onclick = e => {
       if (!e.shiftKey && !e.ctrlKey && !e.metaKey) this.deps.openDevices(b.id);
     };
@@ -391,6 +463,7 @@ export class SessionView {
         ...addEffectItems(this.deps.store, b.id, () => this.deps.openDevices(b.id)),
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameTrack(b.id, n))) },
         { colors: PALETTE, current: b.color, required: true, pick: c => c && this.apply(setTrackColor(b.id, c)) },
+        { label: b.folded ? 'Espandi il bus' : 'Comprimi il bus', run: fold },
         SEPARATOR,
         { label: 'Elimina il bus', run: () => this.apply(removeTrack(b.id)) },
         SEPARATOR,
@@ -404,7 +477,7 @@ export class SessionView {
   private head(t: Track): HTMLElement {
     const p = this.deps.store.project;
     const name = el('span', { className: 'session-track-name', textContent: t.name });
-    const head = el('div', { className: 'session-head', title: `${t.name}: un clic apre strumento ed effetti, doppio clic rinomina` }, name);
+    const head = el('div', { className: 'session-head', title: `${t.name}: un clic apre strumento ed effetti, doppio clic rinomina, trascina per spostarla` }, name);
     head.style.setProperty('--color', t.color);
     head.dataset.track = t.id;
     if (t instanceof GroupTrack) {
@@ -419,7 +492,10 @@ export class SessionView {
       head.classList.add('in-group');
       head.style.setProperty('--group-color', group.color);
     }
-    head.onpointerdown = e => this.clickTrack(t.id, e);
+    head.onpointerdown = e => {
+      this.clickTrack(t.id, e);
+      this.dragColumn(t.id, head, e);
+    };
     head.onclick = e => {
       if (!e.shiftKey && !e.ctrlKey && !e.metaKey) this.deps.openDevices(t.id);
     };

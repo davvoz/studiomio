@@ -51,8 +51,8 @@ export const defaultTrackTypes: readonly TrackType[] = [
   },
   {
     kind: 'bus',
-    create: props => BusTrack.create(props as TrackProps<never>),
-    encodeExtra: () => ({}),
+    create: (props, r) => BusTrack.create({ ...(props as TrackProps<never>), folded: r.has('folded') && r.bool('folded') }),
+    encodeExtra: (t): JsonObject => ((t as BusTrack).folded ? { folded: true } : {}),
     accepts: probe(BusTrack.empty(asId('probe'), '', '')),
   },
 ];

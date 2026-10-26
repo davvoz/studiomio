@@ -4,7 +4,7 @@ import { instrumentType } from '../devices/registry';
 import { PALETTE } from '../model/colors';
 import type { ChainOwner } from '../model/project';
 import { GroupTrack, type MidiTrack, type Track } from '../model/track';
-import { addTrack, removeTrack, renameTrack, setMixer } from '../store/edits';
+import { addTrack, moveTrack, removeTrack, renameTrack, setMixer, type TrackDrop } from '../store/edits';
 import { setTrackColor } from '../store/clip-ref';
 import type { ProjectStore } from '../store/project-store';
 import { acceptBrowserDrops } from './browser/browser-drag';
@@ -14,6 +14,7 @@ import { clickTrack, type UiState } from './ui-state';
 import { el } from './dom';
 import { renameInline } from './inline-rename';
 import { LevelMeter, type MeterBoard } from './meters/meter-board';
+import { canStartTrackDrag, startTrackDrag, type DropSpot } from './track-drag';
 import { addEffectItems, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 
 export interface HeaderActions {
@@ -70,6 +71,13 @@ export class TrackHeaders {
       const track = store.project.visibleTracks[ui.geometry.trackIndexAt(y)];
       actions.dropItem!(item, track ? { kind: 'chain', owner: track.id } : { kind: 'lane', track: null, beat: 0 });
     });
+    // un'intestazione trascinata sposta la traccia (un gruppo con le sue)
+    this.list.addEventListener('pointerdown', e => {
+      const row = (e.target as HTMLElement).closest<HTMLElement>('.header');
+      const id = row?.dataset.track as TrackId | undefined;
+      if (!row || !id || !canStartTrackDrag(e)) return;
+      startTrackDrag(e, { source: row, spotAt: m => this.dropSpot(id, m), drop: drop => store.apply(moveTrack(id, drop)) });
+    });
     store.onChange(() => this.render());
     ui.onChange(() => {
       this.position();
@@ -100,6 +108,27 @@ export class TrackHeaders {
     if (children.length !== elements.length || elements.some((e, i) => children[i] !== e)) this.list.replaceChildren(...elements);
     this.position();
     this.highlight();
+  }
+
+  /** Dove andrebbe la traccia `id` lasciata in `e`: nella metà alta di una riga prima di lei,
+   *  nella metà bassa dopo (in cima alle tracce, se è un gruppo aperto), sotto tutte in fondo.
+   *  La linea rientra come la traccia che ci andrà. */
+  private dropSpot(id: TrackId, e: PointerEvent): DropSpot<TrackDrop> | null {
+    const p = this.store.project, tracks = p.visibleTracks, { trackHeight: h, scrollY } = this.ui.geometry;
+    const box = this.list.parentElement!.getBoundingClientRect();
+    const y = Math.max(0, e.clientY - box.top + scrollY);
+    const i = Math.floor(y / h);
+    const spot = (drop: TrackDrop, row: number, depth: number): DropSpot<TrackDrop> => {
+      const indent = 10 + depth * 12;
+      return { drop, line: { x: box.left + indent, y: box.top + row * h - scrollY - 1, width: box.width - indent, height: 2 } };
+    };
+    if (i >= tracks.length) return spot({ end: true }, tracks.length, 0);
+    const t = tracks[i];
+    if (t.id === id || p.isInGroup(t.id, id)) return null;
+    const depth = p.groupsOf(t.id).length;
+    if (y - i * h < h / 2) return spot({ before: t.id }, i, depth);
+    if (t instanceof GroupTrack && !t.folded) return spot({ first: t.id }, i + 1, depth + 1);
+    return spot({ after: t.id }, i + 1, depth);
   }
 
   private highlight(): void {
@@ -139,6 +168,7 @@ class HeaderRow {
     const meter = new LevelMeter('track-meter', () => meters.resetClip(id));
     this.detachMeter = meters.attach(id, meter);
     this.element.classList.toggle('group', isGroup);
+    this.element.dataset.track = id;
     this.element.append(
       el('div', { className: 'top' }, ...(this.fold ? [this.fold] : []), this.name, this.badge),
       el('div', { className: 'controls' }, this.mute, this.solo, midiSlot(this.volume, { kind: 'mixer', owner: id, control: 'volume' }), this.fx),

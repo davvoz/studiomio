@@ -302,13 +302,18 @@ export class GroupTrack extends Track<never, GroupTrackProps> {
 export const busLetter = (index: number): string =>
   `${String.fromCharCode(65 + (index % 26))}${index >= 26 ? Math.floor(index / 26) : ''}`;
 
+export interface BusTrackProps extends TrackProps<never> {
+  /** Compresso: nella session la sua colonna è stretta (solo il livello, mute e solo), ma suona. */
+  readonly folded?: boolean;
+}
+
 /** Bus, come le tracce di ritorno di Live: non ha clip né slot; riceve il suono che le tracce
  *  gli mandano (le loro mandate), lo passa per i suoi effetti ed esce nel master. Nel progetto
  *  i bus stanno in una lista a parte, dopo le tracce. */
-export class BusTrack extends Track<never> {
+export class BusTrack extends Track<never, BusTrackProps> {
   readonly kind = 'bus';
 
-  static create(props: TrackProps<never>): BusTrack {
+  static create(props: BusTrackProps): BusTrack {
     return new BusTrack(props);
   }
 
@@ -316,8 +321,14 @@ export class BusTrack extends Track<never> {
     return new BusTrack(emptyProps(id, name, color, 0));
   }
 
-  protected create(props: TrackProps<never>): this {
+  protected create(props: BusTrackProps): this {
     return new BusTrack(props) as this;
+  }
+
+  get folded(): boolean { return this.props.folded ?? false; }
+
+  withFolded(folded: boolean): this {
+    return folded === this.folded ? this : this.with({ folded: folded || undefined });
   }
 
   accepts(_clip: Clip): _clip is never {

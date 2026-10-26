@@ -5,7 +5,7 @@ import { Project } from '../../src/model/project';
 import { AudioTrack, GroupTrack } from '../../src/model/track';
 import { ProjectCodec } from '../../src/persistence/project-codec';
 import { importSample } from '../../src/store/selection-edits';
-import { addTrack, groupTracks, removeTrack, setGroupFolded, setMixer, ungroupTracks } from '../../src/store/edits';
+import { addTrack, groupTracks, moveTrack, removeTrack, setGroupFolded, setMixer, ungroupTracks } from '../../src/store/edits';
 import { FakeEffects, FakeGraph, FakeMeters } from '../helpers/fake-audio';
 import { sampleRef, setup } from '../helpers/fixtures';
 
@@ -62,6 +62,45 @@ describe('gruppi di tracce', () => {
     expect(() => p.movingTrack(r.b, 3)).toThrow(/di seguito/);
     // un gruppo si sposta con le sue tracce
     expect(p.movingTrack(g, 2).tracks.map(t => t.name)).toEqual(['3 Audio', '4 Audio', '1 Gruppo', '1 Audio', '2 Audio']);
+  });
+
+  it('trascinata, una traccia entra nel gruppo dove la si lascia o ne esce', () => {
+    const r = four();
+    const g = r.group([r.b, r.c]);
+    // prima di una traccia del gruppo: ci entra
+    r.store.apply(moveTrack(r.d, { before: r.c }));
+    expect(r.names()).toEqual(['1 Audio', '1 Gruppo', '2 Audio', '4 Audio', '3 Audio']);
+    expect(r.parent(r.d)).toBe(g);
+    // in cima al gruppo
+    r.store.apply(moveTrack(r.a, { first: g }));
+    expect(r.names()).toEqual(['1 Gruppo', '1 Audio', '2 Audio', '4 Audio', '3 Audio']);
+    expect(r.parent(r.a)).toBe(g);
+    // in fondo a tutte: fuori dai gruppi
+    r.store.apply(moveTrack(r.b, { end: true }));
+    expect(r.names()).toEqual(['1 Gruppo', '1 Audio', '4 Audio', '3 Audio', '2 Audio']);
+    expect(r.parent(r.b)).toBeNull();
+    // dopo il gruppo: dopo tutte le sue tracce, nel gruppo di lui (nessuno)
+    r.store.apply(moveTrack(r.b, { before: g }));
+    r.store.apply(moveTrack(r.b, { after: g }));
+    expect(r.names()).toEqual(['1 Gruppo', '1 Audio', '4 Audio', '3 Audio', '2 Audio']);
+    expect(r.parent(r.b)).toBeNull();
+  });
+
+  it('un gruppo trascinato porta con sé le sue tracce, ma non dentro sé stesso', () => {
+    const r = four();
+    const g = r.group([r.a, r.b]);
+    r.store.apply(moveTrack(g, { after: r.d }));
+    expect(r.names()).toEqual(['3 Audio', '4 Audio', '1 Gruppo', '1 Audio', '2 Audio']);
+    expect([r.a, r.b].map(r.parent)).toEqual([g, g]);
+    expect(() => r.store.apply(moveTrack(g, { before: r.b }))).toThrow();
+    expect(() => r.store.apply(moveTrack(g, { first: g }))).toThrow();
+    // lasciata dove già stava: niente da annullare
+    const before = r.store.project;
+    r.store.apply(moveTrack(r.c, { before: r.d }));
+    expect(r.store.project).toBe(before);
+    expect(r.store.undoLabel).toBe('Sposta traccia');
+    r.store.undo();
+    expect(r.names()).toEqual(['1 Gruppo', '1 Audio', '2 Audio', '3 Audio', '4 Audio']);
   });
 
   it('separare un gruppo lascia le tracce al loro posto; eliminarlo le elimina', () => {

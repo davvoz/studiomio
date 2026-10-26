@@ -300,13 +300,17 @@ export class Project {
     });
   }
 
-  /** Sposta la traccia (un gruppo con le sue tracce) in `toIndex` tra le tracce che restano;
-   *  il gruppo che la contiene non cambia. */
-  movingTrack(id: TrackId, toIndex: number): Project {
-    this.requireTrack(id);
+  /** Sposta la traccia (un gruppo con le sue tracce) in `toIndex` tra le tracce che restano,
+   *  dentro `group` (null: fuori dai gruppi; assente: il gruppo che la contiene non cambia). */
+  movingTrack(id: TrackId, toIndex: number, group?: TrackId | null): Project {
+    const track = this.requireTrack(id);
+    if (track instanceof BusTrack) throw new Error(`il bus "${track.name}" non sta tra le tracce`);
     const block = this.trackBlock(id), moved = new Set(block.map(t => t.id));
+    if (group && moved.has(group)) throw new Error(`il gruppo "${track.name}" non può stare dentro sé stesso`);
     const rest = this.tracks.filter(x => !moved.has(x.id));
-    rest.splice(Math.max(0, Math.min(rest.length, toIndex)), 0, ...block);
+    const root = group === undefined ? track : track.withGroup(group);
+    rest.splice(Math.max(0, Math.min(rest.length, toIndex)), 0, root, ...block.slice(1));
+    if (root === track && rest.every((t, i) => t === this.tracks[i])) return this;
     return this.with({ tracks: rest }).validated();
   }
 
@@ -327,6 +331,15 @@ export class Project {
     const buses = [...this.buses];
     buses.splice(index, 0, bus);
     return this.with({ buses }).validated();
+  }
+
+  /** Sposta il bus in `toIndex` tra i bus che restano. */
+  movingBus(id: TrackId, toIndex: number): Project {
+    const bus = this.buses.find(b => b.id === id);
+    if (!bus) throw new Error(`bus ${id} non trovato`);
+    const buses = this.buses.filter(b => b !== bus);
+    buses.splice(Math.max(0, Math.min(buses.length, toIndex)), 0, bus);
+    return buses.every((b, i) => b === this.buses[i]) ? this : this.with({ buses });
   }
 
   // ---------------------------------------------------------------- gruppi

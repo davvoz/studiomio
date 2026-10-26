@@ -110,7 +110,37 @@ export const setGroupFolded = (group: TrackId, folded: boolean): Edit =>
     return t.withFolded(folded);
   }));
 
-export const moveTrack = (id: TrackId, toIndex: number): Edit => edit('Sposta traccia', p => p.movingTrack(id, toIndex));
+/** Dove lasciare una traccia trascinata: prima di una traccia o dopo una traccia (e ciò che
+ *  contiene), nel gruppo di quella; in cima alle tracce di un gruppo; in fondo, fuori dai gruppi. */
+export type TrackDrop =
+  | { readonly before: TrackId } | { readonly after: TrackId } | { readonly first: TrackId } | { readonly end: true };
+
+/** Sposta la traccia (un gruppo con le sue tracce) dove è stata lasciata. */
+export const moveTrack = (id: TrackId, drop: TrackDrop): Edit => edit('Sposta traccia', p => {
+  const moved = new Set(p.trackBlock(id).map(t => t.id));
+  const rest = p.tracks.filter(t => !moved.has(t.id));
+  const at = (anchor: TrackId) => {
+    if (moved.has(anchor)) throw new Error('una traccia non va dentro sé stessa');
+    return rest.findIndex(t => t.id === anchor);
+  };
+  if ('end' in drop) return p.movingTrack(id, rest.length, null);
+  if ('first' in drop) return p.movingTrack(id, at(drop.first) + 1, drop.first);
+  if ('before' in drop) return p.movingTrack(id, at(drop.before), p.track(drop.before)!.group);
+  // dopo la traccia e tutte quelle del suo gruppo, nel gruppo che la contiene
+  let end = at(drop.after) + 1;
+  while (end < rest.length && p.isInGroup(rest[end].id, drop.after)) end++;
+  return p.movingTrack(id, end, p.track(drop.after)!.group);
+});
+
+/** Sposta il bus in `toIndex` tra gli altri bus. */
+export const moveBus = (id: TrackId, toIndex: number): Edit => edit('Sposta bus', p => p.movingBus(id, toIndex));
+
+/** Comprime o espande la colonna di un bus nella session. */
+export const setBusFolded = (bus: TrackId, folded: boolean): Edit =>
+  edit(folded ? 'Comprimi bus' : 'Espandi bus', p => p.updatingTrack(bus, t => {
+    if (!(t instanceof BusTrack)) throw new TypeError(`la traccia ${t.name} non è un bus`);
+    return t.withFolded(folded);
+  }));
 
 export const renameTrack = (id: TrackId, name: string): Edit =>
   edit('Rinomina traccia', p => p.updatingTrack(id, t => t.withName(name)));

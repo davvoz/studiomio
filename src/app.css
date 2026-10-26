@@ -345,17 +345,11 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 .status .version { font-size: 10.5px; opacity: .6; align-self: center; user-select: text; }
 
 /* ---------------------------------------------------------------- master */
-.master-header { height: 52px; border-top: 2px solid var(--line); border-right: 1px solid var(--line); --color: var(--text); }
-.master-header .track-name { cursor: default; }
-.master-lane {
-  display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 52px; overflow: hidden; white-space: nowrap;
-  border-top: 2px solid var(--line); background: var(--panel); cursor: pointer;
-}
+.master-header { height: 52px; border-top: 2px solid var(--line); border-right: 1px solid var(--line); --color: var(--text); cursor: pointer; }
+.master-header:hover { background: var(--panel-2); }
+.master-header .track-name { cursor: inherit; }
+.master-lane { height: 52px; border-top: 2px solid var(--line); background: var(--panel); cursor: pointer; }
 .master-lane:hover { background: var(--panel-2); }
-.master-lane .chip { border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; background: var(--panel-2); font-size: 12px; }
-.master-lane .chip.off { opacity: .45; text-decoration: line-through; }
-.master-lane .arrow { color: var(--muted); }
-.master-lane .chip.automated::after { content: ' ●'; color: var(--master-curve); font-size: 10px; }
 /* l'automazione del master: menu a sinistra, la corsia con la curva sotto la timeline */
 .master-header .controls .auto { position: relative; }
 .master-header .controls .auto.has:not(.on)::after {
@@ -405,7 +399,7 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 .views > * { grid-area: 1 / 1; min-height: 0; min-width: 0; }
 .session-view {
   display: flex; flex-direction: column; min-height: 0; background: var(--bg); outline: none;
-  --session-col: 118px; --session-master: 156px; --session-row: 28px;
+  --session-col: 118px; --session-master: 156px; --session-row: 28px; --session-folded: 30px;
 }
 .session-toolbar { display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 12px; }
 .session-toolbar select { padding: 1px 4px; font-size: 12px; }
@@ -425,6 +419,13 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 .session-head.in-group { box-shadow: inset 0 -2px 0 var(--group-color); }
 .session-head.bus { background: color-mix(in srgb, var(--color) 10%, var(--panel)); font-style: italic; }
 .bus-lane { background: color-mix(in srgb, var(--color, #888) 4%, var(--bg)); border-radius: 3px; }
+/* un bus compresso: la colonna stretta con il nome in verticale, il mixer con livello, mute e solo */
+.session-head.bus.folded { padding: 5px 0; text-align: center; }
+.session-head.bus.folded .fold { padding: 0; }
+.session-head.bus.folded .session-track-name { display: none; }
+.bus-lane.folded { display: flex; justify-content: center; padding-top: 8px; cursor: pointer; }
+.bus-lane-name { writing-mode: vertical-rl; white-space: nowrap; overflow: hidden; font-size: 11.5px; font-style: italic; font-weight: 600; color: var(--muted); }
+.bus-lane.folded:hover .bus-lane-name { color: var(--text); }
 /* i bus restano fermi accanto al master; l'ombra copre lo spazio tra le colonne */
 .bus-pinned { position: sticky; right: var(--bus-right); box-shadow: -2px 0 0 var(--bg); }
 .session-head.bus-pinned, .strip.bus-pinned { z-index: 3; }
@@ -433,7 +434,7 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 /* lo slot di un gruppo: ▶ lancia la riga delle sue tracce */
 .slot.group-slot { background: color-mix(in srgb, var(--color) 10%, #16181b); }
 .slot.group-slot.has-clips { background: color-mix(in srgb, var(--color) 32%, #16181b); }
-.master-head { --color: var(--text); right: 0; z-index: 3; cursor: default; }
+.master-head { --color: var(--text); right: 0; z-index: 3; }
 .slot {
   position: relative; display: flex; align-items: center; gap: 5px; padding: 0 5px; overflow: hidden; user-select: none;
   background: #1a1d21; border-radius: 3px;
@@ -510,6 +511,10 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .strip-db { font: 600 11px/1.2 ui-monospace, monospace; color: var(--muted); }
 .strip-ms { display: flex; gap: 3px; }
 .strip-ms button { padding: 1px 8px; font-size: 11.5px; }
+.strip.folded { padding-inline: 2px; }
+.strip.folded :is(.strip-badge, .fx, .knob, .midi-slot, .strip-db) { display: none; }
+.strip.folded .strip-ms { flex-direction: column; }
+.strip.folded .strip-ms button { padding: 1px 5px; }
 .master-strip .peak-readout { margin: 0; }
 .back-to-arrangement.lit { background: #e5a33a; color: #141414; border-color: #e5a33a; }
 .back-to-arrangement { min-width: 34px; }
@@ -718,3 +723,9 @@ button.browser-preview-toggle { flex: none; padding: 0 6px; font-size: 12px; lin
 /* dove si può lasciare una voce trascinata dal browser */
 .lanes-wrap.browser-drop, .header-scroll.browser-drop, .device-view.browser-drop, .master-header.browser-drop { box-shadow: inset 0 0 0 2px var(--accent); }
 .session-head.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
+
+/* una traccia trascinata per spostarla: si attenua, la linea mostra dove andrà */
+.track-drop-line { position: fixed; z-index: 60; background: var(--accent); border-radius: 1px; pointer-events: none; box-shadow: 0 0 0 1px #0008; }
+body.track-dragging { user-select: none; }
+body.track-dragging, body.track-dragging * { cursor: grabbing !important; }
+.header.dragging, .session-head.dragging { opacity: .45; }

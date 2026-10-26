@@ -6,6 +6,23 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Tracks can be dragged to change their order: grab a track header in the arrangement (or a
+  column head in the session) and drop it where the line shows. A group moves with its tracks.
+  Dropping a track among the tracks of an open group puts it in that group, and dropping it
+  below all the tracks takes it out. Buses can be dragged too, among the other buses.
+- Buses can be collapsed in the session with ▾ on their head (or from their menu). A collapsed
+  bus keeps playing but its column is narrow: its name runs down the column, and its mixer
+  shows only mute and solo. Click ▸ or the column to open it again. Collapsed buses stay that
+  way when the project is saved.
+- Clicking the master opens its effect chain, like clicking a track does: its header in the
+  arrangement (anywhere except its buttons and volume) and its head in the session.
+
+### Changed
+- The master row in the arrangement no longer lists its effects: with many effects the list
+  ran off the right edge, and clicking the master now opens the whole chain. The row is empty,
+  like a track lane, and a click on it opens the chain too.
+
 ## [0.3.28] - 2026-10-25
 
 ### Added
