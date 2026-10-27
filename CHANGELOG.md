@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.34] - 2026-10-28
+
 ### Added
 - Rack macros have a new mode, Spring: a knob that goes back on its own. While you move it the
   mapped parameters follow, and when you let go it glides back to its rest position. Both are
