@@ -162,6 +162,3 @@ export function ledMessages(status: number, note: number, value: number): number
 
 /** In coda, come in Live: lampeggia tra verde e spento (Blink(GREEN, BLACK, 24): canale 14). */
 export const TRIGGERED = (color: number) => rgbLed(color, { kind: ANIMATION.blink, color: 0, speed: 24 });
-
-/** Una scena che suona: pulsa verde (Pulse(BLACK, GREEN, 48), canale 10), come sui Launchpad. */
-export const PULSING = (color: number) => rgbLed(COLOR.off, { kind: ANIMATION.pulse, color, speed: 48 });

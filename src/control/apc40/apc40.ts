@@ -14,7 +14,7 @@ import {
 } from '../session-surface';
 import {
   CC, COLOR, dongleChallenge, faderToDb, IDENTITY_REQUEST, identityDeviceId, introduction, isDongleResponse, knobToPan, ledMessages,
-  MODE, NOTE, ON, padAt, padNote, paletteIndex, panToKnob, PULSING, relative, RING, SCENES, STOP_LED, TRACKS, TRIGGERED,
+  MODE, NOTE, ON, padAt, padNote, paletteIndex, panToKnob, relative, RING, SCENES, STOP_LED, TRACKS, TRIGGERED,
 } from './protocol';
 
 export { INSTRUMENT_KEY, type DetailView, type SurfaceEngine, type SurfaceHost } from '../session-surface';
@@ -270,11 +270,12 @@ export class Apc40 extends SessionSurface {
         note(padNote(col, row), this.shift ? overviewColor(this.blockLight(col, row)) : padColor(this.slotLight(tracks[col], ring.scene + row)));
       }
     }
-    // scene (pulsanti RGB): se la riga ha clip, del colore della scena (verdi se non ne ha);
-    // lampeggiano se qualcosa della riga è in coda, pulsano verdi se suonano tutte le sue clip
+    // scene (pulsanti RGB): verdi fisse se suona una loro clip (come le clip), lampeggiano se
+    // qualcosa della riga è in coda; se no del colore della scena (bianche se non ne ha), spente
+    // se la riga è vuota
     for (let i = 0; i < SCENES; i++) {
       const s = this.sceneLight(i);
-      note(NOTE.sceneLaunch + i, s === 'queued' ? TRIGGERED(COLOR.green) : s === 'playing' ? PULSING(COLOR.green) : s === 'off' ? COLOR.off : s.color ? paletteIndex(s.color) : COLOR.green);
+      note(NOTE.sceneLaunch + i, s === 'queued' ? TRIGGERED(COLOR.green) : s === 'playing' ? COLOR.green : s === 'off' ? COLOR.off : s.color ? paletteIndex(s.color) : COLOR.white);
     }
     // per traccia
     tracks.forEach((t, c) => {

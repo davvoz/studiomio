@@ -233,7 +233,7 @@ describe('session: lancio delle clip', () => {
 });
 
 describe('session: stato delle scene', () => {
-  it('una scena è in coda fino al confine, poi suona finché suonano tutte le sue clip', () => {
+  it('una scena è in coda fino al confine, poi suona finché suona una sua clip', () => {
     const r = rig();
     const scene = (s: number) => sceneState(r.store.project.tracks.map(t => [t, r.engine.sessionState(t)] as const), s);
     r.engine.play(0);
@@ -243,14 +243,15 @@ describe('session: stato delle scene', () => {
     r.runUntil(2.2);
     expect(scene(0)).toEqual({ clips: true, playing: true, queued: false });
     expect(scene(1)).toEqual({ clips: true, playing: false, queued: false });
-    // la traccia b si ferma (slot vuoto nella riga 1): la scena 0 non suona più tutta
-    r.engine.launchSlot(r.t(1), 1);
-    r.runUntil(4.2);
-    expect(scene(0).playing).toBe(false);
-    // la scena 1 ha la sola clip di a: suona quando suona quella
+    // la traccia a passa alla clip della scena 1: suonano tutte e due le scene
     r.engine.launchSlot(r.t(0), 1);
+    r.runUntil(4.2);
+    expect(scene(0).playing && scene(1).playing).toBe(true);
+    // si ferma anche b: della scena 0 non suona più niente
+    r.engine.stopTrack(r.t(1));
     r.runUntil(6.2);
-    expect(scene(1)).toEqual({ clips: true, playing: true, queued: false });
+    expect(scene(0).playing).toBe(false);
+    expect(scene(1).playing).toBe(true);
   });
 });
 

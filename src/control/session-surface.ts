@@ -276,7 +276,7 @@ export abstract class SessionSurface {
   }
 
   /** Il pulsante della riga `row` del riquadro: in coda se qualcosa della riga lo è, suona se
-   *  suonano tutte le sue clip, del colore della scena se la riga ha clip, spento se è vuota. */
+   *  suona una sua clip, del colore della scena se la riga ha clip, spento se è vuota. */
   protected sceneLight(row: number): SceneLight {
     const p = this.project, { engine } = this.host;
     const s = this.ring.scene + row;

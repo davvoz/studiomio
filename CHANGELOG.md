@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- A scene is now highlighted as soon as one of its clips is playing: launching a clip from
+  another scene highlights both scenes.
+- On the APC40 mkII the playing scene is steady green, like the playing clips, instead of
+  pulsing. Scenes that have clips but no colour are white instead of green, so they don't
+  look like they are playing.
+
 ## [0.3.31] - 2026-10-27
 
 ### Added

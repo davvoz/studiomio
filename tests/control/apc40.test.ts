@@ -196,12 +196,12 @@ describe('APC40 sulla session', () => {
     expect(r.led(NOTE.activator, 5)).toBe(0); // traccia che non c'è
   });
 
-  it('i pulsanti delle scene con clip prendono il colore della scena (verdi se non ne ha)', () => {
+  it('i pulsanti delle scene con clip prendono il colore della scena (bianchi se non ne ha)', () => {
     const r = rig({ tracks: 2, clips: [[0, 0], [1, 1]] });
     r.start();
     r.store.apply(setSceneColor(r.store.project.scenes[1].id, '#ff0000'));
     r.store.apply(setSceneColor(r.store.project.scenes[2].id, '#0000ff')); // riga vuota: spento
-    expect(r.led(NOTE.sceneLaunch)).toBe(COLOR.green);
+    expect(r.led(NOTE.sceneLaunch)).toBe(COLOR.white);
     expect(r.led(NOTE.sceneLaunch + 1)).toBe(COLOR.red);
     expect(r.led(NOTE.sceneLaunch + 2)).toBe(COLOR.off);
   });
@@ -307,20 +307,26 @@ describe('APC40 sulla session', () => {
     expect(r.pad(padNote(0, 0))).toEqual({ mode: 0, color: COLOR.red });
   });
 
-  it('come in Live: la scena di cui suonano tutte le clip pulsa verde', () => {
+  it('la scena di cui suona una clip è verde fissa, anche due scene insieme', () => {
     const r = rig({ tracks: 3, clips: [[0, 0], [1, 0], [0, 1]] });
     r.engine.playing = true;
     r.engine.states.set(r.t(0), { playing: { slot: 0, elapsed: 0 }, queued: null, followsArrangement: false });
+    r.engine.states.set(r.t(1), { playing: { slot: 0, elapsed: 0 }, queued: null, followsArrangement: false });
     r.start();
     r.settle();
-    const scene = (i: number) => r.out.filter(m => m[1] === NOTE.sceneLaunch + i).slice(-2);
-    // suona solo una delle due clip della riga: la scena resta del suo colore
-    expect(scene(0).at(-1)).toEqual([0x90, NOTE.sceneLaunch, COLOR.green]);
-    // suonano tutte (la traccia 3 non ha clip nella riga): Pulse(BLACK, GREEN, 48), canale 10
-    r.engine.states.set(r.t(1), { playing: { slot: 0, elapsed: 0 }, queued: null, followsArrangement: false });
+    r.store.apply(setSceneColor(r.store.project.scenes[1].id, '#ff0000'));
+    expect(r.led(NOTE.sceneLaunch)).toBe(COLOR.green);
+    expect(r.led(NOTE.sceneLaunch + 1)).toBe(COLOR.red);
+    // la traccia 1 passa alla clip della scena 2: si accendono tutte e due, senza animazioni
+    r.engine.states.set(r.t(0), { playing: { slot: 1, elapsed: 0 }, queued: null, followsArrangement: false });
     r.settle();
-    expect(scene(0)).toEqual([[0x90, NOTE.sceneLaunch, COLOR.off], [0x9a, NOTE.sceneLaunch, COLOR.green]]);
-    expect(scene(1).at(-1)).toEqual([0x90, NOTE.sceneLaunch + 1, COLOR.green]);
+    expect(r.led(NOTE.sceneLaunch)).toBe(COLOR.green);
+    expect(r.led(NOTE.sceneLaunch + 1)).toBe(COLOR.green);
+    expect(r.out.filter(m => m[1] === NOTE.sceneLaunch || m[1] === NOTE.sceneLaunch + 1).every(m => m[0] === 0x90)).toBe(true);
+    // della scena 1 non suona più niente: torna bianca (ha clip ma nessun colore)
+    r.engine.states.set(r.t(1), { playing: null, queued: null, followsArrangement: false });
+    r.settle();
+    expect(r.led(NOTE.sceneLaunch)).toBe(COLOR.white);
   });
 
   it('activator e solo cambiano il mixer, e i LED lo seguono', () => {

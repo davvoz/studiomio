@@ -621,7 +621,7 @@ export class SessionView {
       this.stops.get(t.id)?.classList.toggle('queued', st.queued === 'stop');
       this.heads.get(t.id)?.classList.toggle('taken', !st.followsArrangement);
     }
-    // le scene: suonano se suonano tutte le loro clip, come in Live
+    // le scene: suonano se suona una loro clip
     const sounding = p.tracks.filter(t => !(t instanceof GroupTrack)).map(t => [t, engine.sessionState(t)] as const);
     this.scenes.forEach((cell, s) => {
       const scene = sceneState(sounding, s);
