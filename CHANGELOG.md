@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.31] - 2026-10-27
+
 ### Added
 - The scene that is playing is now highlighted, like in Live: a scene plays when all of its
   clips are playing. In the session its ▶ turns green with a green outline (and blinks while
