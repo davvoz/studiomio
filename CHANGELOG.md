@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.30] - 2026-10-27
+
 ### Added
 - A Pitch Shifter effect: it moves the pitch up or down by up to two octaves (Semitones and
   Fine) without changing the tempo. Window sets the grain: short sounds metallic and robotic,
