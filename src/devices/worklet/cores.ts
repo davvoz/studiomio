@@ -13,6 +13,7 @@ import { GateCore } from '../effects/gate/gate-core';
 import { LimiterCore } from '../effects/limiter/limiter-core';
 import { MultibandCore } from '../effects/multiband/multiband-core';
 import { PhaserCore } from '../effects/phaser/phaser-core';
+import { PitchShifterCore } from '../effects/pitch-shifter/pitch-shifter-core';
 import { ReduxCore } from '../effects/redux/redux-core';
 import { ReverbCore } from '../effects/reverb/reverb-core';
 import { ReverseCore } from '../effects/reverse/reverse-core';
@@ -52,6 +53,7 @@ export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
   limiter: sampleRate => new LimiterCore(sampleRate),
   multiband: sampleRate => new MultibandCore(sampleRate),
   phaser: sampleRate => new PhaserCore(sampleRate),
+  pitchShifter: sampleRate => new PitchShifterCore(sampleRate),
   redux: sampleRate => new ReduxCore(sampleRate),
   reverb: sampleRate => new ReverbCore(sampleRate),
   reverse: sampleRate => new ReverseCore(sampleRate),

@@ -6,6 +6,14 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- A Pitch Shifter effect: it moves the pitch up or down by up to two octaves (Semitones and
+  Fine) without changing the tempo. Window sets the grain: short sounds metallic and robotic,
+  long sounds smoother. Stereo detunes the left channel down and the right up, to double a
+  voice; Feedback sends the shifted sound back in, so it spirals up or down; Glide makes
+  changes of Semitones slide, for dives on a macro. Presets include octave down and up, a
+  demon voice, doubling, a fifth, a spiral and a robot.
+
 ## [0.3.29] - 2026-10-26
 
 ### Added

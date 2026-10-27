@@ -127,7 +127,7 @@ densità, scala, accenti, slide, passi (1–32), velocità e gate.
 
 **Effetti**: EQ (8 bande, TPT, il grafico usa la stessa matematica del suono), Compressore (con
 sidechain), Multibanda (stile OTT), Drive (6 curve, ADAA, sovracampionato), Clipper, Redux,
-Auto Filter, Auto Pan, Chorus, Phaser/Flanger, Gate a passi, Beat Repeat, Tape Stop, Reverse,
+Auto Filter, Auto Pan, Chorus, Phaser/Flanger, Pitch Shifter, Gate a passi, Beat Repeat, Tape Stop, Reverse,
 Delay, Riverbero (FDN 8 linee), Stereo (larghezza e bassi mono), Limiter (lookahead, true peak).
 
 ### Aggiungere un dispositivo
