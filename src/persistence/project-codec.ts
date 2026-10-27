@@ -7,7 +7,7 @@ import type { KeyMap, KeyTarget } from '../model/key-map';
 import { DEFAULT_LAUNCH_QUANTUM } from '../model/launch';
 import { checkMidiMap, MIXER_CONTROLS, type MidiMap, type MidiMapping, type MidiTarget, type MixerControl } from '../model/midi-map';
 import { Project, type ChainOwner } from '../model/project';
-import { MACRO_MODES, type DeviceKey, type Macro, type MacroMode, type Rack, type RackList } from '../model/rack';
+import { MACRO_MODES, springFor, type DeviceKey, type Macro, type MacroMode, type MacroSpring, type Rack, type RackList } from '../model/rack';
 import type { SampleRef } from '../model/sample';
 import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
 import { AudioTrack, BusTrack, GroupTrack, MidiTrack, type MixerSettings, type Sends, type Track, type TrackProps } from '../model/track';
@@ -292,6 +292,7 @@ const encodeRacks = (field: string, racks: RackList): JsonObject => (racks.lengt
     id: rk.id, name: rk.name, devices: [...rk.devices],
     macros: rk.macros.map(m => ({
       name: m.name, value: m.value, mappings: m.mappings.map(x => ({ ...x })), ...(m.mode && m.mode !== 'knob' ? { mode: m.mode } : {}),
+      ...(m.mode === 'spring' && m.spring ? { spring: { ...m.spring } } : {}),
     })),
   })),
 } : {});
@@ -307,10 +308,14 @@ const decodeRack = (r: JsonReader): Rack => ({
     name: m.nullable('name', n => n.asString()),
     value: m.num('value'),
     mappings: m.array('mappings').map(x => ({ device: x.str('device') as DeviceKey, param: x.str('param'), min: x.num('min'), max: x.num('max') })),
-    // interruttori e pulsanti (le manopole non scrivono il tipo); un tipo sconosciuto è una manopola
+    // interruttori, pulsanti e molle (le manopole non scrivono il tipo); un tipo sconosciuto è una manopola
     ...(m.has('mode') && MACRO_MODES.some(([mode]) => mode === m.str('mode')) ? { mode: m.str('mode') as MacroMode } : {}),
+    ...(m.has('mode') && m.str('mode') === 'spring' && m.has('spring')
+      ? { spring: decodeSpring(m.get('spring')) } : {}),
   })),
 });
+
+const decodeSpring = (s: JsonReader): MacroSpring => springFor(s.num('rest'), s.num('time'), s.bool('sync'));
 
 /** La tastiera si scrive solo se è mappata (e solo ciò che vale: rack e dispositivi che ci sono). */
 const encodeKeyMap = (map: KeyMap): JsonObject => (map.length ? {

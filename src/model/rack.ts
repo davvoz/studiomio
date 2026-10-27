@@ -22,13 +22,68 @@ export interface MacroMapping {
 }
 
 /** Come si suona una macro: manopola (come in Live), interruttore (un clic accende, un altro
- *  spegne) o pulsante (acceso solo mentre lo si tiene premuto). Interruttore e pulsante valgono
- *  solo 0 o MACRO_MAX: portano ogni parametro mappato da un capo all'altro della sua corsa. */
-export type MacroMode = 'knob' | 'toggle' | 'button';
+ *  spegne), pulsante (acceso solo mentre lo si tiene premuto) o molla (una manopola che, lasciata,
+ *  torna da sola al suo riposo). Interruttore e pulsante valgono solo 0 o MACRO_MAX: portano ogni
+ *  parametro mappato da un capo all'altro della sua corsa. */
+export type MacroMode = 'knob' | 'toggle' | 'button' | 'spring';
 
 export const MACRO_MODES: readonly (readonly [mode: MacroMode, label: string])[] = [
-  ['knob', 'Manopola'], ['toggle', 'Interruttore'], ['button', 'Pulsante'],
+  ['knob', 'Manopola'], ['toggle', 'Interruttore'], ['button', 'Pulsante'], ['spring', 'Molla'],
 ];
+
+/** Dove torna una macro molla lasciata e in quanto: `time` in battiti se `sync`, se no in
+ *  millisecondi (da dovunque sia, sempre nello stesso tempo). */
+export interface MacroSpring {
+  /** 0 … MACRO_MAX. */
+  readonly rest: number;
+  readonly time: number;
+  readonly sync: boolean;
+}
+
+/** I tempi di ritorno tra cui scegliere: a tempo (in battiti) e liberi (in millisecondi). */
+export const SPRING_TIMES: readonly (readonly [time: number, sync: boolean, label: string])[] = [
+  [0.25, true, '1/16'], [0.5, true, '1/8'], [1, true, '1/4'], [2, true, '1/2'],
+  [4, true, '1 battuta'], [8, true, '2 battute'], [16, true, '4 battute'],
+  [50, false, '50 ms'], [100, false, '100 ms'], [250, false, '250 ms'], [500, false, '500 ms'],
+  [1000, false, '1 s'], [2000, false, '2 s'], [5000, false, '5 s'],
+];
+export const SPRING_MS_MAX = 60_000;
+export const SPRING_BEATS_MAX = 64;
+
+/** Il tempo di ritorno a parole: "1/4", "2 battute", "300 ms". */
+export function springTimeLabel({ time, sync }: MacroSpring): string {
+  const named = SPRING_TIMES.find(([t, s]) => t === time && s === sync);
+  if (named) return named[2];
+  if (!sync) return time >= 1000 ? `${+(time / 1000).toFixed(2)} s` : `${Math.round(time)} ms`;
+  return time % 4 === 0 ? `${time / 4} battut${time === 4 ? 'a' : 'e'}` : `${+time.toFixed(2)} battiti`;
+}
+
+/** Un tempo di ritorno scritto a mano: "300 ms", "1.5 s", "3/16" (di nota), "2 battute",
+ *  "3 battiti"; un numero da solo è in millisecondi. null: non si capisce. */
+export function parseSpringTime(text: string): { time: number; sync: boolean } | null {
+  const t = text.trim().toLowerCase().replace(',', '.');
+  const fraction = /^(\d+)\s*\/\s*(\d+)$/.exec(t);
+  if (fraction) return Number(fraction[2]) > 0 ? { time: (4 * Number(fraction[1])) / Number(fraction[2]), sync: true } : null;
+  const m = /^(\d+(?:\.\d+)?)\s*(ms|s|sec|secondi?|battut[ae]|bar|battit[oi]|beats?)?$/.exec(t);
+  if (!m) return null;
+  const n = Number(m[1]), unit = m[2] ?? 'ms';
+  if (!(n > 0)) return null;
+  if (unit === 'ms') return { time: n, sync: false };
+  if (unit.startsWith('s')) return { time: n * 1000, sync: false };
+  if (unit.startsWith('battut') || unit === 'bar') return { time: n * 4, sync: true };
+  return { time: n, sync: true };
+}
+
+/** Una molla valida (riposo nella corsa, tempo positivo e non enorme). */
+export function springFor(rest: number, time: number, sync: boolean): MacroSpring {
+  const max = sync ? SPRING_BEATS_MAX : SPRING_MS_MAX;
+  const fine = (v: number, fallback: number) => (Number.isFinite(v) ? v : fallback);
+  return {
+    rest: Math.max(0, Math.min(MACRO_MAX, fine(rest, 0))),
+    time: Math.max(sync ? 1 / 16 : 1, Math.min(max, fine(time, sync ? 1 : 250))),
+    sync,
+  };
+}
 
 export interface Macro {
   /** null: il nome viene dal primo parametro mappato, o è "Macro N". */
@@ -38,17 +93,23 @@ export interface Macro {
   readonly mappings: readonly MacroMapping[];
   /** Assente: manopola. */
   readonly mode?: MacroMode;
+  /** Solo delle molle. */
+  readonly spring?: MacroSpring;
 }
 
 export const macroMode = (m: Macro): MacroMode => m.mode ?? 'knob';
 
+/** La molla di una macro molla (null per gli altri tipi). */
+export const springOf = (m: Macro): MacroSpring | null =>
+  (macroMode(m) === 'spring' ? m.spring ?? springFor(0, 1, true) : null);
+
 /** Interruttore o pulsante: acceso o spento, niente in mezzo. */
-export const isSwitchMacro = (m: Macro): boolean => macroMode(m) !== 'knob';
+export const isSwitchMacro = (m: Macro): boolean => macroMode(m) === 'toggle' || macroMode(m) === 'button';
 
 /** Il valore che una macro può avere: per interruttore e pulsante, acceso (da metà in su) o spento. */
 export function macroValueFor(mode: MacroMode, value: number): number {
   const v = Math.max(0, Math.min(MACRO_MAX, Number.isFinite(value) ? value : 0));
-  return mode === 'knob' ? v : v >= MACRO_MAX / 2 ? MACRO_MAX : 0;
+  return mode === 'knob' || mode === 'spring' ? v : v >= MACRO_MAX / 2 ? MACRO_MAX : 0;
 }
 
 export interface Rack {

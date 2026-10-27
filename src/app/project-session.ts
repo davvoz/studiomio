@@ -12,6 +12,7 @@ import type { ProjectStore } from '../store/project-store';
 import { starterProject } from '../store/edits';
 import { importSample } from '../store/selection-edits';
 import { importSampleToSlot } from '../store/session-edits';
+import { springsAtRest } from '../store/rack-edits';
 import type { SampleId } from '../core/id';
 import type { AudioAnalysis } from '../dsp/analysis/analyze';
 
@@ -153,7 +154,7 @@ export class ProjectSession {
 
   async save(): Promise<void> {
     if (!this.onDisk) return this.saveAs();
-    await this.folder.save(this.store.project);
+    await this.folder.save(springsAtRest(this.store.project));
     this.markSaved();
   }
 
@@ -163,7 +164,7 @@ export class ProjectSession {
     await copyFiles(this.folder.dir, dir, this.store.project.samples.map(s => s.file));
     this.folder = new ProjectFolder(dir);
     this.onDisk = true;
-    await this.folder.save(this.store.project);
+    await this.folder.save(springsAtRest(this.store.project));
     this.markSaved();
   }
 
@@ -172,7 +173,7 @@ export class ProjectSession {
    *  `openArchive`, o lo estrae e apre la cartella. */
   async collectAndSave(): Promise<File> {
     if (this.onDisk) await this.save();
-    const entries = await this.folder.archive(this.store.project, this.name);
+    const entries = await this.folder.archive(springsAtRest(this.store.project), this.name);
     const file = new File(zipParts(entries) as Uint8Array<ArrayBuffer>[], `${safeFileName(this.name)}.zip`, { type: 'application/zip' });
     const audio = entries.length - 1;
     this.say(`Raccolto "${this.name}" in ${file.name}: ${audio} file audio, ${(file.size / 1e6).toFixed(1)} MB.`);

@@ -7,7 +7,7 @@ import type { DeviceId } from '../core/id';
 import type { DeviceSettings, ParamValues } from './device';
 import { INSTRUMENT_DEVICE } from './envelope';
 import { MASTER, type ChainOwner, type Project } from './project';
-import { findRack, MACRO_COUNT, MACRO_MODES, macroValueFor, type MacroMode } from './rack';
+import { findRack, MACRO_COUNT, MACRO_MODES, macroValueFor, springFor, type MacroMode, type MacroSpring } from './rack';
 import { MidiTrack } from './track';
 
 /** Un dispositivo del rack salvato: tipo, preset da cui era partito (da mostrare) e parametri. */
@@ -35,6 +35,8 @@ export interface SavedMacro {
   readonly mappings: readonly SavedMapping[];
   /** Assente: manopola. */
   readonly mode?: MacroMode;
+  /** Solo delle molle. */
+  readonly spring?: MacroSpring;
 }
 
 export interface RackPreset {
@@ -70,6 +72,7 @@ export function captureRack(p: Project, owner: ChainOwner, id: DeviceId, name: s
       name: m.name, value: m.value,
       mappings: m.mappings.map(x => ({ device: at.get(x.device)!, param: x.param, min: x.min, max: x.max })),
       ...(m.mode && m.mode !== 'knob' ? { mode: m.mode } : {}),
+      ...(m.mode === 'spring' && m.spring ? { spring: { ...m.spring } } : {}),
     })),
   };
 }
@@ -122,5 +125,7 @@ function savedMacro(raw: unknown, size: number): SavedMacro {
     value: macroValueFor(mode ?? 'knob', finite(raw.value) ? raw.value : 0),
     mappings: mappings.map(({ device, param, min, max }) => ({ device, param, min, max })),
     ...(mode && mode !== 'knob' ? { mode } : {}),
+    ...(mode === 'spring' && isObject(raw.spring) && finite(raw.spring.rest) && finite(raw.spring.time)
+      ? { spring: springFor(raw.spring.rest, raw.spring.time, raw.spring.sync === true) } : {}),
   };
 }

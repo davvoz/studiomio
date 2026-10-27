@@ -7,12 +7,15 @@ import { deviceAt, deviceTypeAt, mappingSpec } from '../../devices/rack-params';
 import { userRacks } from '../../devices/user-racks';
 import type { ChainOwner, Project } from '../../model/project';
 import {
-  findRack, MACRO_MAX, MACRO_MODES, macroMode, macroName, macroParam, rackName, type DeviceKey, type MacroMapping, type Rack,
+  findRack, MACRO_MAX, MACRO_MODES, macroMode, macroName, macroParam, parseSpringTime, rackName, SPRING_TIMES, springOf,
+  springTimeLabel, type DeviceKey, type MacroMapping, type MacroSpring, type Rack,
 } from '../../model/rack';
 import { captureRack } from '../../model/rack-preset';
 import {
-  mapMacro, moveRack, removeRack, renameMacro, renameRack, setMacro, setMacroMode, setMappingRange, ungroupRack, unmapParam,
+  mapMacro, moveRack, removeRack, renameMacro, renameRack, setMacro, setMacroMode, setMacroSpring, setMappingRange, springsAtRest,
+  ungroupRack, unmapParam,
 } from '../../store/rack-edits';
+import type { MacroSprings } from '../../store/macro-springs';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
@@ -21,6 +24,8 @@ import { controlFor, registerControl, type ParamControl } from './controls';
 
 export interface RackPanelOptions {
   readonly store: ProjectStore;
+  /** Le macro molla: il mouse dice quando ne tiene una e quando la lascia. */
+  readonly springs?: MacroSprings;
   readonly owner: ChainOwner;
   readonly rack: Rack;
   /** Il nome di un dispositivo della catena, come nei titoli dei pannelli. */
@@ -53,6 +58,8 @@ export class RackPanel {
   readonly element = el('div', { className: 'rack-panel' });
   readonly head = el('div', { className: 'device-panel-head' });
   private readonly macros: ParamControl[] = [];
+  /** Riposo e ritorno sotto le manopole delle molle, per macro. */
+  private readonly springChips = new Map<number, { readonly rest: HTMLElement; readonly time: HTMLElement }>();
   private readonly rows: MappingRow[] = [];
   private readonly name: HTMLElement;
 
@@ -94,7 +101,11 @@ export class RackPanel {
 
   /** I valori di macro e mappature dal rack attuale (la forma è la stessa). */
   update(rack: Rack): void {
-    rack.macros.forEach((m, i) => this.macros[i]?.set(m.value));
+    rack.macros.forEach((m, i) => {
+      this.macros[i]?.set(m.value);
+      const s = springOf(m), chips = this.springChips.get(i);
+      if (s && chips) showSpring(chips, s);
+    });
     const index = this.o.mapping;
     if (index === undefined || index === null) return;
     for (const row of this.rows) {
@@ -113,9 +124,10 @@ export class RackPanel {
       label: macroName(m, index, x => mappingSpec(p, o.owner, x)?.label),
     };
     const set = (v: number) => setMacro(o.owner, o.rack.id, index, v);
-    const mode = macroMode(m);
-    const control = mode === 'knob'
-      ? controlFor(spec, m.value, (v, final) => this.merge(set(v), `macro-${o.rack.id}-${index}`, final))
+    const mode = macroMode(m), spring = springOf(m);
+    const control = mode === 'knob' || mode === 'spring'
+      // una molla torna da sola: tirarla non è un passo di annullamento
+      ? controlFor(spec, m.value, (v, final) => (spring ? o.store.apply(set(v), { transient: true }) : this.merge(set(v), `macro-${o.rack.id}-${index}`, final)))
       : registerControl(new MacroSwitch(spec.label, m.value, mode,
         // l'interruttore è un passo di annullamento; il pulsante tenuto premuto no (si disfa da solo)
         on => (mode === 'toggle' ? this.apply(set(on ? MACRO_MAX : 0)) : o.store.apply(set(on ? MACRO_MAX : 0), { transient: true }))));
@@ -128,6 +140,23 @@ export class RackPanel {
     e.title = m.mappings.length
       ? `${spec.label}: muove ${m.mappings.map(x => `${o.deviceLabel(x.device)} · ${mappingSpec(p, o.owner, x)?.label ?? x.param}`).join(', ')}`
       : `${spec.label}: nessun parametro mappato (accendi Map, scegli la macro e clicca un parametro)`;
+    if (spring) {
+      e.title += '\nMolla: lasciata torna al riposo (↺: trascinalo su e giù) nel tempo di ritorno (clic per sceglierlo).';
+      e.append(this.springRow(index, spring));
+      // il mouse sulla manopola la tiene: finché non lo si lascia non torna
+      e.addEventListener('pointerdown', ev => {
+        const springs = o.springs;
+        if (ev.button !== 0 || !springs) return;
+        springs.hold(o.owner, o.rack.id, index, true);
+        const up = () => {
+          removeEventListener('pointerup', up, true);
+          removeEventListener('pointercancel', up, true);
+          springs.hold(o.owner, o.rack.id, index, false);
+        };
+        addEventListener('pointerup', up, true);
+        addEventListener('pointercancel', up, true);
+      });
+    }
     // con KEY acceso un clic sceglie la macro per la tastiera, con Map acceso per mapparla, invece di girarla
     for (const type of ['pointerdown', 'click', 'dblclick', 'wheel']) {
       e.addEventListener(type, ev => {
@@ -157,6 +186,61 @@ export class RackPanel {
     return e;
   }
 
+  /** Sotto la manopola di una molla: il riposo (si trascina su e giù) e il tempo di ritorno (un
+   *  clic apre le scelte). */
+  private springRow(index: number, spring: MacroSpring): HTMLElement {
+    const { o } = this;
+    const rest = el('span', { className: 'spring-rest', title: 'Riposo: dove torna la macro lasciata (trascina su e giù, Maiusc per i passi fini)' });
+    const time = el('span', { className: 'spring-time', title: 'Ritorno: in quanto torna al riposo (clic per sceglierlo)' });
+    const chips = { rest, time };
+    this.springChips.set(index, chips);
+    showSpring(chips, spring);
+    const current = (): MacroSpring => {
+      const m = findRack(o.store.project.racksOf(o.owner), o.rack.id)?.macros[index];
+      return (m && springOf(m)) ?? spring;
+    };
+    const mergeKey = `spring-${o.rack.id}-${index}`;
+    rest.addEventListener('pointerdown', ev => {
+      ev.stopPropagation();
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      rest.setPointerCapture(ev.pointerId);
+      let y = ev.clientY, value = current().rest;
+      const move = (m: PointerEvent) => {
+        value = Math.max(0, Math.min(MACRO_MAX, value + ((y - m.clientY) * MACRO_MAX / 180) * (m.shiftKey ? 0.1 : 1)));
+        y = m.clientY;
+        this.merge(setMacroSpring(o.owner, o.rack.id, index, { rest: Math.round(value) }), mergeKey, false);
+      };
+      const up = () => {
+        rest.removeEventListener('pointermove', move);
+        rest.removeEventListener('pointerup', up);
+        o.store.endMerge();
+      };
+      rest.addEventListener('pointermove', move);
+      rest.addEventListener('pointerup', up);
+    });
+    for (const chip of [rest, time]) chip.addEventListener('dblclick', ev => ev.stopPropagation());
+    time.addEventListener('pointerdown', ev => ev.stopPropagation());
+    time.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const s = current();
+      const pick = (t: number, sync: boolean) => this.apply(setMacroSpring(o.owner, o.rack.id, index, { time: t, sync }));
+      const items = (sync: boolean): MenuItem[] => SPRING_TIMES.filter(([, x]) => x === sync)
+        .map(([t, x, label]) => ({ label, checked: s.time === t && s.sync === x, run: () => pick(t, x) }));
+      showContextMenu(ev.clientX, ev.clientY, [
+        ...items(true), SEPARATOR, ...items(false), SEPARATOR,
+        {
+          label: 'Altro…', run: () => editInline(time, springTimeLabel(s), text => {
+            const parsed = parseSpringTime(text);
+            if (parsed) pick(parsed.time, parsed.sync);
+            else o.say?.(`"${text}" non è un tempo di ritorno: scrivi per esempio 300 ms, 1.5 s, 3/16 o 2 battute.`);
+          }, 'es. 300 ms, 3/16, 2 battute'),
+        },
+      ]);
+    });
+    return el('div', { className: 'macro-spring' }, rest, time);
+  }
+
   // ---------------------------------------------------------------- rack salvati
 
   /** Il menu dell'intestazione: salvare il rack, aggiornare o eliminare quello salvato con il
@@ -183,7 +267,7 @@ export class RackPanel {
     const { store, owner, rack, say } = this.o;
     const existed = !!userRacks.find(name);
     try {
-      await userRacks.save(captureRack(store.project, owner, rack.id, name));
+      await userRacks.save(captureRack(springsAtRest(store.project), owner, rack.id, name));
     } catch (e) {
       say?.(`Non è stato possibile salvare il rack «${name}»: ${message(e)}`);
       return;
@@ -270,6 +354,13 @@ export class RackPanel {
 }
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** Il riposo e il tempo di ritorno di una molla, sotto la sua manopola. */
+function showSpring(chips: { readonly rest: HTMLElement; readonly time: HTMLElement }, s: MacroSpring): void {
+  const rest = `↺ ${Math.round(s.rest)}`, time = springTimeLabel(s);
+  if (chips.rest.textContent !== rest) chips.rest.textContent = rest;
+  if (chips.time.textContent !== time) chips.time.textContent = time;
+}
 
 /** Una macro interruttore o pulsante: un tasto che si illumina quando è acceso. L'interruttore
  *  cambia a ogni clic; il pulsante è acceso finché lo si tiene premuto. Una curva che lo fa

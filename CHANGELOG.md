@@ -6,6 +6,18 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Rack macros have a new mode, Spring: a knob that goes back on its own. While you move it the
+  mapped parameters follow, and when you let go it glides back to its rest position. Both are
+  set under the knob: drag ↺ up or down for the rest position, and click the return time to
+  choose it in note values (1/16 to 4 bars, following the tempo) or milliseconds (50 ms to
+  5 s), or type your own (for example 300 ms, 3/16 or 2 bars). It works from everything that
+  moves macros: the mouse, mapped computer keys, MIDI-mapped controllers, the APC40 mkII and the
+  Launchpads. A key or a MIDI note pulls the spring all the way while held. Knobs and faders
+  can't say when you let go, so the spring waits until they stop moving for a moment.
+  Moving a spring doesn't fill the undo history, and the project and saved racks always store
+  it at rest.
+
 ## [0.3.33] - 2026-10-27
 
 ### Added

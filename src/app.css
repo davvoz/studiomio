@@ -223,6 +223,12 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .macro-key.button { border-radius: 50%; }
 .macro-key.on { background: var(--macro); border-color: var(--macro); box-shadow: 0 0 10px color-mix(in srgb, var(--macro) 55%, transparent); }
 .macro-key.automated { border-color: var(--auto); }
+.macro-spring { display: flex; flex-direction: column; align-items: center; gap: 1px; max-width: 62px; margin-top: 2px; font: 10px/13px ui-monospace, monospace; }
+.macro-spring > span { max-width: 100%; padding: 0 3px; border-radius: 3px; background: #2c2836; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.macro-spring > span:hover { background: color-mix(in srgb, var(--macro) 35%, #2c2836); }
+.spring-rest { cursor: ns-resize; touch-action: none; }
+.spring-time { cursor: pointer; }
+.macro-spring .rename { width: 70px; font-size: 10px; padding: 0 2px; }
 .rack.mapping .macro { cursor: pointer; border-radius: 6px; }
 .rack.mapping .macro.chosen { background: color-mix(in srgb, var(--macro) 28%, transparent); outline: 1px solid var(--macro); }
 /* `contain: size`: la lista lunga scorre al suo posto, non allunga il rack */

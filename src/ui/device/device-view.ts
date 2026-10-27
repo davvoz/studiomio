@@ -31,6 +31,7 @@ import { controlOf, type ParamControl } from './controls';
 import { DevicePanel } from './device-panel';
 import { DEVICE_DISPLAYS, NO_SPECTRUM, type DeviceDisplay, type SpectrumTap } from './displays';
 import { RackPanel } from './rack-panel';
+import type { MacroSprings } from '../../store/macro-springs';
 import { SidechainPicker } from './sidechain-picker';
 
 export interface DeviceViewDeps {
@@ -58,6 +59,8 @@ export interface DeviceViewDeps {
   /** Dove una curva che suona porta adesso un parametro (spostamento della manopola, −1 … +1),
    *  o null: le manopole la seguono. */
   readonly modulation?: (owner: ChainOwner, target: ModTarget) => number | null;
+  /** Le macro molla: il mouse dice quando ne tiene una e quando la lascia. */
+  readonly springs?: MacroSprings;
 }
 
 /** La chiave del pannello dello strumento (gli effetti usano il loro id). */
@@ -364,7 +367,7 @@ export class DeviceView {
     const folded = this.folded.has(rack.id);
     const mapping = this.mapMode?.rack === rack.id ? this.mapMode.macro : undefined;
     const panel = new RackPanel({
-      store: this.deps.store, owner, rack, folded, mapping, canMove,
+      store: this.deps.store, springs: this.deps.springs, owner, rack, folded, mapping, canMove,
       deviceLabel: key => labels.get(key) ?? key,
       onMapMode: macro => {
         this.mapMode = macro === undefined ? null : { rack: rack.id, macro };

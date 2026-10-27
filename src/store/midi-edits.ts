@@ -14,7 +14,7 @@ import { MASTER, type Project } from '../model/project';
 import { macroMode, macroOf, MACRO_MAX } from '../model/rack';
 import { SEND_OFF_DB, type MixerSettings } from '../model/track';
 import { setEffectParam, setInstrumentParam, setMasterMixer, setMixer, setSend } from './edits';
-import { macroAt, press } from './key-edits';
+import { hold, macroAt, press, springTargets } from './key-edits';
 import { edit, type Edit, type EditContext } from './project-store';
 import { setMacro } from './rack-edits';
 
@@ -31,7 +31,7 @@ export const setMidi = (target: MidiTarget, control: MidiControl | null): Edit =
   });
 
 /** Un CC arrivato (0…127): i bersagli vanno al punto della loro corsa. Le macro pulsante sono
- *  di `holdMidi`. */
+ *  di `holdMidi`, le molle di `pullMidi`. */
 export const moveMidi = (control: MidiControl, value: number): Edit =>
   edit('MIDI', (p, ctx) => {
     for (const t of midiTargetsOf(p.midiMap, control)) p = turn(p, ctx, t, value);
@@ -45,13 +45,24 @@ export const pressMidi = (control: MidiControl): Edit =>
     return p;
   });
 
-/** Le macro pulsante: accese finché la nota suona o il CC sta da 64 in su (un cambio che si
- *  disfa da solo, da applicare `transient`). */
-export const holdMidi = (control: MidiControl, down: boolean): Edit =>
+/** Le macro pulsante: accese finché la nota suona o il CC sta da 64 in su; le molle tirate fino in
+ *  fondo da una nota (un cambio che si disfa da solo, da applicare `transient`). */
+export const holdMidi = (control: MidiControl, down: boolean, note = true): Edit =>
   edit('MIDI', (p, ctx) => {
     for (const t of midiTargetsOf(p.midiMap, control)) {
-      const m = t.kind === 'macro' ? macroAt(p, t) : undefined;
-      if (t.kind === 'macro' && m && macroMode(m) === 'button') p = setMacro(t.owner, t.rack, t.index, down ? MACRO_MAX : 0).apply(p, ctx);
+      if (t.kind !== 'macro') continue;
+      const m = macroAt(p, t);
+      if (m && (note || macroMode(m) === 'button')) p = hold(p, ctx, t, down);
+    }
+    return p;
+  });
+
+/** Un CC sulle macro molla: le porta al punto della corsa senza farne un passo di annullamento
+ *  (le riporta la molla; da applicare `transient`). */
+export const pullMidi = (control: MidiControl, value: number): Edit =>
+  edit('MIDI', (p, ctx) => {
+    for (const t of springTargets(p, midiTargetsOf(p.midiMap, control))) {
+      p = setMacro(t.owner, t.rack, t.index, Math.round(Math.max(0, Math.min(1, value / CC_MAX)) * MACRO_MAX)).apply(p, ctx);
     }
     return p;
   });
@@ -63,7 +74,7 @@ function turn(p: Project, ctx: EditContext, t: MidiTarget, value: number): Proje
   switch (t.kind) {
     case 'macro': {
       const m = macroAt(p, t);
-      if (!m || macroMode(m) === 'button') return p;
+      if (!m || macroMode(m) === 'button' || macroMode(m) === 'spring') return p;
       return setMacro(t.owner, t.rack, t.index, Math.round(unit * MACRO_MAX)).apply(p, ctx);
     }
     case 'param': {

@@ -5,7 +5,9 @@
  * arriva il MIDI le apre ControlSurfaces, solo se servono. */
 import type { ControlSurfaces } from '../control/control-surfaces';
 import { encodeMidiTarget, midiLabel, midiTargetsOf, type MidiControl } from '../model/midi-map';
-import { holdMidi, moveMidi, pressMidi, setMidi } from '../store/midi-edits';
+import { springTargets, type MacroTarget } from '../store/key-edits';
+import type { MacroSprings } from '../store/macro-springs';
+import { holdMidi, moveMidi, pressMidi, pullMidi, setMidi } from '../store/midi-edits';
 import type { ProjectStore } from '../store/project-store';
 import { ownedByField } from '../ui/keymap';
 import type { UiState } from '../ui/ui-state';
@@ -24,12 +26,15 @@ export class MidiMapper {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   /** L'ultima cosa detta con MIDI acceso: un fader manda decine di messaggi, si dice una volta. */
   private said = '';
+  /** Le molle che ogni nota accesa tiene: spenta la nota, tornano. */
+  private readonly springs = new Map<string, MacroTarget[]>();
 
   constructor(
     private readonly store: ProjectStore,
     private readonly ui: UiState,
     surfaces: ControlSurfaces,
     private readonly say: (text: string) => void,
+    private readonly macroSprings?: MacroSprings,
   ) {
     surfaces.onMidi(data => this.receive(data));
     addEventListener('keydown', e => this.key(e), true);
@@ -70,6 +75,16 @@ export class MidiMapper {
       if (down) this.store.apply(pressMidi(control));
       this.store.apply(holdMidi(control, down), { transient: true });
     });
+    this.holdSprings(control, down);
+  }
+
+  private holdSprings(control: MidiControl, down: boolean): void {
+    if (!this.macroSprings) return;
+    const key = controlKey(control);
+    const targets = down ? springTargets(this.store.project, midiTargetsOf(this.store.project.midiMap, control)) : this.springs.get(key) ?? [];
+    if (down) this.springs.set(key, targets);
+    else this.springs.delete(key);
+    for (const t of targets) this.macroSprings.hold(t.owner, t.rack, t.index, down);
   }
 
   private flush(): void {
@@ -78,7 +93,8 @@ export class MidiMapper {
     this.pending.clear();
     this.run(() => {
       for (const { control, value } of moves) {
-        this.store.apply(holdMidi(control, value >= 64), { transient: true });
+        this.store.apply(holdMidi(control, value >= 64, false), { transient: true });
+        this.store.apply(pullMidi(control, value), { transient: true });
         this.store.apply(moveMidi(control, value), { mergeKey: 'midi' });
       }
     });

@@ -53,6 +53,7 @@ import { KeyMapper } from './key-mapper';
 import { MidiMapper } from './midi-mapper';
 import { mainMenu } from './main-menu';
 import { ProjectSession } from './project-session';
+import { MacroSprings } from '../store/macro-springs';
 import { SamplePreview } from './sample-preview';
 
 /** L'applicazione: crea le parti, le collega e implementa i comandi. */
@@ -61,6 +62,8 @@ export class App implements Commands, TimelineActions {
   readonly audio = new AudioSystem(this.store);
   readonly session = new ProjectSession(this.store, this.audio);
   readonly ui = new UiState();
+  /** Le macro molla tornano al riposo da sole, chiunque le muova. */
+  readonly springs = new MacroSprings(this.store);
   readonly peaks = new PeakStore(id => this.audio.library.get(id));
   readonly arrangement: ArrangementView;
   readonly editor: ClipEditor;
@@ -140,6 +143,7 @@ export class App implements Commands, TimelineActions {
         };
       },
       importSample: file => this.session.importSampleFile(file),
+      springs: this.springs,
       sampleAudio: id => this.audio.library.get(id),
       playheads: track => this.audio.engine.playheads(track),
       modulation: (owner, target) => this.audio.engine.modulationAt(owner, target),
@@ -208,8 +212,8 @@ export class App implements Commands, TimelineActions {
       }
     });
     // prima delle scorciatoie: i tasti mappati sulle macro e sui parametri
-    new KeyMapper(this.store, this.ui, t => this.say(t));
-    new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t));
+    new KeyMapper(this.store, this.ui, t => this.say(t), this.springs);
+    new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
     new MidiTargets(this.store, this.ui, t => this.say(t));
     bindKeys(document, this, KEYMAP);
     // chiudere la finestra con modifiche non salvate chiede conferma (in Electron la chiede il processo principale)

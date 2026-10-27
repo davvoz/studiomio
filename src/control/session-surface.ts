@@ -15,7 +15,7 @@ import { groupSlotState, sceneState, type TrackSessionState } from '../engine/se
 import type { DeviceSettings } from '../model/device';
 import type { ModTarget } from '../model/envelope';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
-import { chainItems, MACRO_MAX, macroName, macroOf, macroParam, rackName, type DeviceKey, type Rack } from '../model/rack';
+import { chainItems, MACRO_MAX, macroName, macroOf, macroParam, rackName, springOf, type DeviceKey, type Rack } from '../model/rack';
 import { GroupTrack, MidiTrack, type Track } from '../model/track';
 import type { ClipRef } from '../store/clip-ref';
 import { setEffectParam, setInstrumentParam, setTempo } from '../store/edits';
@@ -395,13 +395,17 @@ export abstract class SessionSurface {
     const { rack, key } = c.device;
     const macro = rack ? null : macroOf(this.project.racksOf(c.owner), key as DeviceKey, spec.id);
     if (macro) return this.host.say(`${this.label}: ${spec.label} lo muove la macro ${macro.index + 1} di ${rackName(macro.rack)}.`);
+    const index = rack ? rack.macros.findIndex((_, m) => macroParam(m) === spec.id) : -1;
     const edit = rack
-      ? setMacro(c.owner, rack.id, rack.macros.findIndex((_, m) => macroParam(m) === spec.id), v)
+      ? setMacro(c.owner, rack.id, index, v)
       : key === INSTRUMENT_KEY
         ? setInstrumentParam(c.owner as TrackId, spec.id, v)
         : setEffectParam(c.owner, key as DeviceId, spec.id, v);
     const id = `param-${c.owner}-${c.device.key}-${spec.id}`;
-    this.later(id, () => this.move(edit, `${this.mergePrefix}-${id}`));
+    // una molla torna da sola: tirarla non è un passo di annullamento (la manopola non dice
+    // quando la si lascia: la molla aspetta che stia ferma)
+    if (rack && rack.macros[index] && springOf(rack.macros[index])) this.later(id, () => this.host.store.apply(edit, { transient: true }));
+    else this.later(id, () => this.move(edit, `${this.mergePrefix}-${id}`));
   }
 
   // ---------------------------------------------------------------- controlli continui

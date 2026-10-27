@@ -10,7 +10,8 @@ import { INSTRUMENT_DEVICE } from '../model/envelope';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import {
   findRack, group, MACRO_MAX, MACRO_MODES, macroMode, macroOf, macroValueFor, moveDevice as moveInLayout, moveRack as moveRackInLayout,
-  ungroup, updateMacro, updateRack, type DeviceKey, type Layout, type Macro, type MacroMapping, type MacroMode, type Rack, type RackList,
+  springFor, springOf, ungroup, updateMacro, updateRack, type DeviceKey, type Layout, type Macro, type MacroMapping, type MacroMode,
+  type MacroSpring, type Rack, type RackList,
 } from '../model/rack';
 import { MidiTrack } from '../model/track';
 import { edit, type Edit } from './project-store';
@@ -108,26 +109,60 @@ export const renameRack = (owner: ChainOwner, id: DeviceId, name: string | null)
 /** Gira una macro (0 … 127): i parametri mappati la seguono. Un interruttore o un pulsante
  *  scatta: da metà in su è acceso (127), sotto spento (0). */
 export const setMacro = (owner: ChainOwner, id: DeviceId, index: number, value: number): Edit =>
-  edit('Macro', p => {
-    const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
-      const v = macroValueFor(macroMode(m), value);
-      return m.value === v ? m : { ...m, value: v };
-    })));
-    return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
-  });
+  edit('Macro', p => withMacroValue(p, owner, id, index, value));
+
+function withMacroValue(p: Project, owner: ChainOwner, id: DeviceId, index: number, value: number): Project {
+  const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
+    const v = macroValueFor(macroMode(m), value);
+    return m.value === v ? m : { ...m, value: v };
+  })));
+  return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
+}
 
 /** Cambia il tipo di una macro. Diventando interruttore scatta al capo più vicino; un pulsante
- *  parte spento (si accende solo mentre lo si tiene premuto). */
+ *  parte spento (si accende solo mentre lo si tiene premuto); una molla riposa dov'è (e torna in
+ *  1/4), e smettendo di esserlo resta al suo riposo. */
 export const setMacroMode = (owner: ChainOwner, id: DeviceId, index: number, mode: MacroMode): Edit =>
   edit(`Macro: ${MACRO_MODES.find(([m]) => m === mode)?.[1] ?? mode}`, p => {
     const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
       if (macroMode(m) === mode) return m;
-      const value = mode === 'button' ? 0 : macroValueFor(mode, m.value);
-      const { mode: _old, ...rest } = m;
+      const from = springOf(m)?.rest ?? m.value;
+      const value = mode === 'button' ? 0 : macroValueFor(mode, from);
+      const { mode: _old, spring: _spring, ...rest } = m;
+      if (mode === 'spring') return { ...rest, value, mode, spring: springFor(value, 1, true) };
       return mode === 'knob' ? { ...rest, value } : { ...rest, value, mode };
     })));
     return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
   });
+
+/** Il riposo o il tempo di ritorno di una macro molla. Il riposo nuovo è anche il suo valore:
+ *  una molla ferma sta al riposo. */
+export const setMacroSpring = (owner: ChainOwner, id: DeviceId, index: number, patch: Partial<MacroSpring>): Edit =>
+  edit(patch.rest !== undefined ? 'Riposo della molla' : 'Ritorno della molla', p => {
+    const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
+      const s = springOf(m);
+      if (!s) throw new TypeError('la macro non è una molla');
+      const spring = springFor(patch.rest ?? s.rest, patch.time ?? s.time, patch.sync ?? s.sync);
+      if (spring.rest === s.rest && spring.time === s.time && spring.sync === s.sync && m.spring) return m;
+      return { ...m, spring, ...(patch.rest !== undefined ? { value: spring.rest } : {}) };
+    })));
+    return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
+  });
+
+/** Il progetto con ogni macro molla al suo riposo (e i parametri dove li porta): ciò che si
+ *  salva, anche se nel frattempo una molla è tirata o sta tornando. */
+export function springsAtRest(p: Project): Project {
+  const owners: ChainOwner[] = [...p.channels.map(t => t.id), MASTER];
+  for (const owner of owners) {
+    for (const r of p.racksOf(owner)) {
+      r.macros.forEach((m, index) => {
+        const s = springOf(m);
+        if (s && m.value !== s.rest) p = withMacroValue(p, owner, r.id, index, s.rest);
+      });
+    }
+  }
+  return p;
+}
 
 export const renameMacro = (owner: ChainOwner, id: DeviceId, index: number, name: string | null): Edit =>
   edit('Rinomina macro', p => p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => ({ ...m, name })))));

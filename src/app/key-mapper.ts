@@ -3,7 +3,8 @@
  * muovono i loro bersagli prima di ogni altro tasto, come in Live; con Ctrl o Alt restano
  * scorciatoie, e nei campi di testo si scrive. */
 import { keyLabel, targetsOf } from '../model/key-map';
-import { holdKey, pressKey, setKey } from '../store/key-edits';
+import { holdKey, pressKey, setKey, springTargets, type MacroTarget } from '../store/key-edits';
+import type { MacroSprings } from '../store/macro-springs';
 import type { ProjectStore } from '../store/project-store';
 import { findBinding, KEYMAP, ownedByField } from '../ui/keymap';
 import type { UiState } from '../ui/ui-state';
@@ -15,8 +16,15 @@ const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsL
 export class KeyMapper {
   /** I tasti giù che hanno mosso qualcosa: al rilascio i pulsanti si spengono. */
   private readonly held = new Set<string>();
+  /** Le molle che ogni tasto giù tiene: lasciato il tasto, tornano. */
+  private readonly springs = new Map<string, MacroTarget[]>();
 
-  constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly say: (text: string) => void) {
+  constructor(
+    private readonly store: ProjectStore,
+    private readonly ui: UiState,
+    private readonly say: (text: string) => void,
+    private readonly macroSprings?: MacroSprings,
+  ) {
     addEventListener('keydown', e => this.down(e), true);
     addEventListener('keyup', e => this.up(e), true);
     // un tasto lasciato fuori dalla finestra non arriva: i pulsanti si spengono lo stesso
@@ -34,6 +42,7 @@ export class KeyMapper {
     this.held.add(e.code);
     this.store.apply(pressKey(e.code));
     this.store.apply(holdKey(e.code, true), { transient: true });
+    this.holdSprings(e.code, true);
   }
 
   private up(e: KeyboardEvent): void {
@@ -41,13 +50,23 @@ export class KeyMapper {
     e.preventDefault();
     e.stopPropagation();
     this.store.apply(holdKey(e.code, false), { transient: true });
+    this.holdSprings(e.code, false);
   }
 
   private releaseAll(): void {
     for (const key of [...this.held]) {
       this.held.delete(key);
       this.store.apply(holdKey(key, false), { transient: true });
+      this.holdSprings(key, false);
     }
+  }
+
+  private holdSprings(key: string, down: boolean): void {
+    if (!this.macroSprings) return;
+    const targets = down ? springTargets(this.store.project, targetsOf(this.store.project.keyMap, key)) : this.springs.get(key) ?? [];
+    if (down) this.springs.set(key, targets);
+    else this.springs.delete(key);
+    for (const t of targets) this.macroSprings.hold(t.owner, t.rack, t.index, down);
   }
 
   /** Con KEY acceso: il tasto per il bersaglio scelto. */

@@ -99,8 +99,9 @@ salvataggio precedente) e `audio/` (i file originali copiati all'importazione).
 - **Clip MIDI**: piano roll con velocity, fold, quantizzazione, :2 / ×2.
 - **Modulazioni delle clip**: curve relative su volume, pan, qualsiasi parametro o macro. Girano con
   il loop della clip e finiscono nell'export.
-- **Rack**: Instrument Rack e Audio Effect Rack a catena singola, con 8 macro (manopola, interruttore
-  o pulsante) mappabili con minimo e massimo. Preset salvabili, rack di fabbrica.
+- **Rack**: Instrument Rack e Audio Effect Rack a catena singola, con 8 macro (manopola, interruttore,
+  pulsante o molla, che lasciata torna da sola al suo riposo) mappabili con minimo e massimo.
+  Preset salvabili, rack di fabbrica.
 - **Browser**: dispositivi, preset, rack, kit, sample del progetto e cartelle del disco, con ricerca
   e anteprima.
 - **Controller**: APC40 mkII e Launchpad plug and play (Ableton/DAW mode): griglia delle clip,

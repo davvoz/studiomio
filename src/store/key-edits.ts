@@ -8,7 +8,7 @@ import { deviceAt, mappingSpec } from '../devices/rack-params';
 import { keyOf, targetsOf, withKey, type KeyTarget } from '../model/key-map';
 import { INSTRUMENT_DEVICE } from '../model/envelope';
 import { MASTER, type Project } from '../model/project';
-import { findRack, MACRO_MAX, macroMode, macroOf, type Macro } from '../model/rack';
+import { findRack, MACRO_MAX, macroMode, macroOf, springOf, type Macro } from '../model/rack';
 import { setEffectParam, setInstrumentParam } from './edits';
 import { edit, type Edit, type EditContext } from './project-store';
 import { setMacro } from './rack-edits';
@@ -28,14 +28,31 @@ export const pressKey = (key: string): Edit =>
     return p;
   });
 
-/** Il tasto giù o su per le macro pulsante: accese solo mentre lo si tiene. */
+/** Il tasto giù o su per le macro pulsante (accese solo mentre lo si tiene) e molla (giù la
+ *  tira fino al capo lontano dal riposo; lasciata, la riporta la molla). */
 export const holdKey = (key: string, down: boolean): Edit =>
   edit('Tasto', (p, ctx) => {
-    for (const t of targetsOf(p.keyMap, key)) {
-      const m = macroAt(p, t);
-      if (t.kind === 'macro' && m && macroMode(m) === 'button') p = setMacro(t.owner, t.rack, t.index, down ? MACRO_MAX : 0).apply(p, ctx);
-    }
+    for (const t of targetsOf(p.keyMap, key)) p = hold(p, ctx, t, down);
     return p;
+  });
+
+/** Una macro pulsante o molla tenuta o lasciata (da un tasto o da una nota MIDI). */
+export function hold(p: Project, ctx: EditContext, t: KeyTarget, down: boolean): Project {
+  const m = macroAt(p, t);
+  if (t.kind !== 'macro' || !m) return p;
+  if (macroMode(m) === 'button') return setMacro(t.owner, t.rack, t.index, down ? MACRO_MAX : 0).apply(p, ctx);
+  const s = springOf(m);
+  if (s && down) return setMacro(t.owner, t.rack, t.index, s.rest < MACRO_MAX / 2 ? MACRO_MAX : 0).apply(p, ctx);
+  return p;
+}
+
+/** Le macro molla dei bersagli: chi le tiene (un tasto, una nota) lo dice alla molla. */
+export type MacroTarget = Extract<KeyTarget, { kind: 'macro' }>;
+
+export const springTargets = (p: Project, targets: readonly { readonly kind: string }[]): MacroTarget[] =>
+  (targets.filter(t => t.kind === 'macro') as MacroTarget[]).filter(t => {
+    const m = macroAt(p, t);
+    return !!m && !!springOf(m);
   });
 
 export const macroAt = (p: Project, t: KeyTarget): Macro | undefined =>
@@ -45,7 +62,7 @@ export const macroAt = (p: Project, t: KeyTarget): Macro | undefined =>
 export function press(p: Project, ctx: EditContext, t: KeyTarget): Project {
   if (t.kind === 'macro') {
     const m = macroAt(p, t);
-    if (!m || macroMode(m) === 'button') return p;
+    if (!m || macroMode(m) === 'button' || macroMode(m) === 'spring') return p;
     return setMacro(t.owner, t.rack, t.index, m.value >= MACRO_MAX / 2 ? 0 : MACRO_MAX).apply(p, ctx);
   }
   // un parametro mappato su una macro lo muove la macro
