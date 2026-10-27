@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.32] - 2026-10-27
+
 ### Changed
 - A scene is now highlighted as soon as one of its clips is playing: launching a clip from
   another scene highlights both scenes.
