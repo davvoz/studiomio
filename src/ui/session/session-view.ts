@@ -6,7 +6,7 @@ import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
-import { groupSlotState } from '../../engine/session';
+import { groupSlotState, sceneState } from '../../engine/session';
 import { LAUNCH_QUANTA } from '../../model/launch';
 import type { Clip } from '../../model/clip';
 import { PALETTE } from '../../model/colors';
@@ -144,6 +144,7 @@ export class SessionView {
   private readonly slots = new Map<string, HTMLElement>();
   private readonly stops = new Map<TrackId, HTMLElement>();
   private readonly heads = new Map<TrackId, HTMLElement>();
+  private scenes: HTMLElement[] = [];
   private selected: SlotRef | null = null;
   private drag: SlotDrag | null = null;
   /** Il selettore dei file audio da mettere in uno slot (lo slot è `pickFor`). */
@@ -321,7 +322,8 @@ export class SessionView {
       className: 'session-head master-head', textContent: 'Master', title: 'Master: un clic apre gli effetti',
       onclick: () => this.deps.openDevices(MASTER),
     }), row.head, masterCol));
-    p.scenes.forEach((scene, s) => cells.push(place(this.sceneCell(scene, s), row.scene(s), masterCol)));
+    this.scenes = p.scenes.map((scene, s) => place(this.sceneCell(scene, s), row.scene(s), masterCol));
+    cells.push(...this.scenes);
     cells.push(place(el('button', {
       className: 'stop-all', textContent: '■ Ferma tutte', title: 'Ferma tutte le clip al prossimo confine',
       onclick: () => this.deps.engine.stopAllClips(),
@@ -619,6 +621,13 @@ export class SessionView {
       this.stops.get(t.id)?.classList.toggle('queued', st.queued === 'stop');
       this.heads.get(t.id)?.classList.toggle('taken', !st.followsArrangement);
     }
+    // le scene: suonano se suonano tutte le loro clip, come in Live
+    const sounding = p.tracks.filter(t => !(t instanceof GroupTrack)).map(t => [t, engine.sessionState(t)] as const);
+    this.scenes.forEach((cell, s) => {
+      const scene = sceneState(sounding, s);
+      cell.classList.toggle('playing', scene.playing);
+      cell.classList.toggle('queued', scene.queued);
+    });
   }
 
   private readonly frame = (): void => {

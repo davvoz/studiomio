@@ -540,7 +540,7 @@ export class Launchpad extends SessionSurface {
       return this.mode === choice ? MODE_COLOR[choice as Exclude<Mode, 'none'>] : COLOR.whiteHalf;
     }
     const s = this.sceneLight(row);
-    return s === 'queued' ? blink(COLOR.green) : s === 'off' ? COLOR.off : s.color ? paletteIndex(s.color) : COLOR.green;
+    return s === 'queued' ? blink(COLOR.green) : s === 'playing' ? pulse(COLOR.green) : s === 'off' ? COLOR.off : s.color ? paletteIndex(s.color) : COLOR.green;
   }
 
   /** Pro MK3: la riga delle tracce, i modi, il trasporto. */

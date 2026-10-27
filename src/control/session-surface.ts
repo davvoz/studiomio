@@ -11,7 +11,7 @@ import { resolveParams, visibleParamsOf, type DeviceType } from '../devices/devi
 import { paramFromUnit, paramToUnit, type ParamSpec } from '../devices/params';
 import { mappingSpec } from '../devices/rack-params';
 import { effectType, instrumentType } from '../devices/registry';
-import { groupSlotState, type TrackSessionState } from '../engine/session';
+import { groupSlotState, sceneState, type TrackSessionState } from '../engine/session';
 import type { DeviceSettings } from '../model/device';
 import type { ModTarget } from '../model/envelope';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
@@ -81,8 +81,8 @@ export interface Controlled {
 
 /** Come si accende il pad di uno slot: spento, del colore della clip, suona, in coda. */
 export type SlotLight = 'off' | 'playing' | 'queued' | { readonly clip: string };
-/** Il pulsante di una scena: spento (riga vuota), in coda, o del colore della scena (null: non ne ha). */
-export type SceneLight = 'off' | 'queued' | { readonly color: string | null };
+/** Il pulsante di una scena: spento (riga vuota), suona, in coda, o del colore della scena (null: non ne ha). */
+export type SceneLight = 'off' | 'playing' | 'queued' | { readonly color: string | null };
 /** Un pad della mappa dei blocchi: fuori dal progetto, il riquadro, qualcosa suona, ci sono clip, vuoto. */
 export type BlockLight = 'off' | 'ring' | 'playing' | 'clips' | 'empty';
 
@@ -275,18 +275,16 @@ export abstract class SessionSurface {
     return clip ? { clip: clip.color } : 'off';
   }
 
-  /** Il pulsante della riga `row` del riquadro: in coda se qualcosa della riga lo è, del colore
-   *  della scena se la riga ha clip, spento se è vuota. */
+  /** Il pulsante della riga `row` del riquadro: in coda se qualcosa della riga lo è, suona se
+   *  suonano tutte le sue clip, del colore della scena se la riga ha clip, spento se è vuota. */
   protected sceneLight(row: number): SceneLight {
     const p = this.project, { engine } = this.host;
     const s = this.ring.scene + row;
     if (s >= p.scenes.length) return 'off';
-    const queued = p.tracks.some(t => {
-      const q = t.slots[s] && engine.sessionState(t).queued;
-      return !!q && typeof q === 'object' && q.slot === s;
-    });
-    if (queued) return 'queued';
-    return p.tracks.some(t => t.slots[s]) ? { color: p.scenes[s].color ?? null } : 'off';
+    const scene = sceneState(p.tracks.filter(t => !(t instanceof GroupTrack)).map(t => [t, engine.sessionState(t)] as const), s);
+    if (scene.queued) return 'queued';
+    if (scene.playing) return 'playing';
+    return scene.clips ? { color: p.scenes[s].color ?? null } : 'off';
   }
 
   /** Un pad della mappa dei blocchi. */

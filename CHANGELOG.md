@@ -6,6 +6,12 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- The scene that is playing is now highlighted, like in Live: a scene plays when all of its
+  clips are playing. In the session its ▶ turns green with a green outline (and blinks while
+  the scene waits to start). On the APC40 mkII and the Launchpads its launch button pulses
+  green.
+
 ## [0.3.30] - 2026-10-27
 
 ### Added

@@ -207,6 +207,24 @@ export function groupSlotState(members: readonly (readonly [Track, TrackSessionS
   };
 }
 
+/** Una scena: suona se ogni traccia che ha una clip nella riga la suona (come in Live), è in
+ *  coda se una aspetta il prossimo confine per lanciare la sua clip della riga. */
+export interface SceneState {
+  readonly clips: boolean;
+  readonly playing: boolean;
+  readonly queued: boolean;
+}
+
+/** `tracks`: le tracce che suonano (non i gruppi), con il loro stato. */
+export function sceneState(tracks: readonly (readonly [Track, TrackSessionState])[], slot: number): SceneState {
+  const withClip = tracks.filter(([t]) => t.slots[slot]);
+  return {
+    clips: withClip.length > 0,
+    playing: withClip.length > 0 && withClip.every(([, s]) => s.playing?.slot === slot),
+    queued: withClip.some(([, s]) => typeof s.queued === 'object' && s.queued?.slot === slot),
+  };
+}
+
 /** La clip `id` negli slot della traccia (null se non c'è più). */
 export function slotClip(track: Track, id: ClipId): Clip | null {
   return track.slots.find(c => c?.id === id) ?? null;

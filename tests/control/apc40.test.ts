@@ -307,6 +307,22 @@ describe('APC40 sulla session', () => {
     expect(r.pad(padNote(0, 0))).toEqual({ mode: 0, color: COLOR.red });
   });
 
+  it('come in Live: la scena di cui suonano tutte le clip pulsa verde', () => {
+    const r = rig({ tracks: 3, clips: [[0, 0], [1, 0], [0, 1]] });
+    r.engine.playing = true;
+    r.engine.states.set(r.t(0), { playing: { slot: 0, elapsed: 0 }, queued: null, followsArrangement: false });
+    r.start();
+    r.settle();
+    const scene = (i: number) => r.out.filter(m => m[1] === NOTE.sceneLaunch + i).slice(-2);
+    // suona solo una delle due clip della riga: la scena resta del suo colore
+    expect(scene(0).at(-1)).toEqual([0x90, NOTE.sceneLaunch, COLOR.green]);
+    // suonano tutte (la traccia 3 non ha clip nella riga): Pulse(BLACK, GREEN, 48), canale 10
+    r.engine.states.set(r.t(1), { playing: { slot: 0, elapsed: 0 }, queued: null, followsArrangement: false });
+    r.settle();
+    expect(scene(0)).toEqual([[0x90, NOTE.sceneLaunch, COLOR.off], [0x9a, NOTE.sceneLaunch, COLOR.green]]);
+    expect(scene(1).at(-1)).toEqual([0x90, NOTE.sceneLaunch + 1, COLOR.green]);
+  });
+
   it('activator e solo cambiano il mixer, e i LED lo seguono', () => {
     const r = rig();
     r.start();

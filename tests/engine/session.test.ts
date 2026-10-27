@@ -3,7 +3,7 @@ import { sequentialIds, type TrackId } from '../../src/core/id';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
 import { PlaybackEngine } from '../../src/engine/playback-engine';
 import { clipSegmentsBetween } from '../../src/engine/segments';
-import { groupSlotState } from '../../src/engine/session';
+import { groupSlotState, sceneState } from '../../src/engine/session';
 import { MidiClip, type Note } from '../../src/model/midi-clip';
 import { Project } from '../../src/model/project';
 import { captureScene } from '../../src/store/session-edits';
@@ -229,6 +229,28 @@ describe('session: lancio delle clip', () => {
     expect(r.instruments.created[0].cuts).toEqual([]);
     expect(r.state(0)).toMatchObject({ playing: { slot: 2 }, queued: null });
     expect(r.store.project.tracks[0].slots[1]?.name).toBe('B'); // al suo posto, una copia
+  });
+});
+
+describe('session: stato delle scene', () => {
+  it('una scena è in coda fino al confine, poi suona finché suonano tutte le sue clip', () => {
+    const r = rig();
+    const scene = (s: number) => sceneState(r.store.project.tracks.map(t => [t, r.engine.sessionState(t)] as const), s);
+    r.engine.play(0);
+    r.runUntil(0.3);
+    r.engine.launchScene(0);
+    expect(scene(0)).toEqual({ clips: true, playing: false, queued: true });
+    r.runUntil(2.2);
+    expect(scene(0)).toEqual({ clips: true, playing: true, queued: false });
+    expect(scene(1)).toEqual({ clips: true, playing: false, queued: false });
+    // la traccia b si ferma (slot vuoto nella riga 1): la scena 0 non suona più tutta
+    r.engine.launchSlot(r.t(1), 1);
+    r.runUntil(4.2);
+    expect(scene(0).playing).toBe(false);
+    // la scena 1 ha la sola clip di a: suona quando suona quella
+    r.engine.launchSlot(r.t(0), 1);
+    r.runUntil(6.2);
+    expect(scene(1)).toEqual({ clips: true, playing: true, queued: false });
   });
 });
 

@@ -468,7 +468,10 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 .scene.colored { background: color-mix(in srgb, var(--scene) 55%, #101214); box-shadow: inset 3px 0 0 var(--scene); }
 .scene.colored .launch { background: #0005; color: #fff; }
 .scene.colored .scene-name { color: #fff; text-shadow: 0 1px 1px #0009; }
-.scene .launch:hover { background: #3ec46d; color: #0c1a10; }
+.scene .launch:hover, .scene.playing .launch { background: #3ec46d; color: #0c1a10; }
+.scene.playing { box-shadow: inset 0 0 0 1px #3ec46d; }
+.scene.colored.playing { box-shadow: inset 3px 0 0 var(--scene), inset 0 0 0 1px #3ec46d; }
+.scene.queued .launch { animation: session-blink .3s steps(2, jump-none) infinite; }
 .scene-name { flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
 .scene .rename { flex: 1; min-width: 0; padding: 0 3px; font-size: 12px; }
 .stop-all { position: sticky; right: 0; z-index: 1; align-self: center; padding: 2px 6px; font-size: 11px; }
