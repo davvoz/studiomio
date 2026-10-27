@@ -731,4 +731,4 @@ button.browser-preview-toggle { flex: none; padding: 0 6px; font-size: 12px; lin
 .track-drop-line { position: fixed; z-index: 60; background: var(--accent); border-radius: 1px; pointer-events: none; box-shadow: 0 0 0 1px #0008; }
 body.track-dragging { user-select: none; }
 body.track-dragging, body.track-dragging * { cursor: grabbing !important; }
-.header.dragging, .session-head.dragging { opacity: .45; }
+.header.dragging, .session-head.dragging, .scene.dragging { opacity: .45; }

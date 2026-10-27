@@ -6,6 +6,10 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Scenes can be dragged to change their order: grab a scene in the session and drop it where
+  the line shows. Its clips move with it, and the move can be undone.
+
 ## [0.3.32] - 2026-10-27
 
 ### Changed

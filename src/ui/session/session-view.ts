@@ -20,7 +20,7 @@ import {
 } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import {
-  captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, insertScene, moveSlotClip, newSlotMidiClip, renameScene,
+  captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, insertScene, moveScene, moveSlotClip, newSlotMidiClip, renameScene,
   setSceneColor, updateSlotClip, type SlotRef,
 } from '../../store/session-edits';
 import { acceptBrowserDrops } from '../browser/browser-drag';
@@ -428,6 +428,34 @@ export class SessionView {
     return { drop: at > from ? at - 1 : at, line: this.columnLine(x) };
   }
 
+  /** Una scena presa con il mouse e trascinata va su o giù, con le sue clip. */
+  private dragScene(index: number, cell: HTMLElement, e: PointerEvent): void {
+    if (!canStartTrackDrag(e)) return;
+    const id = this.deps.store.project.scenes[index].id;
+    startTrackDrag(e, {
+      source: cell, spotAt: m => this.sceneSpot(index, m), drop: to => {
+        if (!this.apply(moveScene(id, to))) return;
+        // lo slot scelto resta sulla sua clip
+        const s = this.selected?.slot;
+        if (s === undefined) return;
+        const slot = s === index ? to : s > index && s <= to ? s - 1 : s < index && s >= to ? s + 1 : s;
+        this.select({ ...this.selected!, slot });
+      },
+    });
+  }
+
+  /** Dove andrebbe la scena `from` lasciata in `e`: sopra la scena nella cui metà alta si
+   *  trova, sotto l'ultima se è più in basso; la linea attraversa la griglia. */
+  private sceneSpot(from: number, e: PointerEvent): DropSpot<number> | null {
+    const rows = this.scenes.map(c => c.getBoundingClientRect());
+    let at = rows.findIndex(r => e.clientY < r.top + r.height / 2);
+    if (at < 0) at = rows.length;
+    if (at === from || at === from + 1) return null;
+    const y = at < rows.length ? rows[at].top - 1 : rows.at(-1)!.bottom + 1;
+    const box = this.scroll.getBoundingClientRect();
+    return { drop: at > from ? at - 1 : at, line: { x: box.left, y: y - 1, width: box.width, height: 2 } };
+  }
+
   private clickTrack(id: TrackId, e: MouseEvent): void {
     const p = this.deps.store.project;
     clickTrack(this.deps.ui, id, e, () => [...p.visibleTracks, ...p.buses].map(t => t.id));
@@ -574,6 +602,7 @@ export class SessionView {
     cell.classList.toggle('colored', !!scene.color);
     if (scene.color) cell.style.setProperty('--scene', scene.color);
     cell.ondblclick = () => renameInline(name, n => this.apply(renameScene(scene.id, n)));
+    cell.onpointerdown = e => this.dragScene(index, cell, e);
     cell.oncontextmenu = e => {
       e.preventDefault();
       const only = this.deps.store.project.scenes.length < 2;

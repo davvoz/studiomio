@@ -428,6 +428,17 @@ export class Project {
     });
   }
 
+  /** La scena `id` in posizione `toIndex` (contata senza di lei), con gli slot di ogni traccia. */
+  movingScene(id: SceneId, toIndex: number): Project {
+    const from = this.scenes.findIndex(s => s.id === id);
+    if (from < 0) throw new Error(`scena ${id} non trovata`);
+    const to = Math.max(0, Math.min(this.scenes.length - 1, toIndex));
+    if (to === from) return this;
+    const scenes = [...this.scenes];
+    scenes.splice(to, 0, ...scenes.splice(from, 1));
+    return this.with({ scenes, tracks: this.tracks.map(t => t.movingSlot(from, to)) });
+  }
+
   renamingScene(id: SceneId, name: string): Project {
     return this.with({ scenes: this.scenes.map(s => (s.id === id ? { ...s, name } : s)) });
   }

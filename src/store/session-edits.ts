@@ -88,6 +88,10 @@ export const importSampleToSlot = (sample: SampleRef, target: TrackId | null, sl
 export const insertScene = (index?: number): Edit =>
   edit('Nuova scena', (p, { ids }) => p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, index));
 
+/** Sposta la scena, con le sue clip, in posizione `toIndex` (contata senza di lei). */
+export const moveScene = (id: SceneId, toIndex: number): Edit =>
+  edit('Sposta scena', p => p.movingScene(id, toIndex));
+
 export const renameScene = (id: SceneId, name: string): Edit =>
   edit('Rinomina scena', p => p.renamingScene(id, name));
 

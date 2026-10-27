@@ -181,6 +181,15 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.withSlots(this.slots.filter((_, i) => i !== index));
   }
 
+  /** Lo slot `from` va in posizione `to` (una scena spostata), gli altri scorrono. */
+  movingSlot(from: number, to: number): this {
+    this.checkSlot(from);
+    this.checkSlot(to);
+    const s = [...this.slots];
+    s.splice(to, 0, ...s.splice(from, 1));
+    return this.withSlots(s);
+  }
+
   private withLane(arrangement: lane.Lane<C>): this {
     return this.with({ arrangement } as Partial<P>);
   }

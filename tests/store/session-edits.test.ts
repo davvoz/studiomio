@@ -6,7 +6,7 @@ import { findClip, placementRef, scaleMidiClipAt, setClipColor, setTrackColor, s
 import { copySlotClip, pasteClips, pasteToSlot } from '../../src/store/clipboard';
 import { addMidiClip, setLaunchQuantization } from '../../src/store/edits';
 import {
-  captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, importSampleToSlot, insertScene, moveSlotClip, newSlotMidiClip,
+  captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, importSampleToSlot, insertScene, moveScene, moveSlotClip, newSlotMidiClip,
   renameScene, sceneToArrangement, setSceneColor,
 } from '../../src/store/session-edits';
 import { setup } from '../helpers/fixtures';
@@ -74,6 +74,25 @@ describe('session: clip negli slot', () => {
     expect(store.project.tracks[0].slots[0]).toBeNull();
     store.apply(deleteScene(s0));
     expect(store.project.scenes.map(s => s.name)).toEqual(['6', 'Strofa copia', '2', '3', '4']);
+  });
+
+  it('sposta una scena con le sue clip, su e giù, e si annulla', () => {
+    const { store, track } = setup({ midi: 2 });
+    store.apply(newSlotMidiClip({ track: track(0), slot: 0 }));
+    store.apply(newSlotMidiClip({ track: track(1), slot: 2 }));
+    const [a, , c] = [0, 1, 2].map(i => store.project.tracks.map(t => t.slots[i]?.id ?? null));
+    const s0 = store.project.scenes[0].id;
+    store.apply(moveScene(s0, 2));
+    expect(store.project.scenes.map(s => s.name)).toEqual(['2', '3', '1', '4']);
+    expect(store.project.tracks.map(t => t.slots[2]?.id ?? null)).toEqual(a);
+    expect(store.project.tracks.map(t => t.slots[1]?.id ?? null)).toEqual(c);
+    expect(store.undoLabel).toBe('Sposta scena');
+    store.apply(moveScene(store.project.scenes[1].id, 0)); // la 3 in cima
+    expect(store.project.scenes.map(s => s.name)).toEqual(['3', '2', '1', '4']);
+    store.undo();
+    store.undo();
+    expect(store.project.scenes.map(s => s.name)).toEqual(['1', '2', '3', '4']);
+    expect(store.project.tracks.map(t => t.slots[0]?.id ?? null)).toEqual(a);
   });
 
   it('colore delle scene: si sceglie, si toglie, si annulla, passa alla copia e si salva', () => {
