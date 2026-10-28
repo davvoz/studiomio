@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.36] - 2026-10-28
+
 ### Added
 - Consolidate (Ctrl+J, in the Edit menu and in the clip menu), as in Live: on each track, the
   selected clips from the first to the last become a single clip that sounds the same. Clips in
