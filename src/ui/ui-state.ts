@@ -1,6 +1,7 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { PlacementId, TrackId } from '../core/id';
 import { sameTarget, type KeyTarget } from '../model/key-map';
+import type { TimeRange } from '../model/note-edits';
 import { sameMidiTarget, type MidiTarget } from '../model/midi-map';
 import type { ChainOwner } from '../model/project';
 import { TimelineGeometry } from './timeline/geometry';
@@ -28,6 +29,7 @@ export interface ControlledDevice {
 export class UiState {
   private _geometry = new TimelineGeometry();
   private _selection: ReadonlySet<PlacementId> = new Set();
+  private _range: TimeRange | null = null;
   private _track: TrackId | null = null;
   private _tracks: ReadonlySet<TrackId> = new Set();
   private _snap = true;
@@ -43,6 +45,9 @@ export class UiState {
 
   get geometry(): TimelineGeometry { return this._geometry; }
   get selection(): ReadonlySet<PlacementId> { return this._selection; }
+  /** Il tratto di tempo tracciato col riquadro dentro le clip selezionate (la selezione di tempo
+   *  di Live): trascinarlo o eliminarlo agisce solo lì. Null se le clip sono selezionate intere. */
+  get range(): TimeRange | null { return this._range; }
   /** La traccia scelta: evidenziata nell'arrangement e nella session. */
   get track(): TrackId | null { return this._track; }
   /** Le tracce scelte (Maiusc e Ctrl+clic ne aggiungono, Ctrl+G le raggruppa); c'è sempre `track`. */
@@ -77,8 +82,9 @@ export class UiState {
     this.events.emit('change');
   }
 
-  select(ids: Iterable<PlacementId>): void {
+  select(ids: Iterable<PlacementId>, range: TimeRange | null = null): void {
     this._selection = new Set(ids);
+    this._range = range && range.end > range.start ? range : null;
     this.events.emit('change');
   }
 

@@ -161,8 +161,8 @@ export class ArrangementView implements GestureHost {
       const grid = gridStep(this.geo.pxPerBeat, project.signature);
       paintRuler(this.ruler.g, project, this.geo, this.ruler.width, this.ruler.height, grid);
       paintLanes(this.lanes.g, {
-        project, geo: this.geo, width: this.lanes.width, height: this.lanes.height, grid,
-        selection: this.ui.selection, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTracks: this.ui.selectedTracks,
+        project: this.gesture?.preview ?? project, geo: this.geo, width: this.lanes.width, height: this.lanes.height, grid,
+        selection: this.ui.selection, range: this.ui.range, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTracks: this.ui.selectedTracks,
         peaks: (c: AudioClip) => this.deps.peaks.get(c.sample, c.reversed),
       });
       this.updateScrollbar();

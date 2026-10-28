@@ -1,9 +1,10 @@
 /* Modifiche su più clip posate insieme (la selezione della timeline). */
-import type { PlacementId, TrackId } from '../core/id';
+import type { IdFactory, PlacementId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { between, keepBetween, placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
 import { paletteColor } from '../model/colors';
+import type { TimeRange } from '../model/note-edits';
 import type { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
 import { AudioTrack, GroupTrack } from '../model/track';
@@ -82,6 +83,25 @@ export const splitMany = (refs: readonly PlacementRef[], at: Beats): Edit =>
     const pl = findPlacement(acc, r);
     return pl && pl.start < at && placementEnd(pl) > at ? acc.updatingTrack(r.track, t => t.splitting(r.id, at, ids)) : acc;
   }, p));
+
+/** Divide ai bordi di [from, to) le clip della selezione che li attraversano: il tratto dentro
+ *  diventa una clip a sé. Prima la fine (la parte sinistra tiene l'id), poi l'inizio. */
+export const splitRange = (refs: readonly PlacementRef[], from: Beats, to: Beats): Edit =>
+  edit('Dividi', (p, ctx) => splitMany(refs, from).apply(splitMany(refs, to).apply(p, ctx), ctx));
+
+/** Come in Live, agire su una selezione di tempo divide le clip ai suoi bordi: il progetto
+ *  diviso e i pezzi dentro il tratto, uno per clip selezionata. */
+export function cutOutRange(project: Project, ids: IdFactory, refs: readonly PlacementRef[], range: TimeRange): { project: Project; pieces: PlacementRef[] } {
+  const next = splitRange(refs, range.start, range.end).apply(project, { ids });
+  const pieces = refs.flatMap(r => {
+    const pl = findPlacement(project, r);
+    if (!pl) return [];
+    const start = Math.max(pl.start, range.start);
+    const piece = next.track(r.track)?.arrangement.find(x => Math.abs(x.start - start) < 1e-9 && x.start < range.end);
+    return piece ? [{ track: r.track, id: piece.id }] : [];
+  });
+  return { project: next, pieces };
+}
 
 /** Aggiunge un sample (se non è già nel progetto) e lo posa: sulla traccia indicata se è audio,
  *  altrimenti su una nuova. */

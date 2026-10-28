@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TimeSignature } from '../../src/core/music-time';
 import { addMidiClip, placeSample } from '../../src/store/edits';
-import { addedPlacements, deleteMany, duplicateMany, importSample, relocate, splitMany } from '../../src/store/selection-edits';
+import { addedPlacements, deleteMany, duplicateMany, importSample, cutOutRange, relocate, splitMany, splitRange } from '../../src/store/selection-edits';
 import { gridStep, hitTest, placementsInBox, TimelineGeometry } from '../../src/ui/timeline/geometry';
 import { planMove, planResize, resolveSelection, snappedDelta } from '../../src/ui/timeline/planning';
 import { sampleRef, setup } from '../helpers/fixtures';
@@ -99,6 +99,29 @@ describe('modifiche sulla selezione', () => {
     expect(store.project.tracks[0].arrangement.map(p => p.start)).toEqual([0, 3]);
     store.apply(deleteMany(resolveSelection(store.project, new Set(store.project.tracks[0].arrangement.map(p => p.id)))));
     expect(store.project.tracks[0].arrangement).toHaveLength(0);
+  });
+
+  it('dividere ai bordi di un tratto, come la selezione di tempo in Live', () => {
+    const { store, track } = setup({ midi: 1 });
+    store.apply(addMidiClip(track(0), 0, 8));
+    const refs = () => resolveSelection(store.project, new Set(store.project.tracks[0].arrangement.map(p => p.id)));
+    store.apply(splitRange(refs(), 2, 5));
+    expect(store.project.tracks[0].arrangement.map(p => [p.start, p.length])).toEqual([[0, 2], [2, 3], [5, 3]]);
+    expect(store.undoLabel).toBe('Dividi');
+    store.apply(splitRange(refs(), 6, 12)); // la fine oltre la clip: un solo taglio
+    expect(store.project.tracks[0].arrangement.map(p => p.start)).toEqual([0, 2, 5, 6]);
+  });
+
+  it('staccare un tratto: i pezzi dentro, uno per clip', () => {
+    const { store, track, ids } = setup({ midi: 1 });
+    store.apply(addMidiClip(track(0), 0, 4));
+    store.apply(addMidiClip(track(0), 4, 4));
+    const before = store.project;
+    const cut = cutOutRange(before, ids, resolveSelection(before, new Set(before.tracks[0].arrangement.map(p => p.id))), { start: 2, end: 6 });
+    expect(before.tracks[0].arrangement).toHaveLength(2); // il progetto di partenza non cambia
+    const lane = cut.project.tracks[0].arrangement;
+    expect(lane.map(p => [p.start, p.length])).toEqual([[0, 2], [2, 2], [4, 2], [6, 2]]);
+    expect(cut.pieces.map(r => lane.find(p => p.id === r.id)!.start)).toEqual([2, 4]);
   });
 
   it('importare un sample: sulla traccia audio indicata, altrimenti su una nuova', () => {

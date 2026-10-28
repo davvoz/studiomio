@@ -8,6 +8,7 @@ import { placementEnd, type Placement } from '../../model/arrangement';
 import { AudioClip } from '../../model/audio-clip';
 import type { Clip } from '../../model/clip';
 import { MidiClip } from '../../model/midi-clip';
+import type { TimeRange } from '../../model/note-edits';
 import type { LoopRegion, Project } from '../../model/project';
 import { GroupTrack } from '../../model/track';
 import { contentToSeconds } from '../clip-editor/clip-geometry';
@@ -30,6 +31,8 @@ export interface LanePaint {
   readonly height: number;
   readonly grid: Beats;
   readonly selection: ReadonlySet<PlacementId>;
+  /** Il tratto di tempo selezionato dentro le clip selezionate, o null se sono selezionate intere. */
+  readonly range: TimeRange | null;
   readonly peaks: (clip: AudioClip) => Peaks | null;
   /** Clip da non disegnare (sono in anteprima altrove durante un trascinamento). */
   readonly hidden: ReadonlySet<PlacementId>;
@@ -146,13 +149,19 @@ function paintClip(g: CanvasRenderingContext2D, pl: Placement, trackIndex: numbe
   g.font = '600 10.5px system-ui, sans-serif';
   g.fillText(clipLabel(pl.clip), box.x + 4, box.y + 10.5);
   g.restore();
-  if (selected) {
-    g.strokeStyle = COLORS.select;
-    g.lineWidth = 1.5;
-    roundRect(g, { x: box.x + 0.75, y: box.y + 0.75, w: box.w - 1.5, h: box.h - 1.5 });
-    g.stroke();
-    g.lineWidth = 1;
+  if (!selected) return;
+  // con un tratto selezionato si evidenzia solo quello
+  const r = lp.range;
+  const sel = r ? clipBox(lp.geo, trackIndex, Math.max(pl.start, r.start), Math.min(placementEnd(pl), r.end)) : box;
+  if (r) {
+    g.fillStyle = 'rgba(255,255,255,0.16)';
+    g.fillRect(sel.x, sel.y, sel.w, sel.h);
   }
+  g.strokeStyle = COLORS.select;
+  g.lineWidth = 1.5;
+  roundRect(g, { x: sel.x + 0.75, y: sel.y + 0.75, w: sel.w - 1.5, h: sel.h - 1.5 });
+  g.stroke();
+  g.lineWidth = 1;
 }
 
 const clipLabel = (c: Clip): string => (c instanceof AudioClip && c.transpose ? `${c.name}  ${c.transpose > 0 ? '+' : ''}${c.transpose} st` : c.name);

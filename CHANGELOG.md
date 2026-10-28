@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Time selection in the arrangement, as in Live: a box that only covers part of a clip now
+  selects just that stretch of time, and its edges follow the grid. Dragging the highlighted
+  stretch splits the clip at its edges and moves only that part (Ctrl copies it). Delete removes
+  only the stretch, and Ctrl+E splits the clip at both edges. A single undo puts the clip back
+  together.
+
 ## [0.3.34] - 2026-10-28
 
 ### Added

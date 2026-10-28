@@ -25,8 +25,8 @@ import { showContextMenu } from '../ui/context-menu';
 import { choose } from '../ui/dialog';
 import { gridStep } from '../ui/timeline/geometry';
 import { rulerMenu, timelineMenu, type TimelineActions } from './menus';
-import { ProjectStore } from '../store/project-store';
-import { addedPlacements, deleteMany, duplicateLoopRegion, duplicateMany, splitMany } from '../store/selection-edits';
+import { edit, ProjectStore } from '../store/project-store';
+import { addedPlacements, cutOutRange, deleteMany, duplicateLoopRegion, duplicateMany, splitMany } from '../store/selection-edits';
 import { BottomPanel, type BottomView } from '../ui/bottom-panel';
 import { acceptBrowserDrops } from '../ui/browser/browser-drag';
 import { BrowserView } from '../ui/browser/browser-view';
@@ -237,9 +237,13 @@ export class App implements Commands, TimelineActions {
   undo(): void { this.store.undo(); }
   redo(): void { this.store.redo(); }
 
+  /** Con un tratto di tempo selezionato si elimina solo quello, come in Live. */
   deleteSelection(): void {
-    const refs = this.selection();
-    if (refs.length) this.store.apply(deleteMany(refs));
+    const refs = this.selection(), range = this.ui.range;
+    if (!refs.length) return;
+    if (!range) return void this.store.apply(deleteMany(refs));
+    const cut = cutOutRange(this.store.project, this.store.ids, refs, range);
+    this.store.apply(edit('Elimina clip', (_p, ctx) => deleteMany(cut.pieces).apply(cut.project, ctx)));
   }
 
   colorSelection(color: Color | undefined): void {
@@ -296,9 +300,14 @@ export class App implements Commands, TimelineActions {
     if (added.length < copied.items.length) this.say(`Incollate ${added.length} clip su ${copied.items.length}: le altre non hanno una traccia adatta.`);
   }
 
-  /** Divide nel punto del cursore le clip selezionate (o, senza selezione, tutte). */
+  /** Divide nel punto del cursore le clip selezionate (o, senza selezione, tutte); con un tratto
+   *  di tempo selezionato lo divide ai suoi bordi, come in Live, e resta selezionato il pezzo dentro. */
   splitAtCursor(): void {
-    this.splitSelectionAt(this.audio.engine.position);
+    const range = this.ui.range;
+    if (!range) return this.splitSelectionAt(this.audio.engine.position);
+    const cut = cutOutRange(this.store.project, this.store.ids, this.selection(), range);
+    this.store.apply(edit('Dividi', () => cut.project));
+    this.ui.select(cut.pieces.map(r => r.id));
   }
 
   splitSelectionAt(beat: Beats): void {
