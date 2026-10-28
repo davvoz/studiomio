@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.35] - 2026-10-28
+
 ### Added
 - Time selection in the arrangement, as in Live: a box that only covers part of a clip now
   selects just that stretch of time, and its edges follow the grid. Dragging the highlighted
