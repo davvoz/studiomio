@@ -145,7 +145,9 @@ export class ProjectCodec {
       mixer: encodeMixer(t.mixer),
       ...(Object.keys(t.sends).length ? { sends: { ...t.sends } as JsonObject } : {}),
       arrangement: t.arrangement.map(pl => ({
-        id: pl.id, start: pl.start, length: pl.length, offset: pl.offset, clip: this.encodeClip(pl.clip),
+        id: pl.id, start: pl.start, length: pl.length, offset: pl.offset,
+        ...(pl.fadeIn ? { fadeIn: pl.fadeIn } : {}), ...(pl.fadeOut ? { fadeOut: pl.fadeOut } : {}),
+        clip: this.encodeClip(pl.clip),
       })),
       slots: t.slots.map(c => (c ? this.encodeClip(c) : null)),
       effects: t.effects.map(encodeEffect),
@@ -207,6 +209,7 @@ export class ProjectCodec {
     };
     const arrangement: Placement[] = r.array('arrangement').map(p => ({
       id: asId(p.str('id')), start: p.num('start'), length: p.num('length'), offset: p.num('offset'),
+      ...(p.has('fadeIn') ? { fadeIn: p.num('fadeIn') } : {}), ...(p.has('fadeOut') ? { fadeOut: p.num('fadeOut') } : {}),
       clip: clipFor(p.get('clip')),
     }));
     return type.create({

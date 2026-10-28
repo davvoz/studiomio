@@ -7,9 +7,9 @@ import { addMidiClip } from '../../store/edits';
 import type { ProjectStore } from '../../store/project-store';
 import type { UiState } from '../ui-state';
 import type { PeakStore } from '../waveform';
-import { gridStep, hitTest, snapTo, type Hit } from './geometry';
+import { gridStep, hitTest, snapTo, type ClipZone, type Hit } from './geometry';
 import {
-  LoopRegionGesture, MarqueeGesture, MoveClipsGesture, PanGesture, ResizeClipGesture, ScrubGesture,
+  FadeGesture, LoopRegionGesture, MarqueeGesture, MoveClipsGesture, PanGesture, ResizeClipGesture, ScrubGesture,
   type Gesture, type GestureHost, type Pointer,
 } from './gestures';
 import { TimelineScrollbar } from './scrollbar';
@@ -35,7 +35,7 @@ export interface ArrangementDeps {
   readonly rulerMenu?: (x: number, y: number) => void;
 }
 
-type HitKey = 'clip:body' | 'clip:start' | 'clip:end' | 'lane' | 'empty';
+type HitKey = `clip:${ClipZone}` | 'lane' | 'empty';
 const keyOf = (h: Hit): HitKey => (h.kind === 'clip' ? `clip:${h.zone}` : h.kind);
 
 /** Quale gesto inizia premendo su ciascuna cosa. */
@@ -43,12 +43,15 @@ const gestureFor: Readonly<Record<HitKey, (host: GestureHost, hit: Hit, p: Point
   'clip:body': (h, hit, p) => new MoveClipsGesture(h, hit as Extract<Hit, { kind: 'clip' }>, p),
   'clip:start': (h, hit) => new ResizeClipGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
   'clip:end': (h, hit) => new ResizeClipGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
+  'clip:fadeIn': (h, hit) => new FadeGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
+  'clip:fadeOut': (h, hit) => new FadeGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
   lane: (h, _hit, p) => new MarqueeGesture(h, p),
   empty: (h, _hit, p) => new MarqueeGesture(h, p),
 };
 
 const hoverCursor: Readonly<Record<HitKey, string>> = {
-  'clip:body': 'grab', 'clip:start': 'ew-resize', 'clip:end': 'ew-resize', lane: 'default', empty: 'default',
+  'clip:body': 'grab', 'clip:start': 'ew-resize', 'clip:end': 'ew-resize', 'clip:fadeIn': 'col-resize', 'clip:fadeOut': 'col-resize',
+  lane: 'default', empty: 'default',
 };
 
 /** La timeline: righello con loop e testina, corsie con le clip, gesti del mouse. */
@@ -64,6 +67,8 @@ export class ArrangementView implements GestureHost {
     this.scrollTo(beat, this.geo.scrollY);
   });
   private gesture: Gesture | null = null;
+  /** La clip sotto il puntatore (mostra le maniglie delle dissolvenze). */
+  private hovered: PlacementId | null = null;
   private dirty = true;
 
   constructor(private readonly deps: ArrangementDeps) {
@@ -162,7 +167,7 @@ export class ArrangementView implements GestureHost {
       paintRuler(this.ruler.g, project, this.geo, this.ruler.width, this.ruler.height, grid);
       paintLanes(this.lanes.g, {
         project: this.gesture?.preview ?? project, geo: this.geo, width: this.lanes.width, height: this.lanes.height, grid,
-        selection: this.ui.selection, range: this.ui.range, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTracks: this.ui.selectedTracks,
+        selection: this.ui.selection, range: this.ui.range, hovered: this.hovered, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTracks: this.ui.selectedTracks,
         peaks: (c: AudioClip) => this.deps.peaks.get(c.sample, c.reversed),
       });
       this.updateScrollbar();
@@ -205,6 +210,12 @@ export class ArrangementView implements GestureHost {
     });
   }
 
+  private hover(id: PlacementId | null): void {
+    if (id === this.hovered) return;
+    this.hovered = id;
+    this.invalidate();
+  }
+
   /** Mentre suona, chi sposta la vista o modifica la timeline sospende Segui (come in Live). */
   private pauseFollow(): void {
     if (this.deps.engine.playing) this.ui.pauseFollow();
@@ -233,8 +244,11 @@ export class ArrangementView implements GestureHost {
         this.gesture.move(p);
         return;
       }
-      el.style.cursor = hoverCursor[keyOf(hitTest(this.store.project, this.geo, p.x, p.y))];
+      const hit = hitTest(this.store.project, this.geo, p.x, p.y);
+      el.style.cursor = hoverCursor[keyOf(hit)];
+      this.hover(hit.kind === 'clip' ? hit.placement.id : null);
     });
+    el.addEventListener('pointerleave', () => this.hover(null));
     this.bindGestureEnd(el);
     el.addEventListener('contextmenu', e => {
       e.preventDefault();

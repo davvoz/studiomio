@@ -12,6 +12,9 @@ export interface Placement<C extends Clip = Clip> {
   readonly length: Beats;
   /** Battiti della clip saltati all'inizio (bordo sinistro tagliato). */
   readonly offset: Beats;
+  /** Dissolvenze in entrata e in uscita, in battiti (le clip audio, come in Live). */
+  readonly fadeIn?: Beats;
+  readonly fadeOut?: Beats;
 }
 
 export type Lane<C extends Clip = Clip> = readonly Placement<C>[];
@@ -25,14 +28,29 @@ function fitToClip<C extends Clip>(p: Placement<C>): Placement<C> {
   if (p.offset < 0) throw new RangeError(`offset negativo: ${p.offset}`);
   const length = Math.min(p.length, p.clip.playLength - p.offset);
   if (!(length > EPS)) throw new RangeError(`durata non valida: ${p.length}`);
-  return length === p.length ? p : { ...p, length };
+  return fitFades(length === p.length ? p : { ...p, length });
+}
+
+/** Le dissolvenze dentro la durata della clip (quella in entrata ha la precedenza); quelle
+ *  nulle spariscono. */
+function fitFades<C extends Clip>(p: Placement<C>): Placement<C> {
+  if (p.fadeIn === undefined && p.fadeOut === undefined) return p;
+  const { fadeIn = 0, fadeOut = 0, ...rest } = p;
+  const fi = Math.min(Math.max(0, fadeIn), p.length), fo = Math.min(Math.max(0, fadeOut), p.length - fi);
+  return { ...rest, ...(fi > EPS ? { fadeIn: fi } : {}), ...(fo > EPS ? { fadeOut: fo } : {}) };
 }
 
 /** Parte di `p` che resta tenendo solo [from, to) della timeline, o null se non resta nulla. */
 export function keepBetween<C extends Clip>(p: Placement<C>, from: Beats, to: Beats, id: PlacementId): Placement<C> | null {
   const s = Math.max(p.start, from), e = Math.min(placementEnd(p), to);
   if (e - s <= EPS) return null;
-  return { ...p, id, start: s, length: e - s, offset: p.offset + (s - p.start) };
+  // un bordo tagliato perde la sua dissolvenza
+  const { fadeIn, fadeOut, ...rest } = p;
+  return fitFades({
+    ...rest, id, start: s, length: e - s, offset: p.offset + (s - p.start),
+    ...(fadeIn && s <= p.start + EPS ? { fadeIn } : {}),
+    ...(fadeOut && e >= placementEnd(p) - EPS ? { fadeOut } : {}),
+  });
 }
 
 /** Posa `placement` sulla corsia. Come in Live, la clip nuova vince: le clip sotto vengono

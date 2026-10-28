@@ -16,6 +16,23 @@ export interface Piece<C extends Clip = Clip> {
   readonly start: number;
   readonly end: number;
   readonly contentStart: Beats;
+  /** Le dissolvenze della clip posata, se ne ha (solo sulla timeline). */
+  readonly fades?: PieceFades;
+}
+
+/** Le dissolvenze di una clip posata sull'orologio: la clip va da `start` a `end`, sale per
+ *  `fadeIn` battiti e scende negli ultimi `fadeOut`. */
+export interface PieceFades {
+  readonly start: number;
+  readonly end: number;
+  readonly fadeIn: Beats;
+  readonly fadeOut: Beats;
+}
+
+/** Il guadagno delle dissolvenze (0..1) al punto `at` dell'orologio. */
+export function fadeGainAt(f: PieceFades, at: number): number {
+  const up = f.fadeIn > 0 ? (at - f.start) / f.fadeIn : 1, down = f.fadeOut > 0 ? (f.end - at) / f.fadeOut : 1;
+  return Math.max(0, Math.min(1, up, down));
 }
 
 const EPS = 1e-9;
@@ -29,8 +46,8 @@ export function piecesInWindow<C extends Clip>(
 ): Piece<C>[] {
   const from = w.from + w.shift, to = w.to + w.shift;
   const out: Piece<C>[] = [];
-  const push = (clip: C, seg: Segment, start: number, end: number, segStart: number) => {
-    if (end - start > EPS) out.push({ clip, start, end, contentStart: seg.contentStart + (start - segStart) });
+  const push = (clip: C, seg: Segment, start: number, end: number, segStart: number, fades?: PieceFades) => {
+    if (end - start > EPS) out.push({ clip, start, end, contentStart: seg.contentStart + (start - segStart), ...(fades && { fades }) });
   };
   for (const prog of programs) {
     if (prog.until <= from || prog.from >= to) continue;
@@ -39,9 +56,12 @@ export function piecesInWindow<C extends Clip>(
       const lo = Math.max(w.from, w.runStart);
       for (const p of track.arrangement) {
         if (p.start >= w.to || placementEnd(p) <= lo) continue;
+        const fades = p.fadeIn || p.fadeOut
+          ? { start: p.start + w.shift, end: placementEnd(p) + w.shift, fadeIn: p.fadeIn ?? 0, fadeOut: p.fadeOut ?? 0 }
+          : undefined;
         for (const seg of arrangement(p)) {
           const start = Math.max(seg.start, w.runStart) + w.shift, end = Math.min(seg.end, w.runEnd) + w.shift;
-          push(p.clip, seg, Math.max(start, prog.from), Math.min(end, prog.until), seg.start + w.shift);
+          push(p.clip, seg, Math.max(start, prog.from), Math.min(end, prog.until), seg.start + w.shift, fades);
         }
       }
     } else {

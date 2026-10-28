@@ -7,10 +7,10 @@ import { paramSpec, resolveParams, type DeviceType } from '../../devices/device-
 import { paramFromUnit, paramToUnit, type ChoiceParam } from '../../devices/params';
 import { effectType, instrumentType } from '../../devices/registry';
 import type { EffectSettings, InstrumentSettings } from '../../model/device';
-import { INSTRUMENT_DEVICE, scaleKindOf, type ModScaleKind, type ModTarget } from '../../model/envelope';
+import { CLIP_TRANSPOSE, INSTRUMENT_DEVICE, scaleKindOf, type ModScaleKind, type ModTarget } from '../../model/envelope';
 import { MASTER, type Project } from '../../model/project';
 import { chainItems, macroName, macroParam, rackName, type DeviceKey, type Rack, type RackList } from '../../model/rack';
-import { MidiTrack, type Track } from '../../model/track';
+import { AudioTrack, MidiTrack, type Track } from '../../model/track';
 
 /** Una catena di dispositivi da modulare: quella di una traccia o quella del master. */
 export interface ModChain {
@@ -72,9 +72,18 @@ function deviceTargets(key: string, label: string, type: DeviceType | undefined)
   return { key, label, sections };
 }
 
-/** I dispositivi della traccia, nell'ordine in cui il suono li attraversa (il mixer per primo);
- *  un rack viene prima dei suoi dispositivi, con le sue macro. */
-export const targetDevices = (track: Track): TargetDevice[] => [MIXER, ...chainTargets(trackChain(track))];
+/** Su una traccia audio la clip stessa: il suo transpose, come in Live. */
+const AUDIO_CLIP: TargetDevice = {
+  key: 'clip',
+  label: 'Clip',
+  sections: [{ label: 'Clip', params: [{ target: CLIP_TRANSPOSE, label: 'Transpose' }] }],
+};
+
+/** I dispositivi della traccia, nell'ordine in cui il suono li attraversa (la clip audio e il
+ *  mixer per primi); un rack viene prima dei suoi dispositivi, con le sue macro. */
+export const targetDevices = (track: Track): TargetDevice[] => [
+  ...(track instanceof AudioTrack ? [AUDIO_CLIP] : []), MIXER, ...chainTargets(trackChain(track)),
+];
 
 /** Gli effetti del master e le macro dei suoi rack (il suo volume non si modula). */
 export const masterTargetDevices = (p: Project): TargetDevice[] => chainTargets(masterChain(p));
@@ -118,13 +127,15 @@ const rackTargets = (rack: Rack, label: (device: DeviceKey, param: string) => st
 });
 
 /** Il dispositivo che contiene il bersaglio. */
-export const deviceKeyOf = (t: ModTarget): string => (t.kind === 'mixer' ? 'mixer' : t.device);
+export const deviceKeyOf = (t: ModTarget): string => (t.kind === 'device' ? t.device : t.kind);
 
 /** Come si scrive un valore della curva, per tipo di bersaglio. */
 const FORMATS: { readonly [K in ModScaleKind]: (v: number) => string } = {
   volume: v => (v <= 0.0001 ? '0 % (−∞ dB)' : `${Math.round(v * 100)} % (${(40 * Math.log10(v)).toFixed(1)} dB)`),
   pan: v => (Math.abs(v) < 0.005 ? 'centro' : `${Math.round(Math.abs(v) * 100)} ${v < 0 ? 'L' : 'R'}`),
   param: v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.round(Math.abs(v) * 100)} %`,
+  // la clip suona il semitono più vicino
+  transpose: v => { const st = Math.round(v); return `${st > 0 ? '+' : st < 0 ? '−' : ''}${Math.abs(st)} st`; },
 };
 
 /** Come si scrive un valore della curva; per una scelta (con la sua catena) anche l'opzione che

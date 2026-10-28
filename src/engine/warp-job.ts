@@ -50,8 +50,12 @@ function mapPoints(markers: WarpMarkers, duration: number, sr: number, tempo: Te
   return points;
 }
 
-/** Il lavoro di warp di una clip audio (con warp attivo) al tempo del progetto. */
-export function clipRender(clip: AudioClip, sample: SampleRef, tempo: TempoMap): ClipRender {
+/** L'altezza della clip con `shift` semitoni in più, dentro i limiti del transpose. */
+export const shiftedPitch = (clip: AudioClip, shift: number): number => Math.max(-48, Math.min(48, clip.transpose + shift)) + clip.detune / 100;
+
+/** Il lavoro di warp di una clip audio (con warp attivo) al tempo del progetto, trasposta di
+ *  `shift` semitoni in più (la curva del transpose). */
+export function clipRender(clip: AudioClip, sample: SampleRef, tempo: TempoMap, shift = 0): ClipRender {
   if (!clip.warp.enabled) throw new Error('la clip non usa il warp');
   if (clip.sample !== sample.id) throw new Error('il sample non è quello della clip');
   const sr = sample.sampleRate, duration = sampleDuration(sample), markers = clip.warp.markers;
@@ -71,7 +75,7 @@ export function clipRender(clip: AudioClip, sample: SampleRef, tempo: TempoMap):
     job: {
       points,
       outLength: Math.max(1, Math.round(points[points.length - 1][0])),
-      transpose: clip.pitch,
+      transpose: shiftedPitch(clip, shift),
       settings,
       // solo se serve: le clip dritte tengono la chiave di render di sempre
       ...(clip.reversed ? { reverse: true } : {}),

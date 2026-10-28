@@ -57,7 +57,12 @@ export function gridStep(pxPerBeat: number, signature: TimeSignature, minPx = 14
 
 export const snapTo = (b: Beats, step: Beats): Beats => Math.round(b / step) * step;
 
-export type ClipZone = 'body' | 'start' | 'end';
+/** L'intestazione colorata di una clip (con il nome), in pixel. */
+export const CLIP_HEADER = 14;
+
+/** Le zone di una clip: il corpo la sposta, i bordi la ridimensionano, le maniglie negli angoli
+ *  in alto (solo le clip audio) cambiano le dissolvenze. */
+export type ClipZone = 'body' | 'start' | 'end' | 'fadeIn' | 'fadeOut';
 
 /** Cosa c'è sotto il puntatore nell'area delle tracce. */
 export type Hit =
@@ -67,6 +72,18 @@ export type Hit =
 
 /** Larghezza della zona dei bordi di una clip, che li ridimensiona. */
 const EDGE_PX = 6;
+/** Lato delle maniglie delle dissolvenze; sotto questa larghezza (in pixel) la clip non le ha. */
+export const FADE_HANDLE_PX = 6;
+const FADE_MIN_CLIP_PX = 28;
+
+/** Dove stanno (x) le maniglie delle dissolvenze in entrata e in uscita di una clip: alla fine
+ *  della dissolvenza, dentro la clip; null se la clip non ne ha (non è audio o è troppo stretta). */
+export function fadeHandles(geo: TimelineGeometry, pl: Placement): { in: number; out: number } | null {
+  const x0 = geo.beatToX(pl.start), x1 = geo.beatToX(placementEnd(pl)), h = FADE_HANDLE_PX / 2;
+  if (pl.clip.kind !== 'audio' || x1 - x0 < FADE_MIN_CLIP_PX) return null;
+  const inside = (x: number) => Math.max(x0 + h, Math.min(x1 - h, x));
+  return { in: inside(geo.beatToX(pl.start + (pl.fadeIn ?? 0))), out: inside(geo.beatToX(placementEnd(pl) - (pl.fadeOut ?? 0))) };
+}
 
 /** Le righe della timeline sono le tracce che si vedono (`Project.visibleTracks`). */
 export function hitTest(project: Project, geo: TimelineGeometry, x: number, y: number): Hit {
@@ -77,8 +94,11 @@ export function hitTest(project: Project, geo: TimelineGeometry, x: number, y: n
   const placement = track.arrangement.find(p => p.start <= beat && placementEnd(p) > beat);
   if (!placement) return { kind: 'lane', trackIndex: index, track: track.id, beat };
   const x0 = geo.beatToX(placement.start), x1 = geo.beatToX(placementEnd(placement));
+  const handles = y - geo.trackTop(index) < CLIP_HEADER + 2 ? fadeHandles(geo, placement) : null;
+  const near = (hx: number) => Math.abs(x - hx) <= FADE_HANDLE_PX / 2 + 2;
   const edge = Math.min(EDGE_PX, (x1 - x0) / 4);
-  const zone: ClipZone = x - x0 < edge ? 'start' : x1 - x < edge ? 'end' : 'body';
+  const zone: ClipZone = handles && near(handles.in) ? 'fadeIn' : handles && near(handles.out) ? 'fadeOut'
+    : x - x0 < edge ? 'start' : x1 - x < edge ? 'end' : 'body';
   return { kind: 'clip', zone, trackIndex: index, track: track.id, placement, beat };
 }
 

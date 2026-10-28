@@ -6,6 +6,18 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Fades on audio clips in the arrangement, as in Live: hover a clip (or select it) and drag the
+  small handles in its top corners to set the fade in and the fade out. The faded part is shaded
+  with the volume line drawn over it. Fades don't follow the grid, and you hear them while
+  dragging. They are saved with the project, a split keeps only the fades of the original edges,
+  and Consolidate bakes them into the new file.
+- Audio clips can modulate their own transpose, like Live's Transposition envelope: in the clip
+  editor's Modulations choose Clip › Transpose and draw a curve (−48 to +48 semitones, added to
+  the clip's transpose). The clip plays the nearest semitone, keeping its timing with every warp
+  mode. Each semitone the curve reaches is rendered once, so the first play of a new value can
+  take a moment.
+
 ## [0.3.36] - 2026-10-28
 
 ### Added

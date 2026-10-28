@@ -5,7 +5,8 @@ import { dbToGain } from '../audio-graph';
 import type { PlayableProvider } from '../clip-audio';
 import { timeAtClock, type ScheduleWindow } from '../scheduler';
 import { placementSegments, type Segment } from '../segments';
-import { piecesInWindow, type Piece } from '../track-content';
+import { fadeGainAt, piecesInWindow, type Piece } from '../track-content';
+import { CLIP_TRANSPOSE, steppedRuns } from '../../model/envelope';
 import { ActiveNodes, stopQuietly, type PlayerContext, type TrackPlayer } from './track-player';
 
 /** Dissolvenza agli estremi di ogni tratto: evita i clic su tagli e giri di loop. */
@@ -63,8 +64,20 @@ export class AudioTrackPlayer implements TrackPlayer {
     return s;
   }
 
-  private play({ clip, start, end: stop, contentStart }: Piece<AudioClip>, w: ScheduleWindow): void {
-    const playable = this.clips.playable(clip);
+  /** Un tratto; con la curva del transpose, un pezzo per ogni semitono che tocca (si passa da
+   *  uno all'altro con le dissolvenze anti-clic). */
+  private play(piece: Piece<AudioClip>, w: ScheduleWindow): void {
+    const curve = piece.clip.envelope(CLIP_TRANSPOSE)?.points;
+    if (!curve?.length) return this.playRun(piece, w, 0);
+    const { start, end, contentStart } = piece;
+    for (const run of steppedRuns(curve, contentStart, contentStart + end - start)) {
+      const at = (c: number) => start + c - contentStart;
+      this.playRun({ ...piece, start: at(run.from), end: at(run.to), contentStart: run.from }, w, run.value);
+    }
+  }
+
+  private playRun({ clip, start, end: stop, contentStart, fades }: Piece<AudioClip>, w: ScheduleWindow, shift: number): void {
+    const playable = this.clips.playable(clip, shift);
     // l'audio (quello giusto) arriva: il motore riprogrammerà quando è pronto
     if (!playable || playable.provisional) this.ctx.missing();
     if (!playable) return;
@@ -93,7 +106,18 @@ export class AudioTrackPlayer implements TrackPlayer {
     amp.gain.setValueAtTime(g, when + duration - fade);
     amp.gain.linearRampToValueAtTime(0, when + duration);
     src.connect(amp);
-    amp.connect(output);
+    // le dissolvenze della clip posata: un guadagno in più, che segue la retta disegnata
+    const fadeGain = fades ? graph.createGain() : null;
+    if (fadeGain && fades) {
+      const at = (b: number) => Math.max(0, timeAtClock(w, b));
+      fadeGain.gain.setValueAtTime(fadeGainAt(fades, start), at(start));
+      for (const b of [fades.start + fades.fadeIn, fades.end - fades.fadeOut]) {
+        if (b > start && b < stop) fadeGain.gain.linearRampToValueAtTime(fadeGainAt(fades, b), at(b));
+      }
+      fadeGain.gain.linearRampToValueAtTime(fadeGainAt(fades, stop), at(stop));
+      amp.connect(fadeGain);
+      fadeGain.connect(output);
+    } else amp.connect(output);
     src.start(when, offset, duration * rate);
     src.stop(when + duration);
     const ends = when + duration;
@@ -110,6 +134,7 @@ export class AudioTrackPlayer implements TrackPlayer {
     this.active.add(src, () => {
       src.disconnect();
       amp.disconnect();
+      fadeGain?.disconnect();
     }, {
       cut: at => fadeOut(at - FADE, at),
       // il tratto nuovo entra da `at` con la sua dissolvenza e questo esce nello stesso tempo:

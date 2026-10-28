@@ -276,6 +276,10 @@ export const resizePlacement = (trackId: TrackId, id: PlacementId, edges: { star
     return { ...pl, start, length: end - start, offset: pl.offset + (start - pl.start) };
   }, ids)));
 
+/** Le dissolvenze di una clip audio posata (0 ne toglie una). */
+export const setFades = (trackId: TrackId, id: PlacementId, fades: { fadeIn?: Beats; fadeOut?: Beats }): Edit =>
+  edit('Dissolvenza', (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => ({ ...pl, ...fades }), ids)));
+
 export const splitPlacement = (trackId: TrackId, id: PlacementId, at: Beats): Edit =>
   edit('Dividi clip', (p, { ids }) => p.updatingTrack(trackId, t => t.splitting(id, at, ids)));
 

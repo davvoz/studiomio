@@ -1,7 +1,7 @@
 import type { PlacementId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import { placementEnd, type Placement } from '../../model/arrangement';
-import { resizePlacement, setLoopRegion } from '../../store/edits';
+import { resizePlacement, setFades, setLoopRegion } from '../../store/edits';
 import type { TimeRange } from '../../model/note-edits';
 import type { LoopRegion, Project } from '../../model/project';
 import { edit } from '../../store/project-store';
@@ -179,6 +179,40 @@ export class ResizeClipGesture implements Gesture {
     const e = this.edges ?? { start: this.placement.start, end: placementEnd(this.placement) };
     paintGhost(g, geo, this.hit.trackIndex, e.start, e.end, this.placement.clip.color);
   }
+}
+
+/** Trascinare una maniglia in alto a una clip audio: la dissolvenza in entrata (a sinistra) o in
+ *  uscita (a destra), libera dalla griglia come in Live. Si sente subito; resta un solo passo di
+ *  annullamento. */
+export class FadeGesture implements Gesture {
+  readonly cursor = 'col-resize';
+  readonly hidden = NONE;
+  private moved = false;
+
+  constructor(private readonly host: GestureHost, private readonly hit: Extract<Hit, { kind: 'clip' }>) {
+    host.ui.select([hit.placement.id]);
+  }
+
+  move(p: Pointer): void {
+    const { host, hit } = this, pl = hit.placement;
+    const beat = host.geo.xToBeat(p.x), len = pl.length;
+    const clamp = (b: Beats, max: Beats) => Math.max(0, Math.min(max, b));
+    const fades = hit.zone === 'fadeIn'
+      ? { fadeIn: clamp(beat - pl.start, len - (pl.fadeOut ?? 0)) }
+      : { fadeOut: clamp(placementEnd(pl) - beat, len - (pl.fadeIn ?? 0)) };
+    this.moved = true;
+    host.store.apply(setFades(hit.track, pl.id, fades), { mergeKey: 'fade-drag' });
+  }
+
+  end(): void {
+    if (this.moved) this.host.store.endMerge();
+  }
+
+  cancel(): void {
+    this.host.store.endMerge();
+  }
+
+  paint(): void { /* la dissolvenza si vede sulla clip */ }
 }
 
 /** Trascinare nel vuoto: selezione a riquadro, con i bordi sulla griglia. Se il riquadro prende

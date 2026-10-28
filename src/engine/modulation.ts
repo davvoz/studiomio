@@ -83,6 +83,8 @@ const OUTPUT: { readonly [K in ModScaleKind]: { readonly map: (v: number) => num
   volume: { map: v => v * v, curved: true },
   pan: { map: v => v, curved: false },
   param: { map: v => v, curved: false },
+  // il transpose lo suona la clip audio stessa (vedi AudioTrackPlayer): qui non arriva
+  transpose: { map: v => v, curved: false },
 };
 
 /** Lunghezza massima (in battiti) di un tratto di rampa per le mappe curve. */

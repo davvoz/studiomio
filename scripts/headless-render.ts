@@ -165,6 +165,7 @@ class TrackRender {
       this.curves[t.param].push({ start: startSec, end: endSec, at });
       return;
     }
+    if (t.kind === 'clip') return; // il transpose delle clip audio: qui suonano solo le MIDI
     const sink = t.device === 'instrument' ? this.instMod : this.chain.fx.find(f => f.id === t.device)?.mod;
     if (!sink) return;
     sink.event(t.param, 'set', envelopeValueAt(env.points, c0), time(c0));

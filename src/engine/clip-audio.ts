@@ -3,12 +3,13 @@ import type { ClipId, SampleId } from '../core/id';
 import type { Beats, TempoMap } from '../core/music-time';
 import { SupersededError } from '../workers/worker-pool';
 import { AudioClip } from '../model/audio-clip';
+import { CLIP_TRANSPOSE, steppedValues } from '../model/envelope';
 import type { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
 import { toAudioBuffer, type AudioBufferLike, type AudioGraph } from './audio-graph';
 import { renderKey, type RenderCache } from './render-cache';
 import type { SampleLibrary } from './sample-library';
-import { clipRender, type ClipRender } from './warp-job';
+import { clipRender, shiftedPitch, type ClipRender } from './warp-job';
 
 /** Audio pronto per una clip: il buffer, il battito della clip in cui cade il suo primo
  *  campione e la velocità di lettura (≠ 1 solo senza warp, per il transpose). */
@@ -22,9 +23,13 @@ export interface Playable {
 }
 
 export interface PlayableProvider {
-  /** L'audio della clip se è pronto; altrimenti lo chiede e restituisce null. */
-  playable(clip: AudioClip): Playable | null;
+  /** L'audio della clip (trasposta di `shift` semitoni in più) se è pronto; altrimenti lo
+   *  chiede e restituisce null. */
+  playable(clip: AudioClip, shift?: number): Playable | null;
 }
+
+/** Gli spostamenti in semitoni che la curva del transpose della clip suona, oltre a 0. */
+const shiftsOf = (clip: AudioClip) => steppedValues(clip.envelope(CLIP_TRANSPOSE)?.points ?? []).filter(s => s !== 0);
 
 type ClipAudioEvents = {
   /** Un render richiesto è pronto: chi sta suonando può riprogrammare. */
@@ -36,7 +41,7 @@ type ClipAudioEvents = {
 export class ClipAudio implements PlayableProvider {
   private tempo: TempoMap | null = null;
   private samples = new Map<string, SampleRef>();
-  private readonly jobs = new WeakMap<AudioClip, { tempo: TempoMap; sample: SampleRef; render: ClipRender; key: string }>();
+  private readonly jobs = new WeakMap<AudioClip, Map<number, { tempo: TempoMap; sample: SampleRef; render: ClipRender; key: string }>>();
   private readonly buffers = new WeakMap<readonly Float32Array[], AudioBufferLike>();
   private readonly raw = new Map<string, AudioBufferLike>();
   /** L'ultimo render pronto di ogni clip e il tempo a cui è fatto: suona al posto di quello
@@ -61,7 +66,11 @@ export class ClipAudio implements PlayableProvider {
     const clips = new Set(project.tracks.flatMap(t => t.clips.map(c => c.id)));
     for (const id of this.last.keys()) if (!clips.has(id)) this.last.delete(id);
     for (const t of project.tracks) {
-      for (const p of t.arrangement) if (p.clip instanceof AudioClip) this.playable(p.clip);
+      for (const p of t.arrangement) {
+        if (!(p.clip instanceof AudioClip)) continue;
+        this.playable(p.clip);
+        for (const shift of shiftsOf(p.clip)) this.playable(p.clip, shift);
+      }
     }
   }
 
@@ -72,14 +81,16 @@ export class ClipAudio implements PlayableProvider {
     for (const t of project.tracks) {
       for (const p of t.arrangement) {
         if (!(p.clip instanceof AudioClip) || !p.clip.warp.enabled) continue;
-        const j = this.job(p.clip);
-        if (j) waits.push(this.renders.ensure(j.key, j.sample.id, j.render.job));
+        for (const shift of [0, ...shiftsOf(p.clip)]) {
+          const j = this.job(p.clip, shift);
+          if (j) waits.push(this.renders.ensure(j.key, j.sample.id, j.render.job));
+        }
       }
     }
     await Promise.all(waits);
   }
 
-  playable(clip: AudioClip): Playable | null {
+  playable(clip: AudioClip, shift = 0): Playable | null {
     const audio = this.library.get(clip.sample);
     if (!audio) return null;
     if (!clip.warp.enabled) {
@@ -91,17 +102,18 @@ export class ClipAudio implements PlayableProvider {
         buffer = toAudioBuffer(this.graph, channels, audio.sampleRate);
         this.raw.set(key, buffer);
       }
-      return { buffer, startBeat: 0, rate: Math.pow(2, clip.pitch / 12) };
+      return { buffer, startBeat: 0, rate: Math.pow(2, shiftedPitch(clip, shift) / 12) };
     }
-    const j = this.job(clip);
+    const j = this.job(clip, shift);
     if (!j) return null;
     const channels = this.renders.get(j.key);
     if (!channels) {
-      this.renders.ensure(j.key, j.sample.id, j.render.job, clip.id).then(
+      this.renders.ensure(j.key, j.sample.id, j.render.job, shift ? `${clip.id}|${shift}` : clip.id).then(
         () => this.events.emit('ready'),
         err => { if (!(err instanceof SupersededError)) this.events.emit('error', clip, err); },
       );
-      return this.standIn(clip, j.tempo);
+      // i semitoni della curva non hanno un sostituto: arrivano in fretta e si riprogramma
+      return shift ? null : this.standIn(clip, j.tempo);
     }
     let buffer = this.buffers.get(channels);
     if (!buffer) {
@@ -109,7 +121,7 @@ export class ClipAudio implements PlayableProvider {
       this.buffers.set(channels, buffer);
     }
     const playable = { buffer, startBeat: j.render.startBeat, rate: 1 };
-    this.last.set(clip.id, { playable, tempo: j.tempo, sample: clip.sample });
+    if (!shift) this.last.set(clip.id, { playable, tempo: j.tempo, sample: clip.sample });
     return playable;
   }
 
@@ -124,15 +136,17 @@ export class ClipAudio implements PlayableProvider {
     return { ...last.playable, rate: last.playable.rate * speed, provisional: true };
   }
 
-  /** Lavoro di warp della clip al tempo corrente (memorizzato per clip e tempo). */
-  private job(clip: AudioClip) {
+  /** Lavoro di warp della clip al tempo corrente (memorizzato per clip, semitoni e tempo). */
+  private job(clip: AudioClip, shift: number) {
     const tempo = this.tempo, sample = this.samples.get(clip.sample);
     if (!tempo || !sample) return null;
-    const cached = this.jobs.get(clip);
+    let byShift = this.jobs.get(clip);
+    if (!byShift) this.jobs.set(clip, (byShift = new Map()));
+    const cached = byShift.get(shift);
     if (cached && cached.tempo === tempo && cached.sample === sample) return cached;
-    const render = clipRender(clip, sample, tempo);
+    const render = clipRender(clip, sample, tempo, shift);
     const entry = { tempo, sample, render, key: renderKey(sample.id, render.job) };
-    this.jobs.set(clip, entry);
+    byShift.set(shift, entry);
     return entry;
   }
 }

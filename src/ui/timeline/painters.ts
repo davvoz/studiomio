@@ -13,7 +13,7 @@ import type { LoopRegion, Project } from '../../model/project';
 import { GroupTrack } from '../../model/track';
 import { contentToSeconds } from '../clip-editor/clip-geometry';
 import type { Peaks } from '../waveform';
-import type { TimelineGeometry } from './geometry';
+import { CLIP_HEADER, FADE_HANDLE_PX, fadeHandles, type TimelineGeometry } from './geometry';
 
 export const COLORS = {
   bg: '#16191d', laneAlt: '#1a1d22', grid: 'rgba(255,255,255,0.05)', bar: 'rgba(255,255,255,0.13)',
@@ -22,7 +22,6 @@ export const COLORS = {
   select: '#ffffff', clipText: '#111317', ghost: 'rgba(255,255,255,0.35)', box: 'rgba(91,141,239,0.18)',
 };
 
-const CLIP_HEADER = 14;
 
 export interface LanePaint {
   readonly project: Project;
@@ -33,6 +32,8 @@ export interface LanePaint {
   readonly selection: ReadonlySet<PlacementId>;
   /** Il tratto di tempo selezionato dentro le clip selezionate, o null se sono selezionate intere. */
   readonly range: TimeRange | null;
+  /** La clip sotto il puntatore: mostra le maniglie delle dissolvenze. */
+  readonly hovered: PlacementId | null;
   readonly peaks: (clip: AudioClip) => Peaks | null;
   /** Clip da non disegnare (sono in anteprima altrove durante un trascinamento). */
   readonly hidden: ReadonlySet<PlacementId>;
@@ -145,10 +146,16 @@ function paintClip(g: CanvasRenderingContext2D, pl: Placement, trackIndex: numbe
   g.strokeStyle = withAlpha(color, 0.95);
   contentPainters[pl.clip.kind]?.(g, pl, body, lp);
   paintLoopSeams(g, pl, body, lp.geo);
+  paintFades(g, pl, body, lp.geo);
   g.fillStyle = COLORS.clipText;
   g.font = '600 10.5px system-ui, sans-serif';
   g.fillText(clipLabel(pl.clip), box.x + 4, box.y + 10.5);
   g.restore();
+  const handles = (selected || lp.hovered === pl.id) && fadeHandles(lp.geo, pl);
+  if (handles) {
+    g.fillStyle = COLORS.select;
+    for (const x of [handles.in, handles.out]) g.fillRect(Math.round(x - FADE_HANDLE_PX / 2), box.y + 1, FADE_HANDLE_PX, FADE_HANDLE_PX);
+  }
   if (!selected) return;
   // con un tratto selezionato si evidenzia solo quello
   const r = lp.range;
@@ -165,6 +172,31 @@ function paintClip(g: CanvasRenderingContext2D, pl: Placement, trackIndex: numbe
 }
 
 const clipLabel = (c: Clip): string => (c instanceof AudioClip && c.transpose ? `${c.name}  ${c.transpose > 0 ? '+' : ''}${c.transpose} st` : c.name);
+
+/** Le dissolvenze, come in Live: la retta del volume che sale dall'angolo in basso e scende
+ *  verso l'altro, con la parte tolta in ombra. */
+function paintFades(g: CanvasRenderingContext2D, pl: Placement, body: Box, geo: TimelineGeometry): void {
+  if (!pl.fadeIn && !pl.fadeOut) return;
+  const top = body.y, bottom = body.y + body.h, x0 = body.x, x1 = body.x + body.w;
+  const xi = geo.beatToX(pl.start + (pl.fadeIn ?? 0)), xo = geo.beatToX(placementEnd(pl) - (pl.fadeOut ?? 0));
+  g.fillStyle = 'rgba(0,0,0,0.4)';
+  g.strokeStyle = 'rgba(255,255,255,0.75)';
+  g.lineWidth = 1;
+  const wedge = (corner: number, edge: number) => {
+    g.beginPath();
+    g.moveTo(corner, top);
+    g.lineTo(edge, top);
+    g.lineTo(corner, bottom);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.moveTo(corner, bottom);
+    g.lineTo(edge, top);
+    g.stroke();
+  };
+  if (pl.fadeIn) wedge(x0, xi);
+  if (pl.fadeOut) wedge(x1, xo);
+}
 
 /** Linee tratteggiate dove la clip ricomincia il loop. */
 function paintLoopSeams(g: CanvasRenderingContext2D, pl: Placement, body: Box, geo: TimelineGeometry): void {

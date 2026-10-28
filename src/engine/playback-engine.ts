@@ -424,6 +424,8 @@ export class PlaybackEngine {
 
   private destination(owner: ChainOwner, target: ModTarget): ModSink | null {
     if (target.kind === 'mixer') return owner === MASTER ? null : audioParamSink(this.mixer.modulation(owner, target.param));
+    // il transpose lo suona la clip audio stessa
+    if (target.kind === 'clip') return null;
     const racks = owner === MASTER ? this.project?.masterRacks : this.project?.track(owner)?.racks;
     const rack = findRack(racks ?? [], target.device as DeviceId);
     if (rack) return this.macroSink(owner, rack, macroIndex(target.param));
