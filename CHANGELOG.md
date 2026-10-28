@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.37] - 2026-10-28
+
 ### Added
 - Fades on audio clips in the arrangement, as in Live: hover a clip (or select it) and drag the
   small handles in its top corners to set the fade in and the fade out. The faded part is shaded
