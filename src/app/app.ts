@@ -2,6 +2,9 @@ import type { TrackId } from '../core/id';
 import { randomIds } from '../core/id';
 import type { Beats, Seconds } from '../core/music-time';
 import type { Color } from '../model/clip';
+import type { Placement } from '../model/arrangement';
+import { AudioClip } from '../model/audio-clip';
+import { MidiClip } from '../model/midi-clip';
 import type { SampleRef } from '../model/sample';
 import { BrowserCatalog, standardSources } from '../browser/catalog';
 import { FsFolder, indexedDbPlaces } from '../browser/fs-folder';
@@ -19,6 +22,9 @@ import { sceneArrangement, sceneClips, sceneLength } from '../model/scene-export
 import { foldTail } from '../engine/offline-mix';
 import { addBus, addMidiClip, addTrack, setLoopRegion, starterProject, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
+import {
+  consolidatedAudioClip, consolidatedMidiClip, consolidateSpans, placementsIn, soloAudioProject, withConsolidated, type Consolidated,
+} from '../store/consolidate';
 import { sceneToArrangement } from '../store/session-edits';
 import { findClip, placementRef, setClipColor, type ClipRef } from '../store/clip-ref';
 import { showContextMenu } from '../ui/context-menu';
@@ -82,6 +88,8 @@ export class App implements Commands, TimelineActions {
   private readonly bottom = new BottomPanel();
   /** Appunti condivisi da timeline e piano roll. */
   readonly clipboard = new Clipboard();
+  /** Un consolidamento sta renderizzando l'audio: non se ne parte un altro. */
+  private consolidating = false;
   /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
   private readonly clipEditors: Readonly<Record<string, BottomView & { open(ref: ClipRef): boolean }>>;
   private readonly transport: TransportBar;
@@ -314,6 +322,49 @@ export class App implements Commands, TimelineActions {
     const p = this.store.project;
     const refs = this.selection().length ? this.selection() : p.tracks.flatMap(t => t.arrangement.map(x => ({ track: t.id, id: x.id })));
     this.store.apply(splitMany(refs, beat));
+  }
+
+  /** Consolida (Ctrl+J), come in Live: su ogni traccia le clip selezionate, dalla prima
+   *  all'ultima (o il tratto di tempo selezionato), diventano una clip sola che si sente come
+   *  prima. L'audio si renderizza senza gli effetti della traccia in un file nuovo nella
+   *  cartella del progetto. */
+  consolidateSelection(): void {
+    const refs = this.selection(), range = this.ui.range;
+    if (!refs.length) return this.say('Seleziona delle clip da consolidare.');
+    if (this.consolidating) return;
+    this.consolidating = true;
+    this.run(async () => {
+      try {
+        const base = this.store.project, ids = this.store.ids;
+        const spans = consolidateSpans(base, refs, range);
+        // con un tratto di tempo si consolida solo quello: prima le clip si dividono ai suoi bordi
+        const source = range ? cutOutRange(base, ids, spans.flatMap(s => placementsIn(base, s).map(pl => ({ track: s.track, id: pl.id }))), range).project : base;
+        const audio = spans.some(s => placementsIn(source, s).some(pl => pl.clip instanceof AudioClip));
+        if (audio) this.say('Consolidamento dell\'audio…');
+        const items: Consolidated[] = [];
+        for (const span of spans) {
+          const pls = placementsIn(source, span);
+          if (!pls.length) continue;
+          const clipId = ids.next('clip'), placement = ids.next('placement');
+          if (pls[0].clip instanceof MidiClip) {
+            items.push({ span, placement, clip: consolidatedMidiClip(clipId, pls as Placement<MidiClip>[], span.start, span.end) });
+            continue;
+          }
+          const audioPls = pls as Placement<AudioClip>[];
+          const sr = this.audio.context.sampleRate, frames = Math.round(source.tempo.secondsAt(span.end - span.start) * sr);
+          const mix = await this.audio.exportMix(span.start, span.end, soloAudioProject(source, audioPls, ids), 0);
+          const channels = mix.map(c => c.slice(0, frames));
+          const sample = await this.session.addAudio(`${audioPls[0].clip.name} consolidata.wav`, { channels, sampleRate: sr }, new Uint8Array(encodeWav(channels, sr, 24)));
+          items.push({ span, placement, sample, clip: consolidatedAudioClip(clipId, audioPls, sample, source.tempo.bpm, span.start, span.end) });
+        }
+        if (this.store.project !== base) return this.say('Il progetto è cambiato durante il consolidamento: riprova.');
+        this.store.apply(edit('Consolida', (_p, ctx) => withConsolidated(source, items, ctx.ids)));
+        this.ui.select(items.map(i => i.placement));
+        this.say(items.length === 1 ? 'Clip consolidata.' : `${items.length} clip consolidate, una per traccia.`);
+      } finally {
+        this.consolidating = false;
+      }
+    });
   }
 
   snap(beat: Beats): Beats {

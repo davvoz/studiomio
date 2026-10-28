@@ -6,6 +6,14 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Consolidate (Ctrl+J, in the Edit menu and in the clip menu), as in Live: on each track, the
+  selected clips from the first to the last become a single clip that sounds the same. Clips in
+  between are included, and loops become real notes or audio. With a time selection only that
+  stretch is consolidated. MIDI clips merge their notes and clip modulations. Audio clips are
+  rendered without the track's effects into a new file in the project folder, and their clip
+  modulations stay on the new clip. A single undo restores the original clips.
+
 ## [0.3.35] - 2026-10-28
 
 ### Added

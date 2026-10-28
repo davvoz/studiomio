@@ -21,6 +21,7 @@ export interface TimelineActions {
   /** Incolla sulla traccia di indice `trackIndex` dal battito `at`. */
   pasteAt(trackIndex: number, at: Beats): void;
   splitSelectionAt(beat: Beats): void;
+  consolidateSelection(): void;
   selectAll(): void;
   readonly loopEnabled: boolean;
   toggleLoop(): void;
@@ -47,6 +48,7 @@ const MENUS: { readonly [K in Hit['kind']]: (a: TimelineActions, hit: Extract<Hi
     { label: 'Incolla qui', shortcut: KEY.paste, disabled: !a.canPaste, run: () => a.pasteAt(hit.trackIndex, a.snap(hit.beat)) },
     { label: 'Duplica', shortcut: KEY.duplicate, run: () => a.duplicateSelection() },
     { label: 'Dividi qui', shortcut: KEY.split, run: () => a.splitSelectionAt(a.snap(hit.beat)) },
+    { label: 'Consolida', shortcut: KEY.consolidate, run: () => a.consolidateSelection() },
     SEPARATOR,
     { colors: PALETTE, current: hit.placement.clip.color, noneTitle: 'Colore della traccia', pick: c => a.colorSelection(c) },
     SEPARATOR,

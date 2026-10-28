@@ -129,5 +129,5 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
 /** Le scorciatoie come si scrivono nei menu. */
 export const KEY = {
   cut: 'Ctrl+X', copy: 'Ctrl+C', paste: 'Ctrl+V', duplicate: 'Ctrl+D', duplicateLoop: 'Ctrl+Maiusc+D', delete: 'Canc',
-  split: 'Ctrl+E', selectAll: 'Ctrl+A', quantize: 'Q', draw: 'B',
+  split: 'Ctrl+E', consolidate: 'Ctrl+J', selectAll: 'Ctrl+A', quantize: 'Q', draw: 'B',
 } as const;

@@ -10,6 +10,8 @@ export interface Commands {
   copySelection(): void;
   paste(): void;
   splitAtCursor(): void;
+  /** Le clip selezionate (o il tratto di tempo) in una clip sola, come in Live (Ctrl+J). */
+  consolidateSelection(): void;
   selectAll(): void;
   toggleLoop(): void;
   /** Copia il tratto del loop subito dopo e ci sposta il loop (Ctrl+Maiusc+D). */
@@ -63,6 +65,7 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'c', ctrl: true, run: c => c.copySelection() },
   { key: 'v', ctrl: true, run: c => c.paste() },
   { key: 'e', ctrl: true, run: c => c.splitAtCursor() },
+  { key: 'j', ctrl: true, run: c => c.consolidateSelection() },
   { key: 'a', ctrl: true, run: c => c.selectAll() },
   { key: 'l', ctrl: true, run: c => c.toggleLoop() },
   { key: 'm', ctrl: true, shift: true, run: c => c.toggleMetronome() },
