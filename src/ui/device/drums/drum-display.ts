@@ -1,26 +1,57 @@
 /* Il pannello della Drum Machine: a sinistra i 16 pad in griglia 4×4 (il primo in basso a
  * sinistra, come sui controller), a destra i controlli del pad scelto e l'uscita. Un clic su
  * un pad lo sceglie e lo suona; trascinarlo su un altro li scambia (con Ctrl lo copia). Un file
- * audio lasciato su un pad ci diventa il suo sample (più file: sui pad dopo). */
+ * audio lasciato su un pad ci diventa il suo sample (più file: sui pad dopo). Un pad con uno
+ * strumento (Kick, Snare, Hat e Piatti) mostra accanto il pannello di quello strumento, che
+ * lavora sui parametri del pad come se fosse lo strumento da solo. */
 import type { SampleId } from '../../../core/id';
-import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
+import { paramActive, paramSpec, resolveParams, type DeviceType } from '../../../devices/device-type';
+import { pieceOfNote } from '../../../devices/instruments/cymbals/cymbals';
 import {
-  DRUM_MODELS, DRUM_PADS, MODEL, modelDefaults, padNames, padNote, padOfNote, padParam, padsOf, padSlot, type DrumPad, type PadKey,
+  DRUM_MODELS, DRUM_PADS, innerPrefix, innerPresetParams, MODEL, modelDefaults, padInstrument, padNames, padNote, padOfNote, padParam,
+  padsOf, padSlot, type DrumPad, type PadInstrument, type PadKey,
 } from '../../../devices/instruments/drums/drums';
 import type { ParamSpec } from '../../../devices/params';
-import { sampleAt, type DeviceSettings, type ParamValues } from '../../../model/device';
+import { sampleAt, type DeviceSamples, type DeviceSettings, type ParamValues } from '../../../model/device';
 import { SEPARATOR, showContextMenu } from '../../context-menu';
 import { el } from '../../dom';
 import { pitchName } from '../../piano-roll/pitch-axis';
 import { controlFor, setActive, type ParamControl } from '../controls';
+import { CymbalsDisplay } from '../cymbals/cymbals-display';
 import type { DeviceDisplay, DisplayContext } from '../displays';
+import { kickDisplay } from '../kick/kick-display';
+import { snareDisplay } from '../snare/snare-display';
 
 /** Il colore dei pad per famiglia di suono. */
 const MODEL_COLORS: Readonly<Record<string, string>> = {
   kick: '#ff9d2e', boom: '#ff7a2e', snare: '#f2d14b', clap: '#f2d14b', rim: '#e8c06a',
   hatClosed: '#4fd1e0', hatOpen: '#4fd1e0', cymbal: '#7fb6ff', tom: '#7bd88f', cowbell: '#c79bff', shaker: '#c79bff',
-  sample: '#ef6fa6',
+  sample: '#ef6fa6', kickInst: '#ff9d2e', snareInst: '#f2d14b', cymbalsInst: '#4fd1e0',
 };
+
+/** I pannelli degli strumenti che un pad può suonare, per tipo. */
+const INNER_DISPLAYS: Readonly<Record<string, (ctx: DisplayContext) => DeviceDisplay>> = {
+  kick: kickDisplay,
+  snare: snareDisplay,
+  cymbals: ctx => new CymbalsDisplay(ctx),
+};
+
+/** Le chiavi che cominciano con `prefix`, senza (i parametri o i sample di uno strumento di un pad). */
+function stripped<V>(record: Readonly<Record<string, V>>, prefix: string): Record<string, V> {
+  const out: Record<string, V> = {};
+  for (const [k, v] of Object.entries(record)) if (k.startsWith(prefix)) out[k.slice(prefix.length)] = v;
+  return out;
+}
+
+const withPrefix = <V>(record: Readonly<Record<string, V>>, prefix: string): Record<string, V> =>
+  Object.fromEntries(Object.entries(record).map(([k, v]) => [prefix + k, v]));
+
+const sameRecord = <V>(a: Readonly<Record<string, V>> | undefined, b: Readonly<Record<string, V>>): boolean =>
+  !!a && Object.keys(a).length === Object.keys(b).length && Object.entries(b).every(([k, v]) => a[k] === v);
+
+/** I modelli nel menu: prima i suoni, poi gli strumenti. */
+const SOUND_MODELS = DRUM_MODELS.flatMap((m, i) => (padInstrument(i) ? [] : [{ m, i }]));
+const INSTRUMENT_MODELS = DRUM_MODELS.flatMap((m, i) => (padInstrument(i) ? [{ m, i }] : []));
 
 /** I file che si possono lasciare su un pad. */
 const isAudio = (f: File) => f.type.startsWith('audio/') || /\.(wav|aiff?|flac|mp3|ogg|m4a)$/i.test(f.name);
@@ -31,6 +62,8 @@ const asSamplePad = (pad: DrumPad, index: number): Record<string, number> =>
 
 /** I controlli del pad, nell'ordine in cui compaiono (il suono ha il suo menu). */
 const PAD_CONTROLS: readonly PadKey[] = ['tune', 'decay', 'start', 'reverse', 'tone', 'snap', 'level', 'pan', 'choke'];
+/** Quelli di un pad con uno strumento: il resto è nel pannello dello strumento. */
+const INSTRUMENT_CONTROLS: readonly PadKey[] = ['piece', 'level', 'pan', 'choke'];
 
 /** Tutti i valori di un pad, per copiarlo o scambiarlo. */
 const padValues = (pad: DrumPad, index: number): Record<string, number> =>
@@ -42,8 +75,16 @@ const AUDITION_VELOCITY = 110;
 export class DrumDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'drum-display' });
   private readonly padButtons: HTMLButtonElement[];
-  private readonly model = el<HTMLSelectElement>('select', { className: 'drum-model', title: 'Il suono del pad' },
-    ...DRUM_MODELS.map((m, i) => el('option', { value: String(i), textContent: m.label })));
+  private readonly model = el<HTMLSelectElement>('select', { className: 'drum-model', title: 'Il suono del pad (o lo strumento che suona)' },
+    el('optgroup', { label: 'Suoni' }, ...SOUND_MODELS.map(({ m, i }) => el('option', { value: String(i), textContent: m.label }))),
+    el('optgroup', { label: 'Strumenti' }, ...INSTRUMENT_MODELS.map(({ m, i }) => el('option', { value: String(i), textContent: m.label }))));
+  /** I preset dello strumento del pad. */
+  private readonly innerPreset = el<HTMLSelectElement>('select', { className: 'drum-inner-preset', title: 'Un preset dello strumento del pad' });
+  /** Il pannello dello strumento del pad scelto, se ne ha uno. */
+  private readonly innerBox = el('div', { className: 'drum-inner' });
+  private inner: { key: string; display: DeviceDisplay; prefix: string; type: DeviceType; settings: DeviceSettings } | null = null;
+  /** Le note suonate dal pad scelto, per il pannello del suo strumento (le legge lui). */
+  private innerPlayed: number[] = [];
   private readonly padTitle = el('div', { className: 'drum-pad-title' });
   private readonly hint = el('div', { className: 'drum-hint muted' });
   /** Il sample del pad (solo per il modello Sample): scelto tra quelli del progetto o caricato. */
@@ -51,6 +92,7 @@ export class DrumDisplay implements DeviceDisplay {
   private readonly loadButton = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Carica…', title: 'Carica un file audio sul pad' });
   private readonly sampleRow = el('div', { className: 'drum-sample-row' }, this.sampleChoice, this.loadButton);
   private settings: DeviceSettings;
+  private enabled = true;
   private readonly controls = el('div', { className: 'device-controls' });
   private readonly padControls = new Map<string, { spec: ParamSpec; control: ParamControl }>();
   private values: Record<string, number> = {};
@@ -77,11 +119,20 @@ export class DrumDisplay implements DeviceDisplay {
       if (id) this.play(this.selected);
     };
     this.loadButton.onclick = () => this.pickFile(this.selected);
+    this.innerPreset.onchange = () => {
+      const instrument = padInstrument(this.pads[this.selected].model);
+      const preset = instrument?.type.presets.find(x => x.name === this.innerPreset.value);
+      this.innerPreset.value = '';
+      if (!instrument || !preset) return;
+      this.ctx.setParams(innerPresetParams(this.selected, instrument.type, preset), true);
+      this.play(this.selected);
+    };
     this.sampleRow.hidden = !ctx.samples;
     const global = (id: string) => this.control(paramSpec(ctx.type, id)!);
     this.element.append(grid, el('div', { className: 'drum-editor' },
-      el('div', { className: 'drum-pad-head' }, this.padTitle, this.model, this.sampleRow, this.hint),
-      el('div', { className: 'drum-controls' }, this.controls, el('div', { className: 'eq-sep' }), global('velocity'), global('volume'))));
+      el('div', { className: 'drum-pad-head' }, this.padTitle, this.model, this.innerPreset, this.sampleRow, this.hint),
+      el('div', { className: 'drum-controls' }, this.controls, el('div', { className: 'eq-sep' }), global('velocity'), global('volume'))),
+    this.innerBox);
     this.update(ctx.settings, true);
     this.select(0);
     requestAnimationFrame(this.frame);
@@ -94,14 +145,20 @@ export class DrumDisplay implements DeviceDisplay {
     for (const pitch of this.ctx.playedNotes()) {
       const i = padOfNote(pitch);
       if (i >= 0) this.flash(i);
+      const instrument = i === this.selected ? padInstrument(this.pads[i].model) : undefined;
+      if (instrument) this.innerPlayed.push(instrument.note(this.pads[i].piece));
     }
     requestAnimationFrame(this.frame);
   };
 
-  update(settings: DeviceSettings, _enabled: boolean): void {
+  update(settings: DeviceSettings, enabled: boolean): void {
     this.settings = settings;
+    this.enabled = enabled;
+    const model = this.pads[this.selected]?.model;
     if (settings.params !== this.params) this.read(settings.params);
-    this.refresh();
+    // un altro suono sul pad scelto: altri controlli (e un altro strumento)
+    if (this.pads[this.selected].model !== model) this.select(this.selected);
+    else this.refresh();
   }
 
   /** I nomi dei sample caricati, per posto. */
@@ -143,19 +200,105 @@ export class DrumDisplay implements DeviceDisplay {
         ...all.map(s => el('option', { value: s.id, textContent: s.name })));
       this.sampleChoice.value = current ?? '';
     }
+    const instrument = padInstrument(pad.model);
     this.hint.textContent = isSample && !current ? 'Trascina un file audio sul pad, o Carica…' : DRUM_MODELS[pad.model]?.hint ?? '';
+    // il suggerimento di uno strumento è lungo: sta nel titolo
+    this.hint.hidden = !!instrument;
+    this.model.title = instrument ? DRUM_MODELS[pad.model].hint : 'Il suono del pad (o lo strumento che suona)';
+    this.innerPreset.hidden = !instrument;
     for (const { spec, control } of this.padControls.values()) {
       control.set(this.values[spec.id]);
       setActive(control, paramActive(spec, this.values));
     }
+    this.updateInner();
   }
 
   private select(i: number): void {
     this.selected = i;
-    for (const id of [...this.padControls.keys()]) if (/^p\d+/.test(id)) this.padControls.delete(id);
-    this.controls.replaceChildren(...PAD_CONTROLS.map(k => this.control(paramSpec(this.ctx.type, padParam(i, k))!)));
+    for (const id of [...this.padControls.keys()]) if (/^p\d+[a-z]/.test(id)) this.padControls.delete(id);
+    const instrument = padInstrument(this.pads[i].model);
+    const keys = instrument ? INSTRUMENT_CONTROLS.filter(k => paramActive(paramSpec(this.ctx.type, padParam(i, k))!, this.values)) : PAD_CONTROLS;
+    this.controls.replaceChildren(...keys.map(k => this.control(paramSpec(this.ctx.type, padParam(i, k))!)));
+    this.innerPreset.replaceChildren(el('option', { value: '', textContent: 'Preset…' }),
+      ...(instrument?.type.presets ?? []).map(x => el('option', { value: x.name, textContent: x.name })));
     this.refresh();
     this.ctx.controlsChanged();
+  }
+
+  /** Il pannello dello strumento del pad scelto: rifatto se cambiano pad o strumento, se no aggiornato. */
+  private updateInner(): void {
+    const i = this.selected, pad = this.pads[i], instrument = padInstrument(pad.model);
+    const key = instrument ? `${i}:${instrument.type.type}` : '';
+    if (this.inner?.key !== key) {
+      this.inner = instrument ? this.makeInner(i, key, instrument) : null;
+      this.innerPlayed = [];
+      this.innerBox.replaceChildren(...(this.inner ? [this.inner.display.element] : []));
+      this.innerBox.hidden = !this.inner;
+      this.prefixControls();
+      return;
+    }
+    if (!this.inner) return;
+    const settings = this.innerSettings(this.inner.prefix, this.inner.type, this.inner.settings);
+    if (settings !== this.inner.settings) {
+      this.inner.settings = settings;
+      this.inner.display.update(settings, this.enabled);
+      this.prefixControls();
+    }
+    if (this.inner.display instanceof CymbalsDisplay) this.inner.display.selectPiece(pad.piece);
+  }
+
+  /** I parametri e i sample dello strumento, senza il prefisso; quelli di prima se non sono cambiati. */
+  private innerSettings(prefix: string, type: DeviceType, before?: DeviceSettings): DeviceSettings {
+    const params = stripped(this.settings.params, prefix), samples: DeviceSamples = stripped(this.settings.samples ?? {}, prefix);
+    const same = before && sameRecord(before.params, params) && sameRecord(before.samples ?? {}, samples);
+    return same ? before : { type: type.type, preset: null, params, ...(Object.keys(samples).length ? { samples } : {}) };
+  }
+
+  /** Il pannello dello strumento del pad `i`, con un contesto che mette e toglie il prefisso. */
+  private makeInner(i: number, key: string, instrument: PadInstrument): NonNullable<DrumDisplay['inner']> {
+    const ctx = this.ctx, type = instrument.type, prefix = innerPrefix(i, type.type);
+    const samples = ctx.samples;
+    const settings = this.innerSettings(prefix, type);
+    const inner: DisplayContext = {
+      type,
+      settings,
+      sampleRate: ctx.sampleRate,
+      setParams: (values, final) => ctx.setParams(withPrefix(values, prefix), final),
+      controlsChanged: () => {
+        this.prefixControls();
+        ctx.controlsChanged();
+      },
+      openSpectrum: () => ctx.openSpectrum(),
+      audition: (pitch, velocity) => {
+        // un pezzo di Hat e Piatti scelto nel suo pannello: il pad suona quello
+        const piece = instrument === padInstrument(MODEL.cymbalsInst) ? pieceOfNote(pitch) : -1;
+        if (piece >= 0 && piece !== this.pads[i].piece) ctx.setParams({ [padParam(i, 'piece')]: piece }, true);
+        ctx.audition(padNote(i), velocity);
+        this.flash(i);
+      },
+      playedNotes: () => this.innerPlayed.splice(0),
+      ...(samples ? {
+        samples: {
+          list: () => samples.list(),
+          load: (slot, file, values) => samples.load(prefix + slot, file, withPrefix(values, prefix)),
+          assign: (changes, values) => samples.assign(withPrefix(changes, prefix), withPrefix(values, prefix)),
+          ...(samples.audio ? { audio: (slot: string) => samples.audio!(prefix + slot) } : {}),
+        },
+      } : {}),
+    };
+    const display = INNER_DISPLAYS[type.type](inner);
+    if (display instanceof CymbalsDisplay) display.selectPiece(this.pads[i].piece);
+    return { key, display, prefix, type, settings };
+  }
+
+  /** I controlli del pannello dello strumento portano l'id con il prefisso: così la catena li
+   *  mappa sulle macro e ci mette le curve come quelli della Drum Machine. */
+  private prefixControls(): void {
+    const prefix = this.inner?.prefix;
+    if (!prefix) return;
+    for (const e of this.innerBox.querySelectorAll<HTMLElement>('[data-param]')) {
+      if (!e.dataset.param!.startsWith(prefix)) e.dataset.param = prefix + e.dataset.param;
+    }
   }
 
   private control(spec: ParamSpec): HTMLElement {
@@ -264,24 +407,45 @@ export class DrumDisplay implements DeviceDisplay {
 
   private movePad(from: number, to: number, copy: boolean): void {
     const a = this.pads[from], b = this.pads[to];
-    const values = copy ? padValues(a, to) : { ...padValues(a, to), ...padValues(b, from) };
-    const sa = sampleAt(this.settings, padSlot(from)), sb = sampleAt(this.settings, padSlot(to));
+    // con i valori del pad vanno quelli dei suoi strumenti
+    const values = copy
+      ? { ...padValues(a, to), ...this.innerValues(from, to) }
+      : { ...padValues(a, to), ...this.innerValues(from, to), ...padValues(b, from), ...this.innerValues(to, from) };
+    const samples = { ...this.padSamples(from, to), ...(copy ? {} : this.padSamples(to, from)) };
     // i sample vanno con i pad
-    if (this.ctx.samples && (sa || sb)) {
-      this.ctx.samples.assign(copy ? { [padSlot(to)]: sa } : { [padSlot(to)]: sa, [padSlot(from)]: sb }, values);
-    } else this.ctx.setParams(values, true);
+    if (this.ctx.samples && Object.values(samples).some(x => x)) this.ctx.samples.assign(samples, values);
+    else this.ctx.setParams(values, true);
     this.select(to);
+  }
+
+  /** I parametri degli strumenti del pad `from`, con il prefisso del pad `to`. */
+  private innerValues(from: number, to: number): Record<string, number> {
+    const src = `p${from + 1}.`, dst = `p${to + 1}.`;
+    return Object.fromEntries(Object.entries(this.values).flatMap(([k, v]) => (k.startsWith(src) ? [[dst + k.slice(src.length), v]] : [])));
+  }
+
+  /** I sample del pad `from` (il suo e quelli dei suoi strumenti) per i posti del pad `to`; i
+   *  posti di `to` che `from` non ha si vuotano. */
+  private padSamples(from: number, to: number): Record<string, SampleId | null> {
+    const all = this.settings.samples ?? {}, src = `p${from + 1}.`, dst = `p${to + 1}.`;
+    const out: Record<string, SampleId | null> = { [padSlot(to)]: sampleAt(this.settings, padSlot(from)) };
+    for (const slot of Object.keys(all)) if (slot.startsWith(dst)) out[slot] = null;
+    for (const [slot, id] of Object.entries(all)) if (slot.startsWith(src)) out[dst + slot.slice(src.length)] = id;
+    return out;
   }
 
   private menu(i: number, x: number, y: number): void {
     const kit = resolveParams(this.ctx.type, {});
     const fresh = padsOf(kit)[i];
     const samples = this.ctx.samples, loaded = sampleAt(this.settings, padSlot(i));
+    const model = ({ m, i: k }: { m: (typeof DRUM_MODELS)[number]; i: number }) => ({
+      label: m.label, checked: this.pads[i].model === k,
+      run: () => { this.ctx.setParams(modelDefaults(i, k), true); this.play(i); },
+    });
     showContextMenu(x, y, [
-      ...DRUM_MODELS.map((m, k) => ({
-        label: m.label, checked: this.pads[i].model === k,
-        run: () => { this.ctx.setParams(modelDefaults(i, k), true); this.play(i); },
-      })),
+      ...SOUND_MODELS.map(model),
+      SEPARATOR,
+      ...INSTRUMENT_MODELS.map(model),
       SEPARATOR,
       ...(samples ? [
         { label: 'Carica un sample…', run: () => this.pickFile(i) },

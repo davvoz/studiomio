@@ -399,6 +399,59 @@ function build(): Preset[] {
         ...mods([SRC.lfo1, 'f1Cutoff', 50], [SRC.lfo1, 'aPos', 40], [SRC.lfo2, 'aPos', 15, { bi: true }], [SRC.velocity, 'f1Cutoff', 15]),
       },
     },
+    // ---- altri
+    {
+      // la sirena: l'LFO lento sul pitch, il filtro che lo segue
+      name: 'Sirena',
+      params: {
+        aTable: T.Base, aPos: 67, aUnison: 3, aDetune: 12, voiceMode: VOICE_MODE.mono, f1Type: FILTER.lp24, f1Cutoff: 4000, f1Res: 25, e1R: 0.3,
+        l1Shape: LFO_SHAPE.triangle, l1Sync: LFO_SYNC.hz, l1Rate: 0.4, l1Trig: LFO_TRIG.free, volume: -10,
+        ...mods([SRC.lfo1, 'tune', 30, { bi: true }], [SRC.lfo1, 'f1Cutoff', 15, { bi: true }]),
+      },
+    },
+    {
+      name: 'Stab rave',
+      params: {
+        aTable: T.Base, aPos: 67, aUnison: 7, aDetune: 30, aWidth: 100, bOn: 1, bTable: T.PWM, bPos: 40, bOct: -1, bLevel: 50,
+        f1Type: FILTER.lp24, f1Cutoff: 900, f1Res: 25, e1D: 0.35, e1S: 0, e1R: 0.25, e2D: 0.25, volume: -14,
+        ...mods([SRC.env2, 'f1Cutoff', 55], [SRC.velocity, 'f1Cutoff', 15]),
+      },
+    },
+    {
+      // le vocali del filtro formante che girano in quattro battute
+      name: 'Pad di vocali',
+      params: {
+        aTable: T.Base, aPos: 67, aUnison: 5, aDetune: 18, bOn: 1, bTable: T.Vocale, bPos: 40, bLevel: 60, f1Type: FILTER.formant,
+        f1Cutoff: 1200, f1Res: 40, f1Var: 30, e1A: 1, e1D: 1, e1S: 90, e1R: 2, l1Shape: LFO_SHAPE.triangle, l1Div: R['4 battute'],
+        l1Trig: LFO_TRIG.free, l2Shape: LFO_SHAPE.smoothRandom, l2Div: R['1 battuta'], l2Trig: LFO_TRIG.free, volume: -8,
+        ...mods([SRC.lfo1, 'f1Var', 60, { bi: true }], [SRC.lfo2, 'bPos', 30, { bi: true }]),
+      },
+    },
+    {
+      name: 'Basso comb',
+      params: {
+        aTable: T.Base, aPos: 67, subOn: 1, subLevel: 70, voiceMode: VOICE_MODE.mono, glide: 20, f1Type: FILTER.combUp, f1Cutoff: 400, f1Res: 70,
+        f1Key: 100, f1Mix: 70, e1R: 0.06, e2D: 0.3, volume: -11,
+        ...mods([SRC.env2, 'f1Cutoff', 40], [SRC.env2, 'f1Res', -30]),
+      },
+    },
+    {
+      name: 'Arpa metallica',
+      params: {
+        aTable: T.Metallo, aPos: 30, bOn: 1, bTable: T['Seno caldo'], bOct: 1, bLevel: 40, f1Type: FILTER.lp12, f1Cutoff: 6000,
+        e1D: 1.2, e1S: 0, e1R: 1, e2D: 0.4, volume: -10,
+        ...mods([SRC.env2, 'aPos', 50], [SRC.velocity, 'f1Cutoff', 25]),
+      },
+    },
+    {
+      // l'accordo della dub techno: corto, scuro, con il filtro che si apre a battute
+      name: 'Accordo dub',
+      params: {
+        aTable: T.Base, aPos: 67, aUnison: 3, aDetune: 10, bOn: 1, bTable: T.PWM, bPos: 50, bLevel: 50, f1Type: FILTER.lp24, f1Cutoff: 600,
+        f1Res: 40, f1Key: 50, e1D: 0.3, e1S: 0, e1R: 0.35, e2D: 0.2, l1Shape: LFO_SHAPE.sine, l1Div: R['4 battute'], l1Trig: LFO_TRIG.free,
+        volume: -11, ...mods([SRC.env2, 'f1Cutoff', 35], [SRC.lfo1, 'f1Cutoff', 20, { bi: true }]),
+      },
+    },
   ];
 }
 

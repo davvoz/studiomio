@@ -369,7 +369,7 @@ export abstract class SessionSurface {
 
   private describe(owner: ChainOwner, chain: readonly ChainDevice[], index: number): Controlled {
     const device = chain[index];
-    const all = visibleParamsOf(device.type);
+    const all = visibleParamsOf(device.type, device.settings.params);
     const banks = Math.max(1, Math.ceil(all.length / PARAMS_PER_BANK));
     const bank = Math.min(this.banks.get(bankKey(owner, device.key)) ?? 0, banks - 1);
     return { owner, chain, index, device, bank, banks, params: all.slice(bank * PARAMS_PER_BANK, (bank + 1) * PARAMS_PER_BANK) };

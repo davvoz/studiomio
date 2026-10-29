@@ -292,5 +292,55 @@ export const WAVETABLE: DeviceType = {
         mAttack: 4, mDecay: 1, mSustain: 100, mRelease: 1, envDest: MOD_DEST.posA, envAmount: 100, envDest2: MOD_DEST.pitch, envAmount2: 50,
         volume: -12 },
     },
+    // ---- altri suoni
+    {
+      // la sirena del rave: il pitch che sale e scende piano
+      name: 'Sirena rave',
+      params: { tableA: TABLE.Base, posA: 67, unison: 2, detune: 15, voiceMode: VOICE_MODE.mono, cutoff: 5000, resonance: 20, sustain: 100,
+        release: 0.3, lfo1Shape: LFO_SHAPE.triangle, lfo1Sync: LFO_SYNC.hz, lfo1Rate: 0.5, lfo1Retrig: 0, lfo1Dest: MOD_DEST.pitch,
+        lfo1Amount: 30, volume: -7 },
+    },
+    {
+      name: 'Stab digitale',
+      params: { tableA: TABLE.Digitale, posA: 40, unison: 5, detune: 25, spread: 90, cutoff: 1500, resonance: 25, decay: 0.3, sustain: 0,
+        release: 0.25, mDecay: 0.2, envDest: MOD_DEST.cutoff, envAmount: 60, envDest2: MOD_DEST.posA, envAmount2: 40, volume: -7 },
+    },
+    {
+      name: 'Pad pulsar',
+      params: { tableA: TABLE.Pulsar, posA: 20, tableB: TABLE['Seno caldo'], levelB: 50, semiB: -12, unison: 3, detune: 12, posSpread: 30,
+        cutoff: 6000, attack: 1, decay: 1, sustain: 85, release: 2, lfo1Shape: LFO_SHAPE.triangle, lfo1Division: TEMPO_RATE['2 battute'],
+        lfo1Retrig: 1, lfo1Dest: MOD_DEST.posA, lfo1Amount: 60, volume: -14 },
+    },
+    {
+      name: 'Basso metallico',
+      params: { tableA: TABLE.Metallo, posA: 25, sub: 70, voiceMode: VOICE_MODE.mono, glide: 20, cutoff: 1500, resonance: 25, sustain: 90,
+        release: 0.08, mDecay: 0.25, envDest: MOD_DEST.posA, envAmount: 50, envDest2: MOD_DEST.cutoff, envAmount2: 40, volume: -5 },
+    },
+    {
+      name: 'Lead additivo',
+      params: { tableA: TABLE.Additiva, posA: 50, tableB: TABLE.Additiva, posB: 70, levelB: 50, fineB: 8, voiceMode: VOICE_MODE.legato,
+        glide: 70, sustain: 100, release: 0.2, lfo1Shape: LFO_SHAPE.sine, lfo1Sync: LFO_SYNC.hz, lfo1Rate: 5.5, lfo1Retrig: 0,
+        lfo1Dest: MOD_DEST.pitch, lfo1Amount: 1, lfo2Shape: LFO_SHAPE.triangle, lfo2Division: TEMPO_RATE['1 battuta'], lfo2Dest: MOD_DEST.posA,
+        lfo2Amount: 40, volume: -8 },
+    },
+    {
+      name: 'Arpeggio a ottave',
+      params: { tableA: TABLE.Ottave, posA: 30, unison: 2, detune: 10, cutoff: 4000, resonance: 15, decay: 0.3, sustain: 0, release: 0.3,
+        mDecay: 0.15, envDest: MOD_DEST.posA, envAmount: 50, volume: -10 },
+    },
+    {
+      // un vento di armoniche che cambia da solo, lento
+      name: 'Vento spettrale',
+      params: { tableA: TABLE.Spettrale, posA: 40, tableB: TABLE.Formanti, posB: 50, levelB: 60, unison: 4, detune: 18, posSpread: 50,
+        spread: 100, cutoff: 3500, attack: 2, decay: 1, sustain: 90, release: 3, lfo1Shape: LFO_SHAPE.sampleHold, lfo1Division: TEMPO_RATE['1 battuta'],
+        lfo1Dest: MOD_DEST.pos, lfo1Amount: 50, lfo2Shape: LFO_SHAPE.sine, lfo2Division: TEMPO_RATE['4 battute'], lfo2Dest: MOD_DEST.cutoff,
+        lfo2Amount: 25, volume: -9 },
+    },
+    {
+      name: 'Basso growl a 1/16',
+      params: { tableA: TABLE.Growl, posA: 20, sub: 60, voiceMode: VOICE_MODE.mono, cutoff: 2000, resonance: 30, sustain: 100, release: 0.08,
+        lfo1Shape: LFO_SHAPE.square, lfo1Division: TEMPO_RATE['1/16'], lfo1Dest: MOD_DEST.posA, lfo1Amount: 60, lfo2Shape: LFO_SHAPE.sine,
+        lfo2Division: TEMPO_RATE['2 battute'], lfo2Dest: MOD_DEST.cutoff, lfo2Amount: 30, volume: -11 },
+    },
   ],
 };

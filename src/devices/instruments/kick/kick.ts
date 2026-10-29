@@ -151,9 +151,53 @@ function kickPresets(): Preset[] {
         hold: 35, decay: 0.4, tailLevel: 60, tailDecay: 1.2, drive: 8, lowCut: 20 },
     },
     {
+      // una cassa di pelle: poca caduta, il battente fatto di rumore, niente coda
+      name: 'Acustica',
+      params: { note: note(33), snapSource: SNAP_SOURCE.noise, snapLevel: 50, snapTone: 2500, snapDecay: 12, pitch: 8, pitchTime: 20,
+        pitchCurve: 50, shape: 10, hold: 5, decay: 0.18, tailLevel: 15, tailDecay: 0.2, drive: 5, lowCut: 30, velocity: 60, volume: -3 },
+    },
+    {
       name: 'Secca',
       params: { note: note(33), snapLevel: 55, snapTone: 5000, snapDecay: 5, pitch: 28, pitchTime: 25, pitchCurve: 65, shape: 20,
         hold: 8, decay: 0.12, tailLevel: 10, tailDecay: 0.15, drive: 15 },
+    },
+    {
+      name: 'House',
+      params: { note: note(31), snapLevel: 40, snapTone: 4000, snapDecay: 8, pitch: 22, pitchTime: 40, pitchCurve: 55, shape: 15,
+        hold: 20, decay: 0.3, tailLevel: 40, tailDecay: 0.5, drive: 12 },
+    },
+    {
+      name: 'Trance',
+      params: { note: note(33), snapLevel: 60, snapTone: 6000, snapDecay: 6, pitch: 36, pitchTime: 30, pitchCurve: 65, shape: 30,
+        hold: 15, decay: 0.24, tailLevel: 30, tailDecay: 0.4, drive: 25 },
+    },
+    {
+      // morbida e lunga, con una coda di rumble leggera che si confonde con il basso
+      name: 'Dub techno',
+      params: { note: note(28), snapLevel: 20, snapTone: 2000, snapDecay: 6, pitch: 18, pitchTime: 60, pitchCurve: 40, shape: 5,
+        hold: 30, decay: 0.35, tailLevel: 55, tailDecay: 1, rumbleOn: 1, rumble: 35, rumbleTime: 2, rumbleTone: 90, rumbleDrive: 30,
+        rumbleDuck: 60, drive: 5 },
+    },
+    {
+      name: 'Hardgroove',
+      params: { note: note(30), snapSource: SNAP_SOURCE.noise, snapLevel: 55, snapTone: 3500, snapDecay: 12, pitch: 30, pitchTime: 35,
+        pitchCurve: 60, shape: 35, hold: 18, decay: 0.22, tailLevel: 25, tailDecay: 0.35, drive: 35, driveType: 1, volume: -8 },
+    },
+    {
+      name: 'Electro',
+      params: { note: note(31), snapLevel: 70, snapTone: 7000, snapDecay: 3, pitch: 12, pitchTime: 50, pitchCurve: 40, shape: 0,
+        hold: 30, decay: 0.35, tailLevel: 50, tailDecay: 0.7, drive: 10 },
+    },
+    {
+      // un colpo corto e alto, quasi solo click
+      name: 'Minimal',
+      params: { note: note(36), snapLevel: 65, snapTone: 8000, snapDecay: 2, pitch: 20, pitchTime: 20, pitchCurve: 50, shape: 0,
+        hold: 5, decay: 0.1, tailLevel: 5, tailDecay: 0.1, drive: 0, volume: -2 },
+    },
+    {
+      name: 'Breakbeat',
+      params: { note: note(34), snapSource: SNAP_SOURCE.noise, snapLevel: 60, snapTone: 3000, snapDecay: 15, pitch: 10, pitchTime: 15,
+        pitchCurve: 50, shape: 20, hold: 8, decay: 0.16, tailLevel: 10, tailDecay: 0.15, drive: 20, velocity: 60 },
     },
   ];
 }

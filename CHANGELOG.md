@@ -6,6 +6,37 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- A Drum Machine pad can now play a whole instrument, like a Drum Rack pad in Live: choose Kick,
+  Snare or Hat e Piatti in the pad's sound menu (under Strumenti). The instrument's own panel
+  opens next to the pad, with its presets, and works as it does on its own, samples included. A
+  Hat e Piatti pad plays the piece you choose in its panel. The pad keeps its level, pan and
+  choke group, so a closed and an open hi-hat on two pads choke each other. Dragging a pad onto
+  another moves or copies its instrument with it. The instrument's knobs can be mapped to macros
+  and get modulation curves like any other parameter.
+- New Drum Machine kits built with the instruments, on the General MIDI notes (kick, side stick,
+  snares, closed, pedal and open hats choking each other, second kick, crash, ride): Strumenti,
+  Rave (rumble kick in E, snare with room, dry hats), Industriale (everything driven, ring-mod
+  metals), 808 strumenti, Acustica and Lo-fi. They are also in the browser under Batterie.
+- New presets: Acustica for the Kick, Industriale for the Snare, Lo-fi for Hat e Piatti.
+- More Drum Machine kits made with the instruments: House, Dub techno, Breakbeat, Trap, Minimal,
+  Electro.
+- Drum racks among the factory Instrument Racks: Batteria rave, Batteria dub, Batteria rotta,
+  Batteria industriale (Drum Machine kits with effects, whose macros reach into the instruments
+  on the pads: the kick's tail and rumble, the snare's room, the hi-hats' decay and brightness),
+  plus Cassa, Rullante and Hat in movimento to build a kick, a snare or moving hi-hats from eight
+  knobs.
+- Many new synth presets. Analog: Sub, Basso pulsante, Basso in levare and Acid frenetico (with
+  the step sequencer on), Basso funk, Reese analogico, Stab rave, Accordo dub, Archi analogici,
+  Ottoni analogici, Pad scuro, Lead quinta, Lead portamento, Organo analogico, Campanella,
+  Zanzara, Pluck dub. Neuro: Reese che pompa, Wobble neuro, Talkbox, Basso frigio (sequencer),
+  Ringhio lento, Industriale, Sub con morso, Reese scuro, Stab neuro, Glitch S&H, Caduta.
+  Wavetable: Sirena rave, Stab digitale, Pad pulsar, Basso metallico, Lead additivo, Arpeggio a
+  ottave, Vento spettrale, Basso growl a 1/16. Prisma: Sirena, Stab rave, Pad di vocali, Basso
+  comb, Arpa metallica, Accordo dub. Kick: House, Trance, Dub techno, Hardgroove, Electro,
+  Minimal, Breakbeat. Snare: Breakbeat, Trap, Dubstep, Spazzole, Elettro. Hat e Piatti: 909,
+  Trap, Dub, Gong, Minimal.
+
 ## [0.3.39] - 2026-10-29
 
 ### Added

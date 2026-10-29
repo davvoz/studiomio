@@ -43,6 +43,9 @@ export type ParamSpec = NumberParam | ChoiceParam;
 export interface ParamSection {
   readonly label: string;
   readonly params: readonly ParamSpec[];
+  /** Solo con questo valore di un altro parametro la sezione c'è (es. lo strumento di un pad
+   *  della Drum Machine): se no i suoi parametri non arrivano al motore e non si scelgono. */
+  readonly when?: ParamCondition;
 }
 
 /** Operazioni che dipendono dal tipo di parametro: una voce per tipo. */

@@ -2,14 +2,19 @@
  * sfumare in pochi millisecondi quello prima, senza click) e i modelli sono piccole sintesi
  * classiche: seni con caduta d'intonazione per casse e tom, rumore filtrato per rullante, clap
  * e shaker, sei quadre stonate tra loro per hi-hat e piatti (come la 808). Il modello Sample
- * suona il file caricato sul pad. Gira nell'AudioWorklet; qui niente Web Audio, così si prova
- * anche in Node. */
+ * suona il file caricato sul pad. Un pad con uno strumento (Kick, Snare, Hat e Piatti) ha
+ * dentro il motore di quello strumento, che riceve i parametri del pad senza il prefisso. Gira
+ * nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { decayCoef } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
 import { WAVE_TABLE } from '../../dsp/oscillators';
 import { Svf } from '../../dsp/svf';
-import { DRUM_MODELS, DRUM_PADS, padOfNote, padOfSlot, padsOf, type DrumPad } from './drums';
+import { paramsOf, type DeviceType } from '../../device-type';
+import { CymbalsCore } from '../cymbals/cymbals-core';
+import { KickCore } from '../kick/kick-core';
+import { SnareCore } from '../snare/snare-core';
+import { DRUM_MODELS, DRUM_PADS, innerPrefix, padInstrument, padOfNote, padOfSlot, padsOf, splitInner, type DrumPad } from './drums';
 
 /** Sotto questo livello una voce è finita (−100 dB). */
 const FLOOR = 1e-5;
@@ -520,6 +525,62 @@ const VOICES: Readonly<Record<string, (sampleRate: number) => DrumVoice>> = {
   sample: sr => new SampleVoice(sr),
 };
 
+/** I motori degli strumenti che un pad può suonare, per tipo. */
+const INNER_CORES: Readonly<Record<string, (sampleRate: number) => InstrumentCore & SamplePlayer>> = {
+  kick: sr => new KickCore(sr),
+  snare: sr => new SnareCore(sr),
+  cymbals: sr => new CymbalsCore(sr),
+};
+
+/** Dopo quanto silenzio uno strumento di un pad smette di suonare (per non calcolarlo a vuoto). */
+const INNER_QUIET = 0.5;
+
+/** Lo strumento dentro un pad: il suo motore e i parametri da leggere tra quelli della Drum Machine. */
+class InnerInstrument {
+  readonly core: InstrumentCore & SamplePlayer;
+  /** Gli id dei parametri dello strumento e, nello stesso ordine, quelli con il prefisso del pad. */
+  private readonly ids: readonly string[];
+  private readonly keys: readonly string[];
+  private quiet = Infinity;
+  private notes = 0;
+
+  constructor(type: DeviceType, prefix: string, private readonly sampleRate: number) {
+    this.core = INNER_CORES[type.type](sampleRate);
+    this.ids = paramsOf(type).map(p => p.id);
+    this.keys = this.ids.map(id => prefix + id);
+  }
+
+  get active(): boolean {
+    return this.quiet < INNER_QUIET * this.sampleRate;
+  }
+
+  setParams(params: Readonly<Record<string, number>>): void {
+    const own: Record<string, number> = {};
+    this.ids.forEach((id, k) => {
+      const v = params[this.keys[k]];
+      if (v !== undefined) own[id] = v;
+    });
+    this.core.setParams(own);
+  }
+
+  hit(pitch: number, velocity: number): void {
+    this.core.noteOn(++this.notes, pitch, velocity);
+    this.quiet = 0;
+  }
+
+  silence(): void {
+    this.core.silence();
+  }
+
+  /** Suona in [from, to) e tiene il conto del silenzio. */
+  render(left: Float32Array, right: Float32Array, from: number, to: number): void {
+    this.core.render(left, right, from, to);
+    let loud = false;
+    for (let i = from; i < to && !loud; i++) loud = Math.abs(left[i]) >= FLOOR || Math.abs(right[i]) >= FLOOR;
+    this.quiet = loud ? 0 : this.quiet + (to - from);
+  }
+}
+
 /** Un pad: due voci per modello (nate quando servono) e i suoi valori. */
 class Pad {
   settings: DrumPad | null = null;
@@ -527,18 +588,51 @@ class Pad {
   sample: SampleData | null = null;
   private readonly voices = new Map<number, readonly [DrumVoice, DrumVoice]>();
   private current = 0;
+  /** Gli strumenti che il pad ha suonato, per tipo (tornando a uno, è com'era), e quello attuale. */
+  private readonly inners = new Map<string, InnerInstrument>();
+  private inner: InnerInstrument | null = null;
+  /** I sample degli strumenti, per posto con il prefisso ("p3.kick.body"). */
+  private readonly innerSamples = new Map<string, SampleData | null>();
+  private scratchL = new Float32Array(128);
+  private scratchR = new Float32Array(128);
 
-  constructor(private readonly sampleRate: number) {}
+  constructor(private readonly index: number, private readonly sampleRate: number) {}
 
-  /** Le voci del modello attuale (si creano qui, mai mentre si suona un blocco). */
-  prepare(): void {
+  /** Le voci (o lo strumento) del modello attuale: si creano qui, mai mentre si suona un blocco. */
+  prepare(params: Readonly<Record<string, number>>): void {
     const model = this.settings?.model ?? -1;
+    const instrument = padInstrument(model);
+    if (instrument) {
+      const type = instrument.type.type;
+      let inner = this.inners.get(type);
+      if (!inner) {
+        const prefix = innerPrefix(this.index, type);
+        this.inners.set(type, (inner = new InnerInstrument(instrument.type, prefix, this.sampleRate)));
+        for (const [slot, data] of this.innerSamples) if (slot.startsWith(prefix)) inner.core.setSample(slot.slice(prefix.length), data);
+      }
+      if (this.inner && this.inner !== inner) this.inner.silence();
+      this.inner = inner;
+      inner.setParams(params);
+      return;
+    }
+    if (this.inner) this.inner.silence();
+    this.inner = null;
     const make = VOICES[DRUM_MODELS[model]?.id];
     if (make && !this.voices.has(model)) this.voices.set(model, [make(this.sampleRate), make(this.sampleRate)]);
   }
 
-  hit(velocityGain: number): void {
+  /** Il sample di uno strumento del pad (posto con il prefisso). */
+  setInnerSample(slot: string, type: string, inner: string, sample: SampleData | null): void {
+    this.innerSamples.set(slot, sample);
+    this.inners.get(type)?.core.setSample(inner, sample);
+  }
+
+  hit(velocity: number, velocityGain: number): void {
     const s = this.settings;
+    if (s && this.inner) {
+      this.inner.hit(padInstrument(s.model)!.note(s.piece), velocity);
+      return;
+    }
     const pair = s && this.voices.get(s.model);
     if (!s || !pair) return;
     // il colpo prima sfuma, il nuovo parte sull'altra voce
@@ -555,15 +649,35 @@ class Pad {
 
   choke(): void {
     for (const pair of this.voices.values()) for (const v of pair) v.choke();
+    for (const inner of this.inners.values()) inner.silence();
   }
 
   get active(): boolean {
+    if (this.inner?.active) return true;
     for (const pair of this.voices.values()) if (pair[0].active || pair[1].active) return true;
     return false;
   }
 
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     for (const pair of this.voices.values()) for (const v of pair) if (v.active) v.render(left, right, from, to);
+    const inner = this.inner, s = this.settings;
+    if (!inner?.active || !s) return;
+    // lo strumento suona a parte; livello e pan del pad li mette qui
+    const n = to - from;
+    if (this.scratchL.length < n) {
+      this.scratchL = new Float32Array(n);
+      this.scratchR = new Float32Array(n);
+    }
+    const l = this.scratchL.subarray(0, n), r = this.scratchR.subarray(0, n);
+    l.fill(0);
+    r.fill(0);
+    inner.render(l, r, 0, n);
+    const gain = dbToGain(s.level), pan = s.pan / 100;
+    const gl = gain * Math.min(1, 1 - pan), gr = gain * Math.min(1, 1 + pan);
+    for (let i = 0; i < n; i++) {
+      left[from + i] += l[i] * gl;
+      right[from + i] += r[i] * gr;
+    }
   }
 }
 
@@ -578,21 +692,24 @@ export class DrumCore implements InstrumentCore, SamplePlayer {
   private scratchR = new Float32Array(128);
 
   constructor(sampleRate: number) {
-    this.pads = Array.from({ length: DRUM_PADS }, () => new Pad(sampleRate));
+    this.pads = Array.from({ length: DRUM_PADS }, (_, i) => new Pad(i, sampleRate));
     this.gainK = 1 - Math.exp(-1 / (0.01 * sampleRate));
   }
 
   setParams(params: Readonly<Record<string, number>>): void {
     padsOf(params).forEach((s, i) => {
       this.pads[i].settings = s;
-      this.pads[i].prepare();
+      this.pads[i].prepare(params);
     });
     this.velocity = (params.velocity ?? 70) / 100;
     this.volume = dbToGain(params.volume ?? -4);
   }
 
-  /** Il sample del pad di `slot` ("p1"…): il colpo che suona già tiene il suo, il prossimo usa questo. */
+  /** Il sample del pad di `slot` ("p1"…), o di uno strumento di un pad ("p3.kick.body"): il colpo
+   *  che suona già tiene il suo, il prossimo usa questo. */
   setSample(slot: string, sample: SampleData | null): void {
+    const inner = splitInner(slot);
+    if (inner) return this.pads[inner.pad].setInnerSample(slot, inner.type, inner.inner, sample);
     const pad = this.pads[padOfSlot(slot)];
     if (pad) pad.sample = sample;
   }
@@ -604,7 +721,7 @@ export class DrumCore implements InstrumentCore, SamplePlayer {
     const group = pad.settings.choke;
     if (group > 0) for (const other of this.pads) if (other !== pad && other.settings?.choke === group) other.choke();
     const v = velocity / 127;
-    pad.hit(1 - this.velocity + this.velocity * v * v);
+    pad.hit(velocity, 1 - this.velocity + this.velocity * v * v);
   }
 
   /** I colpi suonano fino in fondo: la durata della nota non conta. */

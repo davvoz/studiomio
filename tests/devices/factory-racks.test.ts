@@ -3,7 +3,8 @@ import { paramSpec, resolveParams } from '../../src/devices/device-type';
 import { followsTransport } from '../../src/devices/dsp/core';
 import {
   ACIDO, ACIDO_FX, CASSETTA, DUB, FACTORY_RACKS, FADE_TO_GREY, FRENCH_TOUCH, HOOVER, JUMP, LEVARE, MACCHINA, MURO, NEBBIA, NUOVA_ONDA,
-  OSSIGENO, RINGHIO, TORNADO, TRECENTOTRE,
+  OSSIGENO, RINGHIO, TORNADO, TRECENTOTRE, BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE,
+  HAT_IN_MOVIMENTO,
 } from '../../src/devices/factory-racks';
 import type { RackPreset } from '../../src/model/rack-preset';
 import { effectType, instrumentType } from '../../src/devices/registry';
@@ -82,6 +83,7 @@ describe('rack di fabbrica', () => {
     expect(FACTORY_RACKS.map(r => r.name)).toEqual([
       'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina',
       'Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump', 'Levare', '303',
+      'Batteria rave', 'Batteria dub', 'Batteria rotta', 'Batteria industriale', 'Cassa', 'Rullante', 'Hat in movimento',
     ]);
     for (const rack of FACTORY_RACKS) {
       expect(rack.macros).toHaveLength(MACRO_COUNT);
@@ -171,7 +173,10 @@ describe('rack di fabbrica', () => {
     expect(side(outL, outR) / rms(outL)).toBeLessThan(side(inL, inR) / rms(inL));
   });
 
-  for (const preset of [ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE]) {
+  for (const preset of [
+    ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE,
+    BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE, HAT_IN_MOVIMENTO,
+  ]) {
     it(`${preset.name}: lo strumento e gli effetti in un Instrument Rack, le macro dove partono`, () => {
       const s = setup();
       s.store.apply(loadRack(null, preset));
@@ -212,7 +217,9 @@ function playNotes(instrument: DeviceSettings, effects: readonly EffectSettings[
     core.setParams(resolveParams(effectType(e.type)!, e.params));
     return core;
   });
-  const EIGHTH = SR / 4, PITCHES = [45, 48, 52, 55];
+  // la batteria sulle note dei pad (cassa, hat chiuso, rullante, hat aperto), il resto un accordo in arpeggio
+  const drums = ['drums', 'kick', 'snare', 'cymbals'].includes(instrument.type);
+  const EIGHTH = SR / 4, PITCHES = drums ? [36, 42, 38, 46] : [45, 48, 52, 55];
   let aL = new Float32Array(BLOCK), aR = new Float32Array(BLOCK), bL = new Float32Array(BLOCK), bR = new Float32Array(BLOCK);
   let peak = 0, note = 0;
   for (let f = 0; f < frames; f += BLOCK) {

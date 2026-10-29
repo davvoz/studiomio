@@ -551,6 +551,10 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drum-pad-head { display: flex; align-items: center; gap: 8px; }
 .drum-pad-title { font-weight: 600; font-size: 12px; white-space: nowrap; }
 .drum-model { font-size: 12px; padding: 1px 4px; }
+.drum-inner-preset { font-size: 12px; padding: 1px 4px; }
+/* il pannello dello strumento di un pad, accanto ai controlli del pad */
+.drum-inner { flex: none; align-self: stretch; display: flex; border-left: 1px solid var(--line); padding-left: 10px; }
+.drum-inner[hidden] { display: none; }
 .drum-hint { font-size: 11px; white-space: nowrap; }
 .drum-sample-row { display: flex; align-items: center; gap: 4px; }
 .drum-sample-row.off { display: none; }

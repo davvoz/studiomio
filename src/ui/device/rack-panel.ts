@@ -3,6 +3,7 @@
  * aggiungerne, anche sulle macro dei rack che ha dentro. Ogni modifica passa dallo store. Con ★
  * il rack si salva per gli altri progetti. */
 import type { DeviceId } from '../../core/id';
+import { activeSections } from '../../devices/device-type';
 import { formatParam, type NumberParam, type ParamSpec } from '../../devices/params';
 import { deviceAt, deviceTypeAt, macroSpec, mappingSpec } from '../../devices/rack-params';
 import { userRacks } from '../../devices/user-racks';
@@ -351,11 +352,11 @@ export class RackPanel {
       })),
     }));
     showContextMenu(x, y, [...o.rack.devices.map(device => {
-      const type = deviceTypeAt(p, o.owner, device);
+      const type = deviceTypeAt(p, o.owner, device), settings = deviceAt(p, o.owner, device);
       return {
         label: o.deviceLabel(device),
         disabled: !type,
-        run: () => showContextMenu(x, y, (type?.sections ?? []).flatMap(section => section.params.filter(spec => !spec.hidden).map(spec => ({
+        run: () => showContextMenu(x, y, (type ? activeSections(type, settings?.params ?? {}) : []).flatMap(section => section.params.filter(spec => !spec.hidden).map(spec => ({
           label: type!.sections.length > 1 ? `${section.label} · ${spec.label}` : spec.label,
           checked: mapped(device, spec.id),
           run: () => this.apply(mapMacro(o.owner, o.rack.id as DeviceId, index, device, spec.id)),

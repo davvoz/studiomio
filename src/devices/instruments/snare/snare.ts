@@ -135,6 +135,12 @@ function snarePresets(): Preset[] {
         roomTime: 0.9, roomTone: 5000, drive: 25 },
     },
     {
+      name: 'Industriale',
+      params: { note: note(50), snapSource: SNAP_SOURCE.noise, snapLevel: 70, snapTone: 3000, snapDecay: 14, bodyLevel: 50, pitch: 14,
+        pitchTime: 18, overtone: 30, shape: 60, decay: 0.12, wiresLevel: 85, wiresTone: 1100, wiresDecay: 0.35, grain: 35, roomOn: 1,
+        room: 40, roomTime: 1.4, roomTone: 3500, drive: 55, driveType: 1, volume: -13 },
+    },
+    {
       name: 'Rimshot',
       params: { note: note(62), snapSource: SNAP_SOURCE.click, snapLevel: 85, snapTone: 6500, snapDecay: 3, bodyLevel: 70, pitch: 2,
         pitchTime: 8, overtone: 80, shape: 40, decay: 0.07, wiresLevel: 30, wiresTone: 2500, wiresDecay: 0.08, lowCut: 200 },
@@ -154,6 +160,36 @@ function snarePresets(): Preset[] {
       params: { note: note(56), snapSource: SNAP_SOURCE.noise, snapLevel: 45, snapTone: 4500, snapDecay: 5, bodyLevel: 65, pitch: 4,
         pitchTime: 12, overtone: 60, shape: 5, decay: 0.2, wiresLevel: 65, wiresTone: 2000, wiresDecay: 0.35, wiresDelay: 4, roomOn: 1,
         room: 25, roomTime: 0.5, velocity: 70, velTone: 80 },
+    },
+    {
+      name: 'Breakbeat',
+      params: { note: note(55), snapSource: SNAP_SOURCE.noise, snapLevel: 60, snapTone: 5000, snapDecay: 6, bodyLevel: 60, pitch: 5,
+        overtone: 55, shape: 20, decay: 0.14, wiresLevel: 80, wiresTone: 2500, wiresDecay: 0.25, wiresDelay: 2, drive: 30, roomOn: 1,
+        room: 20, roomTime: 0.4, velocity: 70, velTone: 70, volume: -9 },
+    },
+    {
+      name: 'Trap',
+      params: { note: note(60), snapSource: SNAP_SOURCE.click, snapLevel: 70, snapTone: 8000, snapDecay: 3, bodyLevel: 45, pitch: 10,
+        pitchTime: 10, decay: 0.08, wiresLevel: 85, wiresTone: 3500, wiresDecay: 0.16, wiresDelay: 0.5, roomOn: 1, room: 35, roomTime: 0.9,
+        roomTone: 9000, lowCut: 180 },
+    },
+    {
+      name: 'Dubstep',
+      params: { note: note(50), snapSource: SNAP_SOURCE.noise, snapLevel: 70, snapTone: 3000, snapDecay: 12, bodyLevel: 65, pitch: 12,
+        pitchTime: 25, overtone: 40, shape: 40, decay: 0.2, wiresLevel: 85, wiresTone: 1300, wiresDecay: 0.35, roomOn: 1, room: 55,
+        roomTime: 2, roomTone: 4000, drive: 40, volume: -14 },
+    },
+    {
+      // niente bacchetta: le molle lunghe e piano, come le spazzole jazz
+      name: 'Spazzole',
+      params: { note: note(52), snapSource: SNAP_SOURCE.noise, snapLevel: 15, snapTone: 2000, snapDecay: 20, bodyLevel: 35, pitch: 2,
+        decay: 0.12, wiresLevel: 70, wiresTone: 3000, wiresDecay: 0.6, wiresDelay: 8, grain: 20, roomOn: 1, room: 20, roomTime: 0.6,
+        lowCut: 150, velocity: 80, velTone: 70 },
+    },
+    {
+      name: 'Elettro',
+      params: { note: note(57), snapSource: SNAP_SOURCE.click, snapLevel: 50, snapTone: 6000, snapDecay: 3, bodyLevel: 80, pitch: 14,
+        pitchTime: 30, overtone: 60, shape: 0, decay: 0.12, wiresLevel: 50, wiresTone: 4500, wiresDecay: 0.1, lowCut: 120 },
     },
   ];
 }

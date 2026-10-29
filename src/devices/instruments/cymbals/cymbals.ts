@@ -99,10 +99,46 @@ const PRESETS: readonly Preset[] = [
       ...piece(4, { tune: -5, bell: 50 }) },
   },
   {
+    // scuri, sporchi e un po' diversi a ogni colpo
+    name: 'Lo-fi',
+    params: { metal: 0, variation: 55, width: 25, drive: 30, ...piece(0, { decay: 0.06, tone: 38, noise: 30 }),
+      ...piece(2, { decay: 0.45, tone: 40, noise: 35 }), ...piece(4, { decay: 2.4, tone: 40, bell: 35, noise: 20 }) },
+  },
+  {
     name: 'Acustica',
     params: { metal: 1, variation: 40, width: 60, ...piece(0, { decay: 0.09, tone: 52, noise: 60 }),
       ...piece(2, { decay: 0.9, tone: 50, noise: 65 }), ...piece(3, { decay: 3, tone: 45, noise: 75 }),
       ...piece(4, { decay: 3.6, tone: 50, noise: 35, bell: 25 }) },
+  },
+  {
+    name: '909',
+    params: { metal: 1, variation: 15, width: 35, drive: 10, ...piece(0, { decay: 0.06, tone: 75, noise: 40 }),
+      ...piece(2, { decay: 0.45, tone: 72, noise: 45 }), ...piece(3, { decay: 2.8, tone: 65, noise: 70 }),
+      ...piece(4, { decay: 3.2, tone: 70, bell: 40 }), volume: 0 },
+  },
+  {
+    // hat cortissimi per i rulli
+    name: 'Trap',
+    params: { metal: 0, variation: 30, width: 50, ...piece(0, { decay: 0.025, tone: 80, noise: 30, level: -3 }),
+      ...piece(1, { decay: 0.02, tone: 75 }), ...piece(2, { decay: 0.25, tone: 75 }), ...piece(3, { decay: 2, tone: 70 }), volume: 2 },
+  },
+  {
+    name: 'Dub',
+    params: { metal: 0, variation: 35, width: 80, ...piece(0, { decay: 0.1, tone: 45, noise: 50 }),
+      ...piece(2, { decay: 1.2, tone: 42, noise: 55 }), ...piece(3, { decay: 4, tone: 40, noise: 60 }),
+      ...piece(4, { decay: 5, tone: 45, bell: 25 }), volume: -1 },
+  },
+  {
+    // il metallo ad anello, accordato in basso e lungo: gong e campane
+    name: 'Gong',
+    params: { metal: 2, variation: 10, width: 70, ...piece(2, { decay: 2, tune: -8, tone: 40 }),
+      ...piece(3, { decay: 7, tune: -12, tone: 35, noise: 30, bell: 60 }), ...piece(4, { decay: 6, tune: -7, bell: 80 }),
+      ...piece(5, { decay: 5, tune: -5 }) },
+  },
+  {
+    name: 'Minimal',
+    params: { metal: 1, variation: 10, width: 20, ...piece(0, { decay: 0.03, tone: 85, noise: 20 }),
+      ...piece(2, { decay: 0.2, tone: 80 }), ...piece(4, { decay: 1.5, tone: 80, bell: 55 }), volume: 6 },
   },
 ];
 

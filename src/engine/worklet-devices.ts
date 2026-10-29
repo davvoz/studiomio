@@ -1,7 +1,7 @@
 /* Strumenti ed effetti nel browser: ognuno è un AudioWorkletNode di uno dei due processori
  * (devices/worklet), con il motore del suo tipo. Il thread principale manda note e parametri
  * per messaggio, con il tempo in secondi del contesto. */
-import { resolveParams } from '../devices/device-type';
+import { resolveActiveParams, resolveParams } from '../devices/device-type';
 import { effectType, instrumentType } from '../devices/registry';
 import workletUrl from '../devices/worklet/devices.worklet.ts?worker&url';
 import { METER_VALUES } from '../devices/worklet/meter-core';
@@ -42,10 +42,11 @@ const samplesOf = (samples: DeviceSamples | undefined, source: SampleSource): Re
     return data ? [[slot, { sampleRate: data.sampleRate, channels: [...data.channels] }]] : [];
   }));
 
-/** I parametri completi da mandare al motore (i tipi sconosciuti suonano muti). */
+/** I parametri completi da mandare al motore (i tipi sconosciuti suonano muti), senza quelli
+ *  delle sezioni che non ci sono (gli strumenti dei pad che suonano altro). */
 const fullParams = (s: InstrumentSettings) => {
   const t = instrumentType(s.type);
-  return t ? resolveParams(t, s.params) : {};
+  return t ? resolveActiveParams(t, s.params) : {};
 };
 
 class WorkletInstrument implements Instrument {

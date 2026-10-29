@@ -11,7 +11,7 @@
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam, ParamSpec } from '../../params';
 import { TEMPO_RATE as LFO_RATE, TEMPO_RATES as LFO_RATES } from '../../rates';
-import { SEQUENCER_SECTION } from '../../sequencer';
+import { SEQ_RATE, SEQ_SCALE, SEQUENCER_SECTION } from '../../sequencer';
 import { MAX_UNISON, WAVES } from '../analog/analog';
 
 export const NEURO_VOICE_MODES = ['Mono', 'Legato'] as const;
@@ -193,6 +193,71 @@ export const NEURO: DeviceType = {
     {
       name: 'Sub pulito',
       params: { unison: 1, mix: 0, cutoff: 200, drive: 0, sub: 100, crossover: 400, volume: -6 },
+    },
+    {
+      // il reese che si abbassa sul battere e risale: la pompa senza sidechain
+      name: 'Reese che pompa',
+      params: { unison: 3, detune: 22, oscBFine: -14, cutoff: 1000, resonance: 15, drive: 35, dist: 25, sub: 70,
+        lfo2Shape: LFO_SHAPE.sawUp, lfo2Rate: LFO_RATE['1/4'], lfo2Retrig: 1, lfo2Dest: MOD_DEST.volume, lfo2Amount: 70, volume: -9 },
+    },
+    {
+      name: 'Wobble neuro',
+      params: { unison: 2, detune: 15, oscBSemi: -12, oscBFine: 0, cutoff: 600, resonance: 40, drive: 50, formant: 40, dist: 40, fold: 15,
+        lfo1Shape: LFO_SHAPE.sine, lfo1Rate: LFO_RATE['1/8'], lfo1Dest: MOD_DEST.cutoff, lfo1Amount: 70, lfo1Dest2: MOD_DEST.vowel, lfo1Amount2: 40,
+        volume: -11 },
+    },
+    {
+      // le vocali che si aprono e chiudono a tempo, come una talkbox
+      name: 'Talkbox',
+      params: { unison: 1, oscA: 0, oscB: 1, mix: 40, cutoff: 2500, resonance: 20, drive: 30, formant: 90, vowel: 20, dist: 15, glide: 60,
+        lfo1Shape: LFO_SHAPE.triangle, lfo1Rate: LFO_RATE['1/4'], lfo1Dest: MOD_DEST.vowel, lfo1Amount: 80, volume: -10 },
+    },
+    {
+      // il basso frigio del rave che si scrive da solo, lasciando il battere alla cassa
+      name: 'Basso frigio',
+      params: { oscA: 0, oscB: 1, oscBFine: -7, mix: 35, unison: 1, cutoff: 800, resonance: 30, drive: 35, keyTrack: 40, dist: 20, sub: 75,
+        crossover: 120, voiceMode: 0, glide: 0, decay: 0.16, sustain: 35, release: 0.06, mDecay: 0.1, envDest: MOD_DEST.cutoff, envAmount: 50,
+        volume: -7, seqOn: 1, seqKick: 1, seqScale: SEQ_SCALE.Frigio, seqRate: SEQ_RATE['1/16'], seqDensity: 70, seqRange: 25, seqAccent: 30,
+        seqSlide: 10, seqGate: 55 },
+    },
+    {
+      name: 'Ringhio lento',
+      params: { unison: 2, detune: 14, oscBSemi: -12, oscBFine: 0, fm: 25, fmRatio: 2, fold: 20, cutoff: 1800, resonance: 25, drive: 50,
+        formant: 45, dist: 40, lfo1Shape: LFO_SHAPE.triangle, lfo1Rate: LFO_RATE['2 battute'], lfo1Retrig: 1, lfo1Dest: MOD_DEST.fm,
+        lfo1Amount: 50, lfo1Dest2: MOD_DEST.vowel, lfo1Amount2: 60, volume: -12 },
+    },
+    {
+      name: 'Industriale',
+      params: { unison: 3, detune: 30, fm: 30, fmRatio: 4, fold: 55, cutoff: 3000, resonance: 30, drive: 80, dist: 80, sub: 50,
+        lfo1Shape: LFO_SHAPE.sampleHold, lfo1Rate: LFO_RATE['1/16'], lfo1Dest: MOD_DEST.fold, lfo1Amount: 30, volume: -12 },
+    },
+    {
+      name: 'Sub con morso',
+      params: { unison: 1, mix: 30, cutoff: 600, resonance: 30, drive: 40, dist: 15, sub: 90, crossover: 160, mDecay: 0.08,
+        envDest: MOD_DEST.cutoff, envAmount: 60, decay: 0.5, sustain: 70, volume: -7 },
+    },
+    {
+      name: 'Reese scuro',
+      params: { unison: 5, detune: 30, oscBFine: -20, cutoff: 450, resonance: 20, drive: 40, dist: 30, sub: 80, crossover: 90,
+        lfo1Shape: LFO_SHAPE.triangle, lfo1Rate: LFO_RATE['4 battute'], lfo1Retrig: 1, lfo1Dest: MOD_DEST.cutoff, lfo1Amount: 30,
+        lfo2Shape: LFO_SHAPE.smoothRandom, lfo2Rate: LFO_RATE['1 battuta'], lfo2Retrig: 1, lfo2Dest: MOD_DEST.detune, lfo2Amount: 30, volume: -11 },
+    },
+    {
+      name: 'Stab neuro',
+      params: { unison: 3, detune: 20, fold: 25, cutoff: 900, resonance: 35, drive: 55, formant: 60, vowel: 30, dist: 40, decay: 0.22,
+        sustain: 0, release: 0.12, mDecay: 0.15, envDest: MOD_DEST.vowel, envAmount: 70, envDest2: MOD_DEST.cutoff, envAmount2: 50, volume: -10 },
+    },
+    {
+      // a ogni sedicesimo un'altra vocale e un altro filtro, a caso
+      name: 'Glitch S&H',
+      params: { unison: 2, detune: 12, cutoff: 1500, resonance: 40, drive: 45, formant: 70, dist: 35, lfo1Shape: LFO_SHAPE.sampleHold,
+        lfo1Rate: LFO_RATE['1/16'], lfo1Dest: MOD_DEST.vowel, lfo1Amount: 80, lfo1Dest2: MOD_DEST.cutoff, lfo1Amount2: 40, volume: -11 },
+    },
+    {
+      // la nota che cade all'attacco: il colpo del basso
+      name: 'Caduta',
+      params: { unison: 2, detune: 15, cutoff: 1400, resonance: 25, drive: 45, dist: 30, sub: 70, mDecay: 0.18, envDest: MOD_DEST.pitch,
+        envAmount: 40, envDest2: MOD_DEST.cutoff, envAmount2: 40, decay: 0.6, sustain: 60, volume: -9 },
     },
   ],
 };

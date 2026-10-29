@@ -99,6 +99,11 @@ export class CymbalsDisplay implements DeviceDisplay {
     return view.piece;
   }
 
+  /** Sceglie il pezzo da modificare (la Drum Machine: quello che suona il suo pad). */
+  selectPiece(i: number): void {
+    if (i !== view.piece && PIECES[i]) this.select(i);
+  }
+
   private refresh(): void {
     const i = view.piece;
     this.pads.forEach((b, k) => {

@@ -3,10 +3,10 @@
  * una scelta, come un interruttore, scatta quando la curva la sposta oltre metà strada). Sul
  * master gli effetti e le macro dei suoi rack, per le sue curve sulla timeline. */
 import type { DeviceId } from '../../core/id';
-import { paramSpec, resolveParams, type DeviceType } from '../../devices/device-type';
+import { activeSections, paramSpec, resolveParams, type DeviceType } from '../../devices/device-type';
 import { paramFromUnit, paramToUnit, type ChoiceParam } from '../../devices/params';
 import { effectType, instrumentType } from '../../devices/registry';
-import type { EffectSettings, InstrumentSettings } from '../../model/device';
+import type { EffectSettings, InstrumentSettings, ParamValues } from '../../model/device';
 import { CLIP_TRANSPOSE, INSTRUMENT_DEVICE, scaleKindOf, type ModScaleKind, type ModTarget } from '../../model/envelope';
 import { MASTER, type Project } from '../../model/project';
 import { chainItems, macroIndex, macroName, macroParam, rackName, type ChainItem, type DeviceKey, type Rack, type RackList } from '../../model/rack';
@@ -59,11 +59,12 @@ const MIXER: TargetDevice = {
   }],
 };
 
-/** I parametri di un dispositivo, sezione per sezione (quelli del solo pannello grafico no). */
-function deviceTargets(key: string, label: string, type: DeviceType | undefined): TargetDevice | null {
+/** I parametri di un dispositivo, sezione per sezione (quelli del solo pannello grafico no, e
+ *  delle sezioni che con questi valori non ci sono). */
+function deviceTargets(key: string, label: string, type: DeviceType | undefined, values: ParamValues): TargetDevice | null {
   if (!type) return null;
   const device = key as DeviceId;
-  const sections = type.sections
+  const sections = activeSections(type, values)
     .map(s => ({
       label: s.label,
       params: s.params.filter(p => !p.hidden).map(p => ({ target: { kind: 'device', device, param: p.id } as ModTarget, label: p.label })),
@@ -90,17 +91,19 @@ export const masterTargetDevices = (p: Project): TargetDevice[] => chainTargets(
 
 /** I dispositivi di una catena, nell'ordine del suono; un rack prima dei suoi dispositivi (e dei rack che ha dentro). */
 function chainTargets(chain: ModChain): TargetDevice[] {
-  const types = new Map<DeviceKey, { type: DeviceType | undefined; name: string }>();
-  if (chain.instrument) types.set(INSTRUMENT_DEVICE, { type: instrumentType(chain.instrument.type), name: chain.instrument.type });
-  for (const e of chain.effects) types.set(e.id, { type: effectType(e.type), name: e.type });
+  const types = new Map<DeviceKey, { type: DeviceType | undefined; name: string; values: ParamValues }>();
+  if (chain.instrument) {
+    types.set(INSTRUMENT_DEVICE, { type: instrumentType(chain.instrument.type), name: chain.instrument.type, values: chain.instrument.params });
+  }
+  for (const e of chain.effects) types.set(e.id, { type: effectType(e.type), name: e.type, values: e.params });
   const out: TargetDevice[] = [];
   const seen = new Map<string, number>();
   const device = (key: DeviceKey) => {
-    const { type, name } = types.get(key)!;
+    const { type, name, values } = types.get(key)!;
     // due effetti dello stesso tipo: "Delay", "Delay 2"
     const n = (seen.get(name) ?? 0) + 1;
     seen.set(name, n);
-    const d = deviceTargets(key, `${type?.label ?? name}${n > 1 ? ` ${n}` : ''}`, type);
+    const d = deviceTargets(key, `${type?.label ?? name}${n > 1 ? ` ${n}` : ''}`, type, values);
     if (d) out.push(d);
   };
   const label = (k: DeviceKey, param: string): string | undefined => {

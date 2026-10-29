@@ -11,7 +11,11 @@
  * Gli Instrument Rack partono da un preset dello strumento e ci aggiungono effetti; le macro
  * muovono insieme strumento ed effetti, e partono dove il suono è già bello.
  *
- * Levare, 303, Acido FX e Macchina vengono dal live "Rave illegale" (src/demo/rave-live.ts). */
+ * Levare, 303, Acido FX e Macchina vengono dal live "Rave illegale" (src/demo/rave-live.ts).
+ *
+ * I rack di batteria partono da un kit della Drum Machine (o dal Kick, dallo Snare, da Hat e
+ * Piatti da soli): le macro muovono anche i parametri degli strumenti dentro i pad, per id con il
+ * pad davanti ("p1.kick.decay": la cassa del pad 1). */
 import type { DeviceType } from './device-type';
 import type { RackPreset, SavedDevice, SavedEffect, SavedMacro } from '../model/rack-preset';
 import { MACRO_COUNT, type MacroMode } from '../model/rack';
@@ -21,6 +25,7 @@ import { AUTO_FILTER, AUTO_FILTER_SYNC } from './effects/auto-filter/auto-filter
 import { AUTO_PAN, AUTO_PAN_SYNC } from './effects/auto-pan/auto-pan';
 import { BEAT_REPEAT, GRIDS, INTERVALS, REPEAT_MODE } from './effects/beat-repeat/beat-repeat';
 import { CHORUS, CHORUS_MODE, CHORUS_SYNC } from './effects/chorus/chorus';
+import { CLIPPER } from './effects/clipper/clipper';
 import { COMPRESSOR } from './effects/compressor/compressor';
 import { DELAY, DIVISIONS } from './effects/delay/delay';
 import { DRIVE, SHAPE } from './effects/drive/drive';
@@ -34,6 +39,10 @@ import { REVERSE, REVERSE_LENGTHS } from './effects/reverse/reverse';
 import { STEREO } from './effects/stereo/stereo';
 import { BRAKE_CURVE, BRAKE_DIVISIONS, STARTS, TAPE_STOP, TAPE_SYNC } from './effects/tape-stop/tape-stop';
 import { ANALOG, VOICE_MODE as ANALOG_VOICE } from './instruments/analog/analog';
+import { CYMBALS } from './instruments/cymbals/cymbals';
+import { DRUMS } from './instruments/drums/drums';
+import { KICK } from './instruments/kick/kick';
+import { SNARE } from './instruments/snare/snare';
 import { MOD_DEST as NEURO_DEST, NEURO, LFO_SHAPE as NEURO_LFO } from './instruments/neuro/neuro';
 import { LFO_SYNC, MOD_DEST, TABLE, VOICE_MODE, WAVETABLE, LFO_SHAPE as WT_LFO } from './instruments/wavetable/wavetable';
 import { TEMPO_RATE } from './rates';
@@ -539,8 +548,148 @@ export const TRECENTOTRE: RackPreset = (() => {
   ]);
 })();
 
+// ---------------------------------------------------------------- batteria
+
+/** Il kit Rave con la colla: saturazione, compressione e una stanza piccola. Le macro scavano
+ *  nella cassa (coda, rumble, nota), nel rullante (la stanza) e negli hi-hat. */
+export const BATTERIA_RAVE: RackPreset = (() => {
+  const KIT = 0, HEAT = 1, GLUE = 2, ROOM = 3;
+  return rack('Batteria rave', device(DRUMS, 'Rave', { volume: -9 }), [
+    effect(DRIVE, 'Calda', { mix: 0 }),
+    effect(COMPRESSOR, 'Punch batteria'),
+    effect(REVERB, 'Stanza', { mix: 0 }),
+  ], [
+    { name: 'Coda cassa', value: 50, moves: [[KIT, 'p1.kick.decay', 0.12, 0.4], [KIT, 'p1.kick.tailDecay', 0.2, 1.2]] },
+    { name: 'Rumble', value: 90, moves: [[KIT, 'p1.kick.rumble', 0, 100], [KIT, 'p1.kick.rumbleTime', 0.6, 2.5]] },
+    // la cassa accordata: da C0 a C1, a semitoni
+    { name: 'Nota cassa', value: 42, moves: [[KIT, 'p1.kick.note', 0, 12], [KIT, 'p13.kick.note', 0, 12]] },
+    { name: 'Stanza rullante', value: 50, moves: [[KIT, 'p3.snare.room', 10, 90], [KIT, 'p3.snare.roomTime', 0.5, 2.5]] },
+    { name: 'Hat aperto', value: 35, moves: [[KIT, 'p11.cymbals.openDecay', 0.12, 1.5]] },
+    {
+      name: 'Brillantezza', value: 70,
+      moves: [[KIT, 'p7.cymbals.closedTone', 40, 90], [KIT, 'p9.cymbals.pedalTone', 40, 90], [KIT, 'p11.cymbals.openTone', 40, 90]],
+    },
+    { name: 'Saturazione', moves: [[HEAT, 'mix', 0, 100], [HEAT, 'drive', 6, 16]] },
+    { name: 'Colla', value: 80, moves: [[GLUE, 'mix', 0, 100], [ROOM, 'mix', 0, 15]] },
+  ]);
+})();
+
+/** Il kit Dub techno nell'eco e nella sala, con il filtro davanti: tutto si allontana. */
+export const BATTERIA_DUB: RackPreset = (() => {
+  const KIT = 0, FILTER = 1, ECHO = 2, HALL = 3;
+  return rack('Batteria dub', device(DRUMS, 'Dub techno'), [
+    effect(AUTO_FILTER, null, { freq: 20000, resonance: 25, slope: 1 }),
+    effect(DELAY, 'Dub', { mix: 0 }),
+    effect(REVERB, 'Sala', { mix: 0 }),
+  ], [
+    { name: 'Filtro', moves: [[FILTER, 'freq', 20000, 250]] },
+    { name: 'Eco', value: 45, moves: [[ECHO, 'mix', 0, 45]] },
+    { name: 'Ritorni', value: 60, moves: [[ECHO, 'feedback', 20, 85]] },
+    { name: 'Sala', value: 40, moves: [[HALL, 'mix', 0, 45], [HALL, 'decay', 2, 8]] },
+    { name: 'Stanza rim', value: 50, moves: [[KIT, 'p2.snare.room', 10, 90], [KIT, 'p2.snare.roomTime', 0.8, 3]] },
+    { name: 'Rumble', value: 45, moves: [[KIT, 'p1.kick.rumble', 0, 80], [KIT, 'p1.kick.tailDecay', 0.5, 2]] },
+    { name: 'Hat aperto', value: 60, moves: [[KIT, 'p11.cymbals.openDecay', 0.3, 2.5]] },
+    { name: 'Larghezza hat', value: 80, moves: [[KIT, 'p7.cymbals.width', 20, 100], [KIT, 'p11.cymbals.width', 20, 100]] },
+  ]);
+})();
+
+/** Il kit Lo-fi nel campionatore vecchio: bit e frequenza che calano, il rullante che si sgrana,
+ *  lo stutter a pulsante. */
+export const BATTERIA_ROTTA: RackPreset = (() => {
+  const KIT = 0, BITS = 1, STUTTER = 2, GLUE = 3;
+  return rack('Batteria rotta', device(DRUMS, 'Lo-fi', { volume: -6 }), [
+    effect(REDUX, 'Campionatore 12 bit', { mix: 0 }),
+    repeatButton('1/16'),
+    effect(COMPRESSOR, 'Schiaccia', { mix: 0 }),
+  ], [
+    { name: 'Bit', value: 40, moves: [[BITS, 'mix', 0, 100], [BITS, 'bits', 16, 5], [BITS, 'rate', 30000, 5000]] },
+    { name: 'Grana', value: 60, moves: [[KIT, 'p3.snare.grain', 0, 100], [KIT, 'p5.snare.grain', 30, 100]] },
+    { name: 'Stutter', mode: 'button', moves: [[STUTTER, 'repeat', 0, 1]] },
+    { name: 'Schiaccia', value: 50, moves: [[GLUE, 'mix', 0, 80]] },
+    { name: 'Cassa', value: 64, moves: [[KIT, 'p1.kick.drive', 0, 80], [KIT, 'p1.kick.decay', 0.06, 0.3]] },
+    { name: 'Metallo', value: 64, moves: [[KIT, 'p7.cymbals.variation', 10, 100], [KIT, 'p11.cymbals.variation', 10, 100]] },
+    { name: 'Hat aperto', value: 40, moves: [[KIT, 'p11.cymbals.openDecay', 0.15, 1.5]] },
+    { name: 'Stanza', value: 30, moves: [[KIT, 'p5.snare.room', 0, 80], [KIT, 'p5.snare.roomTime', 0.3, 2]] },
+  ]);
+})();
+
+/** Il kit Industriale ancora più duro: distorsione, OTT, una sala di cemento. */
+export const BATTERIA_INDUSTRIALE: RackPreset = (() => {
+  const KIT = 0, BREAK = 1, OTT = 2, HALL = 3;
+  return rack('Batteria industriale', device(DRUMS, 'Industriale', { volume: -10 }), [
+    effect(DRIVE, 'Rotto', { mix: 0 }),
+    effect(MULTIBAND, 'OTT', { mix: 0, output: 0 }),
+    effect(REVERB, 'Sala', { mix: 0, damping: 3000 }),
+  ], [
+    { name: 'Distruzione', moves: [[BREAK, 'mix', 0, 50], [BREAK, 'output', 0, -6]] },
+    { name: 'OTT', value: 40, moves: [[OTT, 'mix', 0, 60]] },
+    { name: 'Cemento', value: 30, moves: [[HALL, 'mix', 0, 40], [HALL, 'decay', 1.5, 6]] },
+    { name: 'Rumble', value: 64, moves: [[KIT, 'p13.kick.rumble', 0, 100], [KIT, 'p13.kick.rumbleDrive', 40, 100]] },
+    { name: 'Stanza rullante', value: 40, moves: [[KIT, 'p3.snare.room', 0, 90], [KIT, 'p3.snare.roomTime', 0.5, 3]] },
+    { name: 'Rullante sporco', value: 50, moves: [[KIT, 'p3.snare.drive', 20, 100], [KIT, 'p3.snare.grain', 0, 80]] },
+    { name: 'Piatti lunghi', value: 40, moves: [[KIT, 'p14.cymbals.crashDecay', 1, 8], [KIT, 'p16.cymbals.rideDecay', 1, 8]] },
+    { name: 'Hat aperto', value: 40, moves: [[KIT, 'p11.cymbals.openDecay', 0.2, 2]] },
+  ]);
+})();
+
+/** Una cassa da costruire a manopole: il Kick "Techno", un EQ e il clipper. */
+export const CASSA: RackPreset = (() => {
+  const KICK_ = 0, CLIP = 2;
+  return rack('Cassa', device(KICK, 'Techno', { rumbleOn: 1, rumble: 0 }), [
+    eqOf(25, [[60, 2, 1], [300, -3, 1.2], [4000, 1.5, 1]]),
+    effect(CLIPPER, 'Cassa', { drive: 0 }),
+  ], [
+    { name: 'Nota', value: 53, moves: [[KICK_, 'note', 0, 12]] },
+    { name: 'Punch', value: 60, moves: [[KICK_, 'snapLevel', 10, 90], [KICK_, 'pitch', 15, 45]] },
+    { name: 'Caduta', value: 40, moves: [[KICK_, 'pitchTime', 15, 90]] },
+    { name: 'Corpo', value: 50, moves: [[KICK_, 'decay', 0.1, 0.5], [KICK_, 'hold', 5, 60]] },
+    { name: 'Coda', value: 45, moves: [[KICK_, 'tailLevel', 0, 80], [KICK_, 'tailDecay', 0.2, 2]] },
+    { name: 'Rumble', moves: [[KICK_, 'rumble', 0, 100], [KICK_, 'rumbleDrive', 30, 90]] },
+    { name: 'Saturazione', value: 30, moves: [[KICK_, 'drive', 0, 70]] },
+    { name: 'Clip', value: 40, moves: [[CLIP, 'drive', 0, 10]] },
+  ]);
+})();
+
+/** Un rullante da costruire a manopole, con la sala da lanciare. */
+export const RULLANTE: RackPreset = (() => {
+  const SNARE_ = 0, GLUE = 1, THROW = 2;
+  return rack('Rullante', device(SNARE, 'Techno', { volume: -12 }), [
+    effect(COMPRESSOR, 'Punch batteria', { mix: 0 }),
+    effect(REVERB, 'Lancio voce', { mix: 0 }),
+  ], [
+    { name: 'Nota', value: 40, moves: [[SNARE_, 'note', 0, 24]] },
+    { name: 'Bacchetta', value: 50, moves: [[SNARE_, 'snapLevel', 10, 90]] },
+    { name: 'Pelle', value: 55, moves: [[SNARE_, 'bodyLevel', 20, 90], [SNARE_, 'decay', 0.06, 0.3]] },
+    { name: 'Cordiera', value: 64, moves: [[SNARE_, 'wiresLevel', 20, 100], [SNARE_, 'wiresDecay', 0.1, 0.6]] },
+    { name: 'Grana', moves: [[SNARE_, 'grain', 0, 100]] },
+    { name: 'Stanza', value: 45, moves: [[SNARE_, 'room', 0, 90], [SNARE_, 'roomTime', 0.3, 2.5]] },
+    { name: 'Punch', value: 50, moves: [[GLUE, 'mix', 0, 100]] },
+    { name: 'Lancio', moves: [[THROW, 'mix', 0, 60]] },
+  ]);
+})();
+
+/** Gli hi-hat che si muovono: pan a tempo, eco ping-pong e il flanger metallico. */
+export const HAT_IN_MOVIMENTO: RackPreset = (() => {
+  const HATS = 0, PAN = 1, ECHO = 2, JET = 3;
+  return rack('Hat in movimento', device(CYMBALS, 'Techno secca'), [
+    effect(AUTO_PAN, 'Pan in ottavi', { amount: 0 }),
+    effect(DELAY, 'Ping-pong 1/8.', { mix: 0 }),
+    effect(PHASER, 'Hat metallici', { mix: 0 }),
+  ], [
+    { name: 'Chiuso', value: 40, moves: [[HATS, 'closedDecay', 0.02, 0.15]] },
+    { name: 'Aperto', value: 40, moves: [[HATS, 'openDecay', 0.15, 1.5]] },
+    { name: 'Brillantezza', value: 70, moves: [[HATS, 'closedTone', 30, 95], [HATS, 'pedalTone', 30, 95], [HATS, 'openTone', 30, 95]] },
+    { name: 'Variazione', value: 30, moves: [[HATS, 'variation', 0, 100]] },
+    { name: 'Rumore', value: 50, moves: [[HATS, 'closedNoise', 10, 90], [HATS, 'openNoise', 10, 90]] },
+    { name: 'Pan', value: 50, moves: [[PAN, 'amount', 0, 100]] },
+    { name: 'Eco', value: 30, moves: [[ECHO, 'mix', 0, 40]] },
+    { name: 'Jet', moves: [[JET, 'mix', 0, 60]] },
+  ]);
+})();
+
 /** I rack di fabbrica, in ordine. */
 export const FACTORY_RACKS: readonly RackPreset[] = [
   TORNADO, FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO, ACIDO_FX, MACCHINA,
   ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE,
+  BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE, HAT_IN_MOVIMENTO,
 ];
