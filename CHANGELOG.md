@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.46] - 2026-10-30
+
 ### Added
 - A MIDI clip can carry its own sound, like a program change: in the piano roll, "Usa il
   suono attuale" stores the instrument's current settings (preset and knobs) in the clip, and
