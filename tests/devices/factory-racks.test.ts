@@ -96,7 +96,8 @@ describe('rack di fabbrica', () => {
       for (const m of rack.macros) {
         expect(Number.isInteger(m.value) && m.value >= 0 && m.value <= MACRO_MAX).toBe(true);
         for (const x of m.mappings) {
-          const spec = paramSpec(types[x.device], x.param);
+          expect(x.device, `${rack.name}: ${x.param}`).toBeDefined();
+          const spec = paramSpec(types[x.device!], x.param);
           expect(spec, `${rack.name}: ${x.param}`).toBeDefined();
           if (spec?.kind === 'number') for (const v of [x.min, x.max]) expect(v >= spec.min && v <= spec.max, `${rack.name}: ${x.param} ${v}`).toBe(true);
           if (spec?.kind === 'choice') for (const v of [x.min, x.max]) expect(Number.isInteger(v) && v >= 0 && v < spec.options.length).toBe(true);

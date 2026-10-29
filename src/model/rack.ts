@@ -1,8 +1,10 @@
 /* I rack, come in Live: un gruppo di dispositivi consecutivi della catena (con lo strumento è un
  * Instrument Rack, con soli effetti un Audio Effect Rack) con 8 macro. Ogni macro muove i
  * parametri mappati, ciascuno tra il suo minimo e il suo massimo. Il suono non cambia: il rack
- * è un gruppo sopra la catena, che resta una fila sola (niente catene parallele). Qui ci sono i
- * dati e le operazioni pure, sull'ordine dei dispositivi della catena. */
+ * è un gruppo sopra la catena, che resta una fila sola (niente catene parallele). I rack vanno
+ * anche uno dentro l'altro: una macro muove i parametri di tutti i dispositivi del suo rack, anche
+ * di quelli nei rack che ha dentro, e le macro di quei rack. Qui ci sono i dati e le operazioni
+ * pure, sull'ordine dei dispositivi della catena. */
 import type { DeviceId } from '../core/id';
 import { INSTRUMENT_DEVICE } from './envelope';
 
@@ -116,11 +118,13 @@ export interface Rack {
   readonly id: DeviceId;
   /** null: "Instrument Rack" o "Audio Effect Rack". */
   readonly name: string | null;
-  /** I dispositivi del rack nell'ordine della catena, sempre di seguito. */
+  /** I dispositivi del rack nell'ordine della catena, sempre di seguito, anche quelli dei rack
+   *  che ha dentro. */
   readonly devices: readonly DeviceKey[];
   readonly macros: readonly Macro[];
 }
 
+/** I rack di una catena, ognuno prima di quelli che ha dentro (dal più grande al più piccolo). */
 export type RackList = readonly Rack[];
 
 /** Nessun rack (sempre la stessa lista: le modifiche si riconoscono dal riferimento). */
@@ -140,15 +144,52 @@ export const EMPTY_MACRO: Macro = { name: null, value: 0, mappings: [] };
 export const newRack = (id: DeviceId, devices: readonly DeviceKey[]): Rack =>
   ({ id, name: null, devices: [...devices], macros: Array<Macro>(MACRO_COUNT).fill(EMPTY_MACRO) });
 
-export const rackOf = (racks: RackList, key: DeviceKey): Rack | undefined => racks.find(r => r.devices.includes(key));
-
 export const findRack = (racks: RackList, id: DeviceId): Rack | undefined => racks.find(r => r.id === id);
 
-/** La macro che muove un parametro, se c'è (un parametro va a una macro sola). */
+/** `inner` sta dentro `outer`: i suoi dispositivi sono tra quelli di `outer`. Con gli stessi
+ *  dispositivi (un rack che ne ha dentro solo un altro) è fuori quello che viene prima. */
+export function isInside(racks: RackList, inner: Rack, outer: Rack): boolean {
+  if (inner === outer || inner.devices.length > outer.devices.length || !inner.devices.every(k => outer.devices.includes(k))) return false;
+  return inner.devices.length < outer.devices.length || racks.indexOf(outer) < racks.indexOf(inner);
+}
+
+/** Dal più esterno al più interno. */
+const outside = (racks: RackList) => (a: Rack, b: Rack) => b.devices.length - a.devices.length || racks.indexOf(a) - racks.indexOf(b);
+
+/** I rack che contengono un dispositivo, dal più esterno al più interno. */
+export const racksWith = (racks: RackList, key: DeviceKey): Rack[] => racks.filter(r => r.devices.includes(key)).sort(outside(racks));
+
+/** Il rack più interno che contiene un dispositivo. */
+export const rackOf = (racks: RackList, key: DeviceKey): Rack | undefined => racksWith(racks, key).at(-1);
+
+/** I rack che contengono un rack, dal più esterno a quello che lo ha dentro. */
+export const outerRacks = (racks: RackList, rack: Rack): Rack[] => racks.filter(r => isInside(racks, rack, r)).sort(outside(racks));
+
+/** Il rack in cui sta un rack, se sta in uno. */
+export const parentOf = (racks: RackList, rack: Rack): Rack | undefined => outerRacks(racks, rack).at(-1);
+
+/** I rack dentro un rack, a ogni profondità. */
+export const innerRacks = (racks: RackList, rack: Rack): Rack[] => racks.filter(r => isInside(racks, r, rack));
+
+/** Quanti rack ci sono intorno a un rack (0: è nella catena). */
+export const rackDepth = (racks: RackList, rack: Rack): number => outerRacks(racks, rack).length;
+
+/** Ogni rack prima di quelli che ha dentro: dopo che un rack è cresciuto, resta prima di quelli
+ *  che avevano i suoi stessi dispositivi. */
+function outerFirst(racks: RackList): RackList {
+  if (racks.every((r, i) => i === 0 || racks[i - 1].devices.length >= r.devices.length)) return racks;
+  return [...racks].sort((a, b) => b.devices.length - a.devices.length);
+}
+
+/** La macro che muove un parametro, se c'è (un parametro va a una macro sola). Il parametro è
+ *  di un dispositivo, o è la macro di un rack (`device` il rack, `param` "macroN"), che una
+ *  macro di un rack intorno può muovere. */
 export function macroOf(racks: RackList, device: DeviceKey, param: string): { rack: Rack; index: number } | null {
-  const rack = rackOf(racks, device);
-  const index = rack?.macros.findIndex(m => m.mappings.some(x => x.device === device && x.param === param)) ?? -1;
-  return rack && index >= 0 ? { rack, index } : null;
+  for (const rack of racks) {
+    const index = rack.macros.findIndex(m => m.mappings.some(x => x.device === device && x.param === param));
+    if (index >= 0) return { rack, index };
+  }
+  return null;
 }
 
 /** Il nome di un rack come si mostra. */
@@ -160,44 +201,64 @@ export const rackName = (r: Rack): string =>
 export const macroName = (m: Macro, index: number, paramLabel: (x: MacroMapping) => string | undefined): string =>
   m.name ?? (m.mappings.length ? paramLabel(m.mappings[0]) : undefined) ?? `Macro ${index + 1}`;
 
-/** Le regole: i dispositivi di un rack esistono, sono di seguito nella catena, sono di un rack
- *  solo; ogni rack ha MACRO_COUNT macro, che mappano solo dispositivi del rack. */
+/** Le regole: i dispositivi di un rack esistono e sono di seguito nella catena; due rack o sono
+ *  uno dentro l'altro o non hanno dispositivi in comune; ogni rack ha MACRO_COUNT macro, che
+ *  mappano solo dispositivi del rack o le macro dei rack che ha dentro. */
 export function checkRacks(order: readonly DeviceKey[], racks: RackList): void {
-  const claimed = new Set<DeviceKey>();
   for (const r of racks) {
     if (!r.devices.length) throw new Error(`il rack ${r.id} è vuoto`);
     if (r.macros.length !== MACRO_COUNT) throw new Error(`il rack ${r.id} ha ${r.macros.length} macro`);
+    if (new Set(r.devices).size !== r.devices.length) throw new Error(`il rack ${r.id} ha due volte lo stesso dispositivo`);
     const first = order.indexOf(r.devices[0]);
     r.devices.forEach((k, i) => {
-      if (claimed.has(k)) throw new Error(`il dispositivo ${k} è in due rack`);
-      claimed.add(k);
       if (first < 0 || order[first + i] !== k) throw new Error(`i dispositivi del rack ${r.id} non sono di seguito nella catena`);
     });
+  }
+  for (const a of racks) {
+    for (const b of racks) {
+      const shared = a.devices.filter(k => b.devices.includes(k)).length;
+      if (a !== b && shared && shared < a.devices.length && shared < b.devices.length) throw new Error(`i rack ${a.id} e ${b.id} si accavallano`);
+    }
+  }
+  for (const r of racks) {
     for (const m of r.macros) {
-      for (const x of m.mappings) if (!r.devices.includes(x.device)) throw new Error(`una macro del rack ${r.id} muove un dispositivo fuori dal rack`);
+      for (const x of m.mappings) {
+        if (r.devices.includes(x.device)) continue;
+        const inner = findRack(racks, x.device as DeviceId);
+        if (!inner || !isInside(racks, inner, r) || macroIndex(x.param) < 0) throw new Error(`una macro del rack ${r.id} muove un dispositivo fuori dal rack`);
+      }
     }
   }
 }
 
 /** Dopo che dei dispositivi sono stati tolti: escono dai rack (e dalle mappature); un rack
- *  rimasto vuoto sparisce. */
+ *  rimasto vuoto sparisce, e con lui le mappature sulle sue macro. */
 export function pruneRacks(order: readonly DeviceKey[], racks: RackList): RackList {
   const present = new Set(order);
   if (racks.every(r => r.devices.every(k => present.has(k)))) return racks;
-  return racks
-    .map(r => (r.devices.every(k => present.has(k)) ? r : {
-      ...r,
-      devices: r.devices.filter(k => present.has(k)),
-      macros: r.macros.map(m => ({ ...m, mappings: m.mappings.filter(x => present.has(x.device)) })),
-    }))
+  const kept = racks
+    .map(r => (r.devices.every(k => present.has(k)) ? r : { ...r, devices: r.devices.filter(k => present.has(k)) }))
     .filter(r => r.devices.length);
+  const ids = new Set<DeviceKey>(kept.map(r => r.id));
+  return kept.map(r => withoutMappings(r, x => !present.has(x.device) && !ids.has(x.device)));
 }
 
-/** Toglie le mappature di un dispositivo (es. lo strumento cambiato: i parametri sono altri). */
+/** Il rack senza le mappature che `gone` dice (lo stesso rack se non ce n'erano). */
+function withoutMappings(r: Rack, gone: (x: MacroMapping) => boolean): Rack {
+  if (!r.macros.some(m => m.mappings.some(gone))) return r;
+  return { ...r, macros: r.macros.map(m => ({ ...m, mappings: m.mappings.filter(x => !gone(x)) })) };
+}
+
+/** Toglie le mappature di un dispositivo (es. lo strumento cambiato: i parametri sono altri) o
+ *  delle macro di un rack. */
 export const withoutMappingsOf = (racks: RackList, device: DeviceKey): RackList =>
   racks.some(r => r.macros.some(m => m.mappings.some(x => x.device === device)))
-    ? racks.map(r => ({ ...r, macros: r.macros.map(m => ({ ...m, mappings: m.mappings.filter(x => x.device !== device) })) }))
+    ? racks.map(r => withoutMappings(r, x => x.device === device))
     : racks;
+
+/** Toglie la mappatura di un parametro dalle macro dei rack, tranne quelle del rack `except`. */
+export const withoutParam = (racks: RackList, device: DeviceKey, param: string, except?: DeviceId): RackList =>
+  racks.map(r => (r.id === except ? r : withoutMappings(r, x => x.device === device && x.param === param)));
 
 export function updateRack(racks: RackList, id: DeviceId, fn: (r: Rack) => Rack): RackList {
   if (!findRack(racks, id)) throw new RangeError(`rack ${id} non trovato`);
@@ -209,20 +270,28 @@ export function updateMacro(r: Rack, index: number, fn: (m: Macro) => Macro): Ra
   return { ...r, macros: r.macros.map((m, i) => (i === index ? fn(m) : m)) };
 }
 
-/** Raggruppa in un rack nuovo dei dispositivi di seguito, che non sono già in un rack. */
+/** Raggruppa in un rack nuovo dei dispositivi di seguito: liberi, dello stesso rack (il nuovo ci
+ *  va dentro) o rack interi (vanno dentro il nuovo), come Ctrl+G in Live. */
 export function group(order: readonly DeviceKey[], racks: RackList, keys: readonly DeviceKey[], id: DeviceId): RackList {
   const sorted = [...new Set(keys)].sort((a, b) => order.indexOf(a) - order.indexOf(b));
   if (!sorted.length) throw new RangeError('nessun dispositivo da raggruppare');
   if (sorted.some(k => !order.includes(k))) throw new RangeError('dispositivo non trovato');
-  if (sorted.some(k => rackOf(racks, k))) throw new Error('un dispositivo è già in un rack (i rack dentro i rack non ci sono ancora)');
   const first = order.indexOf(sorted[0]);
   if (sorted.some((k, i) => order[first + i] !== k)) throw new Error('si raggruppano solo dispositivi uno di seguito all\'altro');
-  return [...racks, newRack(id, sorted)];
+  for (const r of racks) {
+    const shared = r.devices.filter(k => sorted.includes(k)).length;
+    if (shared && shared < r.devices.length && shared < sorted.length) {
+      throw new Error('si raggruppano dispositivi dello stesso rack, o rack interi: non un pezzo di un rack con qualcosa fuori');
+    }
+  }
+  // con gli stessi dispositivi di un rack che c'è già, quello nuovo gli va intorno
+  return outerFirst([newRack(id, sorted), ...racks]);
 }
 
+/** Separa un rack: quelli che aveva dentro restano, le sue macro e le mappature sulle sue macro spariscono. */
 export const ungroup = (racks: RackList, id: DeviceId): RackList => {
   if (!findRack(racks, id)) throw new RangeError(`rack ${id} non trovato`);
-  return racks.filter(r => r.id !== id);
+  return withoutMappingsOf(racks.filter(r => r.id !== id), id);
 };
 
 /** Un elemento della catena come la si vede: un dispositivo da solo o un rack con i suoi. */
@@ -230,14 +299,18 @@ export type ChainItem =
   | { readonly kind: 'device'; readonly key: DeviceKey }
   | { readonly kind: 'rack'; readonly rack: Rack };
 
-export function chainItems(order: readonly DeviceKey[], racks: RackList): ChainItem[] {
+/** Gli elementi della catena, o quelli subito dentro un rack (`within`): i dispositivi fuori dai
+ *  rack e i rack più esterni, ognuno con i suoi. */
+export function chainItems(order: readonly DeviceKey[], racks: RackList, within?: Rack): ChainItem[] {
+  const keys = within ? within.devices : order;
+  const level = within ? innerRacks(racks, within) : racks;
   const items: ChainItem[] = [];
-  for (let i = 0; i < order.length;) {
-    const rack = rackOf(racks, order[i]);
+  for (let i = 0; i < keys.length;) {
+    const rack = level.filter(r => r.devices.includes(keys[i])).sort(outside(racks))[0];
     if (rack) {
       items.push({ kind: 'rack', rack });
       i += rack.devices.length;
-    } else items.push({ kind: 'device', key: order[i++] });
+    } else items.push({ kind: 'device', key: keys[i++] });
   }
   return items;
 }
@@ -251,54 +324,88 @@ export interface Layout {
 }
 
 /** Sposta un dispositivo di un posto (◂ ▸). Dentro un rack si sposta tra i suoi; dal bordo del
- *  rack ne esce, e accanto a un rack ci entra, senza cambiare l'ordine del suono (come
- *  trascinarlo dentro e fuori in Live). Il solo dispositivo di un rack si porta dietro il rack.
- *  Lo strumento resta il primo. */
+ *  rack ne esce (in quello intorno, se c'è), e accanto a un rack ci entra, senza cambiare l'ordine
+ *  del suono (come trascinarlo dentro e fuori in Live). Il solo dispositivo di un rack si porta
+ *  dietro il rack. Lo strumento resta il primo. */
 export function moveDevice(order: readonly DeviceKey[], racks: RackList, key: DeviceKey, dir: -1 | 1): Layout {
   const i = order.indexOf(key);
   if (i < 0) throw new RangeError(`dispositivo ${key} non trovato`);
   if (key === INSTRUMENT_DEVICE) return { order, racks };
   const rack = rackOf(racks, key);
-  if (rack) {
-    if (rack.devices.length === 1) return moveRack(order, racks, rack.id, dir);
-    const at = rack.devices.indexOf(key);
-    const edge = dir < 0 ? at === 0 : at === rack.devices.length - 1;
-    // il primo del rack resta lo strumento
-    if (edge || (dir < 0 && rack.devices[at - 1] === INSTRUMENT_DEVICE)) {
-      if (!edge) return { order, racks };
-      return { order, racks: updateRack(racks, rack.id, r => removeMember(r, key)) };
-    }
-    return { order: swap(order, i, i + dir), racks: updateRack(racks, rack.id, r => ({ ...r, devices: swap(r.devices, at, at + dir) })) };
-  }
-  const j = i + dir;
-  if (j < 0 || j >= order.length) return { order, racks };
+  if (rack?.devices.length === 1) return moveRack(order, racks, rack.id, dir);
+  const items = chainItems(order, racks, rack);
+  const next = items[items.findIndex(x => x.kind === 'device' && x.key === key) + dir];
+  if (!next) return rack ? { order, racks: updateRack(racks, rack.id, r => withoutMembers(r, [key])) } : { order, racks };
+  if (next.kind === 'device' && next.key === INSTRUMENT_DEVICE) return { order, racks };
   // accanto a un rack ci entra, anche a un Instrument Rack con il solo strumento
-  const next = rackOf(racks, order[j]);
-  if (next) {
-    const devices = dir > 0 ? [key, ...next.devices] : [...next.devices, key];
-    return { order, racks: updateRack(racks, next.id, r => ({ ...r, devices })) };
+  if (next.kind === 'rack') {
+    const devices = dir > 0 ? [key, ...next.rack.devices] : [...next.rack.devices, key];
+    return { order, racks: outerFirst(updateRack(racks, next.rack.id, r => ({ ...r, devices }))) };
   }
-  if (order[j] === INSTRUMENT_DEVICE) return { order, racks };
-  return { order: swap(order, i, j), racks };
+  const moved = swap(order, i, order.indexOf(next.key));
+  return { order: moved, racks: inOrder(moved, racks) };
 }
 
-/** Sposta un rack intero oltre l'elemento accanto (un dispositivo o un altro rack). */
+/** Sposta un rack intero oltre l'elemento accanto (un dispositivo o un altro rack); dal bordo
+ *  del rack in cui sta ne esce. Il solo rack di un rack si porta dietro quello intorno. */
 export function moveRack(order: readonly DeviceKey[], racks: RackList, id: DeviceId, dir: -1 | 1): Layout {
-  const items = chainItems(order, racks);
-  const i = items.findIndex(x => x.kind === 'rack' && x.rack.id === id);
-  if (i < 0) throw new RangeError(`rack ${id} non trovato`);
-  const j = i + dir;
-  const blocked = (x: ChainItem | undefined) => !x || keysOf(x).includes(INSTRUMENT_DEVICE);
-  if (blocked(items[i]) || blocked(items[j])) return { order, racks };
-  return { order: swap(items, i, j).flatMap(keysOf), racks };
+  const rack = findRack(racks, id);
+  if (!rack) throw new RangeError(`rack ${id} non trovato`);
+  const parent = parentOf(racks, rack);
+  const items = chainItems(order, racks, parent);
+  const i = items.findIndex(x => x.kind === 'rack' && x.rack === rack);
+  const next = items[i + dir];
+  if (!next) {
+    if (!parent) return { order, racks };
+    if (parent.devices.length === rack.devices.length) return moveRack(order, racks, parent.id, dir);
+    const gone = [...rack.devices, rack.id, ...innerRacks(racks, rack).map(r => r.id)];
+    return { order, racks: updateRack(racks, parent.id, r => withoutMembers(r, gone)) };
+  }
+  const blocked = (x: ChainItem) => keysOf(x).includes(INSTRUMENT_DEVICE);
+  if (blocked(items[i]) || blocked(next)) return { order, racks };
+  const start = parent ? order.indexOf(parent.devices[0]) : 0;
+  const region = swap(items, i, i + dir).flatMap(keysOf);
+  const moved = [...order.slice(0, start), ...region, ...order.slice(start + region.length)];
+  return { order: moved, racks: inOrder(moved, racks) };
 }
 
-function removeMember(r: Rack, key: DeviceKey): Rack {
-  return {
-    ...r,
-    devices: r.devices.filter(k => k !== key),
-    macros: r.macros.map(m => ({ ...m, mappings: m.mappings.filter(x => x.device !== key) })),
-  };
+/** Mette un rack dentro il rack accanto (prima o dopo, `dir`), in fondo o in cima ai suoi: il
+ *  suono non cambia ordine. Senza un rack accanto non cambia niente. */
+export function nestRack(order: readonly DeviceKey[], racks: RackList, id: DeviceId, dir: -1 | 1): Layout {
+  const rack = findRack(racks, id);
+  if (!rack) throw new RangeError(`rack ${id} non trovato`);
+  const items = chainItems(order, racks, parentOf(racks, rack));
+  const next = items[items.findIndex(x => x.kind === 'rack' && x.rack === rack) + dir];
+  if (next?.kind !== 'rack') return { order, racks };
+  const devices = dir > 0 ? [...rack.devices, ...next.rack.devices] : [...next.rack.devices, ...rack.devices];
+  return { order, racks: outerFirst(updateRack(racks, next.rack.id, r => ({ ...r, devices }))) };
+}
+
+/** Aggiunge un dispositivo in fondo a un rack (e ai rack intorno), subito dopo l'ultimo dei suoi
+ *  nell'ordine `order`, che lo ha già. */
+export function appendTo(racks: RackList, id: DeviceId, key: DeviceKey): RackList {
+  const rack = findRack(racks, id);
+  if (!rack) throw new RangeError(`rack ${id} non trovato`);
+  const last = rack.devices.at(-1)!;
+  const grows = new Set([rack, ...outerRacks(racks, rack)]);
+  return outerFirst(racks.map(r => {
+    if (!grows.has(r)) return r;
+    const at = r.devices.indexOf(last) + 1;
+    return { ...r, devices: [...r.devices.slice(0, at), key, ...r.devices.slice(at)] };
+  }));
+}
+
+/** Il rack senza dei dispositivi o dei rack, e senza le loro mappature. */
+function withoutMembers(r: Rack, keys: readonly DeviceKey[]): Rack {
+  const gone = new Set(keys);
+  return withoutMappings({ ...r, devices: r.devices.filter(k => !gone.has(k)) }, x => gone.has(x.device));
+}
+
+/** I dispositivi dei rack nell'ordine nuovo della catena. */
+function inOrder(order: readonly DeviceKey[], racks: RackList): RackList {
+  const at = new Map(order.map((k, i) => [k, i]));
+  const sorted = (r: Rack) => r.devices.every((k, i) => i === 0 || at.get(r.devices[i - 1])! < at.get(k)!);
+  return racks.map(r => (sorted(r) ? r : { ...r, devices: [...r.devices].sort((a, b) => at.get(a)! - at.get(b)!) }));
 }
 
 function swap<T>(list: readonly T[], i: number, j: number): T[] {

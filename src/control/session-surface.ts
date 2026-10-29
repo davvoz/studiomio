@@ -15,7 +15,9 @@ import { groupSlotState, sceneState, type TrackSessionState } from '../engine/se
 import type { DeviceSettings } from '../model/device';
 import type { ModTarget } from '../model/envelope';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
-import { chainItems, MACRO_MAX, macroName, macroOf, macroParam, rackName, springOf, type DeviceKey, type Rack } from '../model/rack';
+import {
+  chainItems, MACRO_MAX, macroName, macroOf, macroParam, rackName, springOf, type ChainItem, type DeviceKey, type Rack,
+} from '../model/rack';
 import { GroupTrack, MidiTrack, type Track } from '../model/track';
 import type { ClipRef } from '../store/clip-ref';
 import { setEffectParam, setInstrumentParam, setTempo } from '../store/edits';
@@ -393,7 +395,8 @@ export abstract class SessionSurface {
     if (!c || !spec) return;
     const v = paramFromUnit(spec, unit - this.offsetOf(c, spec));
     const { rack, key } = c.device;
-    const macro = rack ? null : macroOf(this.project.racksOf(c.owner), key as DeviceKey, spec.id);
+    // anche una macro mappata su quella di un rack intorno
+    const macro = macroOf(this.project.racksOf(c.owner), key as DeviceKey, spec.id);
     if (macro) return this.host.say(`${this.label}: ${spec.label} lo muove la macro ${macro.index + 1} di ${rackName(macro.rack)}.`);
     const index = rack ? rack.macros.findIndex((_, m) => macroParam(m) === spec.id) : -1;
     const edit = rack
@@ -495,7 +498,8 @@ export abstract class SessionSurface {
   }
 }
 
-/** I dispositivi di una catena, nell'ordine in cui il suono li attraversa; ogni rack prima dei suoi. */
+/** I dispositivi di una catena, nell'ordine in cui il suono li attraversa; ogni rack prima dei
+ *  suoi (anche dei rack che ha dentro). */
 export function chainOf(p: Project, owner: ChainOwner): ChainDevice[] {
   const devices = new Map<DeviceKey, ChainDevice>();
   if (owner !== MASTER) {
@@ -508,9 +512,11 @@ export function chainOf(p: Project, owner: ChainOwner): ChainDevice[] {
     const type = effectType(e.type);
     if (type) devices.set(e.id, { key: e.id, type, settings: e, enabled: e.enabled });
   }
-  const one = (k: DeviceKey) => devices.get(k) ?? [];
-  return chainItems(p.chainKeys(owner), p.racksOf(owner))
-    .flatMap(item => (item.kind === 'device' ? one(item.key) : [rackDevice(p, owner, item.rack), ...item.rack.devices.flatMap(one)]));
+  const order = p.chainKeys(owner), racks = p.racksOf(owner);
+  const flat = (item: ChainItem): ChainDevice | ChainDevice[] => (item.kind === 'device'
+    ? devices.get(item.key) ?? []
+    : [rackDevice(p, owner, item.rack), ...chainItems(order, racks, item.rack).flatMap(flat)]);
+  return chainItems(order, racks).flatMap(flat);
 }
 
 /** Un rack come dispositivo per le manopole: le 8 macro sono i suoi parametri. */

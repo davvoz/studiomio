@@ -1,19 +1,20 @@
 /* Il pannello di un rack, a sinistra dei suoi dispositivi come in Live: intestazione, le 8 macro
  * e, con "Map" acceso, le mappature della macro scelta (minimo, massimo, togli) e il modo di
- * aggiungerne. Ogni modifica passa dallo store. Con ★ il rack si salva per gli altri progetti. */
+ * aggiungerne, anche sulle macro dei rack che ha dentro. Ogni modifica passa dallo store. Con ★
+ * il rack si salva per gli altri progetti. */
 import type { DeviceId } from '../../core/id';
 import { formatParam, type NumberParam, type ParamSpec } from '../../devices/params';
-import { deviceAt, deviceTypeAt, mappingSpec } from '../../devices/rack-params';
+import { deviceAt, deviceTypeAt, macroSpec, mappingSpec } from '../../devices/rack-params';
 import { userRacks } from '../../devices/user-racks';
 import type { ChainOwner, Project } from '../../model/project';
 import {
-  findRack, MACRO_MAX, MACRO_MODES, macroMode, macroName, macroParam, parseSpringTime, rackName, SPRING_TIMES, springOf,
+  findRack, innerRacks, MACRO_MAX, MACRO_MODES, macroMode, macroName, macroParam, parseSpringTime, rackName, SPRING_TIMES, springOf,
   springTimeLabel, type DeviceKey, type MacroMapping, type MacroSpring, type Rack,
 } from '../../model/rack';
 import { captureRack } from '../../model/rack-preset';
 import {
-  mapMacro, moveRack, removeRack, renameMacro, renameRack, setMacro, setMacroMode, setMacroSpring, setMappingRange, springsAtRest,
-  ungroupRack, unmapParam,
+  mapMacro, moveRack, nestRack, removeRack, renameMacro, renameRack, setMacro, setMacroMode, setMacroSpring, setMappingRange,
+  springsAtRest, ungroupRack, unmapParam,
 } from '../../store/rack-edits';
 import type { MacroSprings } from '../../store/macro-springs';
 import type { Edit, ProjectStore } from '../../store/project-store';
@@ -31,6 +32,10 @@ export interface RackPanelOptions {
   /** Il nome di un dispositivo della catena, come nei titoli dei pannelli. */
   readonly deviceLabel: (key: DeviceKey) => string;
   readonly canMove: (dir: -1 | 1) => boolean;
+  /** C'è un rack accanto (prima −1, dopo +1) in cui mettere questo. */
+  readonly canNest: (dir: -1 | 1) => boolean;
+  /** Le voci per mappare una macro sulle macro dei rack intorno (nessuna se il rack non è dentro un altro). */
+  readonly outerMenu: (macro: number) => MenuItem[];
   /** La macro scelta con "Map" acceso: undefined spento, null acceso senza macro scelta. */
   readonly mapping: number | null | undefined;
   readonly folded: boolean;
@@ -75,7 +80,8 @@ export class RackPanel {
     this.head.append(
       button(o.folded ? '▸' : '▾', o.folded ? 'Mostra i dispositivi del rack' : 'Nascondi i dispositivi del rack', () => o.onFold(), { className: 'mini fold' }),
       name,
-      button('Map', 'Mappa le macro sui parametri dei dispositivi del rack', () => o.onMapMode(o.mapping === undefined ? null : undefined),
+      button('Map', 'Mappa le macro sui parametri dei dispositivi del rack (e sulle macro dei rack che ha dentro)',
+        () => o.onMapMode(o.mapping === undefined ? null : undefined),
         { className: `mini map${o.mapping !== undefined ? ' on' : ''}` }),
       button('+', 'Aggiungi un effetto in fondo al rack', e => {
         const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -90,7 +96,12 @@ export class RackPanel {
     );
     this.head.addEventListener('contextmenu', e => {
       e.preventDefault();
-      showContextMenu(e.clientX, e.clientY, this.saveMenu());
+      showContextMenu(e.clientX, e.clientY, [
+        { label: 'Metti nel rack prima', disabled: !o.canNest(-1), run: () => this.apply(nestRack(o.owner, rack.id, -1)) },
+        { label: 'Metti nel rack dopo', disabled: !o.canNest(1), run: () => this.apply(nestRack(o.owner, rack.id, 1)) },
+        SEPARATOR,
+        ...this.saveMenu(),
+      ]);
     });
     const grid = el('div', { className: 'rack-macros' }, ...rack.macros.map((_, i) => this.macro(project, i)));
     const body = el('div', { className: 'rack-body' }, grid);
@@ -172,6 +183,7 @@ export class RackPanel {
     e.addEventListener('contextmenu', ev => {
       ev.preventDefault();
       const label = e.querySelector<HTMLElement>('.knob-label');
+      const outer = o.outerMenu(index);
       showContextMenu(ev.clientX, ev.clientY, [
         { label: 'Rinomina la macro', run: () => label && renameInline(label, n => this.apply(renameMacro(o.owner, o.rack.id, index, n))) },
         { label: 'Nome automatico', disabled: m.name === null, run: () => this.apply(renameMacro(o.owner, o.rack.id, index, null)) },
@@ -181,6 +193,8 @@ export class RackPanel {
         })),
         SEPARATOR,
         { label: 'Mappa…', run: () => o.onMapMode(index) },
+        // dentro un altro rack, la macro si mappa sulle macro di quelli intorno
+        ...(outer.length ? [SEPARATOR, ...outer] : []),
       ]);
     });
     return e;
@@ -325,21 +339,29 @@ export class RackPanel {
     return list;
   }
 
-  /** Due menu: il dispositivo del rack, poi il suo parametro. */
+  /** Due menu: il dispositivo del rack (o un rack che ha dentro), poi il suo parametro (o la sua macro). */
   private chooseParam(p: Project, index: number, x: number, y: number): void {
     const { o } = this;
-    showContextMenu(x, y, o.rack.devices.map(device => {
+    const mapped = (device: DeviceKey, param: string) => o.rack.macros[index].mappings.some(m => m.device === device && m.param === param);
+    const racks = innerRacks(p.racksOf(o.owner), o.rack).map(rack => ({
+      label: o.deviceLabel(rack.id),
+      run: () => showContextMenu(x, y, rack.macros.map((_, i) => {
+        const spec = macroSpec(p, o.owner, rack, i);
+        return { label: spec.label, checked: mapped(rack.id, spec.id), run: () => this.apply(mapMacro(o.owner, o.rack.id, index, rack.id, spec.id)) };
+      })),
+    }));
+    showContextMenu(x, y, [...o.rack.devices.map(device => {
       const type = deviceTypeAt(p, o.owner, device);
       return {
         label: o.deviceLabel(device),
         disabled: !type,
         run: () => showContextMenu(x, y, (type?.sections ?? []).flatMap(section => section.params.filter(spec => !spec.hidden).map(spec => ({
           label: type!.sections.length > 1 ? `${section.label} · ${spec.label}` : spec.label,
-          checked: o.rack.macros[index].mappings.some(m => m.device === device && m.param === spec.id),
+          checked: mapped(device, spec.id),
           run: () => this.apply(mapMacro(o.owner, o.rack.id as DeviceId, index, device, spec.id)),
         })))),
       };
-    }));
+    }), ...(racks.length ? [SEPARATOR, ...racks] : [])]);
   }
 
   private apply(edit: Edit): void {

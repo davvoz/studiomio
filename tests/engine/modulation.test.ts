@@ -240,6 +240,25 @@ describe('modulazioni nel motore', () => {
     expect(replay(delay, 0, r.at(2))).toBeCloseTo(-0.1, 4);
   });
 
+  it('una curva su una macro di un rack fuori passa per la macro del rack dentro fino ai suoi parametri', () => {
+    const r = rig();
+    r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
+    const fx = r.store.project.tracks[0].effects[0].id;
+    r.store.apply(groupDevices(r.t(0), [fx]));
+    const inner = r.store.project.tracks[0].racks[0].id;
+    r.store.apply(groupDevices(r.t(0), [fx]));
+    const outer = r.store.project.tracks[0].racks.find(x => x.id !== inner)!.id;
+    r.store.apply(mapMacro(r.t(0), inner, 0, fx, 'mix'));
+    r.store.apply(setMappingRange(r.t(0), fx, 'mix', { min: 100, max: 50 })); // metà corsa, al contrario
+    r.store.apply(mapMacro(r.t(0), outer, 0, inner, macroParam(0)));
+    r.store.apply(setMappingRange(r.t(0), inner, macroParam(0), { min: 0, max: 63.5 })); // metà della macro dentro
+    r.editClip(c => c.withEnvelope({ kind: 'device', device: outer, param: macroParam(0) }, pts([0, 0], [4, 0.4])));
+    r.engine.play(0);
+    r.runUntil(2);
+    const delay = r.effects.created[0].modulation.events.filter(e => e.param === 'mix');
+    expect(replay(delay, 0, r.at(2))).toBeCloseTo(-0.05, 4);
+  });
+
   it('una curva su una macro interruttore la fa scattare a metà strada, come premerla', () => {
     const r = rig();
     r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));

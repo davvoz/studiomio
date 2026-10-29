@@ -7,8 +7,8 @@ import { SAMPLE_SLOT, SAMPLER } from '../devices/instruments/sampler/sampler';
 import { DEFAULT_INSTRUMENT, newEffect, withPreset, type EffectSettings, type InstrumentSettings } from '../model/device';
 import { INSTRUMENT_DEVICE } from '../model/envelope';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
-import { rackOf, ungroup, type DeviceKey, type Macro, type Rack } from '../model/rack';
-import type { RackPreset } from '../model/rack-preset';
+import { racksWith, ungroup, type DeviceKey } from '../model/rack';
+import { presetRacks, type RackPreset } from '../model/rack-preset';
 import type { SampleRef } from '../model/sample';
 import { MidiTrack } from '../model/track';
 import { addEffect, addTrack, loadEffectPreset, setInstrument, setInstrumentSamples, type TrackKind } from './edits';
@@ -64,7 +64,7 @@ export const loadEffect = (owner: ChainOwner | null, type: string, label: string
   });
 
 /** Un rack salvato nella catena di `owner`, come in Live. Un Instrument Rack prende il posto
- *  dello strumento (il rack in cui era si separa) e i suoi effetti vanno prima degli altri; su
+ *  dello strumento (i rack in cui era si separano) e i suoi effetti vanno prima degli altri; su
  *  una traccia senza strumento va su una traccia MIDI nuova, subito dopo. Un Audio Effect Rack
  *  va in fondo alla catena; senza traccia, su una traccia audio nuova. */
 export const loadRack = (owner: ChainOwner | null, preset: RackPreset): Edit =>
@@ -74,22 +74,16 @@ export const loadRack = (owner: ChainOwner | null, preset: RackPreset): Edit =>
     if (instrument) {
       if (target === MASTER) throw new Error(`«${preset.name}» ha uno strumento: va su una traccia MIDI`);
       if (!target || !(p.track(target) instanceof MidiTrack)) [next, target] = newTrack(p, ctx, 'midi', target);
-      const old = rackOf(next.racksOf(target), INSTRUMENT_DEVICE);
-      if (old) next = next.updatingRacks(target, racks => ungroup(racks, old.id));
+      for (const old of racksWith(next.racksOf(target), INSTRUMENT_DEVICE)) next = next.updatingRacks(target, racks => ungroup(racks, old.id));
       next = setInstrument(target, { ...DEFAULT_INSTRUMENT, ...instrument, params: { ...instrument.params } }).apply(next, ctx);
     } else if (!target || (target !== MASTER && !p.track(target))) [next, target] = newTrack(p, ctx, 'audio', null);
     const effects = preset.effects.map((e): EffectSettings =>
       ({ ...newEffect(ctx.ids.next('device'), e.type), enabled: e.enabled, preset: e.preset, params: { ...e.params } }));
     const devices: DeviceKey[] = [...(instrument ? [INSTRUMENT_DEVICE] as const : []), ...effects.map(e => e.id)];
-    const rack: Rack = {
-      id: ctx.ids.next('device'),
-      name: preset.name,
-      devices,
-      macros: preset.macros.map(({ mappings, ...m }): Macro => ({ ...m, mappings: mappings.map(x => ({ ...x, device: devices[x.device] })) })),
-    };
+    const racks = presetRacks(preset, devices, () => ctx.ids.next('device'));
     next = next.updatingChain(target, c => ({
       effects: instrument ? [...effects, ...c.effects] : [...c.effects, ...effects],
-      racks: [...c.racks, rack],
+      racks: [...c.racks, ...racks],
     }));
     // i parametri mappati dove le macro li portano
     return reapplyMacros(next, target);

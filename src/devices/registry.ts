@@ -20,6 +20,7 @@ import { STEREO } from './effects/stereo/stereo';
 import { TAPE_STOP } from './effects/tape-stop/tape-stop';
 import { ANALOG } from './instruments/analog/analog';
 import { DRUMS } from './instruments/drums/drums';
+import { KICK } from './instruments/kick/kick';
 import { NEURO } from './instruments/neuro/neuro';
 import { PRISMA } from './instruments/prisma/prisma';
 import { SAMPLER } from './instruments/sampler/sampler';
@@ -27,7 +28,7 @@ import { WAVETABLE } from './instruments/wavetable/wavetable';
 
 /** Gli strumenti disponibili (lato interfaccia). Il motore DSP di ciascuno è registrato con
  *  lo stesso nome in worklet/cores.ts. */
-export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS];
+export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS, KICK];
 
 /** Gli effetti disponibili, come sopra. */
 export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER];

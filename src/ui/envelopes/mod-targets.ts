@@ -9,7 +9,7 @@ import { effectType, instrumentType } from '../../devices/registry';
 import type { EffectSettings, InstrumentSettings } from '../../model/device';
 import { CLIP_TRANSPOSE, INSTRUMENT_DEVICE, scaleKindOf, type ModScaleKind, type ModTarget } from '../../model/envelope';
 import { MASTER, type Project } from '../../model/project';
-import { chainItems, macroName, macroParam, rackName, type DeviceKey, type Rack, type RackList } from '../../model/rack';
+import { chainItems, macroIndex, macroName, macroParam, rackName, type ChainItem, type DeviceKey, type Rack, type RackList } from '../../model/rack';
 import { AudioTrack, MidiTrack, type Track } from '../../model/track';
 
 /** Una catena di dispositivi da modulare: quella di una traccia o quella del master. */
@@ -88,7 +88,7 @@ export const targetDevices = (track: Track): TargetDevice[] => [
 /** Gli effetti del master e le macro dei suoi rack (il suo volume non si modula). */
 export const masterTargetDevices = (p: Project): TargetDevice[] => chainTargets(masterChain(p));
 
-/** I dispositivi di una catena, nell'ordine del suono; un rack prima dei suoi dispositivi. */
+/** I dispositivi di una catena, nell'ordine del suono; un rack prima dei suoi dispositivi (e dei rack che ha dentro). */
 function chainTargets(chain: ModChain): TargetDevice[] {
   const types = new Map<DeviceKey, { type: DeviceType | undefined; name: string }>();
   if (chain.instrument) types.set(INSTRUMENT_DEVICE, { type: instrumentType(chain.instrument.type), name: chain.instrument.type });
@@ -103,13 +103,19 @@ function chainTargets(chain: ModChain): TargetDevice[] {
     const d = deviceTargets(key, `${type?.label ?? name}${n > 1 ? ` ${n}` : ''}`, type);
     if (d) out.push(d);
   };
-  for (const item of chainItems(chain.chainKeys, chain.racks)) {
-    if (item.kind === 'device') device(item.key);
-    else {
-      out.push(rackTargets(item.rack, (k, param) => { const t = types.get(k)?.type; return t && paramSpec(t, param)?.label; }));
-      item.rack.devices.forEach(device);
-    }
-  }
+  const label = (k: DeviceKey, param: string): string | undefined => {
+    const t = types.get(k)?.type;
+    if (t) return paramSpec(t, param)?.label;
+    // la macro di un rack dentro
+    const rack = chain.racks.find(r => r.id === k), i = macroIndex(param);
+    return rack?.macros[i] && macroName(rack.macros[i], i, x => label(x.device, x.param));
+  };
+  const visit = (item: ChainItem) => {
+    if (item.kind === 'device') return device(item.key);
+    out.push(rackTargets(item.rack, label));
+    chainItems(chain.chainKeys, chain.racks, item.rack).forEach(visit);
+  };
+  chainItems(chain.chainKeys, chain.racks).forEach(visit);
   return out;
 }
 

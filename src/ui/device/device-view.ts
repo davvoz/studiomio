@@ -2,8 +2,8 @@ import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { DeviceId, SampleId, TrackId } from '../../core/id';
 import type { SampleData } from '../../devices/dsp/core';
 import type { SampleRef } from '../../model/sample';
-import { keptOnPreset, paramSpec, resolveParams } from '../../devices/device-type';
-import { deviceTypeAt } from '../../devices/rack-params';
+import { keptOnPreset, resolveParams } from '../../devices/device-type';
+import { deviceTypeAt, mappingSpec } from '../../devices/rack-params';
 import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, sampleAt, type EffectSettings, type ParamValues } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
@@ -12,8 +12,8 @@ import { keyLabel, keyOf, sameTarget, type KeyTarget } from '../../model/key-map
 import { encodeMidiTarget } from '../../model/midi-map';
 import { MASTER, type ChainOwner, type Project } from '../../model/project';
 import {
-  chainItems, macroIndex, macroName, macroOf, moveDevice as layoutMove, moveRack as layoutMoveRack, rackOf, type DeviceKey, type Rack,
-  type RackList,
+  chainItems, findRack, macroIndex, macroName, macroOf, macroParam, moveDevice as layoutMove, moveRack as layoutMoveRack,
+  nestRack as layoutNestRack, outerRacks, rackName, rackOf, racksWith, type ChainItem, type DeviceKey, type Rack, type RackList,
 } from '../../model/rack';
 import { MidiTrack, type Track } from '../../model/track';
 import type { ControlledDevice, UiState } from '../ui-state';
@@ -103,6 +103,8 @@ export class DeviceView {
   /** I dispositivi scelti (per raggrupparli), e da dove si estende la scelta. */
   private selection: DeviceKey[] = [];
   private anchor: DeviceKey | null = null;
+  /** Il rack scelto con un clic sul suo nome (i suoi dispositivi sono la scelta). */
+  private selectedRack: DeviceId | null = null;
   /** I rack con i dispositivi nascosti. */
   private readonly folded = new Set<DeviceId>();
   /** I dispositivi compressi, per catena ("proprietario/chiave"). */
@@ -317,10 +319,8 @@ export class DeviceView {
     if (this.mapMode && !racks.some(r => r.id === this.mapMode!.rack)) this.mapMode = null;
     this.selection = this.selection.filter(k => order.includes(k));
     const labels = deviceLabels(project, owner);
-    const canMove = (key: DeviceKey, dir: -1 | 1) => {
-      const next = layoutMove(order, racks, key, dir);
-      return next.order !== order || next.racks !== racks;
-    };
+    const changes = (next: { order: readonly DeviceKey[]; racks: RackList }) => next.order !== order || next.racks !== racks;
+    const canMove = (key: DeviceKey, dir: -1 | 1) => changes(layoutMove(order, racks, key, dir));
     const panelOf = (key: DeviceKey): Node => {
       const e = effects.find(x => x.id === key);
       const node = e
@@ -330,9 +330,14 @@ export class DeviceView {
       if (panel) this.bindPanel(owner, key, panel);
       return node;
     };
-    const items = chainItems(order, racks).map(item => (item.kind === 'device'
+    // i rack con dentro i loro elementi, anche altri rack
+    const itemNode = (item: ChainItem): Node => (item.kind === 'device'
       ? panelOf(item.key)
-      : this.rackElement(owner, item.rack, labels, panelOf, dir => layoutMoveRack(order, racks, item.rack.id, dir).order !== order)));
+      : this.rackElement(owner, item.rack, labels, () => chainItems(order, racks, item.rack).map(itemNode), {
+        move: dir => changes(layoutMoveRack(order, racks, item.rack.id, dir)),
+        nest: dir => changes(layoutNestRack(order, racks, item.rack.id, dir)),
+      }));
+    const items = chainItems(order, racks).map(itemNode);
     if (!effects.length) items.push(el('div', { className: 'device-empty muted', textContent: 'Nessun effetto: "+ Effetto" ne aggiunge uno.' }));
     this.chain.replaceChildren(...items);
     this.fitPanels();
@@ -361,14 +366,19 @@ export class DeviceView {
 
   // ---------------------------------------------------------------- rack
 
-  /** Un rack: il pannello delle macro e, se non è chiuso, i suoi dispositivi. */
-  private rackElement(owner: ChainOwner, rack: Rack, labels: ReadonlyMap<DeviceKey, string>, panelOf: (key: DeviceKey) => Node,
-    canMove: (dir: -1 | 1) => boolean): HTMLElement {
+  /** Un rack: il pannello delle macro e, se non è chiuso, i suoi elementi (`contents`). */
+  private rackElement(owner: ChainOwner, rack: Rack, labels: ReadonlyMap<DeviceKey, string>, contents: () => Node[],
+    can: { readonly move: (dir: -1 | 1) => boolean; readonly nest: (dir: -1 | 1) => boolean }): HTMLElement {
     const folded = this.folded.has(rack.id);
     const mapping = this.mapMode?.rack === rack.id ? this.mapMode.macro : undefined;
     const panel = new RackPanel({
-      store: this.deps.store, springs: this.deps.springs, owner, rack, folded, mapping, canMove,
+      store: this.deps.store, springs: this.deps.springs, owner, rack, folded, mapping, canMove: can.move, canNest: can.nest,
       deviceLabel: key => labels.get(key) ?? key,
+      outerMenu: index => {
+        const racks = this.deps.store.project.racksOf(owner);
+        const now = findRack(racks, rack.id);
+        return now ? this.mapMenu(owner, outerRacks(racks, now).reverse(), rack.id, macroParam(index)) : [];
+      },
       onMapMode: macro => {
         this.mapMode = macro === undefined ? null : { rack: rack.id, macro };
         this.sync();
@@ -380,16 +390,63 @@ export class DeviceView {
       onAddEffect: (x, y) => showContextMenu(x, y, EFFECT_TYPES.map(t => ({
         label: t.label, run: () => this.deps.store.apply(addEffectToRack(owner, rack.id, t.type, t.label)),
       }))),
-      onSelect: extend => this.select(rack.devices, extend),
+      onSelect: extend => this.select(rack.devices, extend, rack.id),
       keyMapping: () => !!this.deps.ui?.keyMapping,
       onKeyTarget: index => this.deps.ui?.chooseKeyTarget({ kind: 'macro', owner, rack: rack.id, index }),
       say: this.deps.say,
     });
     this.rackPanels.set(rack.id, panel);
+    this.bindRackPanel(owner, rack, panel);
     const element = el('div', { className: `rack${folded ? ' folded' : ''}${mapping !== undefined ? ' mapping' : ''}` }, panel.element);
-    if (!folded) element.append(...rack.devices.map(panelOf));
+    if (!folded) element.append(...contents());
     else element.append(el('div', { className: 'rack-folded muted' }, ...rack.devices.map(key => el('div', { textContent: labels.get(key) ?? key }))));
     return element;
+  }
+
+  /** Sulle macro di un rack dentro un altro: con "Map" acceso su un rack intorno e una sua macro
+   *  scelta, un clic la mappa lì; mappata su una macro intorno non si tocca (la muove quella). */
+  private bindRackPanel(owner: ChainOwner, rack: Rack, panel: RackPanel): void {
+    const intercept = (e: Event) => {
+      const param = (e.target as HTMLElement | null)?.closest<HTMLElement>('.macro[data-param]')?.dataset.param;
+      if (!param || this.deps.ui?.keyMapping) return;
+      const racks = this.deps.store.project.racksOf(owner);
+      const map = this.mapMode;
+      const mapping = map && map.macro !== null && this.mapsInto(racks, map.rack, rack.id);
+      if (!mapping && !macroOf(racks, rack.id, param)) return;
+      e.stopPropagation();
+      e.preventDefault();
+      if (mapping && e.type === 'pointerdown') this.guard(mapMacro(owner, map.rack, map.macro!, rack.id, param));
+    };
+    for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick', 'wheel', 'keydown']) {
+      panel.element.addEventListener(type, intercept, { capture: true, passive: false });
+    }
+  }
+
+  /** Il rack `outer` ha dentro il dispositivo o il rack `key` (le sue macro lo possono muovere). */
+  private mapsInto(racks: RackList, outer: DeviceId, key: DeviceKey): boolean {
+    const inner = findRack(racks, key as DeviceId);
+    return (inner ? outerRacks(racks, inner) : racksWith(racks, key)).some(r => r.id === outer);
+  }
+
+  /** Le voci per mappare un parametro (o una macro) sulle macro dei rack `racks`, dal più vicino:
+   *  se i rack sono più d'uno, ognuno sotto il suo nome. */
+  private mapMenu(owner: ChainOwner, racks: readonly Rack[], device: DeviceKey, param: string): MenuItem[] {
+    const project = this.deps.store.project;
+    const current = macroOf(project.racksOf(owner), device, param);
+    const label = (x: { device: DeviceKey; param: string }) => mappingSpec(project, owner, x)?.label;
+    const items = racks.flatMap((rack, n): MenuItem[] => [
+      ...(racks.length > 1 ? [...(n ? [SEPARATOR] : []), { label: rackName(rack), disabled: true, run: () => {} }] : []),
+      ...rack.macros.map((m, i): MenuItem => {
+        const name = macroName(m, i, label);
+        return {
+          label: `Mappa su ${name}${name === `Macro ${i + 1}` ? '' : ` (macro ${i + 1})`}`,
+          checked: current?.rack.id === rack.id && current.index === i,
+          run: () => this.guard(mapMacro(owner, rack.id, i, device, param)),
+        };
+      }),
+    ]);
+    if (!items.length) return [];
+    return [...items, SEPARATOR, { label: 'Togli dalla macro', disabled: !current, run: () => this.guard(unmapParam(owner, device, param)) }];
   }
 
   /** Su un dispositivo: il clic sul nome lo sceglie, il menu dell'intestazione raggruppa e
@@ -409,7 +466,7 @@ export class DeviceView {
       const rack = rackOf(this.deps.store.project.racksOf(owner), key);
       const presets = panel.presetMenu();
       showContextMenu(ev.clientX, ev.clientY, [
-        { label: 'Raggruppa in un rack', shortcut: 'Ctrl+G', disabled: !!rack, run: () => this.groupSelection(keys) },
+        { label: 'Raggruppa in un rack', shortcut: 'Ctrl+G', run: () => this.groupSelection(keys) },
         { label: 'Separa il rack', shortcut: 'Ctrl+Maiusc+G', disabled: !rack, run: () => rack && this.guard(ungroupRack(owner, rack.id)) },
         ...(presets.length ? [SEPARATOR, ...presets] : []),
       ]);
@@ -426,7 +483,7 @@ export class DeviceView {
         return;
       }
       const map = this.mapMode;
-      const mapping = map && map.macro !== null && rackOf(racks, key)?.id === map.rack;
+      const mapping = map && map.macro !== null && this.mapsInto(racks, map.rack, key);
       if (!mapping && !macroOf(racks, key, param)) return;
       e.stopPropagation();
       e.preventDefault();
@@ -445,35 +502,39 @@ export class DeviceView {
     });
   }
 
-  /** Il menu di un parametro: su quale macro del suo rack mapparlo. */
+  /** Il menu di un parametro: su quale macro dei suoi rack mapparlo (prima il rack in cui sta,
+   *  poi quelli intorno). */
   private paramMenu(owner: ChainOwner, key: DeviceKey, param: string): MenuItem[] {
-    const project = this.deps.store.project;
-    const racks = project.racksOf(owner);
-    const rack = rackOf(racks, key);
-    if (!rack) return [{ label: 'Raggruppa in un rack per mapparlo su una macro', shortcut: 'Ctrl+G', run: () => this.groupSelection([key]) }];
-    const current = macroOf(racks, key, param);
-    const label = (x: { device: DeviceKey; param: string }) => {
-      const t = deviceTypeAt(project, owner, x.device);
-      return t && paramSpec(t, x.param)?.label;
-    };
-    return [
-      ...rack.macros.map((m, i): MenuItem => {
-        const name = macroName(m, i, label);
-        return {
-          label: `Mappa su ${name}${name === `Macro ${i + 1}` ? '' : ` (macro ${i + 1})`}`,
-          checked: current?.index === i,
-          run: () => this.guard(mapMacro(owner, rack.id, i, key, param)),
-        };
-      }),
-      SEPARATOR,
-      { label: 'Togli dalla macro', disabled: !current, run: () => this.guard(unmapParam(owner, key, param)) },
-    ];
+    const racks = racksWith(this.deps.store.project.racksOf(owner), key).reverse();
+    if (!racks.length) return [{ label: 'Raggruppa in un rack per mapparlo su una macro', shortcut: 'Ctrl+G', run: () => this.groupSelection([key]) }];
+    return this.mapMenu(owner, racks, key, param);
   }
 
   /** I parametri mappati: attenuati, con il numero della macro; con "Map" acceso si vedono quelli
    *  che si possono mappare e quelli della macro scelta. */
   private showMapped(racks: RackList): void {
     for (const key of this.panels.keys()) this.markMapped(key as DeviceKey, racks);
+    for (const [id, panel] of this.rackPanels) {
+      const rack = findRack(racks, id);
+      if (rack) this.markRackMapped(rack, panel, racks);
+    }
+  }
+
+  /** Le macro di un rack mappate su una macro di un rack intorno; con "Map" acceso su uno di
+   *  quelli, si vede che si possono mappare. */
+  private markRackMapped(rack: Rack, panel: RackPanel, racks: RackList): void {
+    const map = this.mapMode;
+    const outer = map && map.macro !== null && this.mapsInto(racks, map.rack, rack.id);
+    panel.element.classList.toggle('mappable', !!outer);
+    for (const e of panel.element.querySelectorAll<HTMLElement>('.macro[data-param]')) {
+      const found = macroOf(racks, rack.id, e.dataset.param!);
+      e.classList.toggle('mapped', !!found);
+      if (outer) e.classList.toggle('chosen', !!found && found.rack.id === map.rack && found.index === map.macro);
+      if (found) {
+        e.dataset.macro = String(found.index + 1);
+        e.title += `\nLa muove la macro ${found.index + 1} di ${rackName(found.rack)} (tasto destro per toglierla).`;
+      } else delete e.dataset.macro;
+    }
   }
 
   /** I segni delle macro su un pannello (anche quando un pannello grafico rifà i suoi controlli). */
@@ -482,15 +543,14 @@ export class DeviceView {
     if (!panel || !this.owner) return;
     racks ??= this.deps.store.project.racksOf(this.owner);
     const map = this.mapMode;
-    const rack = rackOf(racks, key);
-    panel.element.classList.toggle('mappable', !!map && map.macro !== null && rack?.id === map.rack);
+    panel.element.classList.toggle('mappable', !!map && map.macro !== null && this.mapsInto(racks, map.rack, key));
     for (const e of panel.element.querySelectorAll<HTMLElement>('[data-param]')) {
       const found = macroOf(racks, key, e.dataset.param!);
       e.classList.toggle('mapped', !!found);
       e.classList.toggle('chosen', !!found && !!map && found.rack.id === map.rack && found.index === map.macro);
       if (found) {
         e.dataset.macro = String(found.index + 1);
-        e.title = `Lo muove la macro ${found.index + 1} del rack (tasto destro per toglierlo)`;
+        e.title = `Lo muove la macro ${found.index + 1} di ${rackName(found.rack)} (tasto destro per toglierlo)`;
       } else delete e.dataset.macro;
     }
   }
@@ -500,7 +560,7 @@ export class DeviceView {
   /** Con KEY acceso: il parametro aspetta il suo tasto (se lo muove una macro, il tasto va alla macro). */
   private chooseKeyParam(owner: ChainOwner, device: DeviceKey, param: string): void {
     const found = macroOf(this.deps.store.project.racksOf(owner), device, param);
-    if (found) return this.deps.say?.(`Lo muove la macro ${found.index + 1} del rack: dai il tasto alla macro.`);
+    if (found) return this.deps.say?.(`Lo muove la macro ${found.index + 1} di ${rackName(found.rack)}: dai il tasto alla macro.`);
     this.deps.ui?.chooseKeyTarget({ kind: 'param', owner, device, param });
   }
 
@@ -538,23 +598,34 @@ export class DeviceView {
 
   private showSelection(): void {
     for (const [key, panel] of this.panels) panel.element.classList.toggle('selected', this.selection.includes(key as DeviceKey));
+    const chosen = this.chosenRack();
     for (const [key, panel] of this.rackPanels) {
       const rack = this.owner ? this.deps.store.project.racksOf(this.owner).find(r => r.id === key) : undefined;
-      panel.element.classList.toggle('selected', !!rack && rack.devices.every(k => this.selection.includes(k)));
+      // di un rack scelto con un clic sul nome si accende lui, non anche quelli che ha dentro
+      const all = !!rack && rack.devices.every(k => this.selection.includes(k));
+      panel.element.classList.toggle('selected', all && (!chosen || chosen.id === key));
     }
   }
 
-  /** Clic sul nome di un dispositivo (o di un rack: i suoi dispositivi); con Maiusc la scelta va
-   *  dal primo scelto fino a qui. Un altro clic sulla stessa scelta la toglie. */
-  private select(keys: readonly DeviceKey[], extend: boolean): void {
+  /** Il rack scelto con un clic sul suo nome, se la scelta sono ancora i suoi dispositivi. */
+  private chosenRack(): Rack | undefined {
+    const rack = this.owner && this.selectedRack ? findRack(this.deps.store.project.racksOf(this.owner), this.selectedRack) : undefined;
+    return rack && rack.devices.length === this.selection.length && rack.devices.every(k => this.selection.includes(k)) ? rack : undefined;
+  }
+
+  /** Clic sul nome di un dispositivo (o di un rack, `rack`: i suoi dispositivi); con Maiusc la
+   *  scelta va dal primo scelto fino a qui. Un altro clic sulla stessa scelta la toglie. */
+  private select(keys: readonly DeviceKey[], extend: boolean, rack: DeviceId | null = null): void {
     const order = this.owner ? this.deps.store.project.chainKeys(this.owner) : [];
     if (extend && this.anchor && order.includes(this.anchor)) {
       const ends = [this.anchor, ...keys].map(k => order.indexOf(k));
       this.selection = order.slice(Math.min(...ends), Math.max(...ends) + 1);
+      this.selectedRack = null;
     } else {
-      const same = keys.length === this.selection.length && keys.every(k => this.selection.includes(k));
+      const same = keys.length === this.selection.length && keys.every(k => this.selection.includes(k)) && rack === this.selectedRack;
       this.selection = same ? [] : [...keys];
       this.anchor = same ? null : keys[0];
+      this.selectedRack = same ? null : rack;
     }
     this.showSelection();
   }
@@ -571,7 +642,7 @@ export class DeviceView {
   /** Ctrl+Maiusc+G: separa il rack dei dispositivi scelti. */
   private ungroupSelection(): void {
     const owner = this.owner;
-    const rack = owner && this.selection.length ? rackOf(this.deps.store.project.racksOf(owner), this.selection[0]) : undefined;
+    const rack = owner && this.selection.length ? this.chosenRack() ?? rackOf(this.deps.store.project.racksOf(owner), this.selection[0]) : undefined;
     if (!owner || !rack) return this.deps.say?.('Scegli un rack (clic sul suo nome), poi Ctrl+Maiusc+G per separarlo.');
     this.guard(ungroupRack(owner, rack.id));
   }
@@ -718,9 +789,9 @@ const shapeOf = (owner: ChainOwner, { track, effects, racks }: ChainSource, view
   [owner, track instanceof MidiTrack ? track.instrument.type : '-', ...effects.map(e => `${e.id}:${e.type}`), view,
     JSON.stringify(racks.map(r => [r.id, r.name, r.devices, r.macros.map(m => [m.name, m.mode ?? 'knob', m.mappings.map(x => `${x.device}:${x.param}`)])]))].join('|');
 
-/** I nomi dei dispositivi di una catena: "Delay", "Delay 2"… */
+/** I nomi dei dispositivi di una catena: "Delay", "Delay 2"…, e dei rack. */
 function deviceLabels(p: Project, owner: ChainOwner): Map<DeviceKey, string> {
-  const out = new Map<DeviceKey, string>();
+  const out = new Map<DeviceKey, string>(p.racksOf(owner).map(r => [r.id, rackName(r)]));
   const seen = new Map<string, number>();
   for (const key of p.chainKeys(owner)) {
     const label = deviceTypeAt(p, owner, key)?.label ?? key;

@@ -6,6 +6,23 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Racks inside racks, as in Live. Ctrl+G on devices that are already in a rack makes a new rack
+  inside it; Ctrl+G on a whole rack (click its name) wraps it in a new one. ◂ ▸ move a device or a
+  rack out of the rack it's in, and into the rack next to it; right-click a rack's header to put
+  it into the rack before or after. A macro can map any parameter inside its rack, however deep,
+  and the macros of the racks inside it: with Map on, choose a macro and click a macro of an inner
+  rack (or use its right-click menu). An inner macro moved by an outer one shows its badge and
+  can't be turned by hand. Clip curves on an outer macro reach the inner racks' parameters.
+  Nested racks are saved in projects and in saved racks (★).
+- Kick, a new instrument for building kicks in layers. Snap: a click, filtered noise or a sample.
+  Body: a sine dropping from above to the note (amount, time, curve, shape) or a kick sample, with
+  attack, hold and decay. Tail: the sub that stays on the note. Rumble: the dark, driven techno
+  tail that swells between hits. The kick is tuned to a note (C0 to C2, or following the notes
+  played), and the output has soft, hard or folding saturation and a low cut. The panel draws the
+  hit as it sounds, with the pitch drop; drop an audio file or a browser sample on the Snap or
+  Body card to use it. Presets: Techno, 909, 808 lunga, Rumble, Industriale, Profonda, Secca.
+
 ## [0.3.37] - 2026-10-28
 
 ### Added

@@ -6,6 +6,7 @@ import { captureRack, rackPresetFrom, type RackPreset } from '../../src/model/ra
 import { AudioTrack, MidiTrack } from '../../src/model/track';
 import { loadRack } from '../../src/store/browser-edits';
 import { addEffect, addTrack, setEffectParam, setEffectSidechain, setInstrument, setInstrumentParam } from '../../src/store/edits';
+import { macroParam } from '../../src/model/rack';
 import { groupDevices, mapMacro, renameMacro, setMacro, setMacroMode, setMappingRange } from '../../src/store/rack-edits';
 import { setup } from '../helpers/fixtures';
 
@@ -168,5 +169,44 @@ describe('rack salvati: caricarli', () => {
     expect(t.effects.map(e => e.type)).toEqual(['delay', 'compressor', 'delay', 'compressor']);
     expect(t.racks[0].devices.slice(1)).toEqual(t.effects.slice(0, 2).map(e => e.id));
     expect(t.racks.find(x => x.name === 'R')!.macros[0].mappings[0].device).toBe(INSTRUMENT_DEVICE);
+  });
+});
+
+describe('rack salvati: con i rack dentro', () => {
+  it('si salvano i rack dentro e le mappature sulle loro macro; caricati tornano uguali', () => {
+    const r = rig();
+    r.store.apply(groupDevices(r.t, [r.delay, r.comp]));
+    const inner = r.midi().racks.find(x => x.id !== r.rack)!.id;
+    r.store.apply(mapMacro(r.t, inner, 0, r.comp, 'ratio'));
+    r.store.apply(renameMacro(r.t, inner, 0, 'Schiaccia'));
+    r.store.apply(mapMacro(r.t, r.rack, 2, inner, macroParam(0)));
+    r.store.apply(setMacro(r.t, r.rack, 2, 90));
+    const saved = captureRack(r.store.project, r.t, r.rack, 'Doppio');
+    expect(saved.racks).toEqual([{ name: null, first: 1, count: 2, macros: expect.any(Array) }]);
+    expect(saved.macros[2].mappings).toEqual([{ rack: 0, param: 'macro1', min: 0, max: 127 }]);
+    expect(saved.racks![0].macros[0]).toMatchObject({ name: 'Schiaccia', value: 90, mappings: [{ device: 2, param: 'ratio' }] });
+    expect(roundTrip(saved)).toEqual(saved);
+    // caricato su un'altra traccia: due rack, uno dentro l'altro, con le macro che si muovono come prima
+    r.store.apply(addTrack('midi'));
+    const other = r.store.project.tracks.at(-1)!.id;
+    r.store.apply(loadRack(other, saved));
+    const t = r.store.project.track(other) as MidiTrack;
+    const [outer, inside] = t.racks;
+    expect(inside.devices).toEqual(t.effects.map(e => e.id));
+    expect(outer.macros[2].mappings[0].device).toBe(inside.id);
+    r.store.apply(setMacro(other, outer.id, 2, 0));
+    expect((r.store.project.track(other) as MidiTrack).racks[1].macros[0].value).toBe(0);
+  });
+
+  it('dei rack dentro che non stanno nelle regole si saltano, con le mappature sulle loro macro', () => {
+    const r = rig();
+    const saved = JSON.parse(JSON.stringify(captureRack(r.store.project, r.t, r.rack, 'X')));
+    saved.racks = [{ name: 'A', first: 0, count: 2, macros: [] }, { name: 'B', first: 1, count: 2, macros: [] }];
+    saved.macros[3].mappings = [{ rack: 1, param: 'macro1', min: 0, max: 127 }];
+    const back = rackPresetFrom(saved)!;
+    expect(back.racks).toBeUndefined();
+    expect(back.macros[3].mappings).toEqual([]);
+    saved.racks = [{ name: 'A', first: 7, count: 2, macros: [] }];
+    expect(rackPresetFrom(saved)!.racks).toBeUndefined();
   });
 });
