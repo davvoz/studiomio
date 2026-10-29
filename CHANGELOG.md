@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.45] - 2026-10-30
+
 ### Added
 - Recent projects in the File menu: the last eight project folders you opened or saved with
   "Salva con nome" are listed under "Apri progetto da ZIP…", most recent first; click one to
