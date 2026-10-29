@@ -47,6 +47,7 @@ export function mainMenu(app: App): Menu[] {
         { label: 'Duplica loop', shortcut: KEY.duplicateLoop, run: () => app.duplicateLoop() },
         { label: 'Dividi al cursore', shortcut: KEY.split, run: () => app.splitAtCursor() },
         { label: 'Consolida', shortcut: KEY.consolidate, run: () => app.consolidateSelection() },
+        { label: 'Copia nella session', run: () => app.selectionToSession() },
         { label: 'Elimina', shortcut: KEY.delete, run: () => app.deleteSelection() },
         SEPARATOR,
         { label: 'Seleziona tutto', shortcut: KEY.selectAll, run: () => app.selectAll() },

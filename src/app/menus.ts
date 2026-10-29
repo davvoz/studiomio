@@ -22,6 +22,8 @@ export interface TimelineActions {
   pasteAt(trackIndex: number, at: Beats): void;
   splitSelectionAt(beat: Beats): void;
   consolidateSelection(): void;
+  /** Le clip selezionate in una scena nuova della session. */
+  selectionToSession(): void;
   selectAll(): void;
   readonly loopEnabled: boolean;
   toggleLoop(): void;
@@ -49,6 +51,7 @@ const MENUS: { readonly [K in Hit['kind']]: (a: TimelineActions, hit: Extract<Hi
     { label: 'Duplica', shortcut: KEY.duplicate, run: () => a.duplicateSelection() },
     { label: 'Dividi qui', shortcut: KEY.split, run: () => a.splitSelectionAt(a.snap(hit.beat)) },
     { label: 'Consolida', shortcut: KEY.consolidate, run: () => a.consolidateSelection() },
+    { label: 'Copia nella session', run: () => a.selectionToSession() },
     SEPARATOR,
     { colors: PALETTE, current: hit.placement.clip.color, noneTitle: 'Colore della traccia', pick: c => a.colorSelection(c) },
     SEPARATOR,

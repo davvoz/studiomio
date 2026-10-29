@@ -16,16 +16,17 @@ import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../devices/registry';
 import { userPresets } from '../devices/user-presets';
 import { FACTORY_RACKS } from '../devices/factory-racks';
 import { userRacks } from '../devices/user-racks';
-import { MASTER, type ChainOwner } from '../model/project';
+import { MASTER, type ChainOwner, type Project } from '../model/project';
+import type { TimeRange } from '../model/note-edits';
 import { BusTrack } from '../model/track';
 import { sceneArrangement, sceneClips, sceneLength } from '../model/scene-export';
 import { foldTail } from '../engine/offline-mix';
 import { addBus, addMidiClip, addTrack, setLoopRegion, starterProject, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
 import {
-  consolidatedAudioClip, consolidatedMidiClip, consolidateSpans, placementsIn, soloAudioProject, withConsolidated, type Consolidated,
+  consolidatedAudioClip, consolidatedMidiClip, consolidateSpans, placementsIn, sessionClip, soloAudioProject, withConsolidated, type Consolidated,
 } from '../store/consolidate';
-import { sceneToArrangement } from '../store/session-edits';
+import { arrangementToScene, sceneToArrangement, type SceneClip } from '../store/session-edits';
 import { findClip, placementRef, setClipColor, type ClipRef } from '../store/clip-ref';
 import { showContextMenu } from '../ui/context-menu';
 import { choose } from '../ui/dialog';
@@ -351,10 +352,7 @@ export class App implements Commands, TimelineActions {
             continue;
           }
           const audioPls = pls as Placement<AudioClip>[];
-          const sr = this.audio.context.sampleRate, frames = Math.round(source.tempo.secondsAt(span.end - span.start) * sr);
-          const mix = await this.audio.exportMix(span.start, span.end, soloAudioProject(source, audioPls, ids), 0);
-          const channels = mix.map(c => c.slice(0, frames));
-          const sample = await this.session.addAudio(`${audioPls[0].clip.name} consolidata.wav`, { channels, sampleRate: sr }, new Uint8Array(encodeWav(channels, sr, 24)));
+          const sample = await this.renderClips(source, audioPls, span);
           items.push({ span, placement, sample, clip: consolidatedAudioClip(clipId, audioPls, sample, source.tempo.bpm, span.start, span.end) });
         }
         if (this.store.project !== base) return this.say('Il progetto è cambiato durante il consolidamento: riprova.');
@@ -365,6 +363,57 @@ export class App implements Commands, TimelineActions {
         this.consolidating = false;
       }
     });
+  }
+
+  /** Copia nella session, il contrario di "Copia nell'arrangement": le clip selezionate (o il
+   *  tratto di tempo selezionato) in una scena nuova in fondo. Ogni traccia ha una clip che copre
+   *  tutto il tratto, così restano a tempo tra loro; una clip sola che ripete il suo pezzo resta
+   *  com'è, il resto si consolida (l'audio si renderizza in un file nuovo). */
+  selectionToSession(): void {
+    const refs = this.selection();
+    if (!refs.length) return this.say('Seleziona delle clip da copiare nella session.');
+    if (this.consolidating) return;
+    this.consolidating = true;
+    this.run(async () => {
+      try {
+        const base = this.store.project, ids = this.store.ids, bar = base.signature.beatsPerBar;
+        const own = consolidateSpans(base, refs, this.ui.range);
+        const range = { start: Math.min(...own.map(s => s.start)), end: Math.max(...own.map(s => s.end)) };
+        const spans = own.map(s => ({ ...s, ...range }));
+        // le clip si dividono ai bordi del tratto: dentro resta solo ciò che suona lì
+        const source = cutOutRange(base, ids, spans.flatMap(s => placementsIn(base, s).map(pl => ({ track: s.track, id: pl.id }))), range).project;
+        const clips: SceneClip[] = [];
+        for (const span of spans) {
+          const pls = placementsIn(source, span);
+          if (!pls.length) continue;
+          const clipId = ids.next('clip'), clip = sessionClip(clipId, pls, range.start, range.end);
+          if (clip) {
+            clips.push({ track: span.track, clip });
+            continue;
+          }
+          this.say('Rendering dell\'audio…');
+          const audioPls = pls as Placement<AudioClip>[];
+          const sample = await this.renderClips(source, audioPls, span);
+          clips.push({ track: span.track, sample, clip: consolidatedAudioClip(clipId, audioPls, sample, source.tempo.bpm, range.start, range.end) });
+        }
+        if (this.store.project !== base) return this.say('Il progetto è cambiato durante il rendering: riprova.');
+        const from = Math.floor(range.start / bar) + 1, to = Math.max(from, Math.ceil(range.end / bar));
+        const name = from === to ? `Battuta ${from}` : `Battute ${from}-${to}`;
+        this.store.apply(arrangementToScene(name, clips));
+        this.say(`Scena "${name}" in fondo alla session, con ${clips.length === 1 ? 'una clip' : `${clips.length} clip`}.`);
+      } finally {
+        this.consolidating = false;
+      }
+    });
+  }
+
+  /** L'audio delle clip nel tratto, senza gli effetti della traccia, in un file nuovo nella
+   *  cartella del progetto. */
+  private async renderClips(source: Project, pls: readonly Placement<AudioClip>[], span: TimeRange): Promise<SampleRef> {
+    const sr = this.audio.context.sampleRate, frames = Math.round(source.tempo.secondsAt(span.end - span.start) * sr);
+    const mix = await this.audio.exportMix(span.start, span.end, soloAudioProject(source, pls, this.store.ids), 0);
+    const channels = mix.map(c => c.slice(0, frames));
+    return this.session.addAudio(`${pls[0].clip.name} consolidata.wav`, { channels, sampleRate: sr }, new Uint8Array(encodeWav(channels, sr, 24)));
   }
 
   snap(beat: Beats): Beats {

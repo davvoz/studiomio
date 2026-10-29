@@ -7,7 +7,7 @@ import { copySlotClip, pasteClips, pasteToSlot } from '../../src/store/clipboard
 import { addMidiClip, setLaunchQuantization } from '../../src/store/edits';
 import {
   captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, importSampleToSlot, insertScene, moveScene, moveSlotClip, newSlotMidiClip,
-  renameScene, sceneToArrangement, setSceneColor,
+  arrangementToScene, renameScene, sceneToArrangement, setSceneColor,
 } from '../../src/store/session-edits';
 import { setup } from '../helpers/fixtures';
 
@@ -150,6 +150,22 @@ describe('session: clip negli slot', () => {
     expect(store.undoLabel).toBe("Scena nell'arrangement");
     store.undo();
     expect(store.project.tracks[0].arrangement.map(p => [p.start, p.length])).toEqual([[0, 16]]);
+  });
+
+  it('le clip dell\'arrangement in una scena nuova in fondo, in loop', () => {
+    const { store, track } = setup({ midi: 2 });
+    store.apply(addMidiClip(track(1), 0, 4));
+    const clip = store.project.tracks[1].arrangement[0].clip.withId(asId('clip-copia')).withLoop({ enabled: false, start: 0, end: 4 });
+    const scenes = store.project.scenes.length;
+    store.apply(arrangementToScene('Battute 1-2', [{ track: track(1), clip }]));
+    const p = store.project;
+    expect(p.scenes.map(s => s.name).at(-1)).toBe('Battute 1-2');
+    expect(p.scenes).toHaveLength(scenes + 1);
+    expect(p.tracks[0].slots[scenes]).toBeNull();
+    expect([p.tracks[1].slots[scenes]?.id, p.tracks[1].slots[scenes]?.loop.enabled]).toEqual([clip.id, true]);
+    expect(store.undoLabel).toBe('Arrangement nella session');
+    store.undo();
+    expect(store.project.scenes).toHaveLength(scenes);
   });
 
   it('si salvano: clip negli slot, scene e quantizzazione del lancio; un file v4 si apre', () => {

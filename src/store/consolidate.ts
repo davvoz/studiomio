@@ -95,6 +95,21 @@ export function consolidatedMidiClip(id: ClipId, placements: readonly Placement<
   });
 }
 
+/** La clip per uno slot della session che suona come le clip posate in [from, to), se si fa senza
+ *  renderizzare: una clip sola che copre il tratto ripetendo sempre lo stesso pezzo (suonato una
+ *  volta, o il suo loop a giri interi) resta lei, ritagliata su quel pezzo; le note si mettono in
+ *  fila. null: l'audio va renderizzato. */
+export function sessionClip(id: ClipId, placements: readonly Placement[], from: Beats, to: Beats): Clip | null {
+  const segments = placements.length === 1 ? placementSegments(placements[0]) : [];
+  const [first] = segments, same = (a: number, b: number) => Math.abs(a - b) < EPS;
+  if (first && same(first.start, from) && same(segments[segments.length - 1].end, to)
+    && segments.every(s => same(s.contentStart, first.contentStart) && same(s.end - s.start, first.end - first.start))) {
+    const piece = { start: first.contentStart, end: first.contentStart + first.end - first.start };
+    return placements[0].clip.withId(id).withRegion(piece).withLoop({ enabled: true, ...piece });
+  }
+  return placements[0]?.clip instanceof MidiClip ? consolidatedMidiClip(id, placements as Placement<MidiClip>[], from, to) : null;
+}
+
 /** La clip che suona il file renderizzato `sample`: warp dritto sul tempo del progetto, con la
  *  modalità di warp e le modulazioni delle clip di partenza. */
 export function consolidatedAudioClip(id: ClipId, placements: readonly Placement<AudioClip>[], sample: SampleRef, bpm: number, from: Beats, to: Beats): AudioClip {

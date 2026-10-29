@@ -140,3 +140,20 @@ export const sceneToArrangement = (index: number, at: Beats, length: Beats): Edi
     const placed = { id: ids.next('placement'), clip: clip.withId(ids.next('clip')), start: Math.max(0, at), length, offset: 0 };
     return next.updatingTrack(t.id, x => x.placing(placed, ids));
   }, p));
+
+/** Una clip per uno slot, con il file renderizzato che suona se è nuovo. */
+export interface SceneClip {
+  readonly track: TrackId;
+  readonly clip: Clip;
+  readonly sample?: SampleRef;
+}
+
+/** Il contrario di sceneToArrangement: una scena nuova in fondo con le clip date, in loop. */
+export const arrangementToScene = (name: string, clips: readonly SceneClip[]): Edit =>
+  edit('Arrangement nella session', (p, { ids }) => {
+    const at = p.scenes.length;
+    return clips.reduce((next, { track, clip, sample }) => {
+      const withSample = sample && !next.sample(sample.id) ? next.addingSample(sample) : next;
+      return withSample.updatingTrack(track, t => t.withSlot(at, looping(clip)));
+    }, p.addingScene({ id: ids.next('scene'), name }, at));
+  });

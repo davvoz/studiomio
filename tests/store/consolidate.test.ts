@@ -5,7 +5,7 @@ import { fullRange } from '../../src/model/clip';
 import { MidiClip, type Note } from '../../src/model/midi-clip';
 import { addMidiClip } from '../../src/store/edits';
 import {
-  consolidatedEnvelopes, consolidatedMidiClip, consolidatedNotes, consolidateSpans, placementsIn, withConsolidated,
+  consolidatedEnvelopes, consolidatedMidiClip, consolidatedNotes, consolidateSpans, placementsIn, sessionClip, withConsolidated,
 } from '../../src/store/consolidate';
 import { resolveSelection } from '../../src/ui/timeline/planning';
 import { setup } from '../helpers/fixtures';
@@ -54,5 +54,20 @@ describe('consolida', () => {
     const next = withConsolidated(p, [{ span, placement: ids.next('placement'), clip }], ids);
     expect(next.tracks[0].arrangement.map(pl => [pl.start, pl.length])).toEqual([[0, 10]]);
     expect(consolidateSpans(p, refs, { start: 1, end: 5 })[0]).toMatchObject({ start: 1, end: 5 });
+  });
+
+  it('nella session: una clip che ripete il suo pezzo resta lei, il resto si mette in fila', () => {
+    const id = 'clip-x' as ClipId;
+    // un battito in loop posato per quattro: resta la clip di un battito
+    const loop = sessionClip(id, [placed('a', [note(60, 0)], 0, 1, 4, true)], 0, 4)!;
+    expect([loop.id, loop.region, loop.loop]).toEqual([id, { start: 0, end: 1 }, { enabled: true, start: 0, end: 1 }]);
+    // una clip accorciata da sinistra: solo il pezzo che suona
+    const trimmed = { ...placed('b', [note(60, 0), note(62, 2)], 4, 4, 2), offset: 2 };
+    expect(sessionClip(id, [trimmed], 4, 6)!.loop).toEqual({ enabled: true, start: 2, end: 4 });
+    // più tardi del tratto, o due clip: le note in fila su tutto il tratto
+    const late = sessionClip(id, [placed('c', [note(60, 0)], 2, 2)], 0, 4) as MidiClip;
+    expect([late.notes, late.loop]).toEqual([[note(60, 2)], { enabled: true, start: 0, end: 4 }]);
+    expect((sessionClip(id, [placed('d', [note(60, 0)], 0, 2), placed('e', [note(62, 0)], 2, 2)], 0, 4) as MidiClip).notes)
+      .toEqual([note(60, 0), note(62, 2)]);
   });
 });
