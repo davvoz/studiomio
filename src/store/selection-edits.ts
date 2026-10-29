@@ -8,6 +8,7 @@ import type { TimeRange } from '../model/note-edits';
 import type { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
 import { AudioTrack, GroupTrack } from '../model/track';
+import { resizePlacement } from './edits';
 import { edit, type Edit } from './project-store';
 
 /** Una clip posata, indicata dalla sua traccia. */
@@ -21,6 +22,12 @@ export interface Relocation extends PlacementRef {
   readonly start: Beats;
   /** Vero per lasciare l'originale dov'è e posare una copia. */
   readonly copy: boolean;
+}
+
+/** I nuovi bordi di una clip posata. */
+export interface ResizePlan extends PlacementRef {
+  readonly start: Beats;
+  readonly end: Beats;
 }
 
 export function findPlacement(p: Project, ref: PlacementRef): Placement | undefined {
@@ -47,7 +54,12 @@ export const relocate = (label: string, moves: readonly Relocation[]): Edit =>
     return p;
   });
 
-export const deleteMany = (refs: readonly PlacementRef[]): Edit =>
+/** Ridimensiona più clip in una volta (un solo passo di annullamento). */
+export const resizeMany = (plans: readonly ResizePlan[]): Edit =>
+  edit('Ridimensiona clip', (p, ctx) =>
+    plans.reduce((acc, r) => (findPlacement(acc, r) ? resizePlacement(r.track, r.id, r).apply(acc, ctx) : acc), p));
+
+export const deleteMany =(refs: readonly PlacementRef[]): Edit =>
   edit('Elimina clip', p =>
     refs.reduce((acc, r) => (findPlacement(acc, r) ? acc.updatingTrack(r.track, t => t.removingPlacement(r.id)) : acc), p));
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { TimeSignature } from '../../src/core/music-time';
-import { addMidiClip, placeSample } from '../../src/store/edits';
-import { addedPlacements, deleteMany, duplicateMany, importSample, cutOutRange, relocate, splitMany, splitRange } from '../../src/store/selection-edits';
+import { addMidiClip, placeSample, resizePlacement } from '../../src/store/edits';
+import {
+  addedPlacements, deleteMany, duplicateMany, importSample, cutOutRange, relocate, resizeMany, splitMany, splitRange,
+} from '../../src/store/selection-edits';
 import { gridStep, hitTest, placementsInBox, TimelineGeometry } from '../../src/ui/timeline/geometry';
-import { planMove, planResize, resolveSelection, snappedDelta } from '../../src/ui/timeline/planning';
+import { planMove, planResize, planResizeMany, resolveSelection, snappedDelta } from '../../src/ui/timeline/planning';
 import { sampleRef, setup } from '../helpers/fixtures';
 
 describe('geometria della timeline', () => {
@@ -65,6 +67,23 @@ describe('pianificazione dei gesti', () => {
     expect(planResize(pl, 'start', 11.9, 1)).toEqual({ start: 11, end: 12 }); // lunghezza minima
     expect(planResize(pl, 'end', 30, 1)).toEqual({ start: 4, end: 12 }); // non oltre la fine del sample
     expect(planResize(pl, 'end', 6, 1)).toEqual({ start: 4, end: 6 });
+  });
+
+  it('ridimensionare la selezione sposta lo stesso bordo di tutte le clip', () => {
+    const { store, track, sampleId } = setup({ audio: 1, midi: 1, sample: true });
+    store.apply(placeSample(track(0), sampleId, 0)); // 8 battiti, senza loop
+    store.apply(resizePlacement(track(0), store.project.tracks[0].arrangement[0].id, { end: 6 }));
+    store.apply(addMidiClip(track(1), 2, 4)); // in loop
+    const [audio, midi] = store.project.tracks.map(t => t.arrangement[0]);
+    const refs = resolveSelection(store.project, new Set([audio.id, midi.id]));
+    // la MIDI allungata di 3, l'audio si ferma alla fine del sample
+    const longer = planResizeMany(store.project, refs, midi, 'end', 9, 1);
+    expect(longer).toEqual([{ ...refs[0], start: 0, end: 8 }, { ...refs[1], start: 2, end: 9 }]);
+    store.apply(resizeMany(longer));
+    expect(store.project.tracks.map(t => t.arrangement[0].length)).toEqual([8, 7]);
+    // accorciando da sinistra di 1 battito si accorciano tutte
+    const shorter = planResizeMany(store.project, refs, store.project.tracks[1].arrangement[0], 'start', 3, 1);
+    expect(shorter.map(r => r.start)).toEqual([1, 3]);
   });
 });
 

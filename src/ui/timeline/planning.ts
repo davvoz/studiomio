@@ -5,7 +5,7 @@ import type { PlacementId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import { placementEnd, type Placement } from '../../model/arrangement';
 import type { Project } from '../../model/project';
-import type { PlacementRef, Relocation } from '../../store/selection-edits';
+import type { PlacementRef, Relocation, ResizePlan } from '../../store/selection-edits';
 import { findPlacement } from '../../store/selection-edits';
 import { snapTo } from './geometry';
 
@@ -50,4 +50,18 @@ export function planResize(pl: Placement, edge: 'start' | 'end', beat: Beats, mi
   }
   const latest = pl.start + pl.clip.playLength - pl.offset;
   return { start: pl.start, end: Math.max(pl.start + minLength, Math.min(beat, latest)) };
+}
+
+/** Come in Live, trascinando il bordo di una clip selezionata si sposta lo stesso bordo di tutta
+ *  la selezione, della stessa quantità: `beat` è dove va il bordo della clip presa (`grabbed`),
+ *  le altre si fermano ognuna ai propri limiti. */
+export function planResizeMany(
+  project: Project, refs: readonly PlacementRef[], grabbed: Placement, edge: 'start' | 'end', beat: Beats, minLength: Beats,
+): ResizePlan[] {
+  const edgeOf = (pl: Placement) => (edge === 'start' ? pl.start : placementEnd(pl));
+  const delta = planResize(grabbed, edge, beat, minLength)[edge] - edgeOf(grabbed);
+  return refs.flatMap(r => {
+    const pl = findPlacement(project, r);
+    return pl ? [{ ...r, ...planResize(pl, edge, edgeOf(pl) + delta, minLength) }] : [];
+  });
 }

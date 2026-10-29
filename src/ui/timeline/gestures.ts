@@ -1,17 +1,19 @@
 import type { PlacementId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
-import { placementEnd, type Placement } from '../../model/arrangement';
-import { resizePlacement, setFades, setLoopRegion } from '../../store/edits';
+import { placementEnd } from '../../model/arrangement';
+import { setFades, setLoopRegion } from '../../store/edits';
 import type { TimeRange } from '../../model/note-edits';
 import type { LoopRegion, Project } from '../../model/project';
 import { edit } from '../../store/project-store';
 import { dragLoop, LOOP_CURSOR, loopPartAt, type LoopPart } from '../loop-drag';
 import type { ProjectStore } from '../../store/project-store';
-import { addedPlacements, cutOutRange, findPlacement, relocate, type PlacementRef, type Relocation } from '../../store/selection-edits';
+import {
+  addedPlacements, cutOutRange, findPlacement, relocate, resizeMany, type PlacementRef, type Relocation, type ResizePlan,
+} from '../../store/selection-edits';
 import type { UiState } from '../ui-state';
 import { placementsInBox, snapTo, type Hit, type TimelineGeometry } from './geometry';
 import { paintBox, paintGhost } from './painters';
-import { planMove, planResize, resolveSelection, snappedDelta } from './planning';
+import { planMove, planResizeMany, resolveSelection, snappedDelta } from './planning';
 
 export interface Pointer {
   readonly x: number;
@@ -143,41 +145,55 @@ export class MoveClipsGesture implements Gesture {
   }
 }
 
-/** Trascinare un bordo: accorcia o allunga la clip (a sinistra sposta anche l'inizio del contenuto). */
+/** Trascinare un bordo: accorcia o allunga la clip (a sinistra sposta anche l'inizio del contenuto).
+ *  Se la clip è nella selezione si ridimensionano tutte le clip selezionate, come in Live. */
 export class ResizeClipGesture implements Gesture {
   readonly cursor = 'ew-resize';
   readonly hidden: ReadonlySet<PlacementId>;
-  private edges: { start: Beats; end: Beats } | null = null;
-  private readonly placement: Placement;
+  private plan: ResizePlan[] = [];
+  private readonly refs: PlacementRef[];
+  private readonly base: Project;
 
   constructor(private readonly host: GestureHost, private readonly hit: Extract<Hit, { kind: 'clip' }>) {
-    this.placement = hit.placement;
-    this.hidden = new Set([hit.placement.id]);
-    host.ui.select([hit.placement.id]);
+    const { ui } = host, id = hit.placement.id;
+    this.base = host.store.project;
+    // il tratto di tempo selezionato non conta: si prendono le clip intere
+    ui.select(ui.selection.has(id) ? ui.selection : [id]);
+    this.refs = resolveSelection(this.base, ui.selection);
+    this.hidden = new Set(this.refs.map(r => r.id));
   }
 
   move(p: Pointer): void {
-    const { host } = this;
+    const { host, hit } = this;
     const beat = snapped(host, p, host.geo.xToBeat(p.x));
     const minLength = host.snapStep(p) ?? 1 / 16;
-    this.edges = planResize(this.placement, this.hit.zone as 'start' | 'end', beat, Math.min(minLength, 1));
+    this.plan = planResizeMany(this.base, this.refs, hit.placement, hit.zone as 'start' | 'end', beat, Math.min(minLength, 1));
     host.invalidate();
   }
 
   end(): void {
-    const e = this.edges;
-    if (!e || (e.start === this.placement.start && e.end === placementEnd(this.placement))) return this.host.invalidate();
-    this.host.store.apply(resizePlacement(this.hit.track, this.placement.id, e));
+    const changed = this.plan.filter(r => {
+      const pl = findPlacement(this.base, r)!;
+      return r.start !== pl.start || r.end !== placementEnd(pl);
+    });
+    if (!changed.length) return this.host.invalidate();
+    this.host.store.apply(resizeMany(changed));
   }
 
   cancel(): void {
-    this.edges = null;
+    this.plan = [];
     this.host.invalidate();
   }
 
   paint(g: CanvasRenderingContext2D, geo: TimelineGeometry): void {
-    const e = this.edges ?? { start: this.placement.start, end: placementEnd(this.placement) };
-    paintGhost(g, geo, this.hit.trackIndex, e.start, e.end, this.placement.clip.color);
+    const index = new Map(this.base.visibleTracks.map((t, i) => [t.id, i]));
+    const edges = new Map(this.plan.map(r => [r.id, r]));
+    for (const r of this.refs) {
+      const pl = findPlacement(this.base, r), row = index.get(r.track);
+      if (!pl || row === undefined) continue;
+      const e = edges.get(r.id) ?? { start: pl.start, end: placementEnd(pl) };
+      paintGhost(g, geo, row, e.start, e.end, pl.clip.color);
+    }
   }
 }
 
