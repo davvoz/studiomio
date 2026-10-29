@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.39] - 2026-10-29
+
 ### Added
 - Snare, a new instrument for building snares in layers, like the Kick. Colpo: the stick (a click,
   filtered noise or a sample). Pelle: the drum's tone, the two modes of the head tuned to the note
