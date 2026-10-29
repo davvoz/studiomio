@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.43] - 2026-10-29
+
 ### Added
 - Dragging the edge of a selected clip in the arrangement now resizes every selected clip, as in
   Live: the same edge of each clip moves by the same amount, even across tracks, and each clip
