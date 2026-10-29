@@ -21,7 +21,9 @@ import { StereoCore } from '../effects/stereo/stereo-core';
 import { TapeStopCore } from '../effects/tape-stop/tape-stop-core';
 import { AnalogCore } from '../instruments/analog/analog-core';
 import { DrumCore } from '../instruments/drums/drums-core';
+import { CymbalsCore } from '../instruments/cymbals/cymbals-core';
 import { KickCore } from '../instruments/kick/kick-core';
+import { SnareCore } from '../instruments/snare/snare-core';
 import { NeuroCore } from '../instruments/neuro/neuro-core';
 import { PrismaCore } from '../instruments/prisma/prisma-core';
 import { SamplerCore } from '../instruments/sampler/sampler-core';
@@ -34,6 +36,8 @@ export const INSTRUMENT_CORES: Readonly<Record<string, CoreFactory>> = {
   analog: sampleRate => new StepSequencer(new AnalogCore(sampleRate), sampleRate),
   drums: sampleRate => new DrumCore(sampleRate),
   kick: sampleRate => new KickCore(sampleRate),
+  snare: sampleRate => new SnareCore(sampleRate),
+  cymbals: sampleRate => new CymbalsCore(sampleRate),
   neuro: sampleRate => new StepSequencer(new NeuroCore(sampleRate), sampleRate),
   prisma: sampleRate => new PrismaCore(sampleRate),
   sampler: sampleRate => new SamplerCore(sampleRate),

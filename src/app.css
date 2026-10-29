@@ -659,28 +659,61 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .smp .knob { width: 46px; }
 .smp .knob-face { width: 30px; height: 30px; overflow: visible; }
 
-/* il Kick: a sinistra il colpo (forma d'onda e intonazione), a destra le schede degli strati */
-.device-sections:has(> .kick) { flex: 1 1 auto; flex-wrap: nowrap; }
-.kick { display: flex; gap: 6px; align-items: stretch; }
-.kick [hidden] { display: none !important; }
-.kick-left { position: relative; width: 270px; min-height: 140px; flex: none; }
+/* gli strumenti a strati (Kick, Snare): a sinistra il colpo (forma d'onda e intonazione), a destra le schede degli strati */
+.device-sections:has(> .lay) { flex: 1 1 auto; flex-wrap: nowrap; }
+.lay { display: flex; gap: 6px; align-items: stretch; }
+.lay [hidden] { display: none !important; }
+.lay-left { position: relative; width: 270px; min-height: 140px; flex: none; }
 /* il canvas prende la misura della colonna, senza imporla (cambiando i suoi pixel non la allunga) */
-.kick-wave { position: absolute; inset: 0; width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; box-sizing: border-box; }
-.kick-cards { display: flex; gap: 6px; align-items: stretch; }
-.kick-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px 4px; display: flex; flex-direction: column; gap: 4px; }
-.kick-card.drop, .kick-card.browser-drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
-.kick-card-head { display: flex; align-items: center; gap: 6px; min-height: 20px; }
-.kick-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: auto; }
-.kick-card-head .choice { padding-top: 0; }
-.kick-card-head .choice .knob-label { display: none; }
-.kick-card-head .choice select { margin-top: 0; font-size: 11.5px; padding: 0 2px; }
-.kick-sample-row { display: flex; align-items: center; gap: 4px; }
-.kick-sample { font-size: 12px; padding: 1px 4px; max-width: 150px; }
+.lay-wave { position: absolute; inset: 0; width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; box-sizing: border-box; }
+.lay-cards { display: flex; gap: 6px; align-items: stretch; }
+.lay-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px 4px; display: flex; flex-direction: column; gap: 4px; }
+.lay-card.drop, .lay-card.browser-drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.lay-card-head { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.lay-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: auto; }
+.lay-card-head .choice { padding-top: 0; }
+.lay-card-head .choice .knob-label { display: none; }
+.lay-card-head .choice select { margin-top: 0; font-size: 11.5px; padding: 0 2px; }
+.lay-sample-row { display: flex; align-items: center; gap: 4px; }
+.lay-sample { font-size: 12px; padding: 1px 4px; max-width: 150px; }
 /* i controlli in colonne di tre, che si allungano verso destra */
-.kick-knobs { display: grid; grid-template-rows: repeat(3, auto); grid-auto-flow: column; gap: 1px 2px; align-content: start; justify-content: start; }
-.kick .knob { width: 56px; }
-.kick .knob-face { width: 30px; height: 30px; overflow: visible; }
-.kick-knobs .choice select { max-width: 110px; }
+.lay-knobs { display: grid; grid-template-rows: repeat(3, auto); grid-auto-flow: column; gap: 1px 2px; align-content: start; justify-content: start; }
+.lay .knob { width: 56px; }
+.lay .knob-face { width: 30px; height: 30px; overflow: visible; }
+.lay-knobs .choice select { max-width: 110px; }
+
+/* Hat e Piatti: i pezzi come pad e il colpo del pezzo scelto, poi i suoi controlli e quelli di tutti */
+.device-sections:has(> .cym) { flex: 1 1 auto; flex-wrap: nowrap; }
+.cym { display: flex; gap: 6px; align-items: stretch; }
+.cym [hidden] { display: none !important; }
+.cym-left { display: flex; flex-direction: column; gap: 6px; width: 250px; flex: none; }
+.cym-pads { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 44px; gap: 4px; }
+.cym-pad {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; padding: 4px 6px; border-radius: 6px;
+  background: #262a30; border: 1px solid var(--line); box-shadow: inset 3px 0 0 var(--pad); text-align: left; min-width: 0;
+}
+.cym-pad:hover { background: #2d3138; }
+.cym-pad.selected { background: color-mix(in srgb, var(--pad) 20%, #262a30); box-shadow: inset 0 0 0 1px var(--pad); }
+.cym-pad.drop, .cym-pad.browser-drop { box-shadow: inset 0 0 0 2px #fff; }
+.cym-pad.hit { animation: drum-hit .3s ease-out; }
+.cym-pad-name { font-size: 11px; line-height: 1.15; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.cym-pad-note { font: 10px ui-monospace, monospace; color: var(--muted); white-space: nowrap; }
+/* un pezzo che suona un sample: un pallino rosa accanto alla nota */
+.cym-pad.sample .cym-pad-note::after { content: ' ●'; color: #ef6fa6; }
+/* il canvas prende la misura del suo posto, senza imporla */
+.cym-wave-box { position: relative; flex: 1; min-height: 90px; }
+.cym-wave { position: absolute; inset: 0; width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; box-sizing: border-box; }
+.cym-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px 4px; display: flex; flex-direction: column; gap: 4px; }
+.cym-card-head { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.cym-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: auto; white-space: nowrap; }
+.cym-card-head .choice { padding-top: 0; }
+.cym-card-head .choice .knob-label { display: none; }
+.cym-card-head .choice select { margin-top: 0; font-size: 11.5px; padding: 0 2px; }
+.cym-sample-row { display: flex; align-items: center; gap: 4px; }
+.cym-sample { font-size: 12px; padding: 1px 4px; max-width: 160px; }
+.cym-knobs { display: grid; grid-template-rows: repeat(3, auto); grid-auto-flow: column; gap: 1px 2px; align-content: start; justify-content: start; }
+.cym .knob { width: 60px; }
+.cym .knob-face { width: 30px; height: 30px; overflow: visible; }
 .smp .knob-label { font-size: 10.5px; white-space: nowrap; }
 .smp .smp-knobs .choice select { max-width: 86px; font-size: 11.5px; }
 .smp .choice-buttons button { padding: 1px 6px; font-size: 11px; line-height: 1.35; min-width: 38px; }

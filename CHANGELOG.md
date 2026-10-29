@@ -6,6 +6,24 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Snare, a new instrument for building snares in layers, like the Kick. Colpo: the stick (a click,
+  filtered noise or a sample). Pelle: the drum's tone, the two modes of the head tuned to the note
+  with a small pitch drop (amount, time, overtone, shape), or a sample. Cordiera: the snare wires,
+  filtered noise that starts after a short delay, with Grana to make it crunchy like an old
+  sampler. Stanza: a short stereo room. The head is tuned to a note (A1 to A3, or following the
+  notes played from D1), and soft hits are quieter and, with Vel → tono, darker, as on a real
+  snare. Drop an audio file or a browser sample on the Colpo or Pelle card to use it. Presets:
+  909, 808, Techno, Rimshot, Lo-fi, Stanza grande, Acustica.
+- Hat e Piatti, a new instrument just for hi-hats and cymbals. Six pieces on the General MIDI
+  notes, so drum parts written elsewhere play right: closed hat (F#1), pedal hat (G#1), open hat
+  (A#1), crash (C#2), ride (D#2) and ride bell (F2). Closed and pedal choke the open hat, like a
+  real hi-hat. Each piece is a synth (six detuned squares, noise and bell partials, filtered) or
+  a sample, with tuning, decay, brightness, noise, bell, level and pan. For all pieces: three
+  kinds of metal (808, Ruvido, Anello), variation from hit to hit, stereo width, drive. The panel
+  shows the pieces as pads (click to play, drop an audio file or a browser sample on a pad to use
+  it) and draws the hit of the chosen piece. Presets: 808, Techno secca, Industriale, Acustica.
+
 ## [0.3.38] - 2026-10-29
 
 ### Added

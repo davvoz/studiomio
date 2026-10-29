@@ -10,6 +10,7 @@
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { decayCoef } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
+import { driveSample, softClip as soft } from '../../dsp/saturate';
 import { Svf } from '../../dsp/svf';
 import { BODY_SLOT, FOLLOW, kickNote, noteHz, ROOT_NOTE, SNAP_SLOT, SNAP_SOURCE, SOURCE } from './kick';
 
@@ -45,19 +46,7 @@ function hermite(x: Float32Array, k: number, f: number): number {
   return ((c3 * f + c2) * f + c1) * f + y1;
 }
 
-/** La saturazione dell'uscita (`type` in DRIVE_TYPES), con `amount` 0..1: a 0 il suono è pulito. */
-export function driveSample(x: number, amount: number, type: number): number {
-  if (amount < 0.005) return x;
-  const d = 1 + amount * 9, wet = Math.min(1, amount * 5);
-  let y: number;
-  if (type === 1) y = Math.max(-1, Math.min(1, x * d));
-  else if (type === 2) y = Math.sin((Math.PI / 2) * x * d);
-  else y = Math.tanh(x * d) / Math.tanh(d);
-  return x + (y - x) * wet;
-}
-
-/** Saturazione morbida che tiene il picco a 1. */
-const soft = (x: number, amount: number) => (amount < 0.005 ? x : Math.tanh(x * (1 + amount * 6)) / Math.tanh(1 + amount * 6));
+export { driveSample } from '../../dsp/saturate';
 
 /** I parametri del motore, già nelle sue unità. */
 interface Settings {

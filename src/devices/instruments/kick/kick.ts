@@ -6,6 +6,7 @@
  * c'è la saturazione e il taglio dei bassi. Qui c'è la descrizione (parametri e preset); il
  * suono è in kick-core.ts. */
 import type { DeviceType, Preset } from '../../device-type';
+import { DRIVE_TYPES } from '../../dsp/saturate';
 import type { ChoiceParam, NumberParam } from '../../params';
 
 /** I posti dei sample: quello del corpo e quello dello snap. */
@@ -28,7 +29,6 @@ export const kickNote = (value: number) => FIRST_NOTE + value;
 export const SOURCE = { synth: 0, sample: 1 } as const;
 export const SNAP_SOURCE = { click: 0, noise: 1, sample: 2 } as const;
 export const FOLLOW = { fixed: 0, notes: 1 } as const;
-export const DRIVE_TYPES = ['Morbida', 'Dura', 'Ripiegata'] as const;
 
 const num = (id: string, label: string, min: number, max: number, def: number, unit = '', extra: Partial<NumberParam> = {}): NumberParam =>
   ({ kind: 'number', id, label, min, max, default: def, unit, ...extra });
