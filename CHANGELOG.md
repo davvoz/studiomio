@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.41] - 2026-10-29
+
 ### Added
 - Two new devices for any chain, LFO and Inviluppo (envelope). They leave the sound alone and
   move up to 8 parameters each: any knob of the instrument or of the effects, rack macros, and
