@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.38] - 2026-10-29
+
 ### Added
 - Racks inside racks, as in Live. Ctrl+G on devices that are already in a rack makes a new rack
   inside it; Ctrl+G on a whole rack (click its name) wraps it in a new one. ◂ ▸ move a device or a
