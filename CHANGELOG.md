@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.44] - 2026-10-29
+
 ### Added
 - Copy to the session, the reverse of "Copia nell'arrangement": select clips in the arrangement
   (or a stretch of time), right-click › "Copia nella session" (also in the Modifica menu). A new
