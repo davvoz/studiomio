@@ -322,7 +322,7 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 .context-menu .item:focus .check { color: #141414; }
 .context-menu .shortcut { color: var(--muted); font-size: 11.5px; padding-left: 18px; }
 .context-menu .separator { height: 1px; background: #3a3f47; margin: 4px 6px; }
-.context-menu .swatches { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 5px 8px; }
+.context-menu .swatches { display: grid; grid-template-columns: repeat(13, 17px); gap: 3px; padding: 5px 8px; }
 .context-menu .swatch {
   aspect-ratio: 1; min-width: 0; padding: 0; border: 1px solid #0006; border-radius: 4px;
   background: var(--swatch); cursor: pointer;

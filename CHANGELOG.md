@@ -6,6 +6,22 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Copy to the session, the reverse of "Copia nell'arrangement": select clips in the arrangement
+  (or a stretch of time), right-click › "Copia nella session" (also in the Modifica menu). A new
+  scene appears at the bottom of the session, named after its bars, with one looping clip per
+  track covering the whole stretch, so the tracks stay in time with each other. A clip that
+  just repeats its own loop stays as it is; the rest is joined as with Consolida (MIDI notes
+  laid out, audio rendered into a new file).
+- A bigger colour palette for tracks, clips and scenes: 26 colours in two rows by hue, strong
+  colours on top (red, orange, yellow, lime, green, emerald, cyan, blue, violet, magenta, pink,
+  brown, white) and the softer ones underneath. New tracks now start with the strong colours.
+
+### Changed
+- On the APC40 and the Launchpads every palette colour has its own pad colour, picked by hand
+  as Live does, so the strong and soft versions of a hue stay apart on the grid. Before, two
+  colours could end up on the same pad colour, and the soft red showed up as pink.
+
 ## [0.3.43] - 2026-10-29
 
 ### Added

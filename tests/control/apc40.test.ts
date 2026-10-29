@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { FIXED } from '../../src/control/palette';
+import { PALETTE } from '../../src/model/colors';
 import { sequentialIds, type TrackId } from '../../src/core/id';
 import { Apc40, INSTRUMENT_KEY, type DetailView, type SurfaceEngine } from '../../src/control/apc40/apc40';
 import {
@@ -143,6 +145,13 @@ describe('protocollo APC40 mkII', () => {
     expect(paletteIndex('#00ff00')).toBe(COLOR.green);
     // un colore scuro prende la tinta piena, non un pad quasi spento
     expect(paletteIndex('#330000')).toBe(COLOR.red);
+  });
+
+  it('ogni colore della tavolozza ha il suo pad, diverso dagli altri', () => {
+    const pads = PALETTE.map(paletteIndex);
+    expect(PALETTE.every(c => FIXED.has(c))).toBe(true);
+    expect(new Set(pads).size).toBe(PALETTE.length);
+    expect(paletteIndex(PALETTE[0].toUpperCase())).toBe(pads[0]);
   });
 });
 

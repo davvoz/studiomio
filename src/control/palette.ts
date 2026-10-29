@@ -31,12 +31,24 @@ const rgb = (c: number) => [(c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff] as cons
 /** I colori abbastanza luminosi da riconoscersi su un pad (i più scuri sembrano spenti). */
 const BRIGHT = PALETTE.map((c, i) => [i, rgb(c)] as const).filter(([i, [r, g, b]]) => i > 3 && Math.max(r, g, b) >= 0x99);
 
-const cache = new Map<string, number>();
+/** I colori della tavolozza di studiomio (model/colors), ognuno sul suo pad scelto a mano come
+ *  fa Live: tutti diversi, e il carico e il tenue della stessa tinta si distinguono. */
+export const FIXED: ReadonlyMap<string, number> = new Map([
+  // carichi
+  ['#f03c46', 5], ['#ff6a14', 9], ['#ffd60a', 13], ['#a8e01e', 74], ['#2ec944', 21], ['#00c98d', 77], ['#00b4e6', 37],
+  ['#3f7cff', 41], ['#9a5cff', 81], ['#e632d8', 53], ['#ff3c82', 57], ['#c0702e', 126], ['#e8eaed', 3],
+  // tenui
+  ['#ef6b6b', 4], ['#ff9d2e', 96], ['#ffd64a', 12], ['#d4e157', 113], ['#9ad85b', 16], ['#4fcf9a', 32], ['#4bc3d6', 36],
+  ['#5b8def', 40], ['#9b7bf0', 48], ['#e36bd0', 52], ['#ff7aa8', 56], ['#c8a27a', 8], ['#8fa3b8', 119],
+]);
 
-/** Il colore della tavolozza più vicino a "#rrggbb" (il colore di una clip), portato alla
- *  luminosità piena: sui pad conta la tinta, non quanto è scuro. */
+const cache = new Map<string, number>(FIXED);
+
+/** Il pad di un colore "#rrggbb" (di una clip, una traccia, una scena): quello fisso per i colori
+ *  della tavolozza, se no il più vicino portato alla luminosità piena: sui pad conta la tinta,
+ *  non quanto è scuro. */
 export function paletteIndex(hex: string): number {
-  const known = cache.get(hex);
+  const known = cache.get(hex.toLowerCase());
   if (known !== undefined) return known;
   const n = Number.parseInt(hex.replace('#', ''), 16);
   if (!Number.isFinite(n)) return WHITE;
@@ -49,6 +61,6 @@ export function paletteIndex(hex: string): number {
     const d = 2 * (R - pr) ** 2 + 4 * (G - pg) ** 2 + 3 * (B - pb) ** 2;
     if (d < distance) [best, distance] = [i, d];
   }
-  cache.set(hex, best);
+  cache.set(hex.toLowerCase(), best);
   return best;
 }
