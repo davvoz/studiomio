@@ -7,6 +7,7 @@ import { sameTarget, withEnvelope, type ClipEnvelope, type EnvelopePoint, type M
 import type { EffectList } from './effect-list';
 import { checkKeyMap, NO_KEYS, type KeyMap, type KeyTarget } from './key-map';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
+import { MidiClip } from './midi-clip';
 import { checkMidiMap, NO_MIDI, type MidiMap, type MidiTarget } from './midi-map';
 import { checkRacks, findRack, NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
 import type { SampleRef } from './sample';
@@ -201,8 +202,11 @@ export class Project {
   /** Sample usati da almeno una clip audio. */
   /** I sample usati dalle clip audio e dai dispositivi (es. i pad della Drum Machine). */
   usedSampleIds(): Set<SampleId> {
-    const clips = this.tracks.flatMap(t => t.clips).filter(c => c instanceof AudioClip).map(c => c.sample);
-    const devices = [...this.channels.flatMap(t => t.devices), ...this.masterEffects].flatMap(deviceSampleIds);
+    const all = this.tracks.flatMap(t => t.clips);
+    const clips = all.filter(c => c instanceof AudioClip).map(c => c.sample);
+    // anche i suoni delle clip MIDI: i loro sample devono restare nel progetto
+    const sounds = all.flatMap(c => (c instanceof MidiClip && c.sound ? [c.sound] : []));
+    const devices = [...this.channels.flatMap(t => t.devices), ...this.masterEffects, ...sounds].flatMap(deviceSampleIds);
     return new Set([...clips, ...devices]);
   }
 

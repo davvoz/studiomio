@@ -6,6 +6,15 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- A MIDI clip can carry its own sound, like a program change: in the piano roll, "Usa il
+  suono attuale" stores the instrument's current settings (preset and knobs) in the clip, and
+  when the clip starts the track's instrument switches to that sound, right on the clip's
+  first beat. It is applied once per launch, not on every loop, so knob tweaks while the clip
+  plays stay; starting playback in the middle of the clip also gives its sound. The
+  instrument keeps the last sound after the clip stops. Clips without a sound leave the
+  instrument as it is; a sound saved for another instrument type is ignored. "×" removes it.
+
 ## [0.3.45] - 2026-10-30
 
 ### Added

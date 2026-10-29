@@ -6,7 +6,7 @@ import { mappingSpec, mappingTravel } from '../devices/rack-params';
 import { launchQuantumBeats } from '../model/launch';
 import { findRack, isSwitchMacro, MACRO_MAX, macroIndex, type Rack } from '../model/rack';
 import { isModulatorType } from '../devices/modulators/modulators';
-import type { EffectSettings } from '../model/device';
+import type { EffectSettings, InstrumentSettings } from '../model/device';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import { GroupTrack, type AudioTrack, type MidiTrack, type Track } from '../model/track';
 import type { AudioGraph } from './audio-graph';
@@ -70,6 +70,8 @@ type EngineEvents = {
   state: [playing: boolean];
   /** Una clip lanciata o fermata, un ritorno all'arrangement. */
   session: [];
+  /** Lo strumento della traccia ha preso il suono di una clip che parte. */
+  sound: [track: TrackId, sound: InstrumentSettings];
 };
 
 /** Trasporto e riproduzione del progetto. Riceve ogni nuova versione del progetto con
@@ -158,6 +160,12 @@ export class PlaybackEngine {
 
   onSessionChange(fn: () => void): Unsubscribe {
     return this.events.on('session', fn);
+  }
+
+  /** Quando lo strumento di una traccia prende il suono di una clip che parte: il progetto lo
+   *  segue (arriva dopo la programmazione, mai durante). */
+  onClipSound(fn: (track: TrackId, sound: InstrumentSettings) => void): Unsubscribe {
+    return this.events.on('sound', fn);
   }
 
   // ---------------------------------------------------------------- session
@@ -500,6 +508,7 @@ export class PlaybackEngine {
       const ctx: PlayerContext = {
         graph: this.graph, output: this.mixer.input(id), missing: () => { this.missed.add(id); },
         programs: () => this.session.programs(id), notes, tempo: () => this.project?.tempo.bpm ?? 120,
+        sound: sound => queueMicrotask(() => this.events.emit('sound', id, sound)),
       };
       this.players.set(t.id, { kind: t.kind, player: factory(t, ctx, this.services) });
       changed.add(id);

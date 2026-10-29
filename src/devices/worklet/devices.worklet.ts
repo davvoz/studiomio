@@ -54,6 +54,8 @@ class InstrumentProcessor extends AudioWorkletProcessor {
   private readonly heads = new Float32Array(32);
   private headCount = 0;
   private untilHeads = 0;
+  /** Cambi che valgono da un istante (campione), in ordine. */
+  private readonly later: { readonly frame: number; readonly run: () => void }[] = [];
   private alive = true;
 
   constructor(options: AudioWorkletNodeOptions) {
@@ -69,9 +71,9 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     this.clock.set(o.transport);
     listen<InstrumentMessage>(this.port, {
       note: m => this.queue.add(m.pitch, m.velocity, Math.round(m.on * sampleRate), Math.round(m.off * sampleRate)),
-      params: m => this.mod.setBase(m.params),
+      params: m => this.at(m.at, () => this.mod.setBase(m.params)),
       mod: m => this.mod.event(m.param, m.kind, m.value, m.time, m.channel),
-      sample: m => setSample(m.slot, m.sample),
+      sample: m => this.at(m.at, () => setSample(m.slot, m.sample)),
       tempo: m => core.setTempo?.(m.bpm),
       transport: m => this.clock.set(m.anchor),
       stop: () => {
@@ -89,12 +91,22 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     const [left, right = left] = outputs[0];
     // le manopole e le modulazioni valgono dall'inizio del blocco
     const now = currentFrame / sampleRate;
+    while (this.later.length && this.later[0].frame < currentFrame + left.length) this.later.shift()!.run();
     const params = this.mod.paramsAt(now);
     if (params) this.core.setParams(params);
     this.follower?.setTransport(this.clock.at(now));
     this.queue.renderBlock(this.core, left, right, currentFrame);
     if (this.core.playheads) this.postHeads(left.length);
     return this.alive;
+  }
+
+  /** `run` subito, o nel blocco che contiene l'istante `at` (secondi del contesto). */
+  private at(at: number | undefined, run: () => void): void {
+    const frame = at === undefined ? -Infinity : Math.round(at * sampleRate);
+    if (frame < currentFrame) return run();
+    let i = this.later.length;
+    while (i > 0 && this.later[i - 1].frame > frame) i--;
+    this.later.splice(i, 0, { frame, run });
   }
 
   /** Le posizioni delle voci, ogni PLAYHEADS_POST secondi mentre suonano; una volta vuote

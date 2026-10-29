@@ -12,8 +12,9 @@ export interface Instrument {
   readonly modulation?: DeviceModulation;
   /** `velocity` 1..127, tempi in secondi del contesto audio. */
   play(pitch: number, velocity: number, when: number, duration: number): void;
-  /** Nuovi valori dei parametri (stesso tipo di strumento). */
-  update(settings: InstrumentSettings): void;
+  /** Nuovi valori dei parametri (stesso tipo di strumento): subito, o dall'istante `at` del
+   *  contesto audio (il suono di una clip che parte). */
+  update(settings: InstrumentSettings, at?: number): void;
   /** Il tempo del progetto è cambiato (per le modulazioni a tempo dello strumento). */
   setTempo?(bpm: number): void;
   stopAll(): void;

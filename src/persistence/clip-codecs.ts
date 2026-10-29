@@ -4,6 +4,7 @@ import type { Clip, ClipProps } from '../model/clip';
 import { parseTargetKey, targetKey, type ClipEnvelope } from '../model/envelope';
 import { MidiClip } from '../model/midi-clip';
 import { WarpMarkers } from '../model/warp-markers';
+import { decodeInstrument, encodeInstrument } from './device-codec';
 import type { JsonObject, JsonReader } from './json-reader';
 
 /** Conversione JSON di un tipo di clip. */
@@ -131,13 +132,15 @@ export const midiClipCodec: ClipCodec<MidiClip> = {
     ...encodeBase(c),
     // [altezza, inizio, durata, velocity]: un progetto può avere migliaia di note
     notes: c.notes.map(n => [n.pitch, n.start, n.duration, n.velocity]),
+    ...(c.sound ? { sound: encodeInstrument(c.sound) } : {}),
   }),
   decode: r => {
     const notes = r.array('notes').map(n => {
       const [pitch, start, duration, velocity] = n.tuple(4);
       return { pitch, start, duration, velocity };
     });
-    return guarded(r, () => MidiClip.create({ ...decodeBase(r), notes }));
+    const sound = r.has('sound') ? decodeInstrument(r.get('sound')) : null;
+    return guarded(r, () => MidiClip.create({ ...decodeBase(r), notes, ...(sound && { sound }) }));
   },
 };
 

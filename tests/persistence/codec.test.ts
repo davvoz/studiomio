@@ -106,6 +106,20 @@ describe('ProjectCodec', () => {
     expect(params).not.toHaveProperty('z2tune');
   });
 
+  it('il suono di una clip MIDI si salva, e i suoi sample restano nel progetto', () => {
+    const { store, track, sampleId } = setup({ midi: 1, sample: true });
+    store.apply(addMidiClip(track(0), 0, 4));
+    const id = store.project.tracks[0].arrangement[0].id;
+    const sound = { type: 'sampler', preset: 'Pad', params: { z1lo: 40 }, samples: { sample: sampleId } };
+    store.apply(updateClip<MidiClip>('suono', track(0), id, c => c.withSound(sound)));
+    const back = codec.parse(codec.stringify(store.project.withoutUnusedSamples()));
+    expect((back.tracks[0].arrangement[0].clip as MidiClip).sound).toEqual(sound);
+    expect(back.sample(sampleId)).toBeDefined();
+    // senza suono il campo non c'è
+    const plain = JSON.parse(codec.stringify(richProject()));
+    expect(plain.tracks[1].arrangement[0].clip).not.toHaveProperty('sound');
+  });
+
   it('le clip salvate prima del reverse si aprono dritte', () => {
     const json = JSON.parse(codec.stringify(richProject()));
     delete json.tracks[0].arrangement[0].clip.reversed;

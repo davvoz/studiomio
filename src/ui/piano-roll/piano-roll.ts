@@ -111,6 +111,8 @@ export class PianoRoll implements RollHost {
       scaleTime: f => this.scaleTime(f),
       duplicateLoop: () => this.duplicateLoop(),
       openInstrument: () => { const t = this.target(); if (t) deps.openInstrument(t.track.id); },
+      takeSound: () => { const t = this.target(); if (t) this.commit('Suono della clip', c => c.withSound(t.track.instrument)); },
+      clearSound: () => this.commit('Togli il suono della clip', c => c.withSound(null)),
       close: () => this.close(),
     });
     const roll = this;

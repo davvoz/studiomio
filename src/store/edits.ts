@@ -184,6 +184,15 @@ export const setInstrumentParam = (id: TrackId, param: string, value: number): E
 export const setInstrumentParams = (id: TrackId, values: ParamValues): Edit =>
   updatingInstrument('Parametri dello strumento', id, s => withParams(s, values));
 
+/** Lo strumento prende il suono di una clip che è partita (solo dello stesso tipo: il motore
+ *  ignora gli altri). Si applica come cambio che non si annulla, come un program change. */
+export const followClipSound = (id: TrackId, sound: InstrumentSettings): Edit =>
+  edit('Suono della clip', p => {
+    const t = p.track(id);
+    if (!(t instanceof MidiTrack) || t.instrument === sound || t.instrument.type !== sound.type) return p;
+    return p.updatingTrack(id, () => t.withInstrument(sound));
+  });
+
 /** Sample nello strumento, per posto (null: tolto), insieme ai parametri che servono a suonarli
  *  (es. il modello Sample del pad): un passo solo. Un sample nuovo entra anche nel progetto. */
 export const setInstrumentSamples = (id: TrackId, changes: Readonly<Record<string, SampleRef | SampleId | null>>, values: ParamValues = {}): Edit =>

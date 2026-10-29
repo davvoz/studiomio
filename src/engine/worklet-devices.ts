@@ -82,11 +82,11 @@ class WorkletInstrument implements Instrument {
     this.send({ type: 'note', pitch, velocity, on: when, off: when + duration });
   }
 
-  update(settings: InstrumentSettings): void {
+  update(settings: InstrumentSettings, at?: number): void {
     const prev = this.settings;
     this.settings = settings;
-    if (settings.params !== prev.params) this.send({ type: 'params', params: fullParams(settings) });
-    if (settings.samples !== prev.samples) this.sendSamples(prev.samples, settings.samples);
+    if (settings.params !== prev.params) this.send({ type: 'params', params: fullParams(settings), at });
+    if (settings.samples !== prev.samples) this.sendSamples(prev.samples, settings.samples, at);
   }
 
   setTempo(bpm: number): void {
@@ -135,12 +135,12 @@ class WorkletInstrument implements Instrument {
   }
 
   /** Solo i posti cambiati: un sample già nel motore non si rimanda. */
-  private sendSamples(prev: DeviceSamples | undefined, next: DeviceSamples | undefined): void {
+  private sendSamples(prev: DeviceSamples | undefined, next: DeviceSamples | undefined, at?: number): void {
     for (const slot of new Set([...Object.keys(prev ?? {}), ...Object.keys(next ?? {})])) {
       const id = next?.[slot];
       if (id === prev?.[slot]) continue;
       const sample = id ? samplesOf({ [slot]: id }, this.source)[slot] ?? null : null;
-      this.send({ type: 'sample', slot, sample });
+      this.send({ type: 'sample', slot, sample, at });
     }
   }
 

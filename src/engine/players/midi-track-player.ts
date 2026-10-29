@@ -11,10 +11,15 @@ import type { PlayerContext, TrackPlayer } from './track-player';
 
 /** Suona le clip MIDI della traccia (timeline e session) con il suo strumento. Una nota parte
  *  se il suo inizio cade nella finestra; viene tagliata alla fine del tratto (giro di loop,
- *  bordo della clip, fine della corsa, clip lanciata al suo posto). */
+ *  bordo della clip, fine della corsa, clip lanciata al suo posto). Una clip con un suono lo
+ *  dà allo strumento quando parte (vedi `applySound`). */
 export class MidiTrackPlayer implements TrackPlayer {
   private track: MidiTrack;
   private instrument: Instrument;
+  /** Le impostazioni che lo strumento ha (o avrà, se il suono di una clip è in arrivo). */
+  private settings: InstrumentSettings;
+  /** L'ultimo suono di una clip dato allo strumento (null dopo lo stop). */
+  private sound: InstrumentSettings | null = null;
   /** Il tempo che lo strumento conosce. */
   private bpm: number;
   private readonly segments = new WeakMap<Placement, Segment[]>();
@@ -22,12 +27,14 @@ export class MidiTrackPlayer implements TrackPlayer {
   constructor(track: MidiTrack, private readonly ctx: PlayerContext, private readonly host: InstrumentHost) {
     this.track = track;
     this.bpm = ctx.tempo();
+    this.settings = track.instrument;
     this.instrument = this.connect(track.instrument);
   }
 
   update(track: Track): void {
     const next = track as MidiTrack;
-    if (next.instrument !== this.track.instrument) this.setInstrument(next.instrument);
+    // il suono di una clip già mandato allo strumento torna qui dal progetto: c'è già
+    if (next.instrument !== this.settings) this.setInstrument(next.instrument);
     this.track = next;
     const bpm = this.ctx.tempo();
     if (bpm !== this.bpm) {
@@ -37,7 +44,11 @@ export class MidiTrackPlayer implements TrackPlayer {
   }
 
   schedule(w: ScheduleWindow): void {
-    for (const piece of piecesInWindow(this.track, this.ctx.programs(), w, p => this.segmentsOf(p))) this.playPiece(piece, w);
+    const pieces = piecesInWindow(this.track, this.ctx.programs(), w, p => this.segmentsOf(p)).sort((a, b) => a.start - b.start);
+    for (const piece of pieces) {
+      this.applySound(piece, w);
+      this.playPiece(piece, w);
+    }
   }
 
   cut(at: number): void {
@@ -65,6 +76,8 @@ export class MidiTrackPlayer implements TrackPlayer {
   stopAll(): void {
     this.instrument.stopAll();
     this.ctx.notes.clear();
+    // al prossimo play la clip da cui si parte ridà il suo suono
+    this.sound = null;
   }
 
   dispose(): void {
@@ -79,9 +92,22 @@ export class MidiTrackPlayer implements TrackPlayer {
 
   /** Stesso tipo: cambiano solo i parametri, le note continuano. Tipo diverso: strumento nuovo. */
   private setInstrument(settings: InstrumentSettings): void {
+    this.settings = settings;
     if (settings.type === this.instrument.type) return this.instrument.update(settings);
     this.instrument.dispose();
     this.instrument = this.connect(settings);
+  }
+
+  /** Il suono della clip dall'inizio del tratto, se è diverso dall'ultimo dato: ai giri di loop
+   *  e alle riprogrammazioni non si ridà, così ciò che si ritocca mentre la clip suona resta.
+   *  Solo per lo stesso tipo di strumento (un altro tipo si ignora). */
+  private applySound({ clip, start }: Piece<MidiClip>, w: ScheduleWindow): void {
+    const sound = clip.sound;
+    if (!sound || sound === this.sound || sound.type !== this.instrument.type) return;
+    this.sound = sound;
+    this.settings = sound;
+    this.instrument.update(sound, timeAtClock(w, Math.max(start, w.from + w.shift)));
+    this.ctx.sound?.(sound);
   }
 
   private segmentsOf(p: Placement<MidiClip>): Segment[] {

@@ -29,10 +29,11 @@ export interface InstrumentProcessorOptions {
 
 export type InstrumentMessage =
   | { readonly type: 'note'; readonly pitch: number; readonly velocity: number; readonly on: number; readonly off: number }
-  | { readonly type: 'params'; readonly params: Readonly<Record<string, number>> }
+  /** Con `at` valgono da quell'istante (il suono di una clip che parte), se no subito. */
+  | { readonly type: 'params'; readonly params: Readonly<Record<string, number>>; readonly at?: number }
   | ModMessage
-  /** Un sample nuovo (o null: tolto) al posto `slot`. */
-  | { readonly type: 'sample'; readonly slot: string; readonly sample: SampleData | null }
+  /** Un sample nuovo (o null: tolto) al posto `slot`, da `at` se c'è. */
+  | { readonly type: 'sample'; readonly slot: string; readonly sample: SampleData | null; readonly at?: number }
   | { readonly type: 'tempo'; readonly bpm: number }
   /** Un ancoraggio nuovo del trasporto, o null: si è fermato. */
   | { readonly type: 'transport'; readonly anchor: TransportAnchor | null }

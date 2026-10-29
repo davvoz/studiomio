@@ -1,3 +1,4 @@
+import type { InstrumentSettings } from '../../model/device';
 import type { Track } from '../../model/track';
 import type { AudioGraph, AudioNodeLike, ScheduledNodeLike } from '../audio-graph';
 import type { DeviceModulation } from '../modulation';
@@ -32,6 +33,8 @@ export interface PlayerContext {
   readonly notes: NoteActivity;
   /** Il tempo del progetto (BPM). */
   readonly tempo: () => number;
+  /** Lo strumento ha preso il suono di una clip che parte: il progetto deve seguirlo. */
+  readonly sound?: (sound: InstrumentSettings) => void;
 }
 
 /** Come un nodo programmato smette prima del previsto. */

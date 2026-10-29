@@ -10,13 +10,14 @@ import { checkMidiMap, MIXER_CONTROLS, type MidiMap, type MidiMapping, type Midi
 import { Project, type ChainOwner } from '../model/project';
 import { MACRO_MODES, springFor, type DeviceKey, type Macro, type MacroMode, type MacroSpring, type Rack, type RackList } from '../model/rack';
 import type { SampleRef } from '../model/sample';
-import { DEFAULT_INSTRUMENT, type DeviceSettings, type EffectSettings } from '../model/device';
+import { DEFAULT_INSTRUMENT, type EffectSettings } from '../model/device';
 import { AudioTrack, BusTrack, GroupTrack, MidiTrack, type MixerSettings, type Sends, type Track, type TrackProps } from '../model/track';
 import { decodeEnvelopes, defaultClipCodecs, encodeEnvelopes, type ClipCodec } from './clip-codecs';
+import { decodeInstrument, encodeInstrument } from './device-codec';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 13;
+export const PROJECT_VERSION = 14;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -96,6 +97,8 @@ const migrations: Record<number, Migration> = {
   }),
   // 12 → 13: i modulatori (LFO, Inviluppo) hanno le loro destinazioni (campo facoltativo)
   12: json => json,
+  // 13 → 14: una clip MIDI può avere il suono che lo strumento prende quando parte (campo facoltativo)
+  13: json => json,
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
@@ -266,22 +269,6 @@ const decodeSample = (r: JsonReader): SampleRef => ({
   sampleRate: r.num('sampleRate'), channels: r.int('channels'), frames: r.int('frames'),
   analysis: r.nullable('analysis', a => ({ tempo: a.num('tempo'), sensitivity: a.num('sensitivity'), transients: a.numbers('transients') })),
 });
-
-const encodeInstrument = (i: DeviceSettings): JsonObject => ({
-  type: i.type, preset: i.preset, params: { ...i.params },
-  ...(i.samples ? { samples: { ...i.samples } } : {}),
-});
-
-const decodeInstrument = (r: JsonReader): DeviceSettings => {
-  const params = r.get('params');
-  const samples = r.has('samples') ? r.get('samples') : null;
-  return {
-    type: r.str('type'),
-    preset: r.nullable('preset', p => p.asString()),
-    params: Object.fromEntries(params.keys().map(k => [k, params.num(k)])),
-    ...(samples ? { samples: Object.fromEntries(samples.keys().map(k => [k, asId<'sample'>(samples.str(k))])) } : {}),
-  };
-};
 
 const encodeEffect = (e: EffectSettings): JsonObject => ({
   id: e.id, enabled: e.enabled, ...encodeInstrument(e), ...(e.sidechain ? { sidechain: e.sidechain } : {}),

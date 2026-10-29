@@ -23,7 +23,7 @@ import { FsAccessDirectory } from '../persistence/fs-access-directory';
 import { ProjectFolder } from '../persistence/project-folder';
 import { sceneArrangement, sceneClips, sceneLength } from '../model/scene-export';
 import { foldTail } from '../engine/offline-mix';
-import { addBus, addMidiClip, addTrack, setLoopRegion, starterProject, type TrackKind } from '../store/edits';
+import { addBus, addMidiClip, addTrack, followClipSound, setLoopRegion, starterProject, type TrackKind } from '../store/edits';
 import { Clipboard, copyClips, pasteClips } from '../store/clipboard';
 import {
   consolidatedAudioClip, consolidatedMidiClip, consolidateSpans, placementsIn, sessionClip, soloAudioProject, withConsolidated, type Consolidated,
@@ -211,6 +211,7 @@ export class App implements Commands, TimelineActions {
     transport.addGroup(this.browserButton, this.viewButtons.arrangement, this.viewButtons.session, this.viewButtons.back);
     this.surfaces = this.controlSurfaces();
     this.audio.engine.onSessionChange(() => this.renderViews());
+    this.audio.engine.onClipSound((track, sound) => this.store.apply(followClipSound(track, sound), { transient: true }));
     this.renderViews();
 
     this.session.on('message', t => this.say(t));

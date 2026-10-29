@@ -147,7 +147,9 @@ export class FakeInstrument implements Instrument {
   }
   setTempo(bpm: number) { this.tempos.push(bpm); }
   play(pitch: number, velocity: number, when: number, duration: number) { this.notes.push({ pitch, velocity, when, duration }); }
-  update(s: InstrumentSettings) { this.updates.push(s); }
+  /** L'istante di ogni aggiornamento (undefined: subito). */
+  readonly updateTimes: (number | undefined)[] = [];
+  update(s: InstrumentSettings, at?: number) { this.updates.push(s); this.updateTimes.push(at); }
   stopAll() { this.stops++; }
   dispose() { this.disposed = true; }
 }

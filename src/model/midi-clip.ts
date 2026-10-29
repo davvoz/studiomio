@@ -1,6 +1,7 @@
 import type { ClipId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { Clip, fullRange, type ClipProps, type Color } from './clip';
+import type { InstrumentSettings } from './device';
 
 export interface Note {
   /** 0..127 (60 = do centrale) */
@@ -14,6 +15,9 @@ export interface Note {
 export interface MidiClipProps extends ClipProps {
   /** Ordinate per inizio, poi per altezza. */
   readonly notes: readonly Note[];
+  /** Il suono che lo strumento della traccia prende quando la clip parte (una fotografia dei
+   *  suoi parametri, come un program change). Assente: lo strumento resta com'è. */
+  readonly sound?: InstrumentSettings;
 }
 
 const byStartThenPitch = (a: Note, b: Note) => a.start - b.start || a.pitch - b.pitch;
@@ -44,6 +48,13 @@ export class MidiClip extends Clip<MidiClipProps> {
   }
 
   get notes(): readonly Note[] { return this.props.notes; }
+  get sound(): InstrumentSettings | null { return this.props.sound ?? null; }
+
+  /** Il suono da dare allo strumento quando la clip parte (null: nessuno). */
+  withSound(sound: InstrumentSettings | null): MidiClip {
+    const { sound: _old, ...rest } = this.props;
+    return MidiClip.create(sound ? { ...rest, sound } : rest);
+  }
 
   /** Note che iniziano in [from, to). */
   notesIn(from: Beats, to: Beats): Note[] {

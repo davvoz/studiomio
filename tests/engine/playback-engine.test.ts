@@ -10,9 +10,10 @@ import { SampleLibrary, type DspBackend } from '../../src/engine/sample-library'
 import type { AudioClip } from '../../src/model/audio-clip';
 import type { MidiClip } from '../../src/model/midi-clip';
 import { Project } from '../../src/model/project';
+import type { MidiTrack } from '../../src/model/track';
 import type { SampleRef } from '../../src/model/sample';
 import {
-  addMidiClip, addSample, addTrack, placeSample, setInstrument, setInstrumentParam, setLoopRegion, setMixer, setTempo, updateClip,
+  addMidiClip, addSample, addTrack, followClipSound, placeSample, setInstrument, setInstrumentParam, setLoopRegion, setMixer, setTempo, updateClip,
 } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 import { FakeEffects, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
@@ -245,6 +246,50 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     expect(r.instruments.created[1].type).toBe('altro');
     r.engine.audition(r.t(1), 64, 90, 0.5);
     expect(r.instruments.created[1].notes).toEqual([{ pitch: 64, velocity: 90, when: 0.005, duration: 0.5 }]);
+  });
+
+  it('una clip con un suono lo dà allo strumento quando parte, una volta sola; il progetto lo segue', async () => {
+    const r = await rig();
+    const bright = { type: 'analog', preset: 'Chiaro', params: { cutoff: 9000 } };
+    r.store.apply(addMidiClip(r.t(1), 0, 2)); // in loop, posata per 2 battiti
+    r.store.apply(addMidiClip(r.t(1), 2, 2));
+    const [a, b] = r.store.project.tracks[1].arrangement;
+    r.store.apply(updateClip<MidiClip>('loop corto', r.t(1), a.id, c => c.withLoop({ enabled: true, start: 0, end: 1 })));
+    r.store.apply(updateClip<MidiClip>('suono', r.t(1), b.id, c => c.withSound(bright)));
+    const heard: unknown[] = [];
+    r.engine.onClipSound((track, sound) => {
+      heard.push([track, sound]);
+      r.store.apply(followClipSound(track, sound), { transient: true });
+    });
+    const synth = r.instruments.created[0];
+    r.engine.play(0);
+    r.runUntil(1.6); // la seconda clip parte al battito 2 (1.05 s), e fa un giro
+    expect(synth.updates).toEqual([bright]);
+    expect(synth.updateTimes.map(t => +t!.toFixed(6))).toEqual([1.05]);
+    await Promise.resolve();
+    expect(heard).toEqual([[r.t(1), bright]]);
+    expect((r.store.project.tracks[1] as MidiTrack).instrument).toBe(bright);
+    expect(r.store.canUndo).toBe(true); // i passi di prima ci sono ancora…
+    expect(r.store.undoLabel).toBe('suono'); // …e il cambio di suono non è uno di loro
+    // ritoccare lo strumento mentre la clip suona: il suono della clip non torna
+    r.store.apply(setInstrumentParam(r.t(1), 'cutoff', 300));
+    r.runUntil(2);
+    expect(synth.updates.map(u => u.params.cutoff)).toEqual([9000, 300]);
+    // dopo lo stop, ripartire dentro la clip ridà il suo suono
+    r.engine.stop();
+    r.engine.play(2.5);
+    expect(synth.updates.at(-1)).toBe(bright);
+  });
+
+  it('il suono di una clip per un altro tipo di strumento si ignora', async () => {
+    const r = await rig();
+    r.store.apply(addMidiClip(r.t(1), 0, 2));
+    const pl = r.store.project.tracks[1].arrangement[0];
+    r.store.apply(updateClip<MidiClip>('suono', r.t(1), pl.id, c => c.withSound({ type: 'altro', preset: null, params: {} })));
+    r.engine.play(0);
+    r.runUntil(0.5);
+    expect(r.instruments.created).toHaveLength(1);
+    expect(r.instruments.created[0].updates).toEqual([]);
   });
 
   it('lo strumento nasce con il tempo del progetto e lo segue quando cambia', async () => {
