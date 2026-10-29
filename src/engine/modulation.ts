@@ -25,8 +25,9 @@ export interface ModSink {
 
 /** I parametri modulabili di un dispositivo che suona (strumento o effetto). */
 export interface DeviceModulation {
-  /** Lo spostamento del parametro, in frazioni della corsa della manopola (−1 … +1). */
-  sink(param: string): ModSink;
+  /** Lo spostamento del parametro, in frazioni della corsa della manopola (−1 … +1), nel canale
+   *  `channel` (assente: quello delle curve delle clip). I canali di un parametro si sommano. */
+  sink(param: string, channel?: string): ModSink;
 }
 
 /** Un AudioParam come destinazione delle modulazioni. */

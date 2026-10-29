@@ -28,6 +28,9 @@ export interface DeviceType {
   /** I parametri che restano come sono quando si sceglie un preset (es. la mappa delle zone del
    *  Sampler, che dipende dai sample caricati e non dal suono). */
   readonly keepsOnPreset?: (param: string) => boolean;
+  /** Per i modulatori (LFO, Inviluppo): non toccano il suono, muovono i parametri delle loro
+   *  destinazioni (vedi devices/modulators). */
+  readonly modulator?: boolean;
 }
 
 /** I valori dei parametri che un preset di `t` non cambia, tra `params`. */

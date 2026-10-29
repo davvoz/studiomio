@@ -6,6 +6,24 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Two new devices for any chain, LFO and Inviluppo (envelope). They leave the sound alone and
+  move up to 8 parameters each: any knob of the instrument or of the effects, rack macros, and
+  the track's volume and pan. They work like Prisma's LFOs and envelopes: the LFO has the same
+  shapes and the same drawable shape with curved segments, a tempo or Hz rate, phase, delay and
+  rise, and it can run free (locked to the bar), restart on every note, or play once per note.
+  The envelope has attack, hold, decay, sustain and release with curves, and starts on the
+  track's notes or on every beat division (with a gate length), so −100 % on the volume pumps
+  like a sidechain.
+- To connect one, drag its "⊕ Mappa" chip onto any knob in the chain, or pick volume, pan or a
+  macro from a destination's menu. Each destination has its own amount (−100 … +100 % of the
+  knob's travel) that can itself be mapped to a macro or moved by a clip curve. Knobs moved by a
+  modulator are marked with ∿ and follow it while playing; right-click one to remove it.
+- Modulators add up with clip curves and with each other instead of replacing them. One
+  modulator can also move another one's knobs (an envelope opening an LFO's depth).
+- Presets for both (Wobble, Pompa 1/4, Swell, Vibrato…). Saved racks keep their modulators'
+  destinations inside the rack.
+
 ## [0.3.40] - 2026-10-29
 
 ### Added

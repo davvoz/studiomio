@@ -24,12 +24,13 @@ export class FakeParam implements AudioParamLike {
 
 /** Modulazioni finte di un dispositivo: registrano gli eventi per parametro. */
 export class FakeModulation implements DeviceModulation {
-  readonly events: { param: string; type: string; value: number; time: number }[] = [];
-  sink(param: string): ModSink {
+  readonly events: { param: string; type: string; value: number; time: number; channel?: string }[] = [];
+  sink(param: string, channel?: string): ModSink {
+    const c = channel ? { channel } : {};
     return {
-      set: (value, time) => { this.events.push({ param, type: 'set', value, time }); },
-      ramp: (value, time) => { this.events.push({ param, type: 'ramp', value, time }); },
-      hold: time => { this.events.push({ param, type: 'hold', value: NaN, time }); },
+      set: (value, time) => { this.events.push({ param, type: 'set', value, time, ...c }); },
+      ramp: (value, time) => { this.events.push({ param, type: 'ramp', value, time, ...c }); },
+      hold: time => { this.events.push({ param, type: 'hold', value: NaN, time, ...c }); },
     };
   }
 }

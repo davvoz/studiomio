@@ -1,4 +1,6 @@
 import type { DeviceId, TrackId } from '../core/id';
+import { isModulatorType } from '../devices/modulators/modulators';
+import type { EffectSettings } from '../model/device';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import { sidechainLinks } from '../model/sidechain';
 import { SEND_OFF_DB, type MixerSettings, type Track } from '../model/track';
@@ -59,6 +61,11 @@ function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): v
   }
 }
 
+/** Gli effetti che il suono attraversa: i modulatori (LFO, Inviluppo) non lo toccano, li suona il
+ *  motore. Se non ce ne sono, la stessa lista (così la catena vede che non è cambiata). */
+const audioEffects = (effects: readonly EffectSettings[]): readonly EffectSettings[] =>
+  (effects.some(e => isModulatorType(e.type)) ? effects.filter(e => !isModulatorType(e.type)) : effects);
+
 /** Le modulazioni del canale: volume (un guadagno dopo il fader) e pan (un valore sommato al pan). */
 export type MixerModulation = 'volume' | 'pan';
 
@@ -93,6 +100,9 @@ class ChannelStrip {
   private readonly gate: GainNodeLike;
   private readonly sendGate: GainNodeLike;
   private readonly sends = new Map<TrackId, SendWire>();
+  /** Le modulazioni degli LFO e degli inviluppi, una per canale: guadagni in fila tra il fader e
+   *  la modulazione del volume, sorgenti costanti sommate al pan. */
+  private readonly channels = new Map<string, { readonly volume?: GainNodeLike; readonly pan?: ConstantSourceNodeLike }>();
   private applied: { mixer: MixerSettings; audible: boolean; sending: boolean } | null = null;
   private output: AudioNodeLike;
 
@@ -161,12 +171,34 @@ class ChannelStrip {
   }
 
   /** Il parametro su cui va la modulazione: guadagno (1 = neutro) o spostamento del pan (0). */
-  modulation(param: MixerModulation): AudioParamLike {
-    return param === 'volume' ? this.modGain.gain : this.panOffset.offset;
+  modulation(param: MixerModulation, channel?: string): AudioParamLike {
+    if (!channel) return param === 'volume' ? this.modGain.gain : this.panOffset.offset;
+    const key = `${param}|${channel}`;
+    let c = this.channels.get(key);
+    if (!c) {
+      if (param === 'volume') {
+        // subito dopo il fader: fader → nuovo → (quelli di prima) → modulazione del volume
+        const gain = this.graph.createGain();
+        const next = [...this.channels.values()].map(x => x.volume).filter(g => !!g).at(-1) ?? this.modGain;
+        unlink(this.fader, next);
+        this.fader.connect(gain);
+        gain.connect(next);
+        c = { volume: gain };
+      } else {
+        const pan = this.graph.createConstantSource();
+        pan.offset.setValueAtTime(0, 0);
+        pan.connect(this.panner.pan);
+        pan.start();
+        c = { pan };
+      }
+      this.channels.set(key, c);
+    }
+    return c.volume?.gain ?? c.pan!.offset;
   }
 
   dispose(): void {
     this.chain.dispose();
+    for (const c of this.channels.values()) (c.volume ?? c.pan)!.disconnect();
     for (const n of [this.tap, this.fader, this.modGain, this.panner, this.panOffset, this.gate, this.sendGate]) n.disconnect();
     for (const wire of this.sends.values()) wire.gain.disconnect();
     this.meter?.dispose();
@@ -224,8 +256,8 @@ export class MixerGraph {
   }
 
   /** Dove va la modulazione del volume o del pan di una traccia. */
-  modulation(id: TrackId, param: MixerModulation): AudioParamLike {
-    return this.strip(id).modulation(param);
+  modulation(id: TrackId, param: MixerModulation, channel?: string): AudioParamLike {
+    return this.strip(id).modulation(param, channel);
   }
 
   /** Ingresso del canale della traccia (creato se non c'è). */
@@ -247,7 +279,7 @@ export class MixerGraph {
       // il gruppo viene prima delle sue tracce: il suo canale c'è già
       strip.route(t.group ? this.strip(t.group).input : this.bus);
       strip.apply(t.mixer, audible.has(t.id), sending.has(t.id));
-      strip.chain.sync(t.effects, project.tempo.bpm);
+      strip.chain.sync(audioEffects(t.effects), project.tempo.bpm);
       const sends = new Map<TrackId, { db: number; to: AudioNodeLike }>();
       for (const [bus, db] of Object.entries(t.sends) as [TrackId, number][]) {
         if (db > SEND_OFF_DB && present.has(bus)) sends.set(bus, { db, to: this.strip(bus).input });
@@ -258,9 +290,9 @@ export class MixerGraph {
       const strip = this.strip(b.id);
       strip.route(this.bus);
       strip.apply(b.mixer, audible.has(b.id), false);
-      strip.chain.sync(b.effects, project.tempo.bpm);
+      strip.chain.sync(audioEffects(b.effects), project.tempo.bpm);
     }
-    this.masterChain.sync(project.masterEffects, project.tempo.bpm);
+    this.masterChain.sync(audioEffects(project.masterEffects), project.tempo.bpm);
     if (this.masterSettings !== project.master) {
       // il master non ha pan né solo: solo volume e mute
       const m = project.master;

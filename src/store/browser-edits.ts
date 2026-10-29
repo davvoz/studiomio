@@ -8,7 +8,7 @@ import { DEFAULT_INSTRUMENT, newEffect, withPreset, type EffectSettings, type In
 import { INSTRUMENT_DEVICE } from '../model/envelope';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import { racksWith, ungroup, type DeviceKey } from '../model/rack';
-import { presetRacks, type RackPreset } from '../model/rack-preset';
+import { presetRacks, presetTarget, type RackPreset } from '../model/rack-preset';
 import type { SampleRef } from '../model/sample';
 import { MidiTrack } from '../model/track';
 import { addEffect, addTrack, loadEffectPreset, setInstrument, setInstrumentSamples, type TrackKind } from './edits';
@@ -77,10 +77,15 @@ export const loadRack = (owner: ChainOwner | null, preset: RackPreset): Edit =>
       for (const old of racksWith(next.racksOf(target), INSTRUMENT_DEVICE)) next = next.updatingRacks(target, racks => ungroup(racks, old.id));
       next = setInstrument(target, { ...DEFAULT_INSTRUMENT, ...instrument, params: { ...instrument.params } }).apply(next, ctx);
     } else if (!target || (target !== MASTER && !p.track(target))) [next, target] = newTrack(p, ctx, 'audio', null);
-    const effects = preset.effects.map((e): EffectSettings =>
+    const fresh = preset.effects.map((e): EffectSettings =>
       ({ ...newEffect(ctx.ids.next('device'), e.type), enabled: e.enabled, preset: e.preset, params: { ...e.params } }));
-    const devices: DeviceKey[] = [...(instrument ? [INSTRUMENT_DEVICE] as const : []), ...effects.map(e => e.id)];
+    const devices: DeviceKey[] = [...(instrument ? [INSTRUMENT_DEVICE] as const : []), ...fresh.map(e => e.id)];
     const racks = presetRacks(preset, devices, () => ctx.ids.next('device'));
+    // le destinazioni dei modulatori, dentro il rack appena messo
+    const effects = fresh.map((e, i) => {
+      const saved = preset.effects[i].targets;
+      return saved ? { ...e, targets: saved.map(t => presetTarget(t, devices, racks)) } : e;
+    });
     next = next.updatingChain(target, c => ({
       effects: instrument ? [...effects, ...c.effects] : [...c.effects, ...effects],
       racks: [...c.racks, ...racks],

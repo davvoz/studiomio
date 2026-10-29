@@ -5,6 +5,7 @@ import type { SampleId } from '../../core/id';
 import type { DeviceType } from '../../devices/device-type';
 import type { SampleData } from '../../devices/dsp/core';
 import type { DeviceSettings, ParamValues } from '../../model/device';
+import type { ModTarget } from '../../model/envelope';
 import type { SampleRef } from '../../model/sample';
 import type { MenuItem } from '../context-menu';
 import { CymbalsDisplay } from './cymbals/cymbals-display';
@@ -13,6 +14,7 @@ import { DrumDisplay } from './drums/drum-display';
 import { EqDisplay } from './eq/eq-display';
 import { GateDisplay } from './gate/gate-display';
 import { kickDisplay } from './kick/kick-display';
+import { ModulatorDisplay } from './modulators/modulator-display';
 import { snareDisplay } from './snare/snare-display';
 import { PrismaDisplay } from './prisma/prisma-display';
 import { SamplerDisplay } from './sampler/sampler-display';
@@ -43,6 +45,21 @@ export interface SampleSlots {
   audio?(slot: string): SampleData | undefined;
 }
 
+/** Per i modulatori (LFO, Inviluppo): i bersagli che possono muovere, nella catena aperta. */
+export interface ModTargetHost {
+  /** Il bersaglio sotto il punto (x, y) dello schermo, con il suo controllo: un parametro di un
+   *  dispositivo della catena (non del modulatore stesso) o una macro; null se non ce n'è. */
+  at(x: number, y: number): { readonly target: ModTarget; readonly element: HTMLElement } | null;
+  /** Il nome di un bersaglio: "Prisma · Cutoff", "Volume". */
+  label(target: ModTarget): string;
+  /** I bersagli da scegliere da un menu (volume e pan della traccia, macro dei rack). */
+  choices(): readonly { readonly target: ModTarget; readonly label: string }[];
+  /** La destinazione `slot` (da 0) muove `target` (null: libera); con `amount` anche la quantità. */
+  set(slot: number, target: ModTarget | null, amount?: number): void;
+  /** Un messaggio nella barra di stato. */
+  say(text: string): void;
+}
+
 export interface DisplayContext {
   readonly type: DeviceType;
   readonly settings: DeviceSettings;
@@ -64,6 +81,8 @@ export interface DisplayContext {
   playheads?(): readonly number[];
   /** I sample del dispositivo (solo per gli strumenti). */
   readonly samples?: SampleSlots;
+  /** I bersagli delle destinazioni (solo per i modulatori). */
+  readonly modTargets?: ModTargetHost;
 }
 
 /** Lo spettro di chi non ne ha uno: non legge mai nulla. */
@@ -92,4 +111,6 @@ export const DEVICE_DISPLAYS: Readonly<Record<string, DisplayFactory>> = {
   wavetable: ctx => new WavetableDisplay(ctx),
   prisma: ctx => new PrismaDisplay(ctx),
   sampler: ctx => new SamplerDisplay(ctx),
+  lfo: ctx => new ModulatorDisplay(ctx),
+  envelope: ctx => new ModulatorDisplay(ctx),
 };

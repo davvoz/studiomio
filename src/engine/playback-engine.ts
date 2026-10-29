@@ -5,6 +5,8 @@ import { INSTRUMENT_DEVICE, scaleOf, targetKey, type ModTarget } from '../model/
 import { mappingSpec, mappingTravel } from '../devices/rack-params';
 import { launchQuantumBeats } from '../model/launch';
 import { findRack, isSwitchMacro, MACRO_MAX, macroIndex, type Rack } from '../model/rack';
+import { isModulatorType } from '../devices/modulators/modulators';
+import type { EffectSettings } from '../model/device';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import { GroupTrack, type AudioTrack, type MidiTrack, type Track } from '../model/track';
 import type { AudioGraph } from './audio-graph';
@@ -17,6 +19,7 @@ import type { InstrumentHost } from './players/instrument';
 import { Metronome } from './players/metronome';
 import { MidiTrackPlayer } from './players/midi-track-player';
 import { TransportAnchors } from './players/transport-anchors';
+import { ChainModulators } from './device-modulators';
 import { ModTraces } from './mod-trace';
 import { audioParamSink, MasterModulator, scaledSinks, switchSink, TrackModulator, type ModSink } from './modulation';
 import { NoteActivity } from './note-activity';
@@ -103,6 +106,8 @@ export class PlaybackEngine {
   private readonly masterModulator: MasterModulator;
   /** Ciò che le curve hanno programmato su ogni bersaglio, per le manopole che le seguono. */
   private readonly traces: ModTraces;
+  /** I modulatori (LFO, Inviluppo) di ogni catena con almeno uno. */
+  private readonly chainMods = new Map<ChainOwner, ChainModulators>();
 
   constructor(private readonly graph: AudioGraph, private readonly services: EngineServices, opts: EngineOptions = {}) {
     this.timer = opts.timer ?? intervalTimer;
@@ -283,13 +288,14 @@ export class PlaybackEngine {
     this.project = next;
     this.mixer.sync(next);
     const changed = this.syncPlayers(next);
+    const mods = this.syncChainModulators(next, changed);
     // le curve del master si riprendono anche se cambia la sua catena (i bersagli sono lì)
     const curves = this.masterModulator.update(next.masterAutomation);
     const master = curves || (!!prev && (prev.masterEffects !== next.masterEffects || prev.masterRacks !== next.masterRacks) && next.masterAutomation.length > 0);
     if (!this.playing) return;
     if (prev && prev.signature !== next.signature) this.anchors.resend();
     if (!prev || prev.tempo !== next.tempo || prev.loop !== next.loop) this.resume();
-    else if (changed.size || master) this.retake(changed, master);
+    else if (changed.size || master || mods.length) this.retake(changed, master, mods);
   }
 
   play(from: Beats = this.cursor): void {
@@ -309,6 +315,7 @@ export class PlaybackEngine {
     this.anchors.stopped();
     for (const m of this.modulators.values()) m.reset();
     this.masterModulator.reset();
+    for (const m of this.chainMods.values()) m.reset();
     this.cancelTimer?.();
     this.cancelTimer = null;
     this.events.emit('state', false);
@@ -348,7 +355,7 @@ export class PlaybackEngine {
    *  tipo (per un parametro: lo spostamento della manopola, −1 … +1); null se nessuna curva l'ha
    *  mai toccato. Una macro dà la sua curva, i parametri che muove il loro spostamento. */
   modulationAt(owner: ChainOwner, target: ModTarget): number | null {
-    return this.traces.current(`${owner}|${targetKey(target)}`);
+    return this.traces.current(`${owner}|${targetKey(target)}`, target.kind === 'mixer' && target.param === 'volume');
   }
 
   /** Fa sentire subito una nota con lo strumento della traccia (piano roll, tastiera). */
@@ -387,7 +394,7 @@ export class PlaybackEngine {
 
   /** Solo le tracce `ids` (modificate, o con l'audio appena arrivato) e, con `master`, le curve
    *  del master riprendono da un attimo dopo; le altre continuano senza accorgersene. */
-  private retake(ids: Iterable<TrackId>, master = false): void {
+  private retake(ids: Iterable<TrackId>, master = false, mods: readonly ChainModulators[] = []): void {
     const now = this.graph.currentTime;
     this.scheduler.advance(now);
     const sources: ScheduledSource[] = master ? [this.masterModulator] : [];
@@ -397,6 +404,8 @@ export class PlaybackEngine {
       if (player) sources.push(player);
       if (mod) sources.push(mod);
     }
+    // i modulatori dopo le curve: sentono anche le curve che muovono i loro parametri
+    sources.push(...mods);
     this.scheduler.retake(now + this.startLatency, sources);
   }
 
@@ -417,31 +426,32 @@ export class PlaybackEngine {
   /** Dove va una modulazione di una traccia o del master: il canale del mixer (solo le tracce), lo
    *  strumento, un effetto o la macro di un rack (che muove i parametri mappati). Ciò che riceve
    *  resta anche nella sua traccia, per l'interfaccia. */
-  private modSink(owner: ChainOwner, target: ModTarget): ModSink | null {
-    const sink = this.destination(owner, target);
-    return sink && this.traces.wrap(`${owner}|${targetKey(target)}`, scaleOf(target).neutral, sink);
+  private modSink(owner: ChainOwner, target: ModTarget, channel?: string): ModSink | null {
+    const sink = this.destination(owner, target, channel);
+    return sink && this.traces.wrap(`${owner}|${targetKey(target)}`, scaleOf(target).neutral, sink, channel);
   }
 
-  private destination(owner: ChainOwner, target: ModTarget): ModSink | null {
-    if (target.kind === 'mixer') return owner === MASTER ? null : audioParamSink(this.mixer.modulation(owner, target.param));
+  /** `channel`: la fonte, se non sono le curve delle clip (un modulatore): si somma a loro. */
+  private destination(owner: ChainOwner, target: ModTarget, channel?: string): ModSink | null {
+    if (target.kind === 'mixer') return owner === MASTER ? null : audioParamSink(this.mixer.modulation(owner, target.param, channel));
     // il transpose lo suona la clip audio stessa
     if (target.kind === 'clip') return null;
     const racks = owner === MASTER ? this.project?.masterRacks : this.project?.track(owner)?.racks;
     const rack = findRack(racks ?? [], target.device as DeviceId);
-    if (rack) return this.macroSink(owner, rack, macroIndex(target.param));
+    if (rack) return this.macroSink(owner, rack, macroIndex(target.param), channel);
     if (target.device === INSTRUMENT_DEVICE && owner === MASTER) return null;
     const device = target.device === INSTRUMENT_DEVICE
       ? this.players.get(owner as TrackId)?.player.instrumentModulation?.()
-      : this.mixer.effect(owner, target.device)?.modulation;
-    return device?.sink(target.param) ?? null;
+      : this.mixer.effect(owner, target.device)?.modulation ?? this.chainMods.get(owner)?.modulation(target.device);
+    return device?.sink(target.param, channel) ?? null;
   }
 
-  private macroSink(owner: ChainOwner, rack: Rack, index: number): ModSink | null {
+  private macroSink(owner: ChainOwner, rack: Rack, index: number, channel?: string): ModSink | null {
     const macro = rack.macros[index], project = this.project;
     if (!macro || !project) return null;
     const sink = scaledSinks(macro.mappings.flatMap(m => {
       const spec = mappingSpec(project, owner, m);
-      const sink = spec && this.modSink(owner, { kind: 'device', device: m.device, param: m.param });
+      const sink = spec && this.modSink(owner, { kind: 'device', device: m.device, param: m.param }, channel);
       return sink ? [{ sink, scale: mappingTravel(spec, m) }] : [];
     }));
     // un interruttore o un pulsante scatta, come quando lo si preme
@@ -452,6 +462,8 @@ export class PlaybackEngine {
     for (const { player } of this.players.values()) yield player;
     yield* this.modulators.values();
     yield this.masterModulator;
+    // dopo le curve: i modulatori sentono anche le curve che muovono i loro parametri
+    yield* this.chainMods.values();
     yield this.metronome;
     yield this.anchors;
   }
@@ -505,6 +517,32 @@ export class PlaybackEngine {
     }
     this.previousTracks = new Map(project.tracks.map(t => [t.id, t]));
     return changed;
+  }
+
+  /** Allinea i modulatori delle catene (tracce, bus, master); restituisce quelli da riprendere:
+   *  i modulatori cambiati e quelli delle tracce cambiate (le note che li fanno partire). */
+  private syncChainModulators(project: Project, changed: ReadonlySet<TrackId>): ChainModulators[] {
+    const out: ChainModulators[] = [];
+    const present = new Set<ChainOwner>();
+    const sync = (owner: ChainOwner, effects: readonly EffectSettings[], track: Track | null) => {
+      let mods = this.chainMods.get(owner);
+      if (!mods && !effects.some(e => isModulatorType(e.type))) return;
+      present.add(owner);
+      if (!mods) {
+        const programs = owner === MASTER ? () => [] : () => this.session.programs(owner as TrackId);
+        mods = new ChainModulators((target, channel) => this.modSink(owner, target, channel), () => this.graph.currentTime, programs);
+        this.chainMods.set(owner, mods);
+      }
+      if (mods.update(effects, track) || (owner !== MASTER && changed.has(owner as TrackId))) out.push(mods);
+    };
+    for (const t of project.channels) sync(t.id, t.effects, t);
+    sync(MASTER, project.masterEffects, null);
+    for (const [owner, mods] of this.chainMods) {
+      if (present.has(owner)) continue;
+      mods.reset();
+      this.chainMods.delete(owner);
+    }
+    return out;
   }
 
   /** Vero se è cambiata una clip della session che la traccia suona o suonerà. */

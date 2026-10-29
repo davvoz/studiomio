@@ -11,6 +11,8 @@ export interface ModMessage {
   readonly kind: 'set' | 'ramp' | 'hold';
   readonly value: number;
   readonly time: number;
+  /** La fonte (assente: le curve delle clip): gli spostamenti di fonti diverse si sommano. */
+  readonly channel?: string;
 }
 
 export const INSTRUMENT_PROCESSOR = 'studiomio-instrument';

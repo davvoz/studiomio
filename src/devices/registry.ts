@@ -27,13 +27,14 @@ import { NEURO } from './instruments/neuro/neuro';
 import { PRISMA } from './instruments/prisma/prisma';
 import { SAMPLER } from './instruments/sampler/sampler';
 import { WAVETABLE } from './instruments/wavetable/wavetable';
+import { ENVELOPE_DEVICE, LFO_DEVICE } from './modulators/modulators';
 
 /** Gli strumenti disponibili (lato interfaccia). Il motore DSP di ciascuno è registrato con
  *  lo stesso nome in worklet/cores.ts. */
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS, KICK, SNARE, CYMBALS];
 
 /** Gli effetti disponibili, come sopra. */
-export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER, LFO_DEVICE, ENVELOPE_DEVICE];
 
 const instruments = new Map(INSTRUMENT_TYPES.map(t => [t.type, t]));
 const effects = new Map(EFFECT_TYPES.map(t => [t.type, t]));

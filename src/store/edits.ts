@@ -7,8 +7,9 @@ import { AudioClip } from '../model/audio-clip';
 import type { Clip } from '../model/clip';
 import { paletteColor } from '../model/colors';
 import {
-  newEffect, withParam, withParams, withPreset, withSample, withSidechain, type EffectSettings, type InstrumentSettings, type ParamValues,
+  newEffect, withParam, withParams, withPreset, withSample, withSidechain, withTarget, withoutTargetsOf, type EffectSettings, type InstrumentSettings, type ParamValues,
 } from '../model/device';
+import { linkAmount } from '../devices/modulators/modulators';
 import * as chain from '../model/effect-list';
 import { INSTRUMENT_DEVICE, type EnvelopePoint, type ModTarget } from '../model/envelope';
 import { MidiClip } from '../model/midi-clip';
@@ -166,8 +167,9 @@ export const setInstrument = (id: TrackId, settings: InstrumentSettings): Edit =
     const before = p.track(id);
     const next = p.updatingTrack(id, t => {
       if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
-      const racks = settings.type === t.instrument.type ? t.racks : withoutMappingsOf(t.racks, INSTRUMENT_DEVICE);
-      return t.withInstrument(settings).withChain(t.effects, racks);
+      const same = settings.type === t.instrument.type;
+      const racks = same ? t.racks : withoutMappingsOf(t.racks, INSTRUMENT_DEVICE);
+      return t.withInstrument(settings).withChain(same ? t.effects : withoutTargetsOf(t.effects, INSTRUMENT_DEVICE), racks);
     });
     // un altro strumento ha altri parametri: i loro tasti e controlli MIDI non valgono più
     const same = before instanceof MidiTrack && before.instrument.type === settings.type;
@@ -232,6 +234,14 @@ export const setEffectParams = (owner: ChainOwner, id: DeviceId, values: ParamVa
 /** Il rilevatore dell'effetto ascolta la traccia `source` (null: di nuovo il proprio ingresso). */
 export const setEffectSidechain = (owner: ChainOwner, id: DeviceId, source: TrackId | null): Edit =>
   updatingEffect(source ? 'Sidechain' : 'Togli il sidechain', owner, id, e => withSidechain(e, source));
+
+/** La destinazione `slot` (da 0) di un modulatore muove `target` (null: la libera); con
+ *  `amount` anche la sua quantità (in %). */
+export const setModTarget = (owner: ChainOwner, id: DeviceId, slot: number, target: ModTarget | null, amount?: number): Edit =>
+  updatingEffect(target ? 'Destinazione del modulatore' : 'Togli la destinazione', owner, id, e => {
+    const next = withTarget(e, slot, target);
+    return amount === undefined ? next : withParam(next, linkAmount(slot + 1), amount);
+  });
 
 export const loadEffectPreset = (owner: ChainOwner, id: DeviceId, name: string, params: ParamValues): Edit =>
   edit(`Preset ${name}`, p => reapplyMacros(p.updatingEffects(owner, list => chain.update(list, id, e => withPreset(e, name, params))), owner));

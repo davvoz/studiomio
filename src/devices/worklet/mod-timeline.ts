@@ -45,6 +45,12 @@ export class ModTimeline {
     return this.evaluate(time);
   }
 
+  /** Il valore all'istante `time` senza dimenticare niente (si può chiedere anche indietro, fin
+   *  dove gli eventi non sono già stati dimenticati da `valueAt`). */
+  peek(time: number): number {
+    return this.evaluate(time);
+  }
+
   /** Vero se ci sono eventi ancora da arrivare. */
   get pending(): boolean {
     return this.events.length > 0;
@@ -64,11 +70,14 @@ export class ModTimeline {
 }
 
 /** I parametri di un dispositivo con le modulazioni: i valori delle manopole (`base`) più gli
- *  spostamenti nel tempo, in frazioni della corsa della manopola (−1 … +1). */
+ *  spostamenti nel tempo, in frazioni della corsa della manopola (−1 … +1). Ogni fonte (le curve
+ *  delle clip, ogni destinazione di un LFO o di un inviluppo) ha il suo canale: gli spostamenti
+ *  dei canali di un parametro si sommano. */
 export class ParamModulation {
   private base: Readonly<Record<string, number>>;
-  private readonly lines = new Map<string, ModTimeline>();
-  /** Gli spostamenti usati per ultimi, diversi da zero. */
+  /** Per canale (vedi `lineKey`): il parametro e i suoi eventi. */
+  private readonly lines = new Map<string, { readonly param: string; readonly line: ModTimeline }>();
+  /** Gli spostamenti usati per ultimi, per canale, diversi da zero. */
   private readonly offsets = new Map<string, number>();
   private dirty = true;
 
@@ -81,37 +90,51 @@ export class ParamModulation {
     this.dirty = true;
   }
 
-  /** Un evento per un parametro del dispositivo (gli sconosciuti si ignorano); 'hold' tiene il
-   *  valore da lì. */
-  event(param: string, kind: ModEvent['kind'] | 'hold', value: number, time: number): void {
+  /** Un evento per un parametro del dispositivo (gli sconosciuti si ignorano) nel canale
+   *  `channel` (assente: quello delle curve delle clip); 'hold' tiene il valore da lì. */
+  event(param: string, kind: ModEvent['kind'] | 'hold', value: number, time: number, channel?: string): void {
     if (!this.specs.has(param)) return;
-    let line = this.lines.get(param);
-    if (!line) this.lines.set(param, (line = new ModTimeline(0)));
-    if (kind === 'hold') line.hold(time);
-    else line.add({ kind, value, time });
+    const key = lineKey(param, channel);
+    let entry = this.lines.get(key);
+    if (!entry) this.lines.set(key, (entry = { param, line: new ModTimeline(0) }));
+    if (kind === 'hold') entry.line.hold(time);
+    else entry.line.add({ kind, value, time });
   }
 
   /** I parametri da dare al motore all'istante `time`, o null se non sono cambiati. */
   paramsAt(time: number): Readonly<Record<string, number>> | null {
     let changed = this.dirty;
-    for (const [param, line] of this.lines) {
+    for (const [key, { line }] of this.lines) {
       const v = line.valueAt(time);
-      if (Math.abs(v - (this.offsets.get(param) ?? 0)) > 1e-6) {
+      if (Math.abs(v - (this.offsets.get(key) ?? 0)) > 1e-6) {
         changed = true;
-        if (v === 0) this.offsets.delete(param);
-        else this.offsets.set(param, v);
+        if (v === 0) this.offsets.delete(key);
+        else this.offsets.set(key, v);
       }
       // finita e a riposo: non serve più
-      if (!line.pending && v === 0) this.lines.delete(param);
+      if (!line.pending && v === 0) this.lines.delete(key);
     }
     if (!changed) return null;
     this.dirty = false;
     if (!this.offsets.size) return this.base;
+    const sums = new Map<string, number>();
+    for (const [key, offset] of this.offsets) {
+      const param = paramOfKey(key);
+      sums.set(param, (sums.get(param) ?? 0) + offset);
+    }
     const out: Record<string, number> = { ...this.base };
-    for (const [param, offset] of this.offsets) {
+    for (const [param, offset] of sums) {
       const spec = this.specs.get(param)!;
       out[param] = paramFromUnit(spec, paramToUnit(spec, out[param] ?? spec.default) + offset);
     }
     return out;
   }
 }
+
+/** Il canale di un parametro: il nome del parametro (le curve delle clip) o "parametro␁canale". */
+const SEPARATOR = '';
+const lineKey = (param: string, channel: string | undefined): string => (channel ? `${param}${SEPARATOR}${channel}` : param);
+const paramOfKey = (key: string): string => {
+  const i = key.indexOf(SEPARATOR);
+  return i < 0 ? key : key.slice(0, i);
+};

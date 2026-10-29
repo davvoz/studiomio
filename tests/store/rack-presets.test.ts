@@ -5,9 +5,9 @@ import { MASTER } from '../../src/model/project';
 import { captureRack, rackPresetFrom, type RackPreset } from '../../src/model/rack-preset';
 import { AudioTrack, MidiTrack } from '../../src/model/track';
 import { loadRack } from '../../src/store/browser-edits';
-import { addEffect, addTrack, setEffectParam, setEffectSidechain, setInstrument, setInstrumentParam } from '../../src/store/edits';
+import { addEffect, addTrack, setEffectParam, setEffectSidechain, setInstrument, setInstrumentParam, setModTarget } from '../../src/store/edits';
 import { macroParam } from '../../src/model/rack';
-import { groupDevices, mapMacro, renameMacro, setMacro, setMacroMode, setMappingRange } from '../../src/store/rack-edits';
+import { groupDevices, mapMacro, renameMacro, setMacro, setMacroMode, setMappingRange, ungroupRack } from '../../src/store/rack-edits';
 import { setup } from '../helpers/fixtures';
 
 /** Una traccia MIDI con Analog e due effetti, tutti in un Instrument Rack con due macro mappate. */
@@ -208,5 +208,36 @@ describe('rack salvati: con i rack dentro', () => {
     expect(back.macros[3].mappings).toEqual([]);
     saved.racks = [{ name: 'A', first: 7, count: 2, macros: [] }];
     expect(rackPresetFrom(saved)!.racks).toBeUndefined();
+  });
+});
+
+describe('rack salvati: i modulatori', () => {
+  it('le destinazioni dentro il rack tornano sui dispositivi nuovi; quelle fuori si perdono', () => {
+    const r = rig();
+    r.store.apply(addEffect(r.t, 'lfo', 'LFO'));
+    const lfo = r.midi().effects.find(e => e.type === 'lfo')!.id;
+    r.store.apply(addEffect(r.t, 'delay', 'Delay'));
+    const outside = r.midi().effects.at(-1)!.id;
+    // l'LFO entra nel rack: muove lo strumento, una macro del rack, il volume e un delay fuori
+    r.store.apply(ungroupRack(r.t, r.rack));
+    r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE, r.delay, r.comp, lfo]));
+    const rack = r.midi().racks[0].id;
+    r.store.apply(setModTarget(r.t, lfo, 0, { kind: 'device', device: INSTRUMENT_DEVICE, param: 'cutoff' }));
+    r.store.apply(setModTarget(r.t, lfo, 1, { kind: 'device', device: rack, param: macroParam(1) }));
+    r.store.apply(setModTarget(r.t, lfo, 2, { kind: 'mixer', param: 'volume' }));
+    r.store.apply(setModTarget(r.t, lfo, 3, { kind: 'device', device: outside, param: 'mix' }));
+    const saved = roundTrip(captureRack(r.store.project, r.t, rack, 'Wobble'))!;
+    expect(saved.effects.find(e => e.type === 'lfo')!.targets).toEqual(['d0:cutoff', 'r0:macro2', 'mixer:volume', null]);
+    // di nuovo sulla stessa traccia: al posto dello strumento, con i suoi effetti nuovi davanti
+    const before = new Set(r.midi().effects.map(e => e.id));
+    r.store.apply(loadRack(r.t, saved));
+    const loaded = r.midi().effects.find(e => e.type === 'lfo' && !before.has(e.id))!;
+    const newRack = r.midi().racks.find(k => k.name === 'Wobble')!;
+    expect(loaded.targets).toEqual([
+      { kind: 'device', device: INSTRUMENT_DEVICE, param: 'cutoff' },
+      { kind: 'device', device: newRack.id, param: macroParam(1) },
+      { kind: 'mixer', param: 'volume' },
+      null,
+    ]);
   });
 });

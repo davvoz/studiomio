@@ -4,6 +4,7 @@
  * prendono il valore predefinito del tipo quando il dispositivo suona, così un parametro
  * aggiunto in futuro non cambia il suono dei progetti esistenti. */
 import type { DeviceId, SampleId, TrackId } from '../core/id';
+import type { ModTarget } from './envelope';
 
 export type ParamValues = Readonly<Record<string, number>>;
 
@@ -30,6 +31,9 @@ export interface EffectSettings extends DeviceSettings {
   /** La traccia che il rilevatore ascolta al posto del suono che passa (sidechain), per gli
    *  effetti che lo accettano. Assente: ascolta il proprio ingresso. */
   readonly sidechain?: TrackId;
+  /** Per i modulatori (LFO, Inviluppo): cosa muove ogni destinazione (null: libera). La quantità
+   *  di ognuna è un parametro (vedi devices/modulators). Assente: nessuna. */
+  readonly targets?: readonly (ModTarget | null)[];
 }
 
 export const DEFAULT_INSTRUMENT: InstrumentSettings = { type: 'analog', preset: 'Init', params: {} };
@@ -50,6 +54,25 @@ export const withPreset = <S extends DeviceSettings>(s: S, name: string, params:
 export function withSidechain(e: EffectSettings, source: TrackId | null): EffectSettings {
   const { sidechain: _old, ...rest } = e;
   return source ? { ...rest, sidechain: source } : rest;
+}
+
+/** Il bersaglio della destinazione `slot` (da 0) di un modulatore, o null (anche null: la toglie);
+ *  le libere in fondo spariscono. */
+export function withTarget(e: EffectSettings, slot: number, target: ModTarget | null): EffectSettings {
+  const targets = [...(e.targets ?? [])];
+  while (targets.length <= slot) targets.push(null);
+  targets[slot] = target;
+  while (targets.length && targets[targets.length - 1] === null) targets.pop();
+  const { targets: _old, ...rest } = e;
+  return targets.length ? { ...rest, targets } : rest;
+}
+
+/** La catena con le destinazioni dei modulatori che muovevano il dispositivo `device` libere (il
+ *  dispositivo è cambiato di tipo). Se nessuna lo muoveva, la stessa lista. */
+export function withoutTargetsOf(effects: readonly EffectSettings[], device: string): readonly EffectSettings[] {
+  const hits = (t: ModTarget | null) => t?.kind === 'device' && t.device === device;
+  if (!effects.some(e => e.targets?.some(hits))) return effects;
+  return effects.map(e => (e.targets?.some(hits) ? e.targets.reduce((x, t, i) => (hits(t) ? withTarget(x, i, null) : x), e) : e));
 }
 
 /** Il sample al posto `slot`, o null se vuoto. */

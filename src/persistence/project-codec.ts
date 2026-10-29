@@ -4,6 +4,7 @@ import { Tempo, TimeSignature } from '../core/music-time';
 import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import type { KeyMap, KeyTarget } from '../model/key-map';
+import { parseTargetKey, targetKey } from '../model/envelope';
 import { DEFAULT_LAUNCH_QUANTUM } from '../model/launch';
 import { checkMidiMap, MIXER_CONTROLS, type MidiMap, type MidiMapping, type MidiTarget, type MixerControl } from '../model/midi-map';
 import { Project, type ChainOwner } from '../model/project';
@@ -15,7 +16,7 @@ import { decodeEnvelopes, defaultClipCodecs, encodeEnvelopes, type ClipCodec } f
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 12;
+export const PROJECT_VERSION = 13;
 
 /** Come scrivere e ricostruire un tipo di traccia. */
 export interface TrackType {
@@ -93,6 +94,8 @@ const migrations: Record<number, Migration> = {
       return { ...t, instrument: { ...inst, params } };
     }),
   }),
+  // 12 → 13: i modulatori (LFO, Inviluppo) hanno le loro destinazioni (campo facoltativo)
+  12: json => json,
 };
 
 /** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
@@ -282,11 +285,13 @@ const decodeInstrument = (r: JsonReader): DeviceSettings => {
 
 const encodeEffect = (e: EffectSettings): JsonObject => ({
   id: e.id, enabled: e.enabled, ...encodeInstrument(e), ...(e.sidechain ? { sidechain: e.sidechain } : {}),
+  ...(e.targets?.length ? { targets: e.targets.map(t => (t ? targetKey(t) : null)) } : {}),
 });
 
 const decodeEffect = (r: JsonReader): EffectSettings => ({
   id: asId(r.str('id')), enabled: r.bool('enabled'), ...decodeInstrument(r),
   ...(r.has('sidechain') ? { sidechain: asId<'track'>(r.str('sidechain')) } : {}),
+  ...(r.has('targets') ? { targets: r.array('targets').map(t => (t.raw === null ? null : parseTargetKey(t.asString()))) } : {}),
 });
 
 /** I rack si scrivono solo se ci sono. */

@@ -639,6 +639,16 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .prisma-slider-fill { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .prisma-slider-fill.negative { background: color-mix(in srgb, #4cb8ff 55%, transparent); }
 .prisma-slider-text { position: relative; text-align: center; font: 10.5px/18px ui-monospace, monospace; color: var(--text); pointer-events: none; white-space: nowrap; }
+/* Modulatori (LFO, Inviluppo): i pezzi di Prisma, le destinazioni, i controlli che muovono */
+.modulator .prisma-lfo { min-width: 360px; height: 86px; }
+.modulator .prisma-env { min-width: 380px; height: 76px; }
+.mod-links { display: flex; flex-direction: column; gap: 2px; }
+.mod-link-name { width: 168px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.mod-link.empty .mod-link-name { color: var(--muted); }
+.mod-link.empty .prisma-slider { opacity: .4; }
+.mod-target > .knob-label { color: #4cb8ff; }
+.mod-target > .knob-label::before { content: '∿ '; }
+body.dragging-modulator, body.dragging-modulator * { cursor: grabbing !important; }
 /* Sampler: forma d'onda e inviluppi in alto, le schede sotto, l'LFO a destra */
 /* il Sampler riempie l'altezza del pannello: la riga in alto (forma d'onda, inviluppi) prende
  * quella che resta sopra le schede dei controlli */

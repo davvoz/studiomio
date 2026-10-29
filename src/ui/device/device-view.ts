@@ -19,7 +19,7 @@ import { MidiTrack, type Track } from '../../model/track';
 import type { ControlledDevice, UiState } from '../ui-state';
 import {
   addEffect, loadEffectPreset, loadPreset, removeEffect, setEffectEnabled, setEffectParam,
-  setEffectParams, setEffectSidechain, setInstrument, setInstrumentParam, setInstrumentParams, setInstrumentSamples,
+  setEffectParams, setEffectSidechain, setInstrument, setInstrumentParam, setInstrumentParams, setInstrumentSamples, setModTarget,
 } from '../../store/edits';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { addEffectToRack, groupDevices, mapMacro, moveDevice, ungroupRack, unmapParam } from '../../store/rack-edits';
@@ -29,7 +29,7 @@ import { el } from '../dom';
 import { addHeightHandle, DEVICE_HEIGHT } from '../editor-height';
 import { controlOf, type ParamControl } from './controls';
 import { DevicePanel } from './device-panel';
-import { DEVICE_DISPLAYS, NO_SPECTRUM, type DeviceDisplay, type SpectrumTap } from './displays';
+import { DEVICE_DISPLAYS, NO_SPECTRUM, type DeviceDisplay, type ModTargetHost, type SpectrumTap } from './displays';
 import { RackPanel } from './rack-panel';
 import type { MacroSprings } from '../../store/macro-springs';
 import { SidechainPicker } from './sidechain-picker';
@@ -300,6 +300,7 @@ export class DeviceView {
     if (shape !== this.builtFor) this.build(this.owner, source, shape);
     else this.update(source);
     this.showKeys();
+    this.markModulated();
   }
 
   /** Pannelli nuovi quando cambia la forma della catena (effetti aggiunti, tolti, spostati, rack). */
@@ -505,9 +506,59 @@ export class DeviceView {
   /** Il menu di un parametro: su quale macro dei suoi rack mapparlo (prima il rack in cui sta,
    *  poi quelli intorno). */
   private paramMenu(owner: ChainOwner, key: DeviceKey, param: string): MenuItem[] {
+    const mods = this.modulationMenu(owner, { kind: 'device', device: key, param });
     const racks = racksWith(this.deps.store.project.racksOf(owner), key).reverse();
-    if (!racks.length) return [{ label: 'Raggruppa in un rack per mapparlo su una macro', shortcut: 'Ctrl+G', run: () => this.groupSelection([key]) }];
-    return this.mapMenu(owner, racks, key, param);
+    if (!racks.length) return [...mods, { label: 'Raggruppa in un rack per mapparlo su una macro', shortcut: 'Ctrl+G', run: () => this.groupSelection([key]) }];
+    return [...mods, ...this.mapMenu(owner, racks, key, param)];
+  }
+
+  // ---------------------------------------------------------------- modulatori
+
+  /** Le destinazioni dei modulatori della catena che muovono `target`, da togliere. */
+  private modulationMenu(owner: ChainOwner, target: ModTarget): MenuItem[] {
+    const project = this.deps.store.project, labels = deviceLabels(project, owner);
+    const items = project.effectsOf(owner).flatMap(e => (e.targets ?? []).flatMap((t, slot): MenuItem[] => (t && sameModTarget(t, target)
+      ? [{ label: `Togli la modulazione di ${labels.get(e.id) ?? e.type} (destinazione ${slot + 1})`, run: () => this.deps.store.apply(setModTarget(owner, e.id, slot, null)) }]
+      : [])));
+    return items.length ? [...items, SEPARATOR] : [];
+  }
+
+  /** Per il pannello del modulatore `id`: i bersagli della catena di `owner`. */
+  private modTargetHost(owner: ChainOwner, id: DeviceId): ModTargetHost {
+    const { store } = this.deps;
+    return {
+      at: (x, y) => {
+        const e = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-param]');
+        if (!e || !this.chain.contains(e)) return null;
+        const param = e.dataset.param!, project = store.project;
+        const valid = (device: DeviceKey) => !!mappingSpec(project, owner, { device, param });
+        for (const [rack, panel] of this.rackPanels) {
+          if (panel.element.contains(e)) return e.classList.contains('macro') && valid(rack) ? { target: { kind: 'device', device: rack, param }, element: e } : null;
+        }
+        for (const [key, panel] of this.panels) {
+          if (key !== id && panel.element.contains(e) && valid(key as DeviceKey)) return { target: { kind: 'device', device: key as DeviceKey, param }, element: e };
+        }
+        return null;
+      },
+      label: t => modTargetLabel(store.project, owner, t),
+      choices: () => modTargetChoices(store.project, owner),
+      set: (slot, target, amount) => store.apply(setModTarget(owner, id, slot, target, amount)),
+      say: text => this.deps.say?.(text),
+    };
+  }
+
+  /** I controlli che un modulatore della catena muove: un segno, e nel titolo chi li muove. */
+  private markModulated(): void {
+    const owner = this.owner;
+    if (!owner) return;
+    const project = this.deps.store.project;
+    const moved = new Set<string>();
+    for (const e of project.effectsOf(owner)) for (const t of e.targets ?? []) if (t?.kind === 'device') moved.add(`${t.device}|${t.param}`);
+    const mark = (device: string, elements: Iterable<HTMLElement>) => {
+      for (const e of elements) e.classList.toggle('mod-target', moved.has(`${device}|${e.dataset.param}`));
+    };
+    for (const [key, panel] of this.panels) mark(key, panel.element.querySelectorAll<HTMLElement>('[data-param]'));
+    for (const [rack, panel] of this.rackPanels) mark(rack, panel.element.querySelectorAll<HTMLElement>('.macro[data-param]'));
   }
 
   /** I parametri mappati: attenuati, con il numero della macro; con "Map" acceso si vedono quelli
@@ -685,7 +736,7 @@ export class DeviceView {
       type, settings: track.instrument, sampleRate: this.deps.sampleRate,
       setParams: (values, final) => this.displayParams(track.id, INSTRUMENT, values, final,
         v => setInstrumentParams(track.id, v), `param-${track.id}`),
-      controlsChanged: () => { this.markMapped(INSTRUMENT); this.markKeys(INSTRUMENT); this.curveControls = null; },
+      controlsChanged: () => { this.markMapped(INSTRUMENT); this.markKeys(INSTRUMENT); this.markModulated(); this.curveControls = null; },
       openSpectrum: () => NO_SPECTRUM,
       audition: (pitch, velocity) => audition(track.id, pitch, velocity),
       playedNotes: this.deps.playedNotes(track.id),
@@ -737,10 +788,11 @@ export class DeviceView {
     const display = DEVICE_DISPLAYS[e.type]?.({
       type, settings: e, sampleRate: this.deps.sampleRate,
       setParams: (values, final) => this.displayParams(owner, id, values, final, v => setEffectParams(owner, id, v), `fx-${id}`),
-      controlsChanged: () => { this.markMapped(id); this.markKeys(id); this.curveControls = null; },
+      controlsChanged: () => { this.markMapped(id); this.markKeys(id); this.markModulated(); this.curveControls = null; },
       openSpectrum: () => this.deps.spectrum(owner, id),
       audition: () => {},
       playedNotes: () => [],
+      ...(type.modulator ? { modTargets: this.modTargetHost(owner, id) } : {}),
     });
     const sidechain = type.sidechain ? new SidechainPicker(source => store.apply(setEffectSidechain(owner, id, source))) : null;
     if (sidechain) {
@@ -800,6 +852,25 @@ function deviceLabels(p: Project, owner: ChainOwner): Map<DeviceKey, string> {
     out.set(key, n > 1 ? `${label} ${n}` : label);
   }
   return out;
+}
+
+const sameModTarget = (a: ModTarget, b: ModTarget): boolean =>
+  a.kind === b.kind && a.param === b.param && (a.kind !== 'device' || (b.kind === 'device' && a.device === b.device));
+
+/** Il nome di un bersaglio di un modulatore: "Prisma · Cutoff", "Rack · Macro 2", "Volume". */
+function modTargetLabel(p: Project, owner: ChainOwner, t: ModTarget): string {
+  if (t.kind === 'mixer') return t.param === 'volume' ? 'Volume della traccia' : 'Pan della traccia';
+  if (t.kind === 'clip') return 'Transpose';
+  const device = deviceLabels(p, owner).get(t.device);
+  if (!device) return `(tolto) · ${t.param}`;
+  return `${device} · ${mappingSpec(p, owner, { device: t.device, param: t.param })?.label ?? t.param}`;
+}
+
+/** I bersagli dei modulatori da un menu: volume e pan della traccia, le macro dei rack. */
+function modTargetChoices(p: Project, owner: ChainOwner): { target: ModTarget; label: string }[] {
+  const mixer: ModTarget[] = owner === MASTER ? [] : [{ kind: 'mixer', param: 'volume' }, { kind: 'mixer', param: 'pan' }];
+  const macros = p.racksOf(owner).flatMap(r => r.macros.map((_, i): ModTarget => ({ kind: 'device', device: r.id, param: macroParam(i) })));
+  return [...mixer, ...macros].map(target => ({ target, label: modTargetLabel(p, owner, target) }));
 }
 
 const missing = (type: string) =>

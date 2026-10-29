@@ -5,16 +5,27 @@
 import { ModTimeline } from '../devices/worklet/mod-timeline';
 import type { ModSink } from './modulation';
 
-/** Le tracce di tutti i bersagli, per chiave; `now` è l'ora del contesto audio. */
+/** Le tracce di tutti i bersagli, per chiave; `now` è l'ora del contesto audio. Un bersaglio
+ *  può averne più d'una, una per fonte (le curve delle clip, ogni destinazione di un LFO): si
+ *  combinano come nel suono. */
 export class ModTraces {
   private readonly lines = new Map<string, ModTimeline>();
+  /** Per bersaglio, le chiavi delle tracce delle altre fonti. */
+  private readonly channels = new Map<string, Set<string>>();
 
   constructor(private readonly now: () => number) {}
 
-  /** La destinazione `inner` che si ricorda anche ciò che riceve, nella traccia `key`. */
-  wrap(key: string, neutral: number, inner: ModSink): ModSink {
-    let line = this.lines.get(key);
-    if (!line) this.lines.set(key, (line = new ModTimeline(neutral)));
+  /** La destinazione `inner` che si ricorda anche ciò che riceve, nella traccia `key` (con
+   *  `channel`, quella della fonte). */
+  wrap(key: string, neutral: number, inner: ModSink, channel?: string): ModSink {
+    const trace = channel ? `${key}|${channel}` : key;
+    if (channel) {
+      let set = this.channels.get(key);
+      if (!set) this.channels.set(key, (set = new Set()));
+      set.add(trace);
+    }
+    let line = this.lines.get(trace);
+    if (!line) this.lines.set(trace, (line = new ModTimeline(neutral)));
     const l = line;
     // anche se nessuno la legge, la traccia butta ciò che è passato
     const add = (kind: 'set' | 'ramp', value: number, time: number) => {
@@ -28,8 +39,15 @@ export class ModTraces {
     };
   }
 
-  /** Il valore di adesso nella traccia `key`, o null se lì non è mai arrivato niente. */
-  current(key: string): number | null {
-    return this.lines.get(key)?.valueAt(this.now()) ?? null;
+  /** Il valore di adesso nella traccia `key`, o null se lì non è mai arrivato niente. Con le
+   *  altre fonti: gli spostamenti si sommano, i guadagni (`multiply`) si moltiplicano. */
+  current(key: string, multiply = false): number | null {
+    const now = this.now();
+    let value = this.lines.get(key)?.valueAt(now) ?? null;
+    for (const trace of this.channels.get(key) ?? []) {
+      const v = this.lines.get(trace)!.valueAt(now);
+      value = value === null ? v : multiply ? value * v : value + v;
+    }
+    return value;
   }
 }

@@ -1,12 +1,13 @@
 /* Un rack salvato, da usare in altri progetti (come i preset dei rack di Live): i suoi
  * dispositivi con i parametri, le 8 macro con le mappature e i rack che ha dentro. Non conosce il
  * progetto da cui viene: una mappatura indica il dispositivo per posto nel rack (0 il primo), o
- * il rack dentro per posto nella lista dei rack dentro, non per id. Non ci
+ * il rack dentro per posto nella lista dei rack dentro, non per id (così anche le destinazioni dei
+ * modulatori, che fuori dal rack si perdono). Non ci
  * sono i sample caricati (sono file del progetto) né il sidechain (è una traccia del progetto).
  * Qui ci sono i dati, come si prendono da una catena e come si rileggono da fuori. */
 import type { DeviceId } from '../core/id';
 import type { DeviceSettings, ParamValues } from './device';
-import { INSTRUMENT_DEVICE } from './envelope';
+import { INSTRUMENT_DEVICE, type ModTarget } from './envelope';
 import { MASTER, type ChainOwner, type Project } from './project';
 import {
   checkRacks, findRack, innerRacks, MACRO_COUNT, MACRO_MODES, macroValueFor, springFor, type DeviceKey, type Macro, type MacroMode,
@@ -23,6 +24,31 @@ export interface SavedDevice {
 
 export interface SavedEffect extends SavedDevice {
   readonly enabled: boolean;
+  /** Per i modulatori, le destinazioni (vedi `savedTarget`); assente: nessuna. */
+  readonly targets?: readonly (string | null)[];
+}
+
+/** Una destinazione di un modulatore nel rack salvato: "d2:cutoff" (un parametro del terzo
+ *  dispositivo), "r0:macro1" (una macro del rack stesso; "r1:…" del primo rack dentro),
+ *  "mixer:volume". null: libera, o fuori dal rack. */
+function savedTarget(t: ModTarget | null, at: ReadonlyMap<DeviceKey, number>, racks: readonly DeviceId[]): string | null {
+  if (!t || t.kind === 'clip') return null;
+  if (t.kind === 'mixer') return `mixer:${t.param}`;
+  const rack = racks.indexOf(t.device as DeviceId);
+  if (rack >= 0) return `r${rack}:${t.param}`;
+  const device = at.get(t.device);
+  return device === undefined ? null : `d${device}:${t.param}`;
+}
+
+/** La destinazione salvata nella catena in cui il rack arriva: `devices` i suoi dispositivi,
+ *  `racks` il rack e quelli dentro (nell'ordine del rack salvato). */
+export function presetTarget(saved: string | null, devices: readonly DeviceKey[], racks: readonly Rack[]): ModTarget | null {
+  const m = saved ? /^(d|r|mixer)(\d*):(.+)$/.exec(saved) : null;
+  if (!m) return null;
+  const [, kind, n, param] = m;
+  if (kind === 'mixer') return param === 'volume' || param === 'pan' ? { kind: 'mixer', param } : null;
+  const owner = kind === 'd' ? devices[Number(n)] : racks[Number(n)]?.id;
+  return n && owner ? { kind: 'device', device: owner, param } : null;
 }
 
 /** Una mappatura muove un parametro di un dispositivo (`device`) o una macro di un rack dentro (`rack`). */
@@ -101,7 +127,8 @@ export function captureRack(p: Project, owner: ChainOwner, id: DeviceId, name: s
     instrument: rack.devices[0] === INSTRUMENT_DEVICE && track instanceof MidiTrack ? saved(track.instrument) : null,
     effects: rack.devices.filter(k => k !== INSTRUMENT_DEVICE).map(k => {
       const e = effects.find(x => x.id === k)!;
-      return { ...saved(e), enabled: e.enabled };
+      const targets = e.targets?.map(t => savedTarget(t, at, [rack.id, ...inner.map(r => r.id)]));
+      return { ...saved(e), enabled: e.enabled, ...(targets?.some(t => t) ? { targets } : {}) };
     }),
     macros: macros(rack),
     ...(inner.length ? {
@@ -135,7 +162,11 @@ export function rackPresetFrom(raw: unknown): RackPreset | null {
   if (inst === undefined) return null;
   const fx = effects.map(e => {
     const d = savedDevice(e);
-    return d && { ...d, enabled: (e as Record<string, unknown>).enabled !== false };
+    const targets = (e as Record<string, unknown>).targets;
+    return d && {
+      ...d, enabled: (e as Record<string, unknown>).enabled !== false,
+      ...(Array.isArray(targets) ? { targets: targets.map(t => (typeof t === 'string' ? t : null)) } : {}),
+    };
   });
   if (fx.some(e => !e)) return null;
   const size = (inst ? 1 : 0) + fx.length;

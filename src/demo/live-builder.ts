@@ -16,6 +16,7 @@ import { MULTIBAND } from '../devices/effects/multiband/multiband';
 import { PHASER } from '../devices/effects/phaser/phaser';
 import { REVERB } from '../devices/effects/reverb/reverb';
 import { STEREO } from '../devices/effects/stereo/stereo';
+import { ENVELOPE_DEVICE, LFO_DEVICE } from '../devices/modulators/modulators';
 import { ANALOG } from '../devices/instruments/analog/analog';
 import { DRUM_MODELS, DRUMS, MODEL, padParam, padSlot } from '../devices/instruments/drums/drums';
 import { NEURO } from '../devices/instruments/neuro/neuro';
@@ -29,7 +30,7 @@ import type { RackPreset, SavedDevice, SavedMacro } from '../model/rack-preset';
 import { sampleDuration, type SampleRef } from '../model/sample';
 import { loadRack } from '../store/browser-edits';
 import {
-  addEffect, addScene, addTrack, loadEffectPreset, renameProject, renameTrack, setEffectSidechain, setInstrument, setInstrumentSamples,
+  addEffect, addScene, addTrack, loadEffectPreset, renameProject, renameTrack, setEffectSidechain, setInstrument, setInstrumentSamples, setModTarget,
   setLaunchQuantization, setMasterMixer, setMixer, setSlot, setTempo,
 } from '../store/edits';
 import { setKey } from '../store/key-edits';
@@ -94,6 +95,9 @@ export interface EffectSpec {
   readonly label: string;
   readonly name: string;
   readonly params: ParamValues;
+  /** Per i modulatori (LFO, Inviluppo): cosa muove ogni destinazione, in ordine (la quantità è il
+   *  parametro `a1`, `a2`…). Un effetto per posto è della stessa catena (in un rack: del rack). */
+  readonly targets?: readonly (ModSpecTarget | null)[];
 }
 
 export const effect = (t: { type: string; label: string }) => (name: string, params: ParamValues): EffectSpec =>
@@ -109,6 +113,12 @@ export const phaser = effect(PHASER);
 export const eq = effect(EQ);
 export const clipper = effect(CLIPPER);
 export const stereo = effect(STEREO);
+
+/** Un LFO o un Inviluppo con le sue destinazioni. */
+export const lfo = (name: string, params: ParamValues, targets: readonly (ModSpecTarget | null)[]): EffectSpec =>
+  ({ ...effect(LFO_DEVICE)(name, params), targets });
+export const envelope = (name: string, params: ParamValues, targets: readonly (ModSpecTarget | null)[]): EffectSpec =>
+  ({ ...effect(ENVELOPE_DEVICE)(name, params), targets });
 
 /** Un EQ che taglia sotto `freq` (lascia i bassi a chi li deve tenere). */
 export const lowCut = (freq: number): EffectSpec =>
@@ -145,7 +155,10 @@ export function rackPreset(spec: RackSpec, instrument: SavedDevice | null): Rack
   return {
     name: spec.name,
     instrument,
-    effects: spec.effects.map(e => ({ type: e.type, preset: e.name, params: { ...e.params }, enabled: true })),
+    effects: spec.effects.map(e => ({
+      type: e.type, preset: e.name, params: { ...e.params }, enabled: true,
+      ...(e.targets ? { targets: e.targets.map(t => savedSpecTarget(t, !!instrument)) } : {}),
+    })),
     macros: Array.from({ length: MACRO_COUNT }, (_, i): SavedMacro => {
       const m = spec.macros[i];
       if (!m) return { name: null, value: 0, mappings: [] };
@@ -256,11 +269,25 @@ function resolveTarget(target: ModSpecTarget, effects: readonly EffectSettings[]
 }
 
 function addEffects(store: ProjectStore, owner: ChainOwner, effects: readonly EffectSpec[]): void {
+  const list = () => (owner === MASTER ? store.project.masterEffects : store.project.track(owner)!.effects);
+  const first = list().length;
   for (const fx of effects) {
     store.apply(addEffect(owner, fx.type, fx.label));
-    const list = owner === MASTER ? store.project.masterEffects : store.project.track(owner)!.effects;
-    store.apply(loadEffectPreset(owner, list.at(-1)!.id, fx.name, fx.params));
+    store.apply(loadEffectPreset(owner, list().at(-1)!.id, fx.name, fx.params));
   }
+  // le destinazioni dei modulatori alla fine: possono muovere anche gli effetti che vengono dopo
+  effects.forEach((fx, i) => fx.targets?.forEach((t, slot) => {
+    if (t) store.apply(setModTarget(owner, list()[first + i].id, slot, resolveTarget(t, list())));
+  }));
+}
+
+/** La destinazione di un modulatore di un rack scritto a mano, come nei rack salvati. */
+function savedSpecTarget(t: ModSpecTarget | null, instrument: boolean): string | null {
+  if (!t) return null;
+  if (t.kind === 'effect') return `d${t.index + (instrument ? 1 : 0)}:${t.param}`;
+  if (t.kind === 'mixer') return `mixer:${t.param}`;
+  if (t.kind === 'device' && t.device === INSTRUMENT_DEVICE && instrument) return `d0:${t.param}`;
+  throw new RangeError('in un rack un modulatore muove solo i dispositivi del rack, il volume e il pan');
 }
 
 /** Lo strumento di una traccia: il kit della Drum Machine, Neuro, quello dato o Analog. */

@@ -70,7 +70,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     listen<InstrumentMessage>(this.port, {
       note: m => this.queue.add(m.pitch, m.velocity, Math.round(m.on * sampleRate), Math.round(m.off * sampleRate)),
       params: m => this.mod.setBase(m.params),
-      mod: m => this.mod.event(m.param, m.kind, m.value, m.time),
+      mod: m => this.mod.event(m.param, m.kind, m.value, m.time, m.channel),
       sample: m => setSample(m.slot, m.sample),
       tempo: m => core.setTempo?.(m.bpm),
       transport: m => this.clock.set(m.anchor),
@@ -143,7 +143,7 @@ class EffectProcessor extends AudioWorkletProcessor {
     this.clock.set(o.transport);
     listen<EffectMessage>(this.port, {
       params: m => this.mod.setBase(m.params),
-      mod: m => this.mod.event(m.param, m.kind, m.value, m.time),
+      mod: m => this.mod.event(m.param, m.kind, m.value, m.time, m.channel),
       enabled: m => this.runner.setEnabled(m.enabled),
       tempo: m => this.core.setTempo(m.bpm),
       keyed: m => this.setKeyed(m.keyed),

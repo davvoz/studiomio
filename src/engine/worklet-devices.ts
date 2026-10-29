@@ -25,11 +25,14 @@ const contextOf = (graph: AudioGraph) => graph as unknown as BaseAudioContext;
 /** Le modulazioni di un dispositivo nell'AudioWorklet: ogni evento è un messaggio al processore,
  *  che lo applica al momento giusto (vedi devices/worklet/mod-timeline.ts). */
 const workletModulation = (send: (m: ModMessage) => void): DeviceModulation => ({
-  sink: param => ({
-    set: (value, time) => send({ type: 'mod', param, kind: 'set', value, time }),
-    ramp: (value, time) => send({ type: 'mod', param, kind: 'ramp', value, time }),
-    hold: time => send({ type: 'mod', param, kind: 'hold', value: 0, time }),
-  }),
+  sink: (param, channel) => {
+    const extra = channel ? { channel } : {};
+    return {
+      set: (value, time) => send({ type: 'mod', param, kind: 'set', value, time, ...extra }),
+      ramp: (value, time) => send({ type: 'mod', param, kind: 'ramp', value, time, ...extra }),
+      hold: time => send({ type: 'mod', param, kind: 'hold', value: 0, time, ...extra }),
+    };
+  },
 });
 
 /** Dove si trovano i campioni dei sample del progetto (la SampleLibrary). */
