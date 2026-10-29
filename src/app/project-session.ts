@@ -28,6 +28,8 @@ type SessionEvents = {
   /** Cambiati cartella o stato di salvataggio. */
   change: [];
   message: [text: string];
+  /** Il progetto ora vive in questa cartella del disco (aperto o salvato con nome). */
+  stored: [dir: Directory];
 };
 
 /** Il progetto aperto e la sua cartella. Un progetto nuovo vive in una cartella in memoria
@@ -123,11 +125,13 @@ export class ProjectSession {
     this.events.emit('change');
   }
 
-  async open(): Promise<void> {
-    const dir = await this.pickDirectory();
+  /** Apre il progetto nella cartella `dir` (senza: la fa scegliere). */
+  async open(dir?: Directory): Promise<void> {
+    dir ??= await this.pickDirectory();
     const folder = new ProjectFolder(dir);
     if (!(await folder.hasProject())) throw new Error(`"${dir.name}" non contiene un progetto studiomio`);
     await this.openFolder(folder, true, `Aperto "${dir.name}".`);
+    this.events.emit('stored', dir);
   }
 
   /** Apre un progetto ricevuto in un file ZIP (vedi `collectAndSave`). Resta in memoria finché
@@ -166,6 +170,7 @@ export class ProjectSession {
     this.onDisk = true;
     await this.folder.save(springsAtRest(this.store.project));
     this.markSaved();
+    this.events.emit('stored', dir);
   }
 
   /** Raccogli e salva: salva (se il progetto è già su disco) e mette il progetto in un file ZIP

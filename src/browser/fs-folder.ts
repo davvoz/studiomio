@@ -73,21 +73,26 @@ function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<
   }).finally(() => db.close()));
 }
 
-/** Le cartelle in IndexedDB; senza IndexedDB (o se è bloccato) si ricordano solo finché l'app è aperta. */
+/** Le cartelle ricordate sotto `key` (vuoto se IndexedDB non c'è o è bloccato). */
+export async function loadHandles(key: string): Promise<FileSystemDirectoryHandle[]> {
+  try {
+    return (await run<FileSystemDirectoryHandle[] | undefined>('readonly', s => s.get(key))) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Ricorda le cartelle sotto `key`; senza IndexedDB restano solo finché l'app è aperta. */
+export async function saveHandles(key: string, handles: readonly FileSystemDirectoryHandle[]): Promise<void> {
+  try {
+    await run('readwrite', s => s.put([...handles], key));
+  } catch (e) {
+    console.warn('non è stato possibile ricordare le cartelle', e);
+  }
+}
+
+/** Le cartelle del browser in IndexedDB. */
 export const indexedDbPlaces: FolderPlaces<FsFolder> = {
-  async load() {
-    try {
-      const handles = await run<FileSystemDirectoryHandle[] | undefined>('readonly', s => s.get(KEY));
-      return (handles ?? []).map(h => new FsFolder(h));
-    } catch {
-      return [];
-    }
-  },
-  async save(folders) {
-    try {
-      await run('readwrite', s => s.put(folders.map(f => f.handle), KEY));
-    } catch (e) {
-      console.warn('browser: non è stato possibile ricordare le cartelle', e);
-    }
-  },
+  load: async () => (await loadHandles(KEY)).map(h => new FsFolder(h)),
+  save: folders => saveHandles(KEY, folders.map(f => f.handle)),
 };

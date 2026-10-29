@@ -19,6 +19,8 @@ import { userRacks } from '../devices/user-racks';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import type { TimeRange } from '../model/note-edits';
 import { BusTrack } from '../model/track';
+import { FsAccessDirectory } from '../persistence/fs-access-directory';
+import { ProjectFolder } from '../persistence/project-folder';
 import { sceneArrangement, sceneClips, sceneLength } from '../model/scene-export';
 import { foldTail } from '../engine/offline-mix';
 import { addBus, addMidiClip, addTrack, setLoopRegion, starterProject, type TrackKind } from '../store/edits';
@@ -59,6 +61,7 @@ import { BrowserLoader } from './browser-loader';
 import { KeyMapper } from './key-mapper';
 import { MidiMapper } from './midi-mapper';
 import { mainMenu } from './main-menu';
+import { RecentProjects } from './recent-projects';
 import { ProjectSession } from './project-session';
 import { MacroSprings } from '../store/macro-springs';
 import { SamplePreview } from './sample-preview';
@@ -68,6 +71,8 @@ export class App implements Commands, TimelineActions {
   readonly store = new ProjectStore(starterProject('Nuovo progetto', randomIds), randomIds);
   readonly audio = new AudioSystem(this.store);
   readonly session = new ProjectSession(this.store, this.audio);
+  /** Le cartelle dei progetti aperti o salvati di recente, per il menu File. */
+  readonly recent = new RecentProjects();
   readonly ui = new UiState();
   /** Le macro molla tornano al riposo da sole, chiunque le muova. */
   readonly springs = new MacroSprings(this.store);
@@ -210,6 +215,7 @@ export class App implements Commands, TimelineActions {
 
     this.session.on('message', t => this.say(t));
     this.session.on('change', () => menuBar.render());
+    this.session.on('stored', dir => { if (dir instanceof FsAccessDirectory) void this.recent.add(dir.root); });
     // le clip eliminate escono dalla selezione, la traccia eliminata non è più quella scelta;
     // una traccia nascosta in un gruppo chiuso passa la scelta al gruppo che si vede
     this.store.onChange(p => {
@@ -577,6 +583,26 @@ export class App implements Commands, TimelineActions {
   newProject(): void { this.run(async () => { if (await this.closeProject()) await this.session.newProject(); }); }
   open(): void { this.run(async () => { if (await this.closeProject()) await this.session.open(); }); }
   save(): void { this.run(() => this.session.save()); }
+
+  /** Apre un progetto recente. Il permesso sulla cartella si chiede subito, finché vale il clic
+   *  sulla voce; se la cartella non c'è più (spostata, cancellata) esce dall'elenco. */
+  openRecent(handle: FileSystemDirectoryHandle): void {
+    this.run(async () => {
+      const gone = async () => {
+        await this.recent.remove(handle);
+        this.say(`"${handle.name}" non c'è più (spostata o cancellata?): tolta dai progetti recenti.`);
+      };
+      let dir: FsAccessDirectory;
+      try {
+        dir = await FsAccessDirectory.reopen(handle);
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'NotFoundError') return gone();
+        throw e;
+      }
+      if (!(await new ProjectFolder(dir).hasProject())) return gone();
+      if (await this.closeProject()) await this.session.open(dir);
+    });
+  }
   saveAs(): void { this.run(() => this.session.saveAs()); }
 
   /** Raccogli e salva: il progetto in un file ZIP da passare a un altro utente. */

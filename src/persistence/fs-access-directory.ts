@@ -3,13 +3,27 @@ import { FileNotFoundError, splitPath, type Directory } from './directory';
 /** Cartella vera sul disco, scelta dall'utente con la File System Access API
  *  (Chrome ed Edge). Il permesso di scrittura viene chiesto alla prima scrittura. */
 export class FsAccessDirectory implements Directory {
-  constructor(private readonly root: FileSystemDirectoryHandle) {}
+  constructor(readonly root: FileSystemDirectoryHandle) {}
 
   /** Chiede all'utente di scegliere (o creare) la cartella del progetto. */
   static async pick(): Promise<FsAccessDirectory> {
     const picker = (window as unknown as { showDirectoryPicker?: (o: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker;
     if (!picker) throw new Error('questo browser non permette di scegliere una cartella: usa Chrome o Edge');
     return new FsAccessDirectory(await picker({ mode: 'readwrite', id: 'studiomio-project' }));
+  }
+
+  /** Una cartella ricordata (un progetto recente): dopo un riavvio il browser può chiedere di
+   *  nuovo il permesso, e chiederlo vuole un clic dell'utente. */
+  static async reopen(root: FileSystemDirectoryHandle): Promise<FsAccessDirectory> {
+    type Permission = 'granted' | 'denied' | 'prompt';
+    const h = root as FileSystemDirectoryHandle & {
+      queryPermission?(o: { mode: 'readwrite' }): Promise<Permission>;
+      requestPermission?(o: { mode: 'readwrite' }): Promise<Permission>;
+    };
+    const ok = !h.queryPermission || (await h.queryPermission({ mode: 'readwrite' })) === 'granted'
+      || (await h.requestPermission?.({ mode: 'readwrite' })) === 'granted';
+    if (!ok) throw new Error(`permesso negato per la cartella "${root.name}"`);
+    return new FsAccessDirectory(root);
   }
 
   get name(): string {

@@ -116,4 +116,20 @@ describe('ProjectSession', () => {
     const session = new ProjectSession(store, fakeAudio().audio, async () => new MemoryDirectory('Vuota'));
     await expect(session.open()).rejects.toThrow(/"Vuota" non contiene un progetto/);
   });
+
+  it('dice in che cartella vive il progetto (per i recenti): salva con nome e apri, non salva né lo ZIP', async () => {
+    const disk = new MemoryDirectory('Brano');
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    const session = new ProjectSession(store, fakeAudio().audio, async () => new MemoryDirectory('Mai scelta'));
+    const stored: string[] = [];
+    session.on('stored', dir => stored.push(dir.name));
+    await session.newProject();
+    await expect(session.open(new MemoryDirectory('Vuota'))).rejects.toThrow(/non contiene/);
+    const other = new ProjectSession(store, fakeAudio().audio, async () => disk);
+    await other.saveAs();
+    await session.open(disk); // una cartella già nota: non la chiede
+    await session.save();
+    await session.openArchive(await session.collectAndSave());
+    expect(stored).toEqual(['Brano']);
+  });
 });

@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Recent projects in the File menu: the last eight project folders you opened or saved with
+  "Salva con nome" are listed under "Apri progetto da ZIP…", most recent first; click one to
+  open it. After a restart the browser may ask again for permission to use the folder. A
+  folder that has been moved or deleted drops out of the list, and "Svuota l'elenco dei
+  recenti" empties it.
+
 ## [0.3.44] - 2026-10-29
 
 ### Added

@@ -1,6 +1,6 @@
 /* La barra dei menu dell'app: File, Modifica, Crea, Vista, Opzioni, Aiuto (come in Live).
  * Ogni voce chiama un comando dell'app; le scorciatoie scritte qui sono quelle di KEYMAP. */
-import { KEY, SEPARATOR, type MenuAction } from '../ui/context-menu';
+import { KEY, SEPARATOR, type MenuAction, type MenuItem } from '../ui/context-menu';
 import { definitionTable, showDialog } from '../ui/dialog';
 import type { Menu } from '../ui/menu-bar';
 import type { App } from './app';
@@ -14,6 +14,18 @@ const OTHER_KEYS: readonly (readonly [string, string])[] = [
   ['Aprire un menu', 'Alt+iniziale'],
 ];
 
+/** I progetti recenti, in fila sotto "Apri" (i menu non hanno sottomenu), con il numero come
+ *  in Live. */
+function recentItems(app: App): MenuItem[] {
+  const list = app.recent.list;
+  if (!list.length) return [];
+  return [
+    SEPARATOR,
+    ...list.map((h, i) => ({ label: `${i + 1}  ${h.name}`, run: () => app.openRecent(h) })),
+    { label: 'Svuota l\'elenco dei recenti', run: () => void app.recent.clear() },
+  ];
+}
+
 export function mainMenu(app: App): Menu[] {
   const store = app.store, engine = app.audio.engine;
   const menus: Menu[] = [
@@ -23,6 +35,7 @@ export function mainMenu(app: App): Menu[] {
         { label: 'Nuovo progetto', shortcut: 'Ctrl+N', run: () => app.newProject() },
         { label: 'Apri progetto…', shortcut: 'Ctrl+O', run: () => app.open() },
         { label: 'Apri progetto da ZIP…', run: () => app.chooseArchive() },
+        ...recentItems(app),
         SEPARATOR,
         { label: 'Salva', shortcut: 'Ctrl+S', run: () => app.save() },
         { label: 'Salva con nome…', shortcut: 'Ctrl+Maiusc+S', run: () => app.saveAs() },
