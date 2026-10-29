@@ -4,8 +4,9 @@ import { followsTransport } from '../../src/devices/dsp/core';
 import {
   ACIDO, ACIDO_FX, CASSETTA, DUB, FACTORY_RACKS, FADE_TO_GREY, FRENCH_TOUCH, HOOVER, JUMP, LEVARE, MACCHINA, MURO, NEBBIA, NUOVA_ONDA,
   OSSIGENO, RINGHIO, TORNADO, TRECENTOTRE, BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE,
-  HAT_IN_MOVIMENTO,
+  HAT_IN_MOVIMENTO, WOBBLE, POMPA, CANCELLO, ACIDO_VIVO, SIRENA, COLPO,
 } from '../../src/devices/factory-racks';
+import { isModulatorType } from '../../src/devices/modulators/modulators';
 import type { RackPreset } from '../../src/model/rack-preset';
 import { effectType, instrumentType } from '../../src/devices/registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from '../../src/devices/worklet/cores';
@@ -83,6 +84,7 @@ describe('rack di fabbrica', () => {
     expect(FACTORY_RACKS.map(r => r.name)).toEqual([
       'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina',
       'Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump', 'Levare', '303',
+      'Wobble', 'Pompa', 'Cancello', 'Acido vivo', 'Sirena', 'Colpo',
       'Batteria rave', 'Batteria dub', 'Batteria rotta', 'Batteria industriale', 'Cassa', 'Rullante', 'Hat in movimento',
     ]);
     for (const rack of FACTORY_RACKS) {
@@ -95,6 +97,15 @@ describe('rack di fabbrica', () => {
       [...(rack.instrument ? [rack.instrument] : []), ...rack.effects].forEach((d, i) => {
         for (const id of Object.keys(d.params)) expect(paramSpec(types[i], id), `${rack.name}: ${d.type}.${id}`).toBeDefined();
       });
+      // le destinazioni dei modulatori: un parametro a manopola di un dispositivo del rack, o il mixer
+      for (const e of rack.effects) {
+        expect(!!e.targets, `${rack.name}: ${e.type}`).toBe(isModulatorType(e.type));
+        for (const t of e.targets ?? []) {
+          const m = /^d(\d+):(.+)$/.exec(t ?? '');
+          if (!m) expect(['mixer:volume', 'mixer:pan'], `${rack.name}: ${t}`).toContain(t);
+          else expect(paramSpec(types[Number(m[1])], m[2])?.kind, `${rack.name}: ${t}`).toBe('number');
+        }
+      }
       for (const m of rack.macros) {
         expect(Number.isInteger(m.value) && m.value >= 0 && m.value <= MACRO_MAX).toBe(true);
         for (const x of m.mappings) {
@@ -173,8 +184,22 @@ describe('rack di fabbrica', () => {
     expect(side(outL, outR) / rms(outL)).toBeLessThan(side(inL, inR) / rms(inL));
   });
 
+  it('i modulatori dei rack, messi su una traccia, muovono i dispositivi appena creati', () => {
+    const s = setup();
+    s.store.apply(loadRack(null, POMPA));
+    const track = s.store.project.tracks[0] as MidiTrack;
+    const [pump, drift] = track.effects;
+    expect(pump.targets).toEqual([{ kind: 'mixer', param: 'volume' }]);
+    expect(pump.params.a1).toBe(-95);
+    expect(drift.targets).toEqual([{ kind: 'device', device: INSTRUMENT_DEVICE, param: 'cutoff' }, { kind: 'mixer', param: 'pan' }]);
+    // e le macro muovono i modulatori
+    const pumpMacro = track.racks[0].macros[0];
+    expect(pumpMacro.mappings).toEqual([expect.objectContaining({ device: pump.id, param: 'depth' })]);
+  });
+
   for (const preset of [
     ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE,
+    WOBBLE, POMPA, CANCELLO, ACIDO_VIVO, SIRENA, COLPO,
     BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE, HAT_IN_MOVIMENTO,
   ]) {
     it(`${preset.name}: lo strumento e gli effetti in un Instrument Rack, le macro dove partono`, () => {
@@ -211,7 +236,8 @@ function playNotes(instrument: DeviceSettings, effects: readonly EffectSettings[
   const synth = INSTRUMENT_CORES[instrument.type](SR);
   synth.setTempo?.(BPM);
   synth.setParams(resolveParams(instrumentType(instrument.type)!, instrument.params));
-  const cores = effects.map(e => {
+  // i modulatori non toccano il suono (qui, senza il motore, stanno fermi)
+  const cores = effects.filter(e => !isModulatorType(e.type)).map(e => {
     const core = EFFECT_CORES[e.type](SR);
     core.setTempo(BPM);
     core.setParams(resolveParams(effectType(e.type)!, e.params));

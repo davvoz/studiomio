@@ -6,6 +6,16 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Six new Instrument Racks built around LFO and Inviluppo, already connected and moving on
+  their own while the transport plays: Wobble (a tempo LFO opening the Neuro's cutoff, fold and
+  vowel, with macros for rate and shape), Pompa (a pad that ducks on every beat like a
+  sidechain, drifting in cutoff and pan), Cancello (a supersaw trance gate in sixteenths,
+  scattered left and right), Acido vivo (a 303 whose cutoff sweeps by itself, with random
+  sixteenth-note jitter), Sirena (the rave siren, plus a two-tone alarm) and Colpo (a neuro stab
+  with a per-note filter and FM bite and a delayed vibrato). Their macros control how much and
+  how fast the modulators move.
+
 ## [0.3.41] - 2026-10-29
 
 ### Added

@@ -126,6 +126,7 @@ describe('categorie dei dispositivi', () => {
     expect(names(instruments)).toEqual(['Instrument Rack', ANALOG.label]);
     expect(names(await childrenOf(instruments[0]))).toEqual([
       'Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump', 'Levare', '303',
+      'Wobble', 'Pompa', 'Cancello', 'Acido vivo', 'Sirena', 'Colpo',
       'Batteria rave', 'Batteria dub', 'Batteria rotta', 'Batteria industriale', 'Cassa', 'Rullante', 'Hat in movimento',
     ]);
     expect(names(await childrenOf(effects[0]))).toEqual(['Eco', 'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina']);
