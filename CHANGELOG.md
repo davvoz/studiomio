@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.40] - 2026-10-29
+
 ### Added
 - A Drum Machine pad can now play a whole instrument, like a Drum Rack pad in Live: choose Kick,
   Snare or Hat e Piatti in the pad's sound menu (under Strumenti). The instrument's own panel
