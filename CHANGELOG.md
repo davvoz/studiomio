@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.42] - 2026-10-29
+
 ### Added
 - Six new Instrument Racks built around LFO and Inviluppo, already connected and moving on
   their own while the transport plays: Wobble (a tempo LFO opening the Neuro's cutoff, fold and
