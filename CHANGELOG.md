@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.47] - 2026-10-31
+
 ### Added
 - Prisma has 69 new presets (111 in all): basses (Rimbombo, Reese sporco, Basso industriale,
   Growl a macro, Acido quadro, Basso a ottave…), leads (Hoover, Lead trance, Lead stridulo,
