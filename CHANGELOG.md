@@ -6,6 +6,15 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Prisma has 69 new presets (111 in all): basses (Rimbombo, Reese sporco, Basso industriale,
+  Growl a macro, Acido quadro, Basso a ottave…), leads (Hoover, Lead trance, Lead stridulo,
+  Lead chiptune…), pads and drones (Pad scuro, Coro scuro, Pad che si apre, Drone di quinte…),
+  keys and plucks (Piano elettrico, Pluck trance, Kalimba, Stab di ferro, Organo house…),
+  sequences living inside the sound (Arpeggio frigio, Sequenza acida, Gate trance, Filtro a
+  passi) and effects (Rumore che sale, Sirena dub, Raffica laser, Impatto, Elicottero, Tom
+  elettronico, Rullante sintetico…). Each sits at the same level as the existing ones.
+
 ## [0.3.46] - 2026-10-30
 
 ### Added
