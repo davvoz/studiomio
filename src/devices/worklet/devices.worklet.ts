@@ -1,11 +1,14 @@
 /* I processori AudioWorklet dei dispositivi: uno per tutti gli strumenti, uno per tutti gli
  * effetti. Ognuno crea il motore del tipo richiesto e riceve parametri (e note) dalla porta. */
 import { paramsOf, type DeviceType } from '../device-type';
-import { followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type KeyedEffect, type TransportFollower } from '../dsp/core';
+import {
+  followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type KeyedEffect, type SampleData, type TransportFollower,
+} from '../dsp/core';
 import type { ParamSpec } from '../params';
 import { effectType, instrumentType } from '../registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from './cores';
 import { EffectRunner } from './effect-runner';
+import { cleaned, FaultGate, hasInvalid } from './guard';
 import { METER_VALUES, MeterCore } from './meter-core';
 import { ParamModulation } from './mod-timeline';
 import { NoteQueue } from './note-queue';
@@ -45,12 +48,18 @@ const silentInstrument: InstrumentCore = { setParams() {}, noteOn() {}, noteOff(
 const PLAYHEADS_POST = 1 / 30;
 
 class InstrumentProcessor extends AudioWorkletProcessor {
-  private readonly core: InstrumentCore;
+  private readonly type: string;
+  private core: InstrumentCore;
   private readonly queue = new NoteQueue();
   private readonly mod: ParamModulation;
   /** Il motore, se segue la battuta (il sequencer), e dove si trova il trasporto. */
-  private readonly follower: TransportFollower | null;
+  private follower: TransportFollower | null = null;
   private readonly clock = new TransportClock();
+  /** Quello che il motore ha ricevuto, per ricrearlo uguale se si guasta. */
+  private params: Readonly<Record<string, number>>;
+  private readonly samples = new Map<string, SampleData | null>();
+  private bpm: number;
+  private readonly faults = new FaultGate();
   private readonly heads = new Float32Array(32);
   private headCount = 0;
   private untilHeads = 0;
@@ -61,20 +70,25 @@ class InstrumentProcessor extends AudioWorkletProcessor {
   constructor(options: AudioWorkletNodeOptions) {
     super(options);
     const o = options.processorOptions as InstrumentProcessorOptions;
-    this.core = INSTRUMENT_CORES[o.type]?.(sampleRate) ?? silentInstrument;
+    this.type = o.type;
+    this.params = o.params;
+    this.bpm = o.bpm;
+    for (const [slot, sample] of Object.entries(o.samples ?? {})) this.samples.set(slot, sample);
+    this.core = this.build();
     this.mod = new ParamModulation(modSpecs(instrumentType(o.type)), o.params);
-    const core = this.core;
-    const setSample = playsSamples(core) ? core.setSample.bind(core) : () => {};
-    for (const [slot, sample] of Object.entries(o.samples ?? {})) setSample(slot, sample);
-    core.setTempo?.(o.bpm);
-    this.follower = followsTransport(core) ? core : null;
     this.clock.set(o.transport);
     listen<InstrumentMessage>(this.port, {
       note: m => this.queue.add(m.pitch, m.velocity, Math.round(m.on * sampleRate), Math.round(m.off * sampleRate)),
       params: m => this.at(m.at, () => this.mod.setBase(m.params)),
       mod: m => this.mod.event(m.param, m.kind, m.value, m.time, m.channel),
-      sample: m => this.at(m.at, () => setSample(m.slot, m.sample)),
-      tempo: m => core.setTempo?.(m.bpm),
+      sample: m => this.at(m.at, () => {
+        this.samples.set(m.slot, m.sample);
+        if (playsSamples(this.core)) this.core.setSample(m.slot, m.sample);
+      }),
+      tempo: m => {
+        this.bpm = m.bpm;
+        this.core.setTempo?.(m.bpm);
+      },
       transport: m => this.clock.set(m.anchor),
       stop: () => {
         this.queue.clear();
@@ -87,16 +101,39 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     });
   }
 
+  /** Un motore nuovo con i parametri, i sample e il tempo che ha ricevuto quello di prima. */
+  private build(): InstrumentCore {
+    const core = INSTRUMENT_CORES[this.type]?.(sampleRate) ?? silentInstrument;
+    if (playsSamples(core)) for (const [slot, sample] of this.samples) core.setSample(slot, sample);
+    core.setTempo?.(this.bpm);
+    core.setParams(this.params);
+    this.follower = followsTransport(core) ? core : null;
+    return core;
+  }
+
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const [left, right = left] = outputs[0];
-    // le manopole e le modulazioni valgono dall'inizio del blocco
-    const now = currentFrame / sampleRate;
-    while (this.later.length && this.later[0].frame < currentFrame + left.length) this.later.shift()!.run();
-    const params = this.mod.paramsAt(now);
-    if (params) this.core.setParams(params);
-    this.follower?.setTransport(this.clock.at(now));
-    this.queue.renderBlock(this.core, left, right, currentFrame);
-    if (this.core.playheads) this.postHeads(left.length);
+    let error: unknown = null;
+    try {
+      // le manopole e le modulazioni valgono dall'inizio del blocco
+      const now = currentFrame / sampleRate;
+      while (this.later.length && this.later[0].frame < currentFrame + left.length) this.later.shift()!.run();
+      const params = this.mod.paramsAt(now);
+      if (params) this.core.setParams((this.params = params));
+      this.follower?.setTransport(this.clock.at(now));
+      this.queue.renderBlock(this.core, left, right, currentFrame);
+      if (this.core.playheads) this.postHeads(left.length);
+    } catch (e) {
+      error = e;
+    }
+    if (error !== null || hasInvalid(left) || hasInvalid(right)) {
+      left.fill(0);
+      right.fill(0);
+      if (this.faults.restart(currentFrame / sampleRate)) {
+        this.core = this.build();
+        this.port.postMessage({ type: 'fault', error: error === null ? null : String(error) } satisfies InstrumentReply);
+      }
+    }
     return this.alive;
   }
 
@@ -131,61 +168,99 @@ const passThrough: EffectCore = {
 };
 
 class EffectProcessor extends AudioWorkletProcessor {
-  private readonly core: EffectCore;
-  private readonly runner: EffectRunner;
+  private readonly type: string;
+  private core: EffectCore;
+  private runner: EffectRunner;
   private readonly mod: ParamModulation;
   /** Il motore, se il suo rilevatore ascolta il secondo ingresso (sidechain). */
   private keyed: KeyedEffect | null = null;
   /** Il motore, se segue la battuta, e dove si trova il trasporto. */
-  private readonly follower: TransportFollower | null;
+  private follower: TransportFollower | null = null;
   private readonly clock = new TransportClock();
+  /** Quello che il motore ha ricevuto, per ricrearlo uguale se si guasta. */
+  private params: Readonly<Record<string, number>>;
+  private bpm: number;
+  private enabled: boolean;
+  private keyedOn: boolean;
+  private readonly faults = new FaultGate();
   private silence = new Float32Array(128);
+  /** Le copie ripulite degli ingressi (vedi `cleaned`). */
+  private spare = [new Float32Array(128), new Float32Array(128), new Float32Array(128), new Float32Array(128)];
   private alive = true;
 
   constructor(options: AudioWorkletNodeOptions) {
     super(options);
     const o = options.processorOptions as EffectProcessorOptions;
-    this.core = EFFECT_CORES[o.type]?.(sampleRate) ?? passThrough;
-    this.setKeyed(o.keyed);
-    this.core.setTempo(o.bpm);
-    this.core.setParams(o.params);
+    this.type = o.type;
+    this.params = o.params;
+    this.bpm = o.bpm;
+    this.enabled = o.enabled;
+    this.keyedOn = o.keyed;
+    [this.core, this.runner] = this.build();
     this.mod = new ParamModulation(modSpecs(effectType(o.type)), o.params);
-    this.runner = new EffectRunner(this.core, sampleRate, o.enabled);
-    this.follower = followsTransport(this.core) ? this.core : null;
     this.clock.set(o.transport);
     listen<EffectMessage>(this.port, {
       params: m => this.mod.setBase(m.params),
       mod: m => this.mod.event(m.param, m.kind, m.value, m.time, m.channel),
-      enabled: m => this.runner.setEnabled(m.enabled),
-      tempo: m => this.core.setTempo(m.bpm),
-      keyed: m => this.setKeyed(m.keyed),
+      enabled: m => this.runner.setEnabled((this.enabled = m.enabled)),
+      tempo: m => this.core.setTempo((this.bpm = m.bpm)),
+      keyed: m => this.setKeyed((this.keyedOn = m.keyed)),
       transport: m => this.clock.set(m.anchor),
       ping: m => this.port.postMessage({ type: 'pong', id: m.id } satisfies EffectReply),
       dispose: () => { this.alive = false; },
     });
   }
 
-  private setKeyed(on: boolean): void {
-    const core = this.core;
+  /** Un motore nuovo con i parametri, il tempo e l'ascolto che ha ricevuto quello di prima. */
+  private build(): [EffectCore, EffectRunner] {
+    const core = EFFECT_CORES[this.type]?.(sampleRate) ?? passThrough;
+    this.setKeyed(this.keyedOn, core);
+    core.setTempo(this.bpm);
+    core.setParams(this.params);
+    this.follower = followsTransport(core) ? core : null;
+    return [core, new EffectRunner(core, sampleRate, this.enabled)];
+  }
+
+  private setKeyed(on: boolean, core = this.core): void {
     this.keyed = on && isKeyed(core) ? core : null;
     if (!this.keyed && isKeyed(core)) core.setKey(null, null);
   }
 
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const [outL, outR = outL] = outputs[0];
-    if (this.silence.length < outL.length) this.silence = new Float32Array(outL.length);
-    // senza nulla collegato l'ingresso è vuoto: le code (eco, riverbero) continuano sul silenzio
-    const [inL = this.silence, inR = inL] = inputs[0] ?? [];
-    if (this.keyed) {
-      // la traccia ascoltata che tace (o nessuna collegata) è silenzio: il rilevatore non sente niente
-      const [keyL = this.silence, keyR = keyL] = inputs[1] ?? [];
-      this.keyed.setKey(keyL, keyR);
+    if (this.silence.length < outL.length) {
+      this.silence = new Float32Array(outL.length);
+      this.spare = this.spare.map(() => new Float32Array(outL.length));
     }
-    const now = currentFrame / sampleRate;
-    const params = this.mod.paramsAt(now);
-    if (params) this.core.setParams(params);
-    this.follower?.setTransport(this.clock.at(now));
-    this.runner.process(inL, inR, outL, outR);
+    const spare = this.spare;
+    let error: unknown = null;
+    try {
+      // senza nulla collegato l'ingresso è vuoto: le code (eco, riverbero) continuano sul silenzio;
+      // un ingresso guasto (da un nodo che non è dei nostri) si ripulisce prima che entri
+      const [inL = this.silence, inR = inL] = inputs[0] ?? [];
+      const l = cleaned(inL, spare[0]), r = inR === inL ? l : cleaned(inR, spare[1]);
+      if (this.keyed) {
+        // la traccia ascoltata che tace (o nessuna collegata) è silenzio: il rilevatore non sente niente
+        const [keyL = this.silence, keyR = keyL] = inputs[1] ?? [];
+        const kl = cleaned(keyL, spare[2]);
+        this.keyed.setKey(kl, keyR === keyL ? kl : cleaned(keyR, spare[3]));
+      }
+      const now = currentFrame / sampleRate;
+      const params = this.mod.paramsAt(now);
+      if (params) this.core.setParams((this.params = params));
+      this.follower?.setTransport(this.clock.at(now));
+      this.runner.process(l, r, outL, outR);
+    } catch (e) {
+      error = e;
+    }
+    if (error !== null || hasInvalid(outL) || hasInvalid(outR)) {
+      outL.fill(0);
+      outR.fill(0);
+      if (this.faults.restart(currentFrame / sampleRate)) {
+        [this.core, this.runner] = this.build();
+        this.port.postMessage({ type: 'fault', error: error === null ? null : String(error) } satisfies EffectReply);
+      }
+    }
     return this.alive;
   }
 }
@@ -202,6 +277,7 @@ class MeterProcessor extends AudioWorkletProcessor {
   private readonly values: Float32Array;
   private readonly shared: boolean;
   private silence = new Float32Array(128);
+  private spare = [new Float32Array(128), new Float32Array(128)];
   private untilPost = 0;
   private alive = true;
 
@@ -216,9 +292,14 @@ class MeterProcessor extends AudioWorkletProcessor {
 
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const [outL, outR = outL] = outputs[0];
-    if (this.silence.length < outL.length) this.silence = new Float32Array(outL.length);
-    // quando non suona niente l'ingresso non ha canali: è silenzio, e l'RMS deve scendere
-    const [inL = this.silence, inR = inL] = inputs[0] ?? [];
+    if (this.silence.length < outL.length) {
+      this.silence = new Float32Array(outL.length);
+      this.spare = this.spare.map(() => new Float32Array(outL.length));
+    }
+    // quando non suona niente l'ingresso non ha canali: è silenzio, e l'RMS deve scendere; un
+    // ingresso guasto si ripulisce (il misuratore lo lascerebbe passare)
+    const [rawL = this.silence, rawR = rawL] = inputs[0] ?? [];
+    const inL = cleaned(rawL, this.spare[0]), inR = rawR === rawL ? inL : cleaned(rawR, this.spare[1]);
     outL.set(inL);
     if (outR !== outL) outR.set(inR);
     this.core.process(inL, inR, outL.length);

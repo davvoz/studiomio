@@ -47,11 +47,19 @@ export type InstrumentMessage =
   | { readonly type: 'ping'; readonly id: number }
   | { readonly type: 'dispose' };
 
+/** Il motore si è guastato (un campione non finito, o un errore: il messaggio) e il processore
+ *  lo ha riavviato (vedi guard.ts). */
+export interface FaultReply {
+  readonly type: 'fault';
+  readonly error: string | null;
+}
+
 export type InstrumentReply =
   | { readonly type: 'pong'; readonly id: number }
   /** Dove leggono le voci (vedi InstrumentCore.playheads), circa 30 volte al secondo mentre
    *  suonano, e una volta vuoto quando smettono. */
-  | { readonly type: 'playheads'; readonly positions: Float32Array };
+  | { readonly type: 'playheads'; readonly positions: Float32Array }
+  | FaultReply;
 
 export const EFFECT_PROCESSOR = 'studiomio-effect';
 
@@ -79,7 +87,7 @@ export type EffectMessage =
   | { readonly type: 'ping'; readonly id: number }
   | { readonly type: 'dispose' };
 
-export type EffectReply = { readonly type: 'pong'; readonly id: number };
+export type EffectReply = { readonly type: 'pong'; readonly id: number } | FaultReply;
 
 export const METER_PROCESSOR = 'studiomio-meter';
 

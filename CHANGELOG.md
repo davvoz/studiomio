@@ -6,6 +6,16 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- The whole set could suddenly go silent while playing (after changing a Prisma preset or
+  launching a scene whose clip changes the sound) until the project was opened again. A
+  Prisma oscillator switched off during a note kept sliding its wavetable position out of the
+  table; switched back on, it produced an invalid sample that jammed every filter and
+  compressor after it, up to the master. Now the position stays put.
+- Every instrument and effect now checks its own sound: if it produces an invalid sample or
+  an error, that piece is dropped and only that device is restarted, so the rest of the set
+  keeps playing. The status bar says which device it was.
+
 ## [0.3.47] - 2026-10-31
 
 ### Added

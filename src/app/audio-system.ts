@@ -7,7 +7,7 @@ import { PlaybackEngine } from '../engine/playback-engine';
 import { RenderCache } from '../engine/render-cache';
 import { SampleLibrary } from '../engine/sample-library';
 import { liveGraph, offlineGraph } from '../engine/web-audio';
-import { DeviceWorklet, WorkletEffects, WorkletInstruments, WorkletMeters } from '../engine/worklet-devices';
+import { DeviceWorklet, WorkletEffects, WorkletInstruments, WorkletMeters, type FaultListener } from '../engine/worklet-devices';
 import type { ChainOwner, Project } from '../model/project';
 import { EffectSpectrum } from './effect-spectrum';
 import type { ProjectStore } from '../store/project-store';
@@ -47,6 +47,11 @@ export class AudioSystem {
 
   addSample(id: SampleId, audio: AudioData): Promise<void> {
     return this.library.add(id, audio);
+  }
+
+  /** Quando il motore di un dispositivo si guasta (e viene riavviato). */
+  onDeviceFault(fn: FaultListener): () => void {
+    return this.worklet.onFault(fn);
   }
 
   /** Il browser avvia l'audio solo dopo un gesto dell'utente. */

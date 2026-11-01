@@ -12,7 +12,7 @@ import type { BrowserItem, BrowserSource, LoadTarget } from '../browser/item';
 import { ControlSurfaces } from '../control/control-surfaces';
 import { buildDemoProject } from '../demo/demo-project';
 import { encodeWav } from '../dsp/codec/wav';
-import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../devices/registry';
+import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../devices/registry';
 import { userPresets } from '../devices/user-presets';
 import { FACTORY_RACKS } from '../devices/factory-racks';
 import { userRacks } from '../devices/user-racks';
@@ -212,6 +212,11 @@ export class App implements Commands, TimelineActions {
     this.surfaces = this.controlSurfaces();
     this.audio.engine.onSessionChange(() => this.renderViews());
     this.audio.engine.onClipSound((track, sound) => this.store.apply(followClipSound(track, sound), { transient: true }));
+    // il processore ha già azzerato il blocco guasto e riavviato il motore: qui si dice quale
+    this.audio.onDeviceFault((type, error) => {
+      const label = instrumentType(type)?.label ?? effectType(type)?.label ?? type;
+      this.say(`${label} ha prodotto un suono non valido ed è stato riavviato${error ? ` (${error})` : ''}.`);
+    });
     this.renderViews();
 
     this.session.on('message', t => this.say(t));

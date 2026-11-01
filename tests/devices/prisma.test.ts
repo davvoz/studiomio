@@ -316,6 +316,26 @@ describe('Prisma: modulazioni', () => {
     expect(amplitudeAt(left, 2 * f, SR - 9600, 9600)).toBeGreaterThan(0.9);
     expect(core.activeVoices).toBe(1);
   });
+
+  it('un oscillatore spento mentre la sua posizione scende, e riacceso, suona pulito', () => {
+    // spento, il passo della posizione non si ricalcola: se la posizione continuasse a scendere
+    // finirebbe sotto zero, e riaccendendolo la lettura darebbe NaN (il cambio di suono di una
+    // clip sotto una nota lunga)
+    const on = { bOn: 1, bPos: 80, voiceMode: VOICE_MODE.mono, l1Sync: 1, l1Rate: 0.5, ...mods([SRC.lfo1, 'bPos', -100, { bi: true }]) };
+    const { core, queue } = synth(on);
+    queue.add(57, 100, 0, 7 * SR);
+    const off = Math.round((0.7 * SR) / BLOCK) * BLOCK, back = Math.round((6 * SR) / BLOCK) * BLOCK;
+    let peakOut = 0;
+    for (let f = 0; f < 7 * SR; f += BLOCK) {
+      if (f === off) core.setParams(resolveParams(PRISMA, { ...on, bOn: 0 }));
+      if (f === back) core.setParams(resolveParams(PRISMA, on));
+      const l = new Float32Array(BLOCK), r = new Float32Array(BLOCK);
+      queue.renderBlock(core, l, r, f);
+      for (let i = 0; i < BLOCK; i++) peakOut = Math.max(peakOut, Math.abs(l[i]), Math.abs(r[i]));
+    }
+    expect(peakOut).toBeGreaterThan(0.05);
+    expect(peakOut).toBeLessThan(4);
+  });
 });
 
 describe('Prisma: preset', () => {

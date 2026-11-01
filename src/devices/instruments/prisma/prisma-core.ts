@@ -622,8 +622,10 @@ class PrismaVoice implements PolyVoice, MonoVoice {
   }
 
   /** Le copie dell'oscillatore `o` nei suoi buffer, con il warp; la copia di mezzo, senza
-   *  livello, anche in `raw[o]` (il modulante dell'altro). Fasi e posizioni vanno avanti anche
-   *  a oscillatore spento, così riaccendendolo non salta. */
+   *  livello, anche in `raw[o]` (il modulante dell'altro). Le fasi vanno avanti anche a
+   *  oscillatore spento, così riaccendendolo non salta; le posizioni no: spento, il passo non
+   *  si ricalcola più, e proseguendo con l'ultimo uscirebbero dalla tabella (sotto zero la
+   *  lettura dà NaN, che riaccendendolo avvelena il filtro e tutto ciò che viene dopo). */
   private renderOsc(oi: number, len: number, cross: Float64Array | null): void {
     const o = this.osc[oi], os = this.s.osc[oi];
     const outL = this.oscL[oi], outR = this.oscR[oi], raw = this.raw[oi];
@@ -632,10 +634,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     raw.fill(0, 0, len);
     const n = o.copies;
     if (!os.on) {
-      for (let k = 0; k < n; k++) {
-        o.phases[k] = (o.phases[k] + o.dts[k] * len) % 1;
-        o.frames[k] += o.steps[k] * len;
-      }
+      for (let k = 0; k < n; k++) o.phases[k] = (o.phases[k] + o.dts[k] * len) % 1;
       return;
     }
     const { data, frames } = os.table;

@@ -67,6 +67,7 @@ class WorkletInstrument implements Instrument {
   constructor(
     private readonly ctx: BaseAudioContext, settings: InstrumentSettings, bpm: number, transport: TransportAnchor | null,
     ready: Promise<void> | null, private readonly source: SampleSource, private readonly onDispose: () => void,
+    private readonly onFault: (error: string | null) => void,
   ) {
     this.type = settings.type;
     this.settings = settings;
@@ -158,6 +159,7 @@ class WorkletInstrument implements Instrument {
         this.heads = Array.from(m.positions);
         return;
       }
+      if (m.type === 'fault') return this.onFault(m.error);
       this.waiting.get(m.id)?.();
       this.waiting.delete(m.id);
     };
@@ -169,10 +171,26 @@ class WorkletInstrument implements Instrument {
   }
 }
 
-/** Il modulo AudioWorklet dei dispositivi, caricato una volta per contesto audio. */
+/** Chi ascolta i guasti dei motori: il tipo del dispositivo e l'errore (null: un campione non
+ *  finito). */
+export type FaultListener = (type: string, error: string | null) => void;
+
+/** Il modulo AudioWorklet dei dispositivi, caricato una volta per contesto audio. Riceve anche
+ *  i guasti dei motori, che il processore ha già azzerato e riavviato (vedi worklet/guard.ts). */
 export class DeviceWorklet {
   private readonly loading = new WeakMap<BaseAudioContext, Promise<void>>();
   private readonly loaded = new WeakSet<BaseAudioContext>();
+  private readonly faultListeners = new Set<FaultListener>();
+
+  onFault(fn: FaultListener): () => void {
+    this.faultListeners.add(fn);
+    return () => this.faultListeners.delete(fn);
+  }
+
+  fault(type: string, error: string | null): void {
+    console.error(`motore "${type}" guasto, riavviato`, error ?? 'campione non finito (NaN)');
+    for (const fn of this.faultListeners) fn(type, error);
+  }
 
   prepare(graph: AudioGraph): Promise<void> {
     const ctx = contextOf(graph);
@@ -210,6 +228,7 @@ export class WorkletInstruments implements InstrumentHost {
     const c = this.context(graph);
     const instrument: WorkletInstrument = new WorkletInstrument(
       contextOf(graph), settings, bpm, c.transport, this.worklet.pending(graph), this.samples, () => c.instruments.delete(instrument),
+      error => this.worklet.fault(settings.type, error),
     );
     c.instruments.add(instrument);
     return instrument;
@@ -263,7 +282,7 @@ class WorkletEffect implements Effect {
 
   constructor(
     private readonly ctx: BaseAudioContext, settings: EffectSettings, bpm: number, transport: TransportAnchor | null,
-    ready: Promise<void> | null, private readonly onDispose: () => void,
+    ready: Promise<void> | null, private readonly onDispose: () => void, private readonly onFault: (error: string | null) => void,
   ) {
     this.type = settings.type;
     this.settings = settings;
@@ -331,8 +350,10 @@ class WorkletEffect implements Effect {
       channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions,
     });
     this.node.port.onmessage = (e: MessageEvent<EffectReply>) => {
-      this.waiting.get(e.data.id)?.();
-      this.waiting.delete(e.data.id);
+      const m = e.data;
+      if (m.type === 'fault') return this.onFault(m.error);
+      this.waiting.get(m.id)?.();
+      this.waiting.delete(m.id);
     };
     // solo il collegamento diretto: quelli verso lo spettro restano
     this.input.disconnect(this.post);
@@ -362,6 +383,7 @@ export class WorkletEffects implements EffectHost {
     const c = this.context(graph);
     const effect: WorkletEffect = new WorkletEffect(
       contextOf(graph), settings, bpm, c.transport, this.worklet.pending(graph), () => c.effects.delete(effect),
+      error => this.worklet.fault(settings.type, error),
     );
     c.effects.add(effect);
     return effect;
