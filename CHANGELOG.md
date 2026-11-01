@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.48] - 2026-11-01
+
 ### Fixed
 - The whole set could suddenly go silent while playing (after changing a Prisma preset or
   launching a scene whose clip changes the sound) until the project was opened again. A
