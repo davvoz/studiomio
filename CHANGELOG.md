@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.49] - 2026-11-01
+
 ### Added
 - Unsaved changes are no longer lost if the app freezes or is closed badly. Every 30
   seconds, if something changed, a project saved in a folder writes a recovery copy next to
