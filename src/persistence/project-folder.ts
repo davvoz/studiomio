@@ -6,6 +6,7 @@ import { ProjectCodec } from './project-codec';
 
 export const PROJECT_FILE = 'progetto.json';
 export const BACKUP_FILE = 'progetto.bak.json';
+export const RECOVERY_FILE = 'progetto.recupero.json';
 export const AUDIO_DIR = 'audio';
 
 export interface LoadedProject {
@@ -23,6 +24,8 @@ export function safeFileName(name: string): string {
 /** La cartella di un progetto:
  *    progetto.json      tracce, clip, marker, mixer (leggibile e confrontabile)
  *    progetto.bak.json  la versione salvata prima di quella attuale
+ *    progetto.recupero.json  le modifiche non ancora salvate, scritte da sole ogni tanto: se
+ *                       l'app si blocca o si chiude male si riaprono da qui (salvando sparisce)
  *    audio/             i file audio originali, copiati all'importazione */
 export class ProjectFolder {
   constructor(readonly dir: Directory, private readonly codec = new ProjectCodec()) {}
@@ -41,6 +44,28 @@ export class ProjectFolder {
     // si serializza prima di toccare i file: se fallisce, la cartella resta com'era
     if (await this.dir.exists(PROJECT_FILE)) await this.dir.writeBytes(BACKUP_FILE, await this.dir.readBytes(PROJECT_FILE));
     await writeText(this.dir, PROJECT_FILE, text);
+    await this.dropRecovery();
+  }
+
+  /** La copia di recupero: il progetto com'è adesso, senza toccare quello salvato. Non controlla
+   *  i file audio: deve riuscire anche a metà di un lavoro. */
+  async saveRecovery(project: Project): Promise<void> {
+    await writeText(this.dir, RECOVERY_FILE, this.codec.stringify(project));
+  }
+
+  /** La copia di recupero, se c'è e si legge (una copia rovinata non deve impedire di aprire). */
+  async loadRecovery(): Promise<LoadedProject | null> {
+    if (!(await this.dir.exists(RECOVERY_FILE))) return null;
+    try {
+      const project = this.codec.parse(await readText(this.dir, RECOVERY_FILE));
+      return { project, missing: await this.missingSamples(project) };
+    } catch {
+      return null;
+    }
+  }
+
+  async dropRecovery(): Promise<void> {
+    if (await this.dir.exists(RECOVERY_FILE)) await this.dir.remove(RECOVERY_FILE);
   }
 
   async load(): Promise<LoadedProject> {
@@ -62,8 +87,8 @@ export class ProjectFolder {
   }
 
   /** Raccogli e salva: il progetto con i soli sample che usa, come voci di uno ZIP dentro la
-   *  cartella `root`. Estratto, è una cartella di progetto completa; non ci sono il backup né
-   *  i file audio che il progetto non usa più. */
+   *  cartella `root`. Estratto, è una cartella di progetto completa; non ci sono il backup, la
+   *  copia di recupero né i file audio che il progetto non usa più. */
   async archive(project: Project, root: string): Promise<ZipEntry[]> {
     const collected = project.withoutUnusedSamples();
     await this.requireSamples(collected);
@@ -110,7 +135,7 @@ export async function unpackProject(zip: Uint8Array, name: string): Promise<Memo
   for (const e of entries) {
     const path = e.name.slice(prefix.length);
     // niente fuori dalla cartella del progetto (né "..": splitPath lo rifiuterebbe)
-    if (!e.name.startsWith(prefix) || path === BACKUP_FILE || path.split('/').includes('..')) continue;
+    if (!e.name.startsWith(prefix) || path === BACKUP_FILE || path === RECOVERY_FILE || path.split('/').includes('..')) continue;
     await dir.writeBytes(path, e.data);
   }
   return dir;

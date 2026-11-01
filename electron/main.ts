@@ -1,9 +1,9 @@
 // Processo principale di Electron: apre la finestra dell'app, serve i file di `dist/`, tiene i
-// file dei preset e dei rack dell'utente e controlla gli aggiornamenti su GitHub Releases. L'app vera e
-// propria (src/) non cambia.
+// file dei preset e dei rack dell'utente, annota dove si blocca l'app e controlla gli aggiornamenti
+// su GitHub Releases. L'app vera e propria (src/) non cambia.
 import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type IpcMainInvokeEvent } from 'electron';
 import updater from 'electron-updater';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { loadPresets, removePreset, savePreset, type StoredPreset } from './presets.js';
 import { loadRacks, removeRack, saveRack, type StoredRack } from './racks.js';
@@ -21,6 +21,8 @@ const ROOT = join(import.meta.dirname, '..', 'dist');
 const ISOLATION = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
+  // quando la finestra non risponde si può chiedere dove sta girando il codice (vedi watchHangs)
+  'Document-Policy': 'include-js-call-stacks-in-crash-reports',
 };
 
 const MIME: Record<string, string> = {
@@ -33,6 +35,8 @@ const MIME: Record<string, string> = {
   '.png': 'image/png',
   '.wav': 'audio/wav',
 };
+
+app.commandLine.appendSwitch('enable-features', 'DocumentPolicyIncludeJSCallStacksInCrashReports');
 
 protocol.registerSchemesAsPrivileged([{
   scheme: SCHEME,
@@ -90,8 +94,31 @@ function createWindow(): BrowserWindow {
     if (input.type === 'keyDown' && input.key === 'F12') win.webContents.toggleDevTools();
   });
 
+  watchHangs(win);
   void win.loadURL(`${ORIGIN}/index.html`);
   return win;
+}
+
+/** Quando la finestra smette di rispondere (un calcolo che non finisce) o si chiude da sola,
+ *  annota in Documenti/studiomio/Blocchi dove stava girando il codice: dice cosa correggere. */
+function watchHangs(win: BrowserWindow): void {
+  const dir = join(app.getPath('documents'), 'studiomio', 'Blocchi');
+  const note = async (what: string, detail: string) => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, `${stamp}.txt`), [what, `studiomio ${app.getVersion()} · ${new Date().toString()}`, '', detail, ''].join('\n'));
+  };
+  win.on('unresponsive', () => {
+    // se in quel momento non gira codice la promessa non arriva mai: si aspetta poco
+    const stack = Promise.race([
+      win.webContents.mainFrame.collectJavaScriptCallStack().then(s => s || '(stack non disponibile)'),
+      new Promise<string>(resolve => setTimeout(() => resolve('(nessun codice in esecuzione)'), 5000)),
+    ]);
+    void stack.then(s => note('La finestra non risponde.', s)).catch(e => console.warn('blocchi:', e));
+  });
+  win.webContents.on('render-process-gone', (_, details) => {
+    void note('La finestra si è chiusa da sola.', JSON.stringify(details, null, 2)).catch(e => console.warn('blocchi:', e));
+  });
 }
 
 /** I preset e i rack dell'utente: file in Documenti, così restano anche se si disinstalla l'app

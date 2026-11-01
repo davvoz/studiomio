@@ -3,8 +3,8 @@ import { ProjectSession, type SessionAudio } from '../../src/app/project-session
 import { randomIds, type SampleId } from '../../src/core/id';
 import type { AudioData } from '../../src/dsp/types';
 import { Project } from '../../src/model/project';
-import { MemoryDirectory } from '../../src/persistence/directory';
-import { PROJECT_FILE } from '../../src/persistence/project-folder';
+import { MemoryDirectory, readText } from '../../src/persistence/directory';
+import { PROJECT_FILE, RECOVERY_FILE } from '../../src/persistence/project-folder';
 import { addSample, addTrack, placeSample } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 
@@ -131,5 +131,58 @@ describe('ProjectSession', () => {
     await session.save();
     await session.openArchive(await session.collectAndSave());
     expect(stored).toEqual(['Brano']);
+  });
+
+  it('copia di recupero: le modifiche non salvate si riprendono riaprendo, salvare la toglie', async () => {
+    const disk = new MemoryDirectory('Brano');
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    const { audio, loaded } = fakeAudio();
+    const session = new ProjectSession(store, audio, async () => disk);
+    await session.autosave(); // non è su disco: niente
+    expect(await disk.exists(RECOVERY_FILE)).toBe(false);
+    await session.save();
+    await session.autosave(); // niente da salvare
+    expect(await disk.exists(RECOVERY_FILE)).toBe(false);
+
+    await session.importFiles([fileOf('voce.wav')], null, 0);
+    await session.autosave();
+    expect(await disk.exists(RECOVERY_FILE)).toBe(true);
+    const unsaved = store.project;
+    const saved = JSON.parse(await readText(disk, PROJECT_FILE));
+
+    // l'app si blocca: si riapre la cartella
+    const store2 = new ProjectStore(Project.empty('q', randomIds), randomIds);
+    const audio2 = fakeAudio();
+    const reopened = new ProjectSession(store2, audio2.audio, async () => disk);
+    await reopened.open();
+    expect(store2.project.tracks).toHaveLength(0); // si apre il salvato
+    expect(await reopened.hasRecovery()).toBe(true);
+    await reopened.restoreRecovery();
+    expect(store2.project.tracks.map(t => t.name)).toEqual(unsaved.tracks.map(t => t.name));
+    expect(audio2.loaded.size).toBe(1); // il sample importato dopo il salvataggio torna nel motore
+    expect(reopened.changed).toBe(true); // resta da salvare
+    expect(JSON.parse(await readText(disk, PROJECT_FILE))).toEqual(saved); // il salvato non si tocca
+
+    await reopened.save();
+    expect(await disk.exists(RECOVERY_FILE)).toBe(false);
+    expect(await reopened.hasRecovery()).toBe(false);
+
+    // buttare le modifiche toglie la copia
+    store2.apply(addTrack('midi'));
+    await reopened.autosave();
+    expect(await reopened.hasRecovery()).toBe(true);
+    await reopened.discardRecovery();
+    expect(await disk.exists(RECOVERY_FILE)).toBe(false);
+    expect(loaded.size).toBe(1);
+  });
+
+  it('copia di recupero rovinata: il progetto si apre lo stesso, senza proporla', async () => {
+    const disk = new MemoryDirectory('Brano');
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    const session = new ProjectSession(store, fakeAudio().audio, async () => disk);
+    await session.save();
+    await disk.writeBytes(RECOVERY_FILE, new TextEncoder().encode('{ rotto'));
+    await session.open();
+    expect(await session.hasRecovery()).toBe(false);
   });
 });

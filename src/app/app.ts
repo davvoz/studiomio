@@ -19,6 +19,7 @@ import { userRacks } from '../devices/user-racks';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import type { TimeRange } from '../model/note-edits';
 import { BusTrack } from '../model/track';
+import type { Directory } from '../persistence/directory';
 import { FsAccessDirectory } from '../persistence/fs-access-directory';
 import { ProjectFolder } from '../persistence/project-folder';
 import { sceneArrangement, sceneClips, sceneLength } from '../model/scene-export';
@@ -239,6 +240,9 @@ export class App implements Commands, TimelineActions {
     bindKeys(document, this, KEYMAP);
     // chiudere la finestra con modifiche non salvate chiede conferma (in Electron la chiede il processo principale)
     addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });
+    // ogni tanto le modifiche non salvate vanno nella copia di recupero: se l'app si blocca
+    // non si perdono (alla riapertura del progetto si chiede se riprenderle)
+    setInterval(() => this.session.autosave().catch(e => console.warn('copia di recupero:', e)), AUTOSAVE_MS);
     this.say('Trascina dei file audio sulla timeline o apri File › Carica il progetto demo. Ctrl+rotella per lo zoom, Alt per trascinare senza griglia.');
   }
 
@@ -587,7 +591,7 @@ export class App implements Commands, TimelineActions {
   // ---------------------------------------------------------------- file
 
   newProject(): void { this.run(async () => { if (await this.closeProject()) await this.session.newProject(); }); }
-  open(): void { this.run(async () => { if (await this.closeProject()) await this.session.open(); }); }
+  open(): void { this.run(async () => { if (await this.closeProject()) await this.openFolder(); }); }
   save(): void { this.run(() => this.session.save()); }
 
   /** Apre un progetto recente. Il permesso sulla cartella si chiede subito, finché vale il clic
@@ -606,8 +610,22 @@ export class App implements Commands, TimelineActions {
         throw e;
       }
       if (!(await new ProjectFolder(dir).hasProject())) return gone();
-      if (await this.closeProject()) await this.session.open(dir);
+      if (await this.closeProject()) await this.openFolder(dir);
     });
+  }
+
+  /** Apre la cartella di un progetto; se ci sono modifiche mai salvate (l'app si è bloccata o
+   *  è stata chiusa senza salvare) chiede se riprenderle. */
+  private async openFolder(dir?: Directory): Promise<void> {
+    await this.session.open(dir);
+    if (!(await this.session.hasRecovery())) return;
+    const answer = await choose('Riprendere le modifiche non salvate?',
+      `"${this.session.name}" ha delle modifiche che non sono state salvate: l'app si è bloccata o è stata chiusa senza salvare. Vuoi riprenderle?`, [
+        { label: 'Buttale', value: 'discard' },
+        { label: 'Riprendile', value: 'restore', primary: true },
+      ]);
+    if (answer === 'restore') await this.session.restoreRecovery();
+    else if (answer === 'discard') await this.session.discardRecovery();
   }
   saveAs(): void { this.run(() => this.session.saveAs()); }
 
@@ -717,6 +735,7 @@ export class App implements Commands, TimelineActions {
       { label: 'Salva', value: 'save', primary: true },
     ]);
     if (answer === 'save') await this.session.save(); // se si annulla la scelta della cartella, si ferma qui
+    if (answer === 'discard') await this.session.discardRecovery();
     return answer === 'save' || answer === 'discard';
   }
 
@@ -805,6 +824,9 @@ export class App implements Commands, TimelineActions {
     return this.audio.engine.position;
   }
 }
+
+/** Ogni quanto si scrive la copia di recupero (se ci sono modifiche). */
+const AUTOSAVE_MS = 30_000;
 
 /** Una scena si esporta al massimo per tante battute (se i loop si richiudono solo dopo, basta il più lungo). */
 const SCENE_MAX_BARS = 64;

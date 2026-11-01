@@ -6,6 +6,14 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Unsaved changes are no longer lost if the app freezes or is closed badly. Every 30
+  seconds, if something changed, a project saved in a folder writes a recovery copy next to
+  it (`progetto.recupero.json`; the saved project is never touched). Reopening the folder
+  asks whether to restore those changes or throw them away. Saving removes the copy.
+- When the window stops responding or closes by itself, the app notes where it was stuck in
+  `Documenti\studiomio\Blocchi`: send that file along to get the cause fixed.
+
 ## [0.3.48] - 2026-11-01
 
 ### Fixed

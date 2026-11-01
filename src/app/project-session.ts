@@ -38,6 +38,8 @@ export class ProjectSession {
   private folder: ProjectFolder;
   private onDisk = false;
   private savedVersion: Project;
+  /** La versione scritta per ultima nella copia di recupero. */
+  private autosaved: Project | null = null;
   private readonly events = new Emitter<SessionEvents>();
 
   constructor(private readonly store: ProjectStore, private readonly audio: SessionAudio, private readonly pickDirectory: () => Promise<Directory> = FsAccessDirectory.pick) {
@@ -144,16 +146,50 @@ export class ProjectSession {
   private async openFolder(folder: ProjectFolder, onDisk: boolean, opened: string): Promise<void> {
     const { project, missing } = await folder.load();
     this.audio.engine.stop();
-    for (const s of project.samples) {
-      if (missing.includes(s)) continue;
-      await this.audio.addSample(s.id, await this.decode(await folder.readAudio(s)));
-    }
+    await this.loadSamples(folder, project, missing);
     this.folder = folder;
     this.onDisk = onDisk;
     this.store.load(project);
     this.savedVersion = project;
     this.events.emit('change');
     this.say(missing.length ? `${opened} Mancano ${missing.length} file audio: ${missing.map(s => s.file).join(', ')}` : opened);
+  }
+
+  /** Vero se nella cartella c'è una copia di recupero (modifiche mai salvate: l'app si è
+   *  bloccata o è stata chiusa senza salvare). */
+  async hasRecovery(): Promise<boolean> {
+    return this.onDisk && (await this.folder.loadRecovery()) !== null;
+  }
+
+  /** Riapre la copia di recupero al posto del progetto salvato; resta da salvare. */
+  async restoreRecovery(): Promise<void> {
+    const recovered = await this.folder.loadRecovery();
+    if (!recovered) return;
+    const { project, missing } = recovered;
+    this.audio.engine.stop();
+    const loaded = new Set(this.store.project.samples.map(s => s.id));
+    await this.loadSamples(this.folder, project, [...missing, ...project.samples.filter(s => loaded.has(s.id))]);
+    this.store.load(project);
+    this.autosaved = project;
+    this.events.emit('change');
+    this.say(`Ripristinate le modifiche non salvate di "${this.name}": salva per tenerle.`);
+  }
+
+  /** Le modifiche non salvate si buttano: la copia di recupero non serve più. */
+  async discardRecovery(): Promise<void> {
+    if (this.onDisk) await this.folder.dropRecovery();
+  }
+
+  /** Scrive la copia di recupero se il progetto è cambiato dall'ultima volta (solo per un
+   *  progetto su disco: uno nuovo non ha ancora una cartella). */
+  async autosave(): Promise<void> {
+    const project = this.store.project;
+    if (!this.onDisk || !this.changed || project === this.autosaved) return;
+    const folder = this.folder, saved = this.savedVersion;
+    await folder.saveRecovery(springsAtRest(project));
+    // nel frattempo si è salvato o aperto altro: la copia è vecchia e non va lasciata lì
+    if (this.folder !== folder || this.savedVersion !== saved) await folder.dropRecovery();
+    else this.autosaved = project;
   }
 
   async save(): Promise<void> {
@@ -189,6 +225,14 @@ export class ProjectSession {
     this.savedVersion = this.store.project;
     this.events.emit('change');
     this.say(`Salvato in "${this.folder.name}".`);
+  }
+
+  /** Carica nel motore i file audio del progetto, tranne quelli in `skip`. */
+  private async loadSamples(folder: ProjectFolder, project: Project, skip: readonly SampleRef[]): Promise<void> {
+    for (const s of project.samples) {
+      if (skip.includes(s)) continue;
+      await this.audio.addSample(s.id, await this.decode(await folder.readAudio(s)));
+    }
   }
 
   private async loadFile(file: File): Promise<SampleRef> {
