@@ -18,6 +18,7 @@ import { LAYOUT, paintEditor } from './editor-painter';
 import { wheelTime } from '../envelopes/envelope-lane';
 import { ModulationEditor } from '../envelopes/modulation-editor';
 import { targetDevices, trackChain } from '../envelopes/mod-targets';
+import type { Clipboard } from '../../store/clipboard';
 
 export interface ClipEditorDeps {
   readonly store: ProjectStore;
@@ -28,6 +29,8 @@ export interface ClipEditorDeps {
   /** Il tratto [from, to] (secondi) di un sample come file nuovo del progetto, caricato nel motore. */
   readonly cropSample: (sample: SampleRef, from: Seconds, to: Seconds) => Promise<SampleRef>;
   readonly say: (text: string) => void;
+  /** Gli appunti dell'app (per le curve di modulazione). */
+  readonly clipboard: Clipboard;
 }
 
 interface Target {
@@ -52,6 +55,11 @@ export class ClipEditor implements EditorHost {
   private dirty = true;
   private fitPending = false;
 
+  /** La riga delle modulazioni (per mostrare un parametro dal suo menu). */
+  get modulation(): ModulationEditor {
+    return this.mods;
+  }
+
   constructor(private readonly deps: ClipEditorDeps) {
     this.panel = new ClipPanel({
       commit: (label, fn, mergeKey) => this.commit(label, fn, mergeKey),
@@ -64,6 +72,7 @@ export class ClipEditor implements EditorHost {
     });
     const editor = this;
     this.mods = new ModulationEditor({
+      clipboard: deps.clipboard,
       get axis() { return editor._axis; },
       curves: () => editor.clip(),
       span: () => { const c = editor.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },

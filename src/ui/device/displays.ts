@@ -11,6 +11,7 @@ import type { MenuItem } from '../context-menu';
 import { CymbalsDisplay } from './cymbals/cymbals-display';
 import { DriveDisplay } from './drive/drive-display';
 import { DrumDisplay } from './drums/drum-display';
+import { COMPRESSOR_GRAPH, DynamicsDisplay, NOISE_GATE_GRAPH } from './dynamics/dynamics-display';
 import { EqDisplay } from './eq/eq-display';
 import { GateDisplay } from './gate/gate-display';
 import { kickDisplay } from './kick/kick-display';
@@ -28,6 +29,18 @@ export interface SpectrumTap {
   readonly binCount: number;
   /** Riempie `pre` e `post` (lunghi binCount); false se l'effetto non sta suonando. */
   read(pre: Float32Array<ArrayBuffer>, post: Float32Array<ArrayBuffer>): boolean;
+  dispose(): void;
+}
+
+/** Cosa fa un effetto di dinamica: il livello che sente il rilevatore e la riduzione, in dB. */
+export interface DynamicsReading {
+  readonly input: number;
+  readonly reduction: number;
+}
+
+export interface DynamicsTap {
+  /** Ciò che è successo dall'ultima lettura; null se non è arrivato niente. */
+  read(): DynamicsReading | null;
   dispose(): void;
 }
 
@@ -72,6 +85,8 @@ export interface DisplayContext {
   controlsChanged(): void;
   /** Lo spettro dell'effetto (si stacca con `dispose`); per gli strumenti è sempre vuoto. */
   openSpectrum(): SpectrumTap;
+  /** Per gli effetti di dinamica: cosa stanno facendo mentre il suono passa. */
+  openDynamics?(): DynamicsTap;
   /** Suona subito una nota con lo strumento (per gli effetti non fa nulla). */
   audition(pitch: number, velocity: number): void;
   /** Le note che lo strumento ha suonato dalla chiamata precedente (per gli effetti, nessuna). */
@@ -88,6 +103,9 @@ export interface DisplayContext {
 /** Lo spettro di chi non ne ha uno: non legge mai nulla. */
 export const NO_SPECTRUM: SpectrumTap = { sampleRate: 48000, binCount: 0, read: () => false, dispose() {} };
 
+/** Di chi non suona: non legge mai nulla. */
+export const NO_DYNAMICS: DynamicsTap = { read: () => null, dispose() {} };
+
 export interface DeviceDisplay {
   readonly element: HTMLElement;
   /** Controlli che stanno nell'intestazione del dispositivo, dopo il nome (per esempio le schede). */
@@ -102,6 +120,8 @@ export type DisplayFactory = (ctx: DisplayContext) => DeviceDisplay;
 /** Pannelli grafici per tipo di dispositivo. */
 export const DEVICE_DISPLAYS: Readonly<Record<string, DisplayFactory>> = {
   eq: ctx => new EqDisplay(ctx),
+  compressor: ctx => new DynamicsDisplay(ctx, COMPRESSOR_GRAPH),
+  'noise-gate': ctx => new DynamicsDisplay(ctx, NOISE_GATE_GRAPH),
   drive: ctx => new DriveDisplay(ctx),
   gate: ctx => new GateDisplay(ctx),
   drums: ctx => new DrumDisplay(ctx),

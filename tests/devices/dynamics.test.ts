@@ -5,6 +5,8 @@ import { COMPRESSOR, DETECTOR } from '../../src/devices/effects/compressor/compr
 import { CompressorCore } from '../../src/devices/effects/compressor/compressor-core';
 import { autoMakeup, curveDb } from '../../src/devices/effects/compressor/compressor-math';
 import { LIMITER } from '../../src/devices/effects/limiter/limiter';
+import { NOISE_GATE } from '../../src/devices/effects/noise-gate/noise-gate';
+import { NoiseGateCore } from '../../src/devices/effects/noise-gate/noise-gate-core';
 import { LimiterCore } from '../../src/devices/effects/limiter/limiter-core';
 import { REVERB } from '../../src/devices/effects/reverb/reverb';
 import { ReverbCore } from '../../src/devices/effects/reverb/reverb-core';
@@ -49,6 +51,38 @@ const compressor = (params: Record<string, number>) => {
 };
 
 describe('Compressore', () => {
+  it('su un suono fermo arriva alla riduzione della curva, qualunque siano attacco e rilascio', () => {
+    // −6 dB in ingresso, soglia −18, 4:1: 9 dB in meno. Il rilevatore di picco non deve "mediare"
+    // tra una semionda e l'altra, altrimenti muovendo l'attacco cambia quanto comprime
+    for (const [attack, release] of [[1, 100], [10, 120], [30, 150], [100, 100], [100, 1000]]) {
+      for (const freq of [200, 1000]) {
+        const x = sine(freq, 0.5, 96000);
+        const [out] = run(compressor({ threshold: -18, ratio: 4, knee: 0, attack, release }), x);
+        expect(db(peak(x, 48000)) - db(peak(out, 48000)), `attacco ${attack}, rilascio ${release}, ${freq} Hz`).toBeCloseTo(9, 0);
+      }
+    }
+  });
+
+  it('un attacco lento non allunga il rilascio', () => {
+    const quiet = 48000, loud = sine(1000, 0.9, quiet);
+    const x = new Float32Array(quiet * 2);
+    x.set(loud);
+    const y = x.map((v, i) => (i < quiet ? v : 0.001));
+    const c = compressor({ threshold: -30, ratio: 8, knee: 0, attack: 100, release: 10 });
+    const [out] = run(c, y);
+    // 100 ms dopo la fine del suono forte (10 rilasci) la riduzione è finita, l'uscita è l'ingresso
+    expect(Math.abs(out[quiet + 4800])).toBeCloseTo(0.001, 4);
+  });
+
+  it('dice al suo pannello cosa sente e quanto abbassa', () => {
+    const c = compressor({ threshold: -18, ratio: 4, knee: 0, attack: 1, release: 100 });
+    run(c, sine(1000, 0.5, 48000));
+    const out = new Float32Array(2);
+    c.readDynamics(out);
+    expect(out[0]).toBeCloseTo(-6, 0);
+    expect(out[1]).toBeCloseTo(9, 0);
+  });
+
   it('la curva: sotto la soglia niente, sopra il rapporto; il ginocchio raccorda', () => {
     const hard = { threshold: -20, ratio: 4, knee: 0 };
     expect(curveDb(hard, -30)).toBe(-30);
@@ -289,5 +323,77 @@ describe('costo', () => {
       console.log(`${name}: ${(share * 100).toFixed(2)} % di un core`);
       expect(share).toBeLessThan(0.1);
     }
+  });
+});
+
+describe('Noise Gate', () => {
+  const gate = (params: Record<string, number>) => {
+    const c = new NoiseGateCore(SR);
+    c.setParams(resolveParams(NOISE_GATE, params));
+    return c;
+  };
+  /** Un suono che passa da un livello all'altro a metà. */
+  const steps = (a: number, b: number, n = 48000) => sine(1000, 1, n).map((v, i) => v * (i < n / 2 ? a : b));
+
+  it('sopra la soglia il suono passa com\'è, sotto tace', () => {
+    const [loud] = run(gate({ threshold: -40 }), sine(1000, 0.5, 24000));
+    expect(peak(loud, 12000)).toBeCloseTo(0.5, 3);
+    const [quiet] = run(gate({ threshold: -40 }), sine(1000, 0.001, 24000));
+    expect(peak(quiet)).toBe(0);
+  });
+
+  it('il rientro dice quanto chiude', () => {
+    const x = steps(0.5, 0.001);
+    const [out] = run(gate({ threshold: -40, floor: -12, hold: 0, release: 10 }), x);
+    expect(db(peak(out, 40000) / 0.001)).toBeCloseTo(-12, 0);
+  });
+
+  it('non batte su un suono basso né su uno intorno alla soglia', () => {
+    // 40 Hz: il rilevatore non si chiude a ogni passaggio per lo zero
+    const [low] = run(gate({ threshold: -30, hold: 0 }), sine(40, 0.5, 48000));
+    expect(rms(low, 24000) / rms(sine(40, 0.5, 48000), 24000)).toBeCloseTo(1, 2);
+    // sta dentro l'isteresi: una volta aperto resta aperto
+    const wobble = Float32Array.from(sine(1000, 1, 48000), (v, i) => v * (i < 4800 ? 0.1 : 0.1 * (0.85 + 0.1 * Math.sin(i / 2000))));
+    const [out] = run(gate({ threshold: -20, hysteresis: 6, hold: 0, release: 5 }), wobble);
+    expect(rms(out, 24000) / rms(wobble, 24000)).toBeCloseTo(1, 2);
+  });
+
+  it('tieni lo lascia aperto dopo la fine del suono', () => {
+    const x = steps(0.5, 0.001);
+    const at = 24000 + Math.round(0.1 * SR);
+    const [held] = run(gate({ threshold: -40, hold: 200, release: 5 }), x);
+    expect(Math.abs(held[at - 3]) + Math.abs(held[at - 2]) + Math.abs(held[at - 1])).toBeGreaterThan(0.0005);
+    const [short] = run(gate({ threshold: -40, hold: 0, release: 5 }), x);
+    expect(peak(short, at)).toBe(0);
+  });
+
+  it('attacco e rilascio sono rampe: niente salti di volume', () => {
+    const x = Float32Array.from({ length: 24000 }, (_, i) => (i < 12000 ? 0 : 0.5));
+    const [out] = run(gate({ threshold: -20, attack: 10 }), x);
+    expect(out[12000 + 240]).toBeLessThan(0.5);
+    expect(out[12000 + 480]).toBeCloseTo(0.5, 3);
+  });
+
+  it('inverti: si chiude quando il suono è forte', () => {
+    const [loud] = run(gate({ threshold: -40, flip: 1 }), sine(1000, 0.5, 24000));
+    expect(peak(loud, 12000)).toBe(0);
+    const [quiet] = run(gate({ threshold: -40, flip: 1 }), sine(1000, 0.001, 24000));
+    expect(peak(quiet, 12000)).toBeCloseTo(0.001, 4);
+  });
+
+  it('con il sidechain si apre al suono della chiave', () => {
+    const c = gate({ threshold: -40 });
+    const key = sine(1000, 0.5, BLOCK), x = new Float32Array(BLOCK).fill(0.001), l = new Float32Array(BLOCK), r = new Float32Array(BLOCK);
+    c.setKey(key, key);
+    for (let i = 0; i < 100; i++) c.process(x, x, l, r, BLOCK);
+    expect(l[0]).toBeCloseTo(0.001, 5);
+  });
+
+  it('i filtri del rilevatore gli tolgono ciò che non deve sentire', () => {
+    const low = sine(50, 0.5, 48000);
+    const [open] = run(gate({ threshold: -30 }), low);
+    expect(peak(open, 24000)).toBeGreaterThan(0.4);
+    const [closed] = run(gate({ threshold: -30, scHp: 2000 }), low);
+    expect(peak(closed, 24000)).toBe(0);
   });
 });

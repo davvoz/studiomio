@@ -13,7 +13,9 @@ import type { ProjectStore } from '../../store/project-store';
 import { controlFor, type ParamControl } from '../device/controls';
 import { el } from '../dom';
 import { LevelMeter, PeakReadout, type MeterBoard } from '../meters/meter-board';
-import { fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from '../mixer-controls';
+import { automationOnRightClick, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from '../mixer-controls';
+
+import type { ModTarget } from '../../model/envelope';
 
 const PAN: NumberParam = { kind: 'number', id: 'pan', label: 'Pan', min: -50, max: 50, default: 0, unit: 'pan', step: 1 };
 
@@ -27,6 +29,8 @@ const formatDb = (db: number) => (db <= -40 ? '−∞' : `${db > 0 ? '+' : db < 
 
 export interface StripActions {
   openDevices(owner: ChainOwner): void;
+  /** Mostra la curva di un parametro nella clip della traccia. */
+  showAutomation?(owner: ChainOwner, target: ModTarget): void;
 }
 
 /** Fader verticale (che si mappa sul MIDI come `target`), il suo misuratore e il valore in dB. */
@@ -69,6 +73,8 @@ export class TrackStrip {
     const meter = new LevelMeter('strip-meter', () => meters.resetClip(id));
     this.detach = meters.attach(id, meter);
     midiTarget(this.pan.element, { kind: 'mixer', owner: id, control: 'pan' });
+    automationOnRightClick(this.pan.element, () => actions.showAutomation?.(id, { kind: 'mixer', param: 'pan' }));
+    automationOnRightClick(this.volume, () => actions.showAutomation?.(id, { kind: 'mixer', param: 'volume' }));
     this.element.append(this.sendBox, this.badge, this.fx, this.pan.element,
       faderBlock(this.volume, { kind: 'mixer', owner: id, control: 'volume' }, meter, this.db), el('div', { className: 'strip-ms' }, this.mute, this.solo));
   }

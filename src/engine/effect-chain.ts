@@ -9,7 +9,12 @@ import type { DeviceModulation } from './modulation';
 export interface EffectMonitor {
   readonly pre: AudioNodeLike;
   readonly post: AudioNodeLike;
+  /** Per gli effetti di dinamica: chi vuole sapere cosa fanno (null: nessuno). */
+  watch?(listener: DynamicsListener | null): void;
 }
+
+/** Il livello che il rilevatore sente e la riduzione, in dB. */
+export type DynamicsListener = (input: number, reduction: number) => void;
 
 /** Un effetto nel grafo audio: il suono entra da `input` ed esce da `output`. */
 export interface Effect {

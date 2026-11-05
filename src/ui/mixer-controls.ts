@@ -4,7 +4,7 @@ import { encodeMidiTarget, type MidiTarget } from '../model/midi-map';
 import type { ChainOwner } from '../model/project';
 import { addEffect } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
-import type { MenuItem } from './context-menu';
+import { showContextMenu, type MenuItem } from './context-menu';
 import { el } from './dom';
 
 /** Volume in dB: trascinato è un solo passo di annullamento, doppio clic torna a 0 dB. */
@@ -42,6 +42,15 @@ export function setFxCount(button: HTMLButtonElement, count: number): void {
 export function setVolume(vol: HTMLInputElement, db: number): void {
   if (vol.value !== String(db)) vol.value = String(db);
   vol.title = `${db.toFixed(1)} dB`;
+}
+
+/** "Mostra automazione" nel menu di un controllo del mixer. */
+export function automationOnRightClick(element: HTMLElement, show: () => void): void {
+  element.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    showContextMenu(e.clientX, e.clientY, [{ label: 'Mostra automazione', run: show }]);
+  });
 }
 
 /** "Aggiungi <effetto>" per ogni tipo: aggiunge in fondo alla catena e la apre. */

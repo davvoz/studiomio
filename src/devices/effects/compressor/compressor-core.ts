@@ -7,9 +7,12 @@
  * Con il sidechain il rilevatore (la riga di sotto) ascolta la chiave, un'altra traccia, invece
  * dell'ingresso; senza, la chiave è l'ingresso stesso e i conti sono gli stessi di sempre.
  *
- * La riduzione si leviga in dB con attacco e rilascio separati, come i compressori da studio.
+ * La riduzione si leviga in dB. Prima il rilascio: tiene il picco tra una semionda e l'altra,
+ * così su un suono fermo si arriva alla riduzione che la curva promette, qualunque siano attacco
+ * e rilascio. Poi l'attacco: sale verso quel valore con il suo tempo; in discesa non aggiunge
+ * niente, altrimenti un attacco lento allungherebbe anche il rilascio.
  * Gira nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
-import { dbToGain, type EffectCore, type KeyedEffect } from '../../dsp/core';
+import { dbToGain, type DynamicsMeter, type EffectCore, type KeyedEffect } from '../../dsp/core';
 import { DETECTOR } from './compressor';
 import { autoMakeup, curveDb, type Curve } from './compressor-math';
 
@@ -21,7 +24,7 @@ const LOG_TO_DB = 20 / Math.LN10;
 
 const coef = (seconds: number, sampleRate: number) => Math.exp(-1 / Math.max(1, seconds * sampleRate));
 
-export class CompressorCore implements EffectCore, KeyedEffect {
+export class CompressorCore implements EffectCore, KeyedEffect, DynamicsMeter {
   private curve: Curve = { threshold: -18, ratio: 4, knee: 6 };
   private attackK = 0;
   private releaseK = 0;
@@ -34,6 +37,8 @@ export class CompressorCore implements EffectCore, KeyedEffect {
   private prevL = 0;
   private prevR = 0;
   private power = 0;
+  /** La riduzione voluta, con il rilascio (dB). */
+  private held = 0;
   private reduction = 0;
   private makeup = 1;
   private mix = 1;
@@ -47,6 +52,8 @@ export class CompressorCore implements EffectCore, KeyedEffect {
   private keyR: Float32Array | null = null;
   /** La riduzione più forte dall'ultima lettura (per i misuratori e i test). */
   maxReduction = 0;
+  /** Il livello più forte sentito dal rilevatore dall'ultima lettura (dB). */
+  private maxLevel = -120;
 
   constructor(private readonly sampleRate: number) {
     this.smoothK = 1 - coef(SMOOTH, sampleRate);
@@ -76,9 +83,16 @@ export class CompressorCore implements EffectCore, KeyedEffect {
     this.keyR = right ?? left;
   }
 
+  readDynamics(out: Float32Array): void {
+    out[0] = this.maxLevel;
+    out[1] = this.maxReduction;
+    this.maxLevel = -120;
+    this.maxReduction = this.reduction;
+  }
+
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     const { curve, attackK, releaseK, hpK, rmsK, rms, smoothK } = this;
-    let { hpL, hpR, prevL, prevR, power, reduction, makeup, mix } = this;
+    let { hpL, hpR, prevL, prevR, power, held, reduction, makeup, mix, maxLevel } = this;
     const targetMakeup = this.targetMakeup, targetMix = this.targetMix;
     const keyL = this.keyL ?? inL, keyR = this.keyR ?? inR;
     this.fresh = false;
@@ -97,7 +111,9 @@ export class CompressorCore implements EffectCore, KeyedEffect {
       } else level = Math.max(Math.abs(hpL), Math.abs(hpR));
       const x = level > 1e-6 ? Math.log(level) * LOG_TO_DB : -120;
       const want = x - curveDb(curve, x);
-      reduction = want > reduction ? attackK * reduction + (1 - attackK) * want : releaseK * reduction + (1 - releaseK) * want;
+      if (x > maxLevel) maxLevel = x;
+      held = Math.max(want, releaseK * held + (1 - releaseK) * want);
+      reduction = held > reduction ? attackK * reduction + (1 - attackK) * held : held;
       if (reduction > maxReduction) maxReduction = reduction;
       makeup += (targetMakeup - makeup) * smoothK;
       mix += (targetMix - mix) * smoothK;
@@ -110,9 +126,11 @@ export class CompressorCore implements EffectCore, KeyedEffect {
     this.prevL = prevL;
     this.prevR = prevR;
     this.power = power < 1e-20 ? 0 : power;
+    this.held = held;
     this.reduction = reduction;
     this.makeup = makeup;
     this.mix = mix;
     this.maxReduction = maxReduction;
+    this.maxLevel = maxLevel;
   }
 }

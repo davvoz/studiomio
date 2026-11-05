@@ -9,6 +9,7 @@ import { SampleLibrary } from '../engine/sample-library';
 import { liveGraph, offlineGraph } from '../engine/web-audio';
 import { DeviceWorklet, WorkletEffects, WorkletInstruments, WorkletMeters, type FaultListener } from '../engine/worklet-devices';
 import type { ChainOwner, Project } from '../model/project';
+import { EffectDynamics } from './effect-dynamics';
 import { EffectSpectrum } from './effect-spectrum';
 import type { ProjectStore } from '../store/project-store';
 import { DspService } from '../workers/dsp-service';
@@ -69,6 +70,11 @@ export class AudioSystem {
   /** Lo spettro prima e dopo un effetto che suona. */
   spectrum(owner: ChainOwner, id: DeviceId): EffectSpectrum {
     return new EffectSpectrum(this.context, () => this.engine.effectMonitor(owner, id));
+  }
+
+  /** Cosa fa un effetto di dinamica che suona, per il suo pannello. */
+  dynamics(owner: ChainOwner, id: DeviceId): EffectDynamics {
+    return new EffectDynamics(() => this.engine.effectMonitor(owner, id));
   }
 
   /** Mixdown di [from, to) del progetto corrente. */

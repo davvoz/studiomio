@@ -117,6 +117,7 @@ export class PianoRoll implements RollHost {
     });
     const roll = this;
     this.mods = new ModulationEditor({
+      clipboard: deps.clipboard,
       get axis() { return roll._axis; },
       curves: () => roll.clip(),
       span: () => { const c = roll.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },

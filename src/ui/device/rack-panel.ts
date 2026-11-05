@@ -35,6 +35,10 @@ export interface RackPanelOptions {
   readonly canMove: (dir: -1 | 1) => boolean;
   /** C'è un rack accanto (prima −1, dopo +1) in cui mettere questo. */
   readonly canNest: (dir: -1 | 1) => boolean;
+  /** Le voci di copia e incolla del rack. */
+  readonly headMenu?: () => MenuItem[];
+  /** Le prime voci del menu di una macro. */
+  readonly macroMenu?: (macro: number) => MenuItem[];
   /** Le voci per mappare una macro sulle macro dei rack intorno (nessuna se il rack non è dentro un altro). */
   readonly outerMenu: (macro: number) => MenuItem[];
   /** La macro scelta con "Map" acceso: undefined spento, null acceso senza macro scelta. */
@@ -97,7 +101,9 @@ export class RackPanel {
     );
     this.head.addEventListener('contextmenu', e => {
       e.preventDefault();
+      const clip = o.headMenu?.() ?? [];
       showContextMenu(e.clientX, e.clientY, [
+        ...clip, ...(clip.length ? [SEPARATOR] : []),
         { label: 'Metti nel rack prima', disabled: !o.canNest(-1), run: () => this.apply(nestRack(o.owner, rack.id, -1)) },
         { label: 'Metti nel rack dopo', disabled: !o.canNest(1), run: () => this.apply(nestRack(o.owner, rack.id, 1)) },
         SEPARATOR,
@@ -186,6 +192,7 @@ export class RackPanel {
       const label = e.querySelector<HTMLElement>('.knob-label');
       const outer = o.outerMenu(index);
       showContextMenu(ev.clientX, ev.clientY, [
+        ...(o.macroMenu?.(index) ?? []),
         { label: 'Rinomina la macro', run: () => label && renameInline(label, n => this.apply(renameMacro(o.owner, o.rack.id, index, n))) },
         { label: 'Nome automatico', disabled: m.name === null, run: () => this.apply(renameMacro(o.owner, o.rack.id, index, null)) },
         SEPARATOR,

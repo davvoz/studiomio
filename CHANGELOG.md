@@ -6,6 +6,39 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Session: several clips can be selected together. Shift+drag draws a rectangle from any slot,
+  even on a full grid (from an empty slot, no Shift needed); Shift+click or Shift+arrows extend it,
+  Ctrl+click adds or removes one clip, Ctrl+A takes them all. They launch, move (Ctrl copies),
+  duplicate, cut, copy, paste, recolour and delete together, in one undo step. Pasted, they keep their shape; on the timeline the scenes go one
+  after the other.
+- Noise Gate: a real gate with a threshold (the old Gate, the one with the step pattern, is now
+  called Trance Gate). Hysteresis, attack, hold, release, floor, invert, detector filters and
+  sidechain.
+- Compressor and Noise Gate have a graph: the curve, a dot showing where the sound is right now,
+  the gain reduction, and a threshold you can drag.
+- Instruments, effects and whole racks can be copied, cut, pasted and duplicated, also onto
+  another track: Ctrl+C/X/V/D on the device chosen by clicking its name, or from its right-click
+  menu. A modulator keeps the targets copied with it.
+- "Mostra automazione" in the right-click menu of knobs, macros, volume and pan: it opens the
+  curve of that control in a clip of the track, or on the timeline for the master.
+- Modulation curves can be copied and pasted, onto another parameter or into another clip:
+  Shift+drag picks a stretch of the curve, which can then be dragged as a whole, copied, cut or
+  deleted; with nothing picked the whole curve is copied.
+- Ready-made modulation shapes (the ∿ button, or F on the lane): sine, triangle, ramps, square,
+  pump and two random ones. They fill the picked stretch, or the whole clip, with a cycle from
+  8 bars down to 1/32, or a single one over the whole stretch ("Tutto"); depth and invert too. Change
+  the cycle or the depth afterwards and the shape is redrawn in the same place.
+- Drawing modulation: B turns drawing on and off, Alt draws freehand instead of steps on the
+  grid. The lane is taller and its top edge changes its height.
+
+### Fixed
+- The sidechain menu no longer grows with the names of the tracks.
+- The Compressor did not reach the reduction it promised in Picco mode: asked for 9 dB it gave
+  between 5.5 and 8.7, depending on attack and release, so moving the attack changed how much it
+  compressed. Now it follows the curve at any setting. Sets using it in Picco mode compress up to
+  3.5 dB more than before on sustained sounds: check their balance.
+
 ## [0.3.49] - 2026-11-01
 
 ### Added

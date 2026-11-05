@@ -15,7 +15,7 @@ import type { SampleId } from '../core/id';
 import type { SampleData } from '../devices/dsp/core';
 import type { DeviceSamples, EffectSettings, InstrumentSettings } from '../model/device';
 import type { AudioGraph } from './audio-graph';
-import type { Effect, EffectHost, EffectMonitor } from './effect-chain';
+import type { DynamicsListener, Effect, EffectHost, EffectMonitor } from './effect-chain';
 import type { Meter, MeterHost, MeterReading } from './meters';
 import type { DeviceModulation } from './modulation';
 import type { Instrument, InstrumentHost } from './players/instrument';
@@ -279,6 +279,7 @@ class WorkletEffect implements Effect {
   private disposed = false;
   private pings = 0;
   private readonly waiting = new Map<number, () => void>();
+  private watcher: DynamicsListener | null = null;
 
   constructor(
     private readonly ctx: BaseAudioContext, settings: EffectSettings, bpm: number, transport: TransportAnchor | null,
@@ -293,7 +294,13 @@ class WorkletEffect implements Effect {
     this.output = ctx.createGain();
     this.sidechain = effectType(settings.type)?.sidechain ? ctx.createGain() : undefined;
     this.post.connect(this.output);
-    this.monitor = { pre: this.input, post: this.post };
+    this.monitor = {
+      pre: this.input, post: this.post,
+      watch: listener => {
+        this.watcher = listener;
+        this.send({ type: 'watch', on: !!listener });
+      },
+    };
     // suono diretto finché il processore non c'è
     this.input.connect(this.post);
     if (!ready) this.build();
@@ -352,9 +359,11 @@ class WorkletEffect implements Effect {
     this.node.port.onmessage = (e: MessageEvent<EffectReply>) => {
       const m = e.data;
       if (m.type === 'fault') return this.onFault(m.error);
+      if (m.type === 'dynamics') return this.watcher?.(m.input, m.reduction);
       this.waiting.get(m.id)?.();
       this.waiting.delete(m.id);
     };
+    if (this.watcher) this.send({ type: 'watch', on: true });
     // solo il collegamento diretto: quelli verso lo spettro restano
     this.input.disconnect(this.post);
     this.input.connect(this.node);

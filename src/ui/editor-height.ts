@@ -25,7 +25,6 @@ export interface Foldable {
   unfold(): void;
 }
 
-const LANE = 100;
 /** Quanto si lascia la vista sotto l'altezza minima perché si riduca (meno: torna su). */
 const FOLD_AT = 40;
 /** Quanto dura la discesa della vista che si riduce, e il ritorno di quella che si riapre. */
@@ -52,7 +51,7 @@ export function addHeightHandle(editor: HTMLElement, setting: HeightSetting = ED
     handle.classList.add('dragging');
     // la corsia delle modulazioni aggiunge altezza (vedi `.with-lane` nel CSS); se la finestra è
     // bassa il CSS può aver ridotto l'editor: si parte dall'altezza che si vede
-    const extra = editor.classList.contains('with-lane') ? LANE : 0;
+    const extra = editor.classList.contains('with-lane') ? editor.querySelector<HTMLElement>('.mod-lane')?.offsetHeight ?? 0 : 0;
     const y0 = e.clientY;
     const h0 = fold?.folded ? fold.foldedHeight : Math.min(current(setting), editor.offsetHeight - extra);
     // quanto la vista è scesa sotto l'altezza minima (al massimo fino a lasciare l'intestazione)

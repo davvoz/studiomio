@@ -10,6 +10,7 @@ import { DRIVE } from './effects/drive/drive';
 import { EQ } from './effects/eq/eq';
 import { GATE } from './effects/gate/gate';
 import { LIMITER } from './effects/limiter/limiter';
+import { NOISE_GATE } from './effects/noise-gate/noise-gate';
 import { MULTIBAND } from './effects/multiband/multiband';
 import { PHASER } from './effects/phaser/phaser';
 import { PITCH_SHIFTER } from './effects/pitch-shifter/pitch-shifter';
@@ -34,7 +35,7 @@ import { ENVELOPE_DEVICE, LFO_DEVICE } from './modulators/modulators';
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS, KICK, SNARE, CYMBALS];
 
 /** Gli effetti disponibili, come sopra. */
-export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, MULTIBAND, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER, LFO_DEVICE, ENVELOPE_DEVICE];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, NOISE_GATE, MULTIBAND, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER, LFO_DEVICE, ENVELOPE_DEVICE];
 
 const instruments = new Map(INSTRUMENT_TYPES.map(t => [t.type, t]));
 const effects = new Map(EFFECT_TYPES.map(t => [t.type, t]));

@@ -3,11 +3,11 @@ import { asId } from '../../src/core/id';
 import { MidiClip } from '../../src/model/midi-clip';
 import { ProjectCodec } from '../../src/persistence/project-codec';
 import { findClip, placementRef, scaleMidiClipAt, setClipColor, setTrackColor, slotRef, updateClipAt } from '../../src/store/clip-ref';
-import { copySlotClip, pasteClips, pasteToSlot } from '../../src/store/clipboard';
+import { copySlotClip, copySlotClips, pasteClips, pasteSlots, pasteToSlot } from '../../src/store/clipboard';
 import { addMidiClip, setLaunchQuantization } from '../../src/store/edits';
 import {
-  captureScene, clearSlot, deleteScene, duplicateScene, duplicateSlotClip, importSampleToSlot, insertScene, moveScene, moveSlotClip, newSlotMidiClip,
-  arrangementToScene, renameScene, sceneToArrangement, setSceneColor,
+  captureScene, clearSlots, deleteScene, duplicateScene, duplicateSlots, importSampleToSlot, insertScene, moveScene, moveSlots, newSlotMidiClip,
+  arrangementToScene, renameScene, sceneToArrangement, setSceneColor, updateSlotClip,
 } from '../../src/store/session-edits';
 import { setup } from '../helpers/fixtures';
 
@@ -21,13 +21,13 @@ describe('session: clip negli slot', () => {
     expect(clip).toBeInstanceOf(MidiClip);
     expect([clip.region.end - clip.region.start, clip.loop.enabled]).toEqual([4, true]);
 
-    store.apply(moveSlotClip({ track: track(0), slot: 1 }, { track: track(1), slot: 3 }, false));
+    store.apply(moveSlots([{ track: track(0), slot: 1 }], 1, 2, false));
     expect(store.project.tracks[0].slots[1]).toBeNull();
     expect(store.project.tracks[1].slots[3]?.id).toBe(clip.id);
-    store.apply(moveSlotClip({ track: track(1), slot: 3 }, { track: track(1), slot: 0 }, true));
+    store.apply(moveSlots([{ track: track(1), slot: 3 }], 0, -3, true));
     expect(store.project.tracks[1].slots[0]?.id).not.toBe(clip.id); // la copia ha un id suo
     expect(store.project.tracks[1].slots[3]?.id).toBe(clip.id);
-    store.apply(clearSlot({ track: track(1), slot: 3 }));
+    store.apply(clearSlots([{ track: track(1), slot: 3 }]));
     expect(names(store.project.tracks[1].slots)).toEqual(['Clip MIDI', null, null, null]);
     store.undo();
     store.undo();
@@ -37,7 +37,7 @@ describe('session: clip negli slot', () => {
   it('una clip audio non va su una traccia MIDI', () => {
     const { store, track, sampleId } = setup({ audio: 1, midi: 1, sample: true });
     store.apply(importSampleToSlot(store.project.sample(sampleId)!, track(0), 0));
-    expect(() => store.apply(moveSlotClip({ track: track(0), slot: 0 }, { track: track(1), slot: 0 }, false))).toThrow(TypeError);
+    expect(() => store.apply(moveSlots([{ track: track(0), slot: 0 }], 1, 0, false))).toThrow(TypeError);
   });
 
   it('un audio importato in uno slot è in loop; senza traccia audio ne nasce una', () => {
@@ -54,7 +54,7 @@ describe('session: clip negli slot', () => {
     const { store, track } = setup({ midi: 1 });
     store.apply(newSlotMidiClip({ track: track(0), slot: 0 }));
     store.apply(newSlotMidiClip({ track: track(0), slot: 1 }));
-    store.apply(duplicateSlotClip({ track: track(0), slot: 0 }));
+    store.apply(duplicateSlots([{ track: track(0), slot: 0 }]));
     expect(store.project.scenes).toHaveLength(5);
     expect(names(store.project.tracks[0].slots)).toEqual(['Clip MIDI', 'Clip MIDI', 'Clip MIDI', null, null]);
     expect(store.undoLabel).toBe('Duplica clip');
@@ -241,6 +241,98 @@ describe('MIDI :2 e ×2', () => {
     store.undo();
     store.undo();
     expect(store.project.tracks[0].arrangement[0].length).toBe(4);
+  });
+});
+
+describe('più clip insieme', () => {
+  /** Due tracce con le clip 'a' e 'b' nella scena 0 e 'c' nella 1 della prima. */
+  const grid = () => {
+    const s = setup({ midi: 3 });
+    const add = (t: number, slot: number, name: string) => {
+      s.store.apply(newSlotMidiClip({ track: s.track(t), slot }));
+      const id = s.store.project.tracks[t].slots[slot]!.id;
+      s.store.apply(updateSlotClip('nome', s.track(t), id, c => c.withName(name)));
+    };
+    add(0, 0, 'a');
+    add(1, 0, 'b');
+    add(0, 1, 'c');
+    return { ...s, refs: [{ track: s.track(0), slot: 0 }, { track: s.track(1), slot: 0 }, { track: s.track(0), slot: 1 }] };
+  };
+  const row = (store: ReturnType<typeof setup>['store'], t: number) => names(store.project.tracks[t].slots);
+
+  it('si spostano insieme, con un passo solo di annullamento', () => {
+    const { store, refs } = grid();
+    store.apply(moveSlots(refs, 1, 2, false));
+    expect(row(store, 0)).toEqual([null, null, null, null]);
+    expect(row(store, 1)).toEqual([null, null, 'a', 'c']);
+    expect(row(store, 2)).toEqual([null, null, 'b', null]);
+    store.undo();
+    expect(row(store, 0)).toEqual(['a', 'c', null, null]);
+  });
+
+  it('spostandole su sé stesse non si perde niente', () => {
+    const { store, track } = grid();
+    store.apply(moveSlots([{ track: track(0), slot: 0 }, { track: track(0), slot: 1 }], 0, 1, false));
+    expect(row(store, 0)).toEqual([null, 'a', 'c', null]);
+  });
+
+  it('se una uscirebbe dalla griglia non si muove niente', () => {
+    const { store, refs } = grid();
+    expect(() => store.apply(moveSlots(refs, 2, 0, false))).toThrow('uscirebbe');
+    expect(() => store.apply(moveSlots(refs, 0, -1, false))).toThrow('uscirebbe');
+    expect(row(store, 0)).toEqual(['a', 'c', null, null]);
+  });
+
+  it('una copia ha id nuovi', () => {
+    const { store, refs } = grid();
+    store.apply(moveSlots(refs, 0, 2, true));
+    expect(row(store, 0)).toEqual(['a', 'c', 'a', 'c']);
+    expect(store.project.tracks[0].slots[2]!.id).not.toBe(store.project.tracks[0].slots[0]!.id);
+  });
+
+  it('si svuotano insieme', () => {
+    const { store, refs } = grid();
+    store.apply(clearSlots(refs));
+    expect([...row(store, 0), ...row(store, 1)].every(c => c === null)).toBe(true);
+    store.undo();
+    expect(row(store, 1)[0]).toBe('b');
+  });
+
+  it('Ctrl+D copia il blocco sotto; se non c\'è posto inserisce le scene che servono', () => {
+    const { store, refs } = grid();
+    store.apply(duplicateSlots(refs));
+    expect(row(store, 0)).toEqual(['a', 'c', 'a', 'c']);
+    expect(row(store, 1)).toEqual(['b', null, 'b', null]);
+    expect(store.project.scenes).toHaveLength(4);
+    store.apply(duplicateSlots(refs));
+    expect(store.project.scenes).toHaveLength(6);
+    expect(row(store, 0)).toEqual(['a', 'c', 'a', 'c', 'a', 'c']);
+  });
+
+  it('negli appunti tengono la forma della griglia, anche incollate più in là', () => {
+    const { store, refs, track } = grid();
+    const copied = copySlotClips(store.project, refs)!;
+    expect(pasteSlots(store.project, copied, track(1), 3)).toHaveLength(3);
+    store.apply(pasteToSlot(copied, track(1), 3)); // serve una scena in più
+    expect(store.project.scenes).toHaveLength(5);
+    expect(row(store, 1)).toEqual(['b', null, null, 'a', 'c']);
+    expect(row(store, 2)).toEqual([null, null, null, 'b', null]);
+    expect(store.project.tracks[1].slots[4]!.loop.enabled).toBe(true);
+  });
+
+  it('quelle che non hanno una traccia adatta si saltano', () => {
+    const { store, refs, track } = grid();
+    store.apply(pasteToSlot(copySlotClips(store.project, refs)!, track(2), 2));
+    expect(row(store, 2)).toEqual([null, null, 'a', 'c']);
+  });
+
+  it('sulla timeline le scene vanno una dopo l\'altra', () => {
+    const { store, refs } = grid();
+    const copied = copySlotClips(store.project, refs)!;
+    expect(copied.span).toBe(8);
+    store.apply(pasteClips(copied, 0, 0));
+    expect(store.project.tracks[0].arrangement.map(pl => [pl.start, pl.clip.name])).toEqual([[0, 'a'], [4, 'c']]);
+    expect(store.project.tracks[1].arrangement.map(pl => pl.start)).toEqual([0]);
   });
 });
 

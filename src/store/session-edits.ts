@@ -32,31 +32,41 @@ export const newSlotMidiClip = ({ track, slot }: SlotRef): Edit =>
     return p.updatingTrack(track, x => x.withSlot(slot, MidiClip.empty(ids.next('clip'), 'Clip MIDI', t.color, p.signature.beatsPerBar)));
   });
 
-export const clearSlot = ({ track, slot }: SlotRef): Edit =>
-  edit('Elimina clip', p => p.updatingTrack(track, t => t.withSlot(slot, null)));
+/** Svuota più slot in un passo solo. */
+export const clearSlots = (refs: readonly SlotRef[]): Edit =>
+  edit('Elimina clip', p => refs.reduce((q, r) => q.updatingTrack(r.track, t => t.withSlot(r.slot, null)), p));
 
-/** Sposta (o copia) la clip di uno slot in un altro, anche su un'altra traccia dello stesso
- *  tipo; quella che c'era al suo posto viene sostituita, come in Live. */
-export const moveSlotClip = (from: SlotRef, to: SlotRef, copy: boolean): Edit =>
+/** Sposta (o copia) tutte insieme le clip di `refs`, di `columns` colonne (tra le tracce che si
+ *  vedono) e `rows` scene. Non si può uscire dalla griglia né finire su una traccia di un altro
+ *  tipo: in quel caso non si muove niente. Quelle che c'erano al loro posto vengono sostituite. */
+export const moveSlots = (refs: readonly SlotRef[], columns: number, rows: number, copy: boolean): Edit =>
   edit(copy ? 'Copia clip' : 'Sposta clip', (p, { ids }) => {
-    const clip = requireTrack(p, from.track).slots[from.slot];
-    if (!clip) throw new Error('lo slot di partenza è vuoto');
-    if (!requireTrack(p, to.track).accepts(clip)) throw new TypeError('la clip non va su questa traccia');
-    if (from.track === to.track && from.slot === to.slot) return p;
-    const moved = copy ? clip.withId(ids.next('clip')) : clip;
-    const cleared = copy ? p : p.updatingTrack(from.track, t => t.withSlot(from.slot, null));
-    return cleared.updatingTrack(to.track, t => t.withSlot(to.slot, moved));
+    const tracks = p.visibleTracks;
+    const moves = refs.flatMap(r => {
+      const clip = requireTrack(p, r.track).slots[r.slot];
+      if (!clip) return [];
+      const to = tracks[tracks.findIndex(t => t.id === r.track) + columns];
+      const slot = r.slot + rows;
+      if (!to || slot < 0 || slot >= p.scenes.length) throw new Error('La selezione non ci sta: uscirebbe dalla griglia.');
+      if (!to.accepts(clip)) throw new TypeError('la clip non va su questa traccia');
+      return [{ from: r, clip, track: to.id, slot }];
+    });
+    if (!columns && !rows) return p;
+    const cleared = copy ? p : moves.reduce((q, m) => q.updatingTrack(m.from.track, t => t.withSlot(m.from.slot, null)), p);
+    return moves.reduce((q, m) => q.updatingTrack(m.track, t => t.withSlot(m.slot, copy ? m.clip.withId(ids.next('clip')) : m.clip)), cleared);
   });
 
-/** Una copia della clip nello slot sotto; se è occupato (o non c'è) prima si inserisce una scena. */
-export const duplicateSlotClip = ({ track, slot }: SlotRef): Edit =>
+/** Una copia delle clip di `refs` subito sotto il blocco che formano. Come per una clip sola, se
+ *  anche un solo posto è occupato (o non c'è) si inseriscono prima le scene che servono. */
+export const duplicateSlots = (refs: readonly SlotRef[]): Edit =>
   edit('Duplica clip', (p, { ids }) => {
-    const clip = requireTrack(p, track).slots[slot];
-    if (!clip) throw new Error('lo slot è vuoto');
-    const below = slot + 1;
-    const free = below < p.scenes.length && !requireTrack(p, track).slots[below];
-    const next = free ? p : p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, below);
-    return next.updatingTrack(track, t => t.withSlot(below, clip.withId(ids.next('clip'))));
+    const filled = refs.filter(r => requireTrack(p, r.track).slots[r.slot]);
+    if (!filled.length) throw new Error('gli slot sono vuoti');
+    const top = Math.min(...filled.map(r => r.slot)), below = Math.max(...filled.map(r => r.slot)) + 1, height = below - top;
+    const free = filled.every(r => r.slot + height < p.scenes.length && !requireTrack(p, r.track).slots[r.slot + height]);
+    let next = p;
+    if (!free) for (let i = 0; i < height; i++) next = next.addingScene({ id: ids.next('scene'), name: String(next.scenes.length + 1) }, below);
+    return filled.reduce((q, r) => q.updatingTrack(r.track, t => t.withSlot(r.slot + height, t.slots[r.slot]!.withId(ids.next('clip')))), next);
   });
 
 /** Modifica la clip `clip` negli slot della traccia (note, warp, nome…). */

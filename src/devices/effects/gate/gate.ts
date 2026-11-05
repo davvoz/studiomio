@@ -1,4 +1,4 @@
-/* "Gate": il trance gate. Un pattern di step (fino a 32) a tempo, agganciato alla battuta: ogni
+/* "Trance Gate" (il tipo resta 'gate': i progetti salvati lo chiamano così). Un pattern di step (fino a 32) a tempo, agganciato alla battuta: ogni
  * step apre il suono al suo livello (0 = chiuso) per la parte dello step data da "Gate", con
  * attacco e rilascio per non fare click; lo swing ritarda gli step dispari. "Profondità" dice
  * quanto chiude: a 100% il silenzio, meno lascia passare un po' di suono (un tremolo a step).
@@ -38,7 +38,7 @@ const rate = (label: string) => STEP_RATES.findIndex(([l]) => l === label);
 
 export const GATE: DeviceType = {
   type: 'gate',
-  label: 'Gate',
+  label: 'Trance Gate',
   sections: [
     {
       label: 'Pattern',

@@ -3,7 +3,9 @@
  * destra la corsia con la curva, allineata alla timeline e con il suo zoom. Si apre con il
  * pulsante "A" del master; ha un pallino quando il master ha delle curve. */
 import type { PlaybackEngine } from '../engine/playback-engine';
+import type { ModTarget } from '../model/envelope';
 import type { Project } from '../model/project';
+import type { Clipboard } from '../store/clipboard';
 import { setMasterAutomation } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { BeatAxis } from './clip-editor/clip-geometry';
@@ -26,10 +28,11 @@ export class MasterAutomation {
   private axisOf: { geo: TimelineGeometry; axis: BeatAxis } | null = null;
   private curvesOf: { project: Project; curves: LaneCurves } | null = null;
 
-  constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine) {
+  constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, clipboard: Clipboard) {
     const self = this;
     this.editor = new ModulationEditor({
       get axis() { return self.axis(); },
+      clipboard,
       curves: () => this.curves(),
       grid: () => gridStep(ui.geometry.pxPerBeat, store.project.signature),
       signature: () => store.project.signature,
@@ -63,6 +66,12 @@ export class MasterAutomation {
     this.header.hidden = this.lane.hidden = !open;
     if (open) this.editor.opened();
     this.sync();
+  }
+
+  /** Apre la corsia sul parametro `target`. */
+  show(target: ModTarget): boolean {
+    this.toggle(true);
+    return this.editor.show(target);
   }
 
   /** L'asse della corsia: quello della timeline (lo stesso oggetto finché non si muove). */

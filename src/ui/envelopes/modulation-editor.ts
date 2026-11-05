@@ -26,6 +26,7 @@ export class ModulationEditor {
   private readonly device = el<HTMLSelectElement>('select', { title: 'Il dispositivo da modulare' });
   private readonly param = el<HTMLSelectElement>('select', { title: 'Il parametro da modulare' });
   private readonly drawButton: HTMLButtonElement;
+  private readonly shapesButton: HTMLButtonElement;
   private readonly clearButton: HTMLButtonElement;
   private devices: TargetDevice[] = [];
   private target: ModTarget | null = null;
@@ -33,9 +34,13 @@ export class ModulationEditor {
   private builtFor = '';
 
   constructor(private readonly host: ModulationHost, title = 'Modulazioni') {
-    this.lane = new EnvelopeLane(host, on => this.drawButton.classList.toggle('on', on));
+    this.lane = new EnvelopeLane(host, on => this.drawButton.classList.toggle('on', on), on => this.shapesButton.classList.toggle('on', on));
     this.drawButton = el<HTMLButtonElement>('button', {
-      className: 'mini', textContent: '✎', title: 'Disegno a scalini sulla griglia', onclick: () => this.lane.setDraw(!this.lane.draw),
+      className: 'mini', textContent: '✎', title: 'Disegno a scalini sulla griglia (B); con Alt a mano libera', onclick: () => this.lane.setDraw(!this.lane.draw),
+    });
+    this.shapesButton = el<HTMLButtonElement>('button', {
+      className: 'mini', textContent: '∿', title: 'Forme pronte (F): sinusoide, rampe, pompa… nel tratto scelto o su tutto ciò che suona',
+      onclick: () => this.lane.setShapes(!this.lane.shapes),
     });
     this.clearButton = el<HTMLButtonElement>('button', {
       className: 'mini', textContent: '×', title: 'Cancella la modulazione di questo parametro',
@@ -44,7 +49,7 @@ export class ModulationEditor {
     this.device.onchange = () => this.chooseDevice(this.device.value);
     this.param.onchange = () => this.choose(this.paramTargets().find(t => targetKey(t) === this.param.value) ?? null);
     this.controls.append(
-      el('div', { className: 'mod-head' }, el('span', { textContent: title }), this.drawButton, this.clearButton),
+      el('div', { className: 'mod-head' }, el('span', { textContent: title }), this.drawButton, this.shapesButton, this.clearButton),
       this.device, this.param);
   }
 
@@ -65,6 +70,15 @@ export class ModulationEditor {
     this.choose(keep && (curves.envelope(keep) || !first) ? keep : first);
   }
 
+  /** Porta la corsia sul parametro `target`; false se con questa clip non si può modulare. */
+  show(target: ModTarget): boolean {
+    const devices = this.host.devices();
+    if (!devices || !this.targetsOf(devices).some(t => sameTarget(t, target))) return false;
+    this.devices = devices;
+    this.choose(target);
+    return true;
+  }
+
   /** Allinea menu e corsia alle curve e ai dispositivi (dopo ogni modifica del progetto). */
   sync(): void {
     const curves = this.host.curves(), devices = this.host.devices();
@@ -78,6 +92,7 @@ export class ModulationEditor {
       this.fill();
     }
     this.clearButton.disabled = !(this.target && curves.envelope(this.target));
+    this.shapesButton.disabled = !this.target;
     this.lane.invalidate();
   }
 

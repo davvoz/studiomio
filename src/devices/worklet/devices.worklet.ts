@@ -1,5 +1,6 @@
 /* I processori AudioWorklet dei dispositivi: uno per tutti gli strumenti, uno per tutti gli
  * effetti. Ognuno crea il motore del tipo richiesto e riceve parametri (e note) dalla porta. */
+import { metersDynamics } from '../dsp/core';
 import { paramsOf, type DeviceType } from '../device-type';
 import {
   followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type KeyedEffect, type SampleData, type TransportFollower,
@@ -167,6 +168,9 @@ const passThrough: EffectCore = {
   process: (inL, inR, outL, outR, n) => { outL.set(inL.subarray(0, n)); outR.set(inR.subarray(0, n)); },
 };
 
+/** Ogni quanti secondi un effetto di dinamica dice al pannello cosa sta facendo. */
+const DYNAMICS_POST = 1 / 30;
+
 class EffectProcessor extends AudioWorkletProcessor {
   private readonly type: string;
   private core: EffectCore;
@@ -187,6 +191,10 @@ class EffectProcessor extends AudioWorkletProcessor {
   /** Le copie ripulite degli ingressi (vedi `cleaned`). */
   private spare = [new Float32Array(128), new Float32Array(128), new Float32Array(128), new Float32Array(128)];
   private alive = true;
+  /** Il pannello guarda: ogni DYNAMICS_POST secondi gli si dice cosa fa l'effetto. */
+  private watched = false;
+  private untilDynamics = 0;
+  private readonly dynamics = new Float32Array(2);
 
   constructor(options: AudioWorkletNodeOptions) {
     super(options);
@@ -206,6 +214,7 @@ class EffectProcessor extends AudioWorkletProcessor {
       tempo: m => this.core.setTempo((this.bpm = m.bpm)),
       keyed: m => this.setKeyed((this.keyedOn = m.keyed)),
       transport: m => this.clock.set(m.anchor),
+      watch: m => { this.watched = m.on; },
       ping: m => this.port.postMessage({ type: 'pong', id: m.id } satisfies EffectReply),
       dispose: () => { this.alive = false; },
     });
@@ -250,6 +259,7 @@ class EffectProcessor extends AudioWorkletProcessor {
       if (params) this.core.setParams((this.params = params));
       this.follower?.setTransport(this.clock.at(now));
       this.runner.process(l, r, outL, outR);
+      if (this.watched) this.postDynamics(outL.length);
     } catch (e) {
       error = e;
     }
@@ -262,6 +272,13 @@ class EffectProcessor extends AudioWorkletProcessor {
       }
     }
     return this.alive;
+  }
+
+  private postDynamics(frames: number): void {
+    if ((this.untilDynamics -= frames / sampleRate) > 0 || !metersDynamics(this.core)) return;
+    this.untilDynamics = DYNAMICS_POST;
+    this.core.readDynamics(this.dynamics);
+    this.port.postMessage({ type: 'dynamics', input: this.dynamics[0], reduction: this.dynamics[1] } satisfies EffectReply);
   }
 }
 

@@ -16,7 +16,7 @@ export class SidechainPicker {
   readonly element = el('div', { className: 'device-section' },
     el('div', { className: 'device-section-title', textContent: 'Sidechain' }),
     el('div', { className: 'device-controls' },
-      el('div', { className: 'choice' }, this.select, el('div', { className: 'knob-label', textContent: 'Ascolta' }))));
+      el('div', { className: 'choice sidechain-choice' }, this.select, el('div', { className: 'knob-label', textContent: 'Ascolta' }))));
   /** Le voci del menu dell'ultima volta: si rifà solo se cambiano (un menu aperto resta aperto). */
   private shown = '';
 

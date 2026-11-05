@@ -83,11 +83,17 @@ export type EffectMessage =
   | { readonly type: 'keyed'; readonly keyed: boolean }
   /** Un ancoraggio nuovo del trasporto, o null: si è fermato. */
   | { readonly type: 'transport'; readonly anchor: TransportAnchor | null }
+  /** Comincia o smette di mandare 'dynamics' (lo chiede il pannello finché è aperto). */
+  | { readonly type: 'watch'; readonly on: boolean }
   /** Risponde con 'pong' quando tutti i messaggi precedenti sono stati ricevuti. */
   | { readonly type: 'ping'; readonly id: number }
   | { readonly type: 'dispose' };
 
-export type EffectReply = { readonly type: 'pong'; readonly id: number } | FaultReply;
+export type EffectReply =
+  | { readonly type: 'pong'; readonly id: number }
+  /** Cosa fa un effetto di dinamica (vedi DynamicsMeter), circa 30 volte al secondo. */
+  | { readonly type: 'dynamics'; readonly input: number; readonly reduction: number }
+  | FaultReply;
 
 export const METER_PROCESSOR = 'studiomio-meter';
 

@@ -102,7 +102,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 
 /* ---------------------------------------------------------------- editor della clip */
 .clip-editor { display: grid; grid-template-columns: 250px 1fr; grid-template-rows: minmax(0, 1fr) auto; height: min(var(--editor-h, 300px), calc(100vh - 220px)); border-top: 2px solid var(--accent); background: var(--panel); outline: none; position: relative; }
-.clip-editor.with-lane { height: min(calc(var(--editor-h, 300px) + 100px), calc(100vh - 220px)); }
+.clip-editor.with-lane { height: min(calc(var(--editor-h, 300px) + var(--lane-h, 128px)), calc(100vh - 220px)); }
 /* il bordo in alto: trascinandolo l'editor diventa più alto o più basso */
 .editor-resize { position: absolute; left: 0; right: 0; top: -6px; height: 9px; z-index: 3; cursor: ns-resize; touch-action: none; }
 .editor-resize:hover, .editor-resize.dragging { background: linear-gradient(transparent 4px, var(--accent) 4px, var(--accent) 6px, transparent 6px); }
@@ -113,8 +113,19 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .mod-head span { margin-right: auto; font-weight: 600; font-size: 12px; }
 .mod-head .mini { padding: 0 7px; font-size: 12px; line-height: 1.6; }
 .mod-controls select { width: 100%; font-size: 12px; padding: 2px 4px; }
-.mod-lane { grid-row: 2; grid-column: -2 / -1; position: relative; height: 104px; border-top: 1px solid var(--line); overflow: hidden; }
-.mod-lane canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
+.mod-lane { grid-row: 2; grid-column: -2 / -1; position: relative; height: var(--lane-h, 128px); border-top: 1px solid var(--line); overflow: hidden; }
+.mod-lane canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; outline: none; }
+.mod-lane-grip { position: absolute; left: 0; right: 0; top: 0; height: 5px; cursor: ns-resize; touch-action: none; }
+.mod-lane-grip:hover { background: #fff2; }
+/* le forme pronte, sopra la curva */
+.mod-shapes { position: absolute; top: 8px; right: 8px; z-index: 2; max-width: calc(100% - 16px); display: flex; flex-wrap: wrap; align-items: center; gap: 3px 4px; padding: 3px 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 2px 6px #0006; font-size: 11px; color: var(--muted); }
+.mod-shapes[hidden] { display: none; }
+.mod-shape-buttons { display: flex; gap: 1px; }
+.mod-shapes button { width: 21px; height: 20px; padding: 0; display: grid; place-items: center; font-size: 12px; line-height: 1; }
+.mod-shapes svg { width: 18px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.mod-shapes select { font-size: 11px; padding: 1px 0; width: 74px; }
+.mod-shapes select:last-child { width: 60px; }
+.master-auto-lane .mod-lane-grip { display: none; }
 .mod-side { grid-row: 2; grid-column: 2; border-top: 1px solid var(--line); border-right: 1px solid #2b2f36; background: #1b1e23; font-size: 10.5px; line-height: 1.3; color: var(--muted); padding: 6px 5px; overflow: hidden; word-break: break-word; }
 .clip-editor[hidden] { display: none; }
 .clip-panel { padding: 8px 10px; overflow-y: auto; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
@@ -160,11 +171,15 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-title { font-weight: 600; margin-right: auto; padding-left: 9px; border-left: 4px solid var(--color, var(--accent)); }
 .device-head .close { padding: 2px 9px; }
 /* la catena scorre solo in orizzontale, come in Live: ogni dispositivo è disegnato per stare
- * nell'altezza della vista (anche con la barra di scorrimento sotto) ed è alto quanto la catena */
+ * nell'altezza della vista (anche con la barra di scorrimento sotto) ed è alto quanto la catena.
+ * Lo spazio della barra c'è sempre: l'altezza non cambia quando compare, e il grafico del
+ * compressore, che è largo quanto è alto, non la farebbe comparire e sparire all'infinito */
 .device-chain {
-  display: flex; gap: 10px; padding: 8px 10px; overflow: auto hidden; flex: 1; min-height: 0; align-items: flex-start;
-  scrollbar-width: thin; scrollbar-color: #3a4048 transparent;
+  display: flex; gap: 10px; padding: 8px 10px; overflow: scroll hidden; flex: 1; min-height: 0; align-items: flex-start;
 }
+/* niente frecce: con la barra sempre al suo posto si vedrebbero anche senza niente da scorrere */
+.device-chain::-webkit-scrollbar { height: 10px; }
+.device-chain::-webkit-scrollbar-thumb { background: #3a4048; border-radius: 5px; }
 .device-chain > * { min-height: 100%; }
 /* i disegni prendono le misure dal CSS, mai dalla loro risoluzione: questa è le misure × devicePixelRatio
  * e, con lo schermo scalato (125%, 150%), farebbe allargare il canvas a ogni ridisegno, all'infinito.
@@ -287,6 +302,8 @@ body.midi-mapping [data-midi-target]:not(.mapped) { outline: 1px dashed color-mi
 body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi); background: color-mix(in srgb, var(--midi) 22%, transparent); }
 .inactive { opacity: .3; }
 .choice select { font-size: 12px; padding: 2px 4px; margin-top: 8px; }
+/* largo uguale con qualunque nome di traccia: i nomi lunghi finiscono con … */
+.sidechain-choice select { width: 132px; text-overflow: ellipsis; }
 .header .controls .fx { padding: 1px 6px; font-size: 11px; }
 .knob { width: 62px; display: flex; flex-direction: column; align-items: center; cursor: ns-resize; user-select: none; outline: none; touch-action: none; }
 .knob-face { width: 40px; height: 40px; }
@@ -383,7 +400,7 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 /* ---------------------------------------------------------------- EQ */
 /* i pannelli grafici (EQ, Drive) riempiono l'altezza del dispositivo: il grafico prende lo
  * spazio che resta sopra i controlli, nella catena come dentro un rack */
-.device-sections:has(> .eq-display, > .drive-display, > .gate-display) { flex: 1 0 auto; flex-wrap: nowrap; }
+.device-sections:has(> .eq-display, > .drive-display, > .gate-display, > .dynamics-display) { flex: 1 0 auto; flex-wrap: nowrap; }
 .eq-display { display: flex; flex-direction: column; gap: 6px; }
 .eq-graph { display: block; width: 600px; flex: 1 1 0; min-height: 120px; border-radius: 6px; border: 1px solid var(--line); cursor: crosshair; touch-action: none; }
 .device-panel.off .eq-graph { opacity: .6; }
@@ -563,6 +580,12 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drum-controls { display: flex; align-items: flex-start; gap: 2px; }
 
 /* Drive: curva, spettro, forme, controlli */
+/* il grafico alto quanto il pannello e accanto le schede su due righe, sidechain compreso (che è
+ * fuori dal display): per questo display e controlli non fanno scatola, stanno tutti nella griglia */
+.device-sections:has(> .dynamics-display) { display: grid; grid-template-columns: auto auto auto; grid-template-rows: 1fr 1fr; align-content: stretch; }
+.dynamics-display, .dynamics-controls { display: contents; }
+.dynamics-graph { display: block; grid-row: 1 / -1; align-self: stretch; width: 176px; min-height: 90px; border-radius: 6px; border: 1px solid var(--line); cursor: ew-resize; touch-action: none; }
+.device-panel.off .dynamics-graph { opacity: .6; }
 .drive-display { display: flex; flex-direction: column; gap: 6px; }
 .drive-top { display: flex; gap: 6px; flex: 1 1 0; min-height: 90px; }
 .drive-curve { display: block; width: 150px; border-radius: 6px; border: 1px solid var(--line); }

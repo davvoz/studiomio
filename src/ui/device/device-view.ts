@@ -21,15 +21,18 @@ import {
   addEffect, loadEffectPreset, loadPreset, removeEffect, setEffectEnabled, setEffectParam,
   setEffectParams, setEffectSidechain, setInstrument, setInstrumentParam, setInstrumentParams, setInstrumentSamples, setModTarget,
 } from '../../store/edits';
+import type { Clipboard } from '../../store/clipboard';
+import { copyDevices, copyRack, pasteDevices, removeDevices, type CopiedDevices } from '../../store/device-clipboard';
 import type { Edit, ProjectStore } from '../../store/project-store';
-import { addEffectToRack, groupDevices, mapMacro, moveDevice, ungroupRack, unmapParam } from '../../store/rack-edits';
+import { addEffectToRack, groupDevices, mapMacro, moveDevice, removeRack, ungroupRack, unmapParam } from '../../store/rack-edits';
 import { acceptBrowserDrops } from '../browser/browser-drag';
-import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
+import { KEY, showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
+import { ownedByField } from '../keymap';
 import { addHeightHandle, DEVICE_HEIGHT } from '../editor-height';
 import { controlOf, type ParamControl } from './controls';
 import { DevicePanel } from './device-panel';
-import { DEVICE_DISPLAYS, NO_SPECTRUM, type DeviceDisplay, type ModTargetHost, type SpectrumTap } from './displays';
+import { DEVICE_DISPLAYS, NO_DYNAMICS, NO_SPECTRUM, type DeviceDisplay, type DynamicsTap, type ModTargetHost, type SpectrumTap } from './displays';
 import { RackPanel } from './rack-panel';
 import type { MacroSprings } from '../../store/macro-springs';
 import { SidechainPicker } from './sidechain-picker';
@@ -41,6 +44,8 @@ export interface DeviceViewDeps {
   readonly sampleRate: number;
   /** Lo spettro di un effetto che suona (per i pannelli grafici). */
   readonly spectrum: (owner: ChainOwner, id: DeviceId) => SpectrumTap;
+  /** Cosa fa un effetto di dinamica che suona (per il suo pannello). */
+  readonly dynamics?: (owner: ChainOwner, id: DeviceId) => DynamicsTap;
   /** Per seguire le note che la traccia suona: ogni chiamata della funzione data restituisce
    *  quelle partite dalla chiamata prima. */
   readonly playedNotes: (track: TrackId) => () => readonly number[];
@@ -52,6 +57,10 @@ export interface DeviceViewDeps {
   readonly playheads?: (track: TrackId) => readonly number[];
   /** Un messaggio nella barra di stato (es. perché un raggruppamento non si può fare). */
   readonly say?: (text: string) => void;
+  /** Gli appunti dell'app, per copiare dispositivi da una catena all'altra. */
+  readonly clipboard?: Clipboard;
+  /** Mostra la curva di un parametro: nella clip della traccia o, sul master, sulla timeline. */
+  readonly showAutomation?: (owner: ChainOwner, target: ModTarget) => void;
   /** Una voce del browser lasciata sulla catena aperta. */
   readonly dropItem?: (item: BrowserItem, target: LoadTarget) => void;
   /** Per mappare la tastiera del computer (KEY acceso e il bersaglio scelto). */
@@ -62,6 +71,14 @@ export interface DeviceViewDeps {
   /** Le macro molla: il mouse dice quando ne tiene una e quando la lascia. */
   readonly springs?: MacroSprings;
 }
+
+/** Ctrl+tasto sui dispositivi scelti. */
+const DEVICE_KEYS: Readonly<Record<string, (v: DeviceView) => void>> = {
+  c: v => v.copySelection(),
+  x: v => v.cutSelection(),
+  v: v => v.pasteSelection(),
+  d: v => v.duplicateSelection(),
+};
 
 /** La chiave del pannello dello strumento (gli effetti usano il loro id). */
 const INSTRUMENT = 'instrument';
@@ -144,6 +161,12 @@ export class DeviceView {
         e.stopPropagation();
         if (e.shiftKey) this.ungroupSelection();
         else this.groupSelection();
+      }
+      const command = !ownedByField(e.target as HTMLElement | null, e) && (e.ctrlKey || e.metaKey) && !e.shiftKey ? DEVICE_KEYS[e.key.toLowerCase()] : undefined;
+      if (command) {
+        e.preventDefault();
+        e.stopPropagation();
+        command(this);
       }
     });
     // le schede dei pannelli vanno a capo nell'altezza della catena: si rifà quando cambia
@@ -375,6 +398,8 @@ export class DeviceView {
     const panel = new RackPanel({
       store: this.deps.store, springs: this.deps.springs, owner, rack, folded, mapping, canMove: can.move, canNest: can.nest,
       deviceLabel: key => labels.get(key) ?? key,
+      headMenu: () => this.clipboardMenu(owner, rack.devices, rack.id),
+      macroMenu: index => this.automationMenu(owner, { kind: 'device', device: rack.id, param: macroParam(index) }),
       outerMenu: index => {
         const racks = this.deps.store.project.racksOf(owner);
         const now = findRack(racks, rack.id);
@@ -467,6 +492,8 @@ export class DeviceView {
       const rack = rackOf(this.deps.store.project.racksOf(owner), key);
       const presets = panel.presetMenu();
       showContextMenu(ev.clientX, ev.clientY, [
+        ...this.clipboardMenu(owner, keys),
+        SEPARATOR,
         { label: 'Raggruppa in un rack', shortcut: 'Ctrl+G', run: () => this.groupSelection(keys) },
         { label: 'Separa il rack', shortcut: 'Ctrl+Maiusc+G', disabled: !rack, run: () => rack && this.guard(ungroupRack(owner, rack.id)) },
         ...(presets.length ? [SEPARATOR, ...presets] : []),
@@ -506,10 +533,80 @@ export class DeviceView {
   /** Il menu di un parametro: su quale macro dei suoi rack mapparlo (prima il rack in cui sta,
    *  poi quelli intorno). */
   private paramMenu(owner: ChainOwner, key: DeviceKey, param: string): MenuItem[] {
-    const mods = this.modulationMenu(owner, { kind: 'device', device: key, param });
+    const mods = [...this.automationMenu(owner, { kind: 'device', device: key, param }), ...this.modulationMenu(owner, { kind: 'device', device: key, param })];
     const racks = racksWith(this.deps.store.project.racksOf(owner), key).reverse();
     if (!racks.length) return [...mods, { label: 'Raggruppa in un rack per mapparlo su una macro', shortcut: 'Ctrl+G', run: () => this.groupSelection([key]) }];
     return [...mods, ...this.mapMenu(owner, racks, key, param)];
+  }
+
+  /** "Mostra automazione", se l'app la sa mostrare. */
+  private automationMenu(owner: ChainOwner, target: ModTarget): MenuItem[] {
+    const show = this.deps.showAutomation;
+    return show ? [{ label: 'Mostra automazione', run: () => show(owner, target) }, SEPARATOR] : [];
+  }
+
+  // ---------------------------------------------------------------- appunti
+
+  /** Le voci di copia e incolla di un dispositivo (o del rack `rack`). */
+  private clipboardMenu(owner: ChainOwner, keys: readonly DeviceKey[], rack: DeviceId | null = null): MenuItem[] {
+    const onlyInstrument = !rack && keys.every(k => k === INSTRUMENT);
+    const content = () => (rack ? copyRack(this.deps.store.project, owner, rack) : copyDevices(this.deps.store.project, owner, keys));
+    return [
+      { label: 'Taglia', shortcut: KEY.cut, disabled: onlyInstrument, run: () => this.cut(owner, keys, rack, content()) },
+      { label: 'Copia', shortcut: KEY.copy, run: () => this.copy(content()) },
+      { label: 'Duplica', shortcut: KEY.duplicate, disabled: onlyInstrument, run: () => this.paste(content(), owner, this.lastKey(owner, keys)) },
+      { label: 'Incolla dopo', shortcut: KEY.paste, disabled: !this.deps.clipboard?.devices, run: () => this.paste(this.deps.clipboard?.devices ?? null, owner, this.lastKey(owner, keys)) },
+    ];
+  }
+
+  /** Il dispositivo scelto che viene per ultimo nel suono. */
+  private lastKey(owner: ChainOwner, keys: readonly DeviceKey[]): DeviceKey | null {
+    const order = this.deps.store.project.chainKeys(owner);
+    return keys.length ? order[Math.max(...keys.map(k => order.indexOf(k)))] : null;
+  }
+
+  /** Ciò che è scelto adesso, pronto per gli appunti. */
+  private chosenContent(): CopiedDevices | null {
+    const owner = this.owner, rack = this.chosenRack(), p = this.deps.store.project;
+    if (!owner) return null;
+    return rack ? copyRack(p, owner, rack.id) : copyDevices(p, owner, this.selection);
+  }
+
+  private copy(content: CopiedDevices | null): boolean {
+    if (!content || !this.deps.clipboard) return false;
+    this.deps.clipboard.content = content;
+    const n = (content.instrument ? 1 : 0) + content.effects.length;
+    this.deps.say?.(`${content.rack ? `Rack «${content.rack.name}» copiato` : n > 1 ? `${n} dispositivi copiati` : 'Dispositivo copiato'}: Ctrl+V lo incolla, anche sulla catena di un'altra traccia.`);
+    return true;
+  }
+
+  private cut(owner: ChainOwner, keys: readonly DeviceKey[], rack: DeviceId | null, content: CopiedDevices | null): void {
+    if (this.copy(content)) this.guard(rack ? removeRack(owner, rack) : removeDevices(owner, keys));
+  }
+
+  private paste(content: CopiedDevices | null, owner: ChainOwner, after: DeviceKey | null): void {
+    if (content) this.guard(pasteDevices(content, owner, after));
+  }
+
+  /** Ctrl+C: i dispositivi scelti con un clic sul nome. */
+  copySelection(): void {
+    if (!this.copy(this.chosenContent())) this.deps.say?.('Scegli un dispositivo con un clic sul nome, poi Ctrl+C.');
+  }
+
+  cutSelection(): void {
+    const owner = this.owner, rack = this.chosenRack();
+    if (owner && this.selection.length) this.cut(owner, this.selection, rack?.id ?? null, this.chosenContent());
+  }
+
+  pasteSelection(): void {
+    if (!this.owner) return;
+    const content = this.deps.clipboard?.devices ?? null;
+    if (!content) return this.deps.say?.('Negli appunti non ci sono dispositivi.');
+    this.paste(content, this.owner, this.lastKey(this.owner, this.selection));
+  }
+
+  duplicateSelection(): void {
+    if (this.owner && this.selection.length) this.paste(this.chosenContent(), this.owner, this.lastKey(this.owner, this.selection));
   }
 
   // ---------------------------------------------------------------- modulatori
@@ -790,6 +887,7 @@ export class DeviceView {
       setParams: (values, final) => this.displayParams(owner, id, values, final, v => setEffectParams(owner, id, v), `fx-${id}`),
       controlsChanged: () => { this.markMapped(id); this.markKeys(id); this.markModulated(); this.curveControls = null; },
       openSpectrum: () => this.deps.spectrum(owner, id),
+      openDynamics: () => this.deps.dynamics?.(owner, id) ?? NO_DYNAMICS,
       audition: () => {},
       playedNotes: () => [],
       ...(type.modulator ? { modTargets: this.modTargetHost(owner, id) } : {}),

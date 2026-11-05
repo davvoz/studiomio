@@ -1,4 +1,5 @@
 import type { TrackId } from '../core/id';
+import type { ModTarget } from '../model/envelope';
 import { randomIds } from '../core/id';
 import type { Beats, Seconds } from '../core/music-time';
 import type { Color } from '../model/clip';
@@ -30,7 +31,7 @@ import {
   consolidatedAudioClip, consolidatedMidiClip, consolidateSpans, placementsIn, sessionClip, soloAudioProject, withConsolidated, type Consolidated,
 } from '../store/consolidate';
 import { arrangementToScene, sceneToArrangement, type SceneClip } from '../store/session-edits';
-import { findClip, placementRef, setClipColor, type ClipRef } from '../store/clip-ref';
+import { findClip, placementRef, setClipColor, slotRef, type ClipRef } from '../store/clip-ref';
 import { showContextMenu } from '../ui/context-menu';
 import { choose } from '../ui/dialog';
 import { gridStep } from '../ui/timeline/geometry';
@@ -95,6 +96,9 @@ export class App implements Commands, TimelineActions {
   private readonly bottom = new BottomPanel();
   /** Appunti condivisi da timeline e piano roll. */
   readonly clipboard = new Clipboard();
+  private readonly automation: MasterAutomation;
+  /** L'ultima clip aperta di ogni traccia: lì va "Mostra automazione". */
+  private readonly lastClips = new Map<TrackId, ClipRef>();
   /** Un consolidamento sta renderizzando l'audio: non se ne parte un altro. */
   private consolidating = false;
   /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
@@ -137,7 +141,7 @@ export class App implements Commands, TimelineActions {
       store: this.store, engine: this.audio.engine, peaks: this.peaks,
       trackBeats: (sample, bpm) => this.audio.dsp.trackBeats(sample.id, bpm),
       cropSample: (sample, from, to) => this.cropSample(sample, from, to),
-      say: t => this.say(t),
+      say: t => this.say(t), clipboard: this.clipboard,
     });
     const audition = (track: TrackId, pitch: number, velocity = 100) => this.run(() => this.audio.audition(track, pitch, velocity));
     this.pianoRoll = new PianoRoll({
@@ -147,7 +151,8 @@ export class App implements Commands, TimelineActions {
     });
     this.device = new DeviceView({
       store: this.store, audition: (track, pitch) => audition(track, pitch),
-      sampleRate: this.audio.context.sampleRate, spectrum: (owner, id) => this.audio.spectrum(owner, id),
+      clipboard: this.clipboard, showAutomation: (owner, target) => this.showAutomation(owner, target),
+      sampleRate: this.audio.context.sampleRate, spectrum: (owner, id) => this.audio.spectrum(owner, id), dynamics: (owner, id) => this.audio.dynamics(owner, id),
       playedNotes: track => {
         const engine = this.audio.engine;
         let last = engine.audioTime;
@@ -168,10 +173,11 @@ export class App implements Commands, TimelineActions {
     });
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
-    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner), dropItem };
+    const showAutomation = (owner: ChainOwner, target: ModTarget) => this.showAutomation(owner, target);
+    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner), dropItem, showAutomation };
     const meters = new MeterBoard(owner => this.audio.engine.levels(owner));
     this.sessionView = new SessionView({
-      store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard,
+      store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard, showAutomation,
       openClip: ref => this.openClip(ref),
       openDevices: owner => this.openDevices(owner),
       importToSlot: (files, track, slot) => this.dropFiles(files, () => this.session.importFilesToSlots(files, track, slot)),
@@ -182,7 +188,7 @@ export class App implements Commands, TimelineActions {
       dropItem,
     });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
-    const automation = new MasterAutomation(this.store, this.ui, this.audio.engine);
+    const automation = this.automation = new MasterAutomation(this.store, this.ui, this.audio.engine, this.clipboard);
     const master = new MasterStrip(this.store, headerActions, meters, automation);
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this);
     const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
@@ -790,7 +796,36 @@ export class App implements Commands, TimelineActions {
     const editor = clip && this.clipEditors[clip.kind];
     if (!editor) return this.say(clip ? `Nessun editor per le clip "${clip.kind}".` : '');
     this.ui.selectTrack(ref.track);
+    this.lastClips.set(ref.track, ref);
     this.bottom.show(editor, () => editor.open(ref));
+  }
+
+  /** Mostra la curva di un parametro. Sul master è sulla timeline; su una traccia è in una clip:
+   *  l'ultima aperta, o quella che suona, o la prima che ha. */
+  showAutomation(owner: ChainOwner, target: ModTarget): void {
+    if (owner === MASTER) {
+      this.showView('arrangement');
+      if (!this.automation.show(target)) this.say('Questo parametro non si può automatizzare.');
+      return;
+    }
+    const ref = this.clipOf(owner);
+    if (!ref) return this.say('La traccia non ha clip: l\'automazione si disegna in una clip. Creane una e riprova.');
+    this.openClip(ref);
+    const clip = findClip(this.store.project, ref)?.clip;
+    if (clip && !(clip.kind === 'audio' ? this.editor : this.pianoRoll).modulation.show(target)) this.say('Questo parametro non si può automatizzare.');
+  }
+
+  /** La clip della traccia su cui lavorare. */
+  private clipOf(id: TrackId): ClipRef | null {
+    const p = this.store.project, track = p.track(id), last = this.lastClips.get(id);
+    if (!track) return null;
+    if (last && findClip(p, last)) return last;
+    const playing = this.audio.engine.playingClips().get(id);
+    if (playing) return slotRef(id, playing);
+    const slot = track.slots.find(c => c);
+    if (slot) return slotRef(id, slot.id);
+    const placed = track.arrangement[0];
+    return placed ? placementRef(id, placed.id) : null;
   }
 
   /** Apre strumento ed effetti di una traccia, o gli effetti del master; dal piano roll, con il

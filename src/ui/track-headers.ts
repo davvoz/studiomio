@@ -15,13 +15,16 @@ import { el } from './dom';
 import { renameInline } from './inline-rename';
 import { LevelMeter, type MeterBoard } from './meters/meter-board';
 import { canStartTrackDrag, startTrackDrag, type DropSpot } from './track-drag';
-import { addEffectItems, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
+import type { ModTarget } from '../model/envelope';
+import { addEffectItems, automationOnRightClick, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 
 export interface HeaderActions {
   /** Apre la catena dei dispositivi (strumento ed effetti) di una traccia o del master. */
   openDevices(owner: ChainOwner): void;
   /** Una voce del browser lasciata su una traccia (o sotto le tracce: `track` null). */
   dropItem?(item: BrowserItem, target: LoadTarget): void;
+  /** Mostra la curva di un parametro nella clip della traccia. */
+  showAutomation?(owner: ChainOwner, target: ModTarget): void;
 }
 
 const kindBadge = (text: string) => () => el('span', { className: 'kind', textContent: text });
@@ -163,6 +166,7 @@ class HeaderRow {
     this.mute = toggle('M', 'Mute', 'mute');
     this.solo = toggle('S', 'Solo', 'solo');
     this.volume = volumeSlider(store, 0, `vol-${id}`, (volumeDb, merge) => this.mixer({ volumeDb }, merge));
+    automationOnRightClick(this.volume, () => actions.showAutomation?.(id, { kind: 'mixer', param: 'volume' }));
     this.fx = fxButton(0, 'Effetti della traccia', open);
     this.name.ondblclick = () => this.rename();
     const meter = new LevelMeter('track-meter', () => meters.resetClip(id));

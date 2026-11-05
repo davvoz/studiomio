@@ -46,6 +46,15 @@ export interface EffectCore {
 
 export type EffectFactory = (sampleRate: number) => EffectCore;
 
+/** Un effetto di dinamica (compressore, gate): dice al suo pannello cosa sta facendo. */
+export interface DynamicsMeter {
+  /** Scrive in `out` il livello più forte sentito dal rilevatore (dB) e la riduzione più forte
+   *  (dB, positiva) dall'ultima lettura. */
+  readDynamics(out: Float32Array): void;
+}
+
+export const metersDynamics = (core: object): core is DynamicsMeter => typeof (core as Partial<DynamicsMeter>).readDynamics === 'function';
+
 /** Dove si trova il trasporto all'inizio di un blocco: il battito della timeline (in quarti) e
  *  il tempo con cui avanza. */
 export interface TransportPosition {
