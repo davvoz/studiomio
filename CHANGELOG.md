@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.51] - 2026-11-05
+
 ### Fixed
 - Copied devices can really be pasted onto another track. Ctrl+V only worked while the keyboard
   was on the device view: after clicking another track in the Arrangement, a slot in Session or
