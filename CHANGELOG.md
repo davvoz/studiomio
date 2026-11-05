@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.50] - 2026-11-05
+
 ### Added
 - Session: several clips can be selected together. Shift+drag draws a rectangle from any slot,
   even on a full grid (from an empty slot, no Shift needed); Shift+click or Shift+arrows extend it,
