@@ -55,6 +55,8 @@ export class DynamicsDisplay implements DeviceDisplay {
   private values: Record<string, number>;
   private params: ParamValues | null = null;
   private dirty = true;
+  /** L'altezza è cambiata: la larghezza segue al fotogramma dopo (dentro l'osservatore non si può). */
+  private resized = true;
   private input = -120;
   private reduction = 0;
 
@@ -66,7 +68,7 @@ export class DynamicsDisplay implements DeviceDisplay {
       el('div', { className: 'device-controls' }, ...s.params.map(p => this.control(p.id)))));
     this.element.append(this.canvas, el('div', { className: 'dynamics-controls' }, ...sections));
     this.canvas.addEventListener('pointerdown', e => this.press(e));
-    new ResizeObserver(() => { this.square(); this.dirty = true; }).observe(this.canvas);
+    new ResizeObserver(() => { this.resized = this.dirty = true; }).observe(this.canvas);
     this.update(ctx.settings, true);
     requestAnimationFrame(this.frame);
   }
@@ -135,6 +137,10 @@ export class DynamicsDisplay implements DeviceDisplay {
       this.input = reading.input > this.input ? reading.input : this.input + (reading.input - this.input) * SMOOTH;
       this.reduction = reading.reduction > this.reduction ? reading.reduction : this.reduction + (reading.reduction - this.reduction) * SMOOTH;
       this.dirty = true;
+    }
+    if (this.resized) {
+      this.resized = false;
+      this.square();
     }
     if (this.dirty) this.paint();
   };

@@ -34,6 +34,8 @@ export interface PianoRollDeps {
   /** Suona subito una nota con lo strumento della traccia. */
   readonly audition: (track: TrackId, pitch: number, velocity: number) => void;
   readonly openInstrument: (track: TrackId) => void;
+  /** Negli appunti ci sono dei dispositivi: Ctrl+V li mette sulla traccia. */
+  readonly pasteDevices?: () => void;
   /** Appunti condivisi con la timeline. */
   readonly clipboard: Clipboard;
   readonly say: (text: string) => void;
@@ -310,6 +312,7 @@ export class PianoRoll implements RollHost {
   paste(at?: Beats): void {
     const c = this.clip(), copied = this.deps.clipboard.notes;
     if (!c) return;
+    if (this.deps.clipboard.devices && this.deps.pasteDevices) return this.deps.pasteDevices();
     if (!copied) return this.deps.say(this.deps.clipboard.clips ? 'Negli appunti ci sono delle clip: incollale sulla timeline.' : 'Gli appunti sono vuoti.');
     const start = at ?? this.insert ?? copied.origin + copied.span;
     this.commitNotes('Incolla note', pasteNotes(c.notes, copied, start));

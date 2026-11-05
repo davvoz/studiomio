@@ -32,7 +32,7 @@ import {
 } from '../store/consolidate';
 import { arrangementToScene, sceneToArrangement, type SceneClip } from '../store/session-edits';
 import { findClip, placementRef, setClipColor, slotRef, type ClipRef } from '../store/clip-ref';
-import { showContextMenu } from '../ui/context-menu';
+import { showContextMenu, type MenuItem } from '../ui/context-menu';
 import { choose } from '../ui/dialog';
 import { gridStep } from '../ui/timeline/geometry';
 import { rulerMenu, timelineMenu, type TimelineActions } from './menus';
@@ -147,6 +147,7 @@ export class App implements Commands, TimelineActions {
     this.pianoRoll = new PianoRoll({
       store: this.store, engine: this.audio.engine, audition, clipboard: this.clipboard,
       openInstrument: track => this.openDevices(track, true),
+      pasteDevices: () => this.pasteDevices(),
       say: t => this.say(t),
     });
     this.device = new DeviceView({
@@ -174,12 +175,15 @@ export class App implements Commands, TimelineActions {
     this.bottom.add(this.editor, this.pianoRoll, this.device);
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
     const showAutomation = (owner: ChainOwner, target: ModTarget) => this.showAutomation(owner, target);
-    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner), dropItem, showAutomation };
+    const pasteDeviceItems = (owner: ChainOwner) => this.pasteDeviceItems(owner);
+    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner), dropItem, showAutomation, pasteDeviceItems };
     const meters = new MeterBoard(owner => this.audio.engine.levels(owner));
     this.sessionView = new SessionView({
       store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard, showAutomation,
       openClip: ref => this.openClip(ref),
       openDevices: owner => this.openDevices(owner),
+      pasteDevices: () => this.pasteDevices(),
+      pasteDeviceItems,
       importToSlot: (files, track, slot) => this.dropFiles(files, () => this.session.importFilesToSlots(files, track, slot)),
       addTrack: kind => this.addTrack(kind),
       exportScene: index => this.exportScene(index),
@@ -306,8 +310,9 @@ export class App implements Commands, TimelineActions {
     this.store.apply(deleteMany(refs));
   }
 
-  /** Incolla al cursore, sulle tracce da cui si è copiato. */
+  /** Incolla al cursore, sulle tracce da cui si è copiato; dei dispositivi, sulla traccia scelta. */
   paste(): void {
+    if (this.clipboard.devices) return this.pasteDevices();
     const copied = this.clipboard.clips;
     if (!copied) return this.say(this.clipboard.notes ? 'Negli appunti ci sono delle note: incollale nel piano roll.' : 'Gli appunti sono vuoti.');
     const index = this.store.project.visibleTracks.findIndex(t => t.id === copied.sourceTrack);
@@ -315,7 +320,19 @@ export class App implements Commands, TimelineActions {
   }
 
   get canPaste(): boolean {
-    return this.clipboard.clips !== null;
+    return this.clipboard.clips !== null || this.clipboard.devices !== null;
+  }
+
+  /** Incolla i dispositivi degli appunti nella catena di `owner` e la mostra: da qualunque parte
+   *  arrivi Ctrl+V, senza `owner` va sulla traccia scelta (o sulla catena aperta). */
+  pasteDevices(owner: ChainOwner | null = this.ui.track ?? this.device.openOwner): void {
+    if (!owner) return this.say('Scegli la traccia su cui incollare.');
+    this.openDevices(owner);
+    if (this.device.openOwner === owner) this.device.pasteSelection();
+  }
+
+  private pasteDeviceItems(owner: ChainOwner): MenuItem[] {
+    return this.clipboard.devices ? [{ label: 'Incolla dispositivi', run: () => this.pasteDevices(owner) }] : [];
   }
 
   pasteAt(trackIndex: number, at: Beats): void {

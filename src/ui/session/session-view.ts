@@ -44,6 +44,10 @@ export interface SessionViewDeps {
   readonly clipboard: Clipboard;
   openClip(ref: ClipRef): void;
   openDevices(owner: ChainOwner): void;
+  /** Mette i dispositivi degli appunti sulla traccia scelta. */
+  pasteDevices(): void;
+  /** Le voci di menu per incollare dei dispositivi su `owner` (nessuna se gli appunti non ne hanno). */
+  pasteDeviceItems(owner: ChainOwner): MenuItem[];
   /** Mostra la curva di un parametro nella clip della traccia. */
   showAutomation?(owner: ChainOwner, target: ModTarget): void;
   /** Una voce del browser lasciata su uno slot, sulla testa di una colonna (o del master) o
@@ -288,6 +292,7 @@ export class SessionView {
   }
 
   pasteSelected(): void {
+    if (this.deps.clipboard.devices) return this.deps.pasteDevices();
     const s = this.selected, content = this.deps.clipboard.clips;
     if (!s) return;
     if (!content) return this.deps.say('Negli appunti non ci sono clip.');
@@ -538,6 +543,7 @@ export class SessionView {
       showContextMenu(e.clientX, e.clientY, [
         { label: 'Effetti', run: () => this.deps.openDevices(b.id) },
         ...addEffectItems(this.deps.store, b.id, () => this.deps.openDevices(b.id)),
+        ...this.deps.pasteDeviceItems(b.id),
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameTrack(b.id, n))) },
         { colors: PALETTE, current: b.color, required: true, pick: c => c && this.apply(setTrackColor(b.id, c)) },
         { label: b.folded ? 'Espandi il bus' : 'Comprimi il bus', run: fold },
@@ -585,6 +591,7 @@ export class SessionView {
       showContextMenu(e.clientX, e.clientY, [
         { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: () => this.deps.openDevices(t.id) },
         ...addEffectItems(this.deps.store, t.id, () => this.deps.openDevices(t.id)),
+        ...this.deps.pasteDeviceItems(t.id),
         { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameTrack(t.id, n))) },
         { colors: PALETTE, current: t.color, required: true, pick: c => c && this.apply(setTrackColor(t.id, c)) },
         SEPARATOR,

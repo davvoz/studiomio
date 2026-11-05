@@ -25,6 +25,8 @@ export interface HeaderActions {
   dropItem?(item: BrowserItem, target: LoadTarget): void;
   /** Mostra la curva di un parametro nella clip della traccia. */
   showAutomation?(owner: ChainOwner, target: ModTarget): void;
+  /** Le voci di menu per incollare dei dispositivi su `owner` (nessuna se gli appunti non ne hanno). */
+  pasteDeviceItems?(owner: ChainOwner): MenuItem[];
 }
 
 const kindBadge = (text: string) => () => el('span', { className: 'kind', textContent: text });
@@ -186,6 +188,7 @@ class HeaderRow {
         { colors: PALETTE, current: t.color, required: true, pick: c => c && store.apply(setTrackColor(t.id, c)) },
         { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: open },
         ...addEffectItems(store, id, open),
+        ...(actions.pasteDeviceItems?.(id) ?? []),
         { label: t.mixer.mute ? 'Togli il mute' : 'Mute', run: () => this.mixer({ mute: !t.mixer.mute }) },
         { label: t.mixer.solo ? 'Togli il solo' : 'Solo', run: () => this.mixer({ solo: !t.mixer.solo }) },
         SEPARATOR,

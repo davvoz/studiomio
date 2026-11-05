@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- Copied devices can really be pasted onto another track. Ctrl+V only worked while the keyboard
+  was on the device view: after clicking another track in the Arrangement, a slot in Session or
+  the piano roll it said the clipboard was empty. Now it pastes on the selected track and shows
+  its chain. "Incolla dispositivi" is also in the right-click menu of a track, and "Incolla" in
+  the empty part of a chain, even one with no effects.
+
 ## [0.3.50] - 2026-11-05
 
 ### Added

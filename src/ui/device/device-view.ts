@@ -171,6 +171,14 @@ export class DeviceView {
     });
     // le schede dei pannelli vanno a capo nell'altezza della catena: si rifà quando cambia
     new ResizeObserver(() => this.fitPanels()).observe(this.chain);
+    // nel vuoto della catena (anche di una catena senza effetti) si può incollare
+    this.chain.addEventListener('contextmenu', e => {
+      if ((e.target as HTMLElement).closest('.device-panel, .rack-panel')) return;
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, [
+        { label: 'Incolla', shortcut: KEY.paste, disabled: !deps.clipboard?.devices, run: () => this.pasteSelection() },
+      ]);
+    });
     deps.store.onChange(() => this.sync());
     deps.ui?.onChange(() => this.showKeys());
     const dropItem = deps.dropItem;
@@ -576,7 +584,7 @@ export class DeviceView {
     if (!content || !this.deps.clipboard) return false;
     this.deps.clipboard.content = content;
     const n = (content.instrument ? 1 : 0) + content.effects.length;
-    this.deps.say?.(`${content.rack ? `Rack «${content.rack.name}» copiato` : n > 1 ? `${n} dispositivi copiati` : 'Dispositivo copiato'}: Ctrl+V lo incolla, anche sulla catena di un'altra traccia.`);
+    this.deps.say?.(`${content.rack ? `Rack «${content.rack.name}» copiato` : n > 1 ? `${n} dispositivi copiati` : 'Dispositivo copiato'}: scegli una traccia e premi Ctrl+V per incollarlo lì.`);
     return true;
   }
 
