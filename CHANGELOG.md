@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.52] - 2026-11-07
+
 ### Added
 - Play MIDI tracks from the computer keyboard. Turn on the ⌨ button of a track, in the Arrangement
   or in the Session mixer: A to L are the white keys, W E T Y U O P the black keys, Z X change the
