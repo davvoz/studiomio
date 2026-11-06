@@ -13,9 +13,10 @@ import type { ProjectStore } from '../../store/project-store';
 import { controlFor, type ParamControl } from '../device/controls';
 import { el } from '../dom';
 import { LevelMeter, PeakReadout, type MeterBoard } from '../meters/meter-board';
-import { automationOnRightClick, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from '../mixer-controls';
+import { automationOnRightClick, fxButton, keyboardButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from '../mixer-controls';
 
 import type { ModTarget } from '../../model/envelope';
+import type { UiState } from '../ui-state';
 
 const PAN: NumberParam = { kind: 'number', id: 'pan', label: 'Pan', min: -50, max: 50, default: 0, unit: 'pan', step: 1 };
 
@@ -28,6 +29,7 @@ const sendParam = (bus: BusTrack): NumberParam => ({
 const formatDb = (db: number) => (db <= -40 ? '−∞' : `${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db).toFixed(1)}`);
 
 export interface StripActions {
+  readonly ui: UiState;
   openDevices(owner: ChainOwner): void;
   /** Mostra la curva di un parametro nella clip della traccia. */
   showAutomation?(owner: ChainOwner, target: ModTarget): void;
@@ -52,6 +54,8 @@ export class TrackStrip {
   private readonly db = el('div', { className: 'strip-db' });
   private readonly mute: HTMLButtonElement;
   private readonly solo: HTMLButtonElement;
+  /** Solo le tracce MIDI hanno uno strumento da suonare con la tastiera. */
+  private readonly keyboard: HTMLButtonElement | null = null;
   private readonly detach: () => void;
   private shown: Track | null = null;
 
@@ -69,6 +73,7 @@ export class TrackStrip {
       { kind: 'mixer', owner: id, control: flag });
     this.mute = toggle('M', 'mute');
     this.solo = toggle('S', 'solo');
+    if (current() instanceof MidiTrack) this.keyboard = keyboardButton(actions.ui, id);
     this.element.dataset.track = id;
     const meter = new LevelMeter('strip-meter', () => meters.resetClip(id));
     this.detach = meters.attach(id, meter);
@@ -76,7 +81,11 @@ export class TrackStrip {
     automationOnRightClick(this.pan.element, () => actions.showAutomation?.(id, { kind: 'mixer', param: 'pan' }));
     automationOnRightClick(this.volume, () => actions.showAutomation?.(id, { kind: 'mixer', param: 'volume' }));
     this.element.append(this.sendBox, this.badge, this.fx, this.pan.element,
-      faderBlock(this.volume, { kind: 'mixer', owner: id, control: 'volume' }, meter, this.db), el('div', { className: 'strip-ms' }, this.mute, this.solo));
+      faderBlock(this.volume, { kind: 'mixer', owner: id, control: 'volume' }, meter, this.db), el('div', { className: 'strip-ms' }, this.mute, this.solo, ...(this.keyboard ? [this.keyboard] : [])));
+  }
+
+  showKeyboard(on: boolean): void {
+    this.keyboard?.classList.toggle('on', on);
   }
 
   /** `buses`: i bus del progetto, per le manopole delle mandate. */

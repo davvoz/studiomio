@@ -147,6 +147,13 @@ export class FakeInstrument implements Instrument {
   }
   setTempo(bpm: number) { this.tempos.push(bpm); }
   play(pitch: number, velocity: number, when: number, duration: number) { this.notes.push({ pitch, velocity, when, duration }); }
+  /** Gli ultimi parametri dell'arpeggiatore. */
+  arp: Readonly<Record<string, number>> = {};
+  setArp(params: Readonly<Record<string, number>>) { this.arp = params; }
+  /** Le note tenute a mano adesso, per altezza, con la loro velocity. */
+  readonly held = new Map<number, number>();
+  press(pitch: number, velocity: number) { this.held.set(pitch, velocity); }
+  release(pitch: number) { this.held.delete(pitch); }
   /** L'istante di ogni aggiornamento (undefined: subito). */
   readonly updateTimes: (number | undefined)[] = [];
   update(s: InstrumentSettings, at?: number) { this.updates.push(s); this.updateTimes.push(at); }

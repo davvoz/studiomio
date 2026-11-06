@@ -82,7 +82,7 @@ function delayedDiff(out: Float32Array, input: Float32Array): { diff: number; la
 describe('rack di fabbrica', () => {
   it('sono rack validi: ogni parametro esiste, ogni mappatura resta dentro la corsa del suo parametro', () => {
     expect(FACTORY_RACKS.map(r => r.name)).toEqual([
-      'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina',
+      'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina', 'Salsiccia',
       'Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump', 'Levare', '303',
       'Wobble', 'Pompa', 'Cancello', 'Acido vivo', 'Sirena', 'Colpo',
       'Batteria rave', 'Batteria dub', 'Batteria rotta', 'Batteria industriale', 'Cassa', 'Rullante', 'Hat in movimento',
@@ -117,6 +117,15 @@ describe('rack di fabbrica', () => {
         }
       }
     }
+  });
+
+  it('Salsiccia: la catena del master di Cripta, con una manopola per idea', () => {
+    const salsiccia = FACTORY_RACKS.find(r => r.name === 'Salsiccia')!;
+    expect(salsiccia.instrument).toBeNull();
+    expect(salsiccia.effects.map(e => e.type)).toEqual(['compressor', 'drive', 'multiband', 'eq', 'clipper']);
+    expect(salsiccia.macros.map(m => [m.name, m.value])).toEqual([
+      ['Grasso', 55], ['Colore', 64], ['Spinta', 45], ['Corpo', 0], ['Aria', 0], ['Pompa', 55], ['Clip', 0], ['Volume', 106],
+    ]);
   });
 
   it('Tornado: otto effetti, una macro ciascuno', () => {

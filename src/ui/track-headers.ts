@@ -3,7 +3,7 @@ import type { TrackId } from '../core/id';
 import { instrumentType } from '../devices/registry';
 import { PALETTE } from '../model/colors';
 import type { ChainOwner } from '../model/project';
-import { GroupTrack, type MidiTrack, type Track } from '../model/track';
+import { GroupTrack, MidiTrack, type Track } from '../model/track';
 import { addTrack, moveTrack, removeTrack, renameTrack, setMixer, type TrackDrop } from '../store/edits';
 import { setTrackColor } from '../store/clip-ref';
 import type { ProjectStore } from '../store/project-store';
@@ -16,7 +16,7 @@ import { renameInline } from './inline-rename';
 import { LevelMeter, type MeterBoard } from './meters/meter-board';
 import { canStartTrackDrag, startTrackDrag, type DropSpot } from './track-drag';
 import type { ModTarget } from '../model/envelope';
-import { addEffectItems, automationOnRightClick, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
+import { addEffectItems, automationOnRightClick, fxButton, keyboardButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 
 export interface HeaderActions {
   /** Apre la catena dei dispositivi (strumento ed effetti) di una traccia o del master. */
@@ -137,7 +137,10 @@ export class TrackHeaders {
   }
 
   private highlight(): void {
-    for (const [id, row] of this.rows) row.element.classList.toggle('selected', this.ui.selectedTracks.has(id));
+    for (const [id, row] of this.rows) {
+      row.element.classList.toggle('selected', this.ui.selectedTracks.has(id));
+      row.showKeyboard(this.ui.keyboardTracks.has(id));
+    }
   }
 }
 
@@ -150,6 +153,8 @@ class HeaderRow {
   private badge: HTMLElement = el('span');
   private readonly mute: HTMLButtonElement;
   private readonly solo: HTMLButtonElement;
+  /** Solo le tracce MIDI hanno uno strumento da suonare con la tastiera. */
+  private readonly keyboard: HTMLButtonElement | null = null;
   private readonly volume: HTMLInputElement;
   private readonly fx: HTMLButtonElement;
   /** La traccia mostrata l'ultima volta (per non rifare ciò che non è cambiato). */
@@ -167,6 +172,7 @@ class HeaderRow {
       { kind: 'mixer', owner: id, control: flag });
     this.mute = toggle('M', 'Mute', 'mute');
     this.solo = toggle('S', 'Solo', 'solo');
+    if (store.project.track(id) instanceof MidiTrack) this.keyboard = keyboardButton(ui, id);
     this.volume = volumeSlider(store, 0, `vol-${id}`, (volumeDb, merge) => this.mixer({ volumeDb }, merge));
     automationOnRightClick(this.volume, () => actions.showAutomation?.(id, { kind: 'mixer', param: 'volume' }));
     this.fx = fxButton(0, 'Effetti della traccia', open);
@@ -177,7 +183,7 @@ class HeaderRow {
     this.element.dataset.track = id;
     this.element.append(
       el('div', { className: 'top' }, ...(this.fold ? [this.fold] : []), this.name, this.badge),
-      el('div', { className: 'controls' }, this.mute, this.solo, midiSlot(this.volume, { kind: 'mixer', owner: id, control: 'volume' }), this.fx),
+      el('div', { className: 'controls' }, this.mute, this.solo, ...(this.keyboard ? [this.keyboard] : []), midiSlot(this.volume, { kind: 'mixer', owner: id, control: 'volume' }), this.fx),
       meter.element);
     this.element.oncontextmenu = e => {
       e.preventDefault();
@@ -222,6 +228,10 @@ class HeaderRow {
       this.fold.textContent = t.folded ? '▸' : '▾';
       this.fold.title = t.folded ? 'Apri il gruppo: mostra le sue tracce' : 'Chiudi il gruppo: nasconde le sue tracce (suonano lo stesso)';
     }
+  }
+
+  showKeyboard(on: boolean): void {
+    this.keyboard?.classList.toggle('on', on);
   }
 
   dispose(): void {

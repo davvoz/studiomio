@@ -23,6 +23,8 @@ const APPLY: { readonly [K in NoteEvent['kind']]: (core: InstrumentCore, e: Note
 export class NoteQueue {
   private events: NoteEvent[] = [];
   private nextId = 1;
+  /** Le note tenute a mano, per altezza: la loro fine si conosce solo quando il tasto si alza. */
+  private readonly held = new Map<number, { readonly id: number; readonly frame: number }>();
 
   /** Programma una nota da `onFrame` a `offFrame`. */
   add(pitch: number, velocity: number, onFrame: number, offFrame: number): void {
@@ -31,8 +33,27 @@ export class NoteQueue {
     this.insert({ frame: Math.max(onFrame + 1, offFrame), kind: 'off', id, pitch, velocity });
   }
 
+  /** Una nota tenuta a mano: parte da `frame` e finisce con `release`. Di una nota tenuta si
+   *  conosce solo l'inizio, quindi i tagli e le riprogrammazioni delle clip non la toccano. */
+  press(pitch: number, velocity: number, frame: number): void {
+    this.release(pitch, frame);
+    const id = this.nextId++;
+    this.held.set(pitch, { id, frame });
+    this.insert({ frame, kind: 'on', id, pitch, velocity });
+  }
+
+  /** Il tasto si è alzato. La nota è già spenta se nel frattempo tutto si è fermato. */
+  release(pitch: number, frame: number): void {
+    const note = this.held.get(pitch);
+    if (!note) return;
+    this.held.delete(pitch);
+    // nello stesso blocco di `press`: a parità di campione gli spegnimenti verrebbero prima
+    this.insert({ frame: Math.max(frame, note.frame + 1), kind: 'off', id: note.id, pitch, velocity: 0 });
+  }
+
   clear(): void {
     this.events = [];
+    this.held.clear();
   }
 
   /** Toglie le note che partirebbero da `frame` in poi e anticipa a `frame` la fine di quelle

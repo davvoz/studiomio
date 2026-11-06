@@ -248,6 +248,15 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     expect(r.instruments.created[1].notes).toEqual([{ pitch: 64, velocity: 90, when: 0.005, duration: 0.5 }]);
   });
 
+  it('una nota suonata a mano resta accesa finché non si lascia, anche con il trasporto fermo', async () => {
+    const r = await rig();
+    const synth = r.instruments.created[0];
+    r.engine.pressNote(r.t(1), 64, 90);
+    expect(synth.held.get(64)).toBe(90);
+    r.engine.releaseNote(r.t(1), 64);
+    expect(synth.held.size).toBe(0);
+  });
+
   it('una clip con un suono lo dà allo strumento quando parte, una volta sola; il progetto lo segue', async () => {
     const r = await rig();
     const bright = { type: 'analog', preset: 'Chiaro', params: { cutoff: 9000 } };

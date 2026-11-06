@@ -12,6 +12,7 @@
  * muovono insieme strumento ed effetti, e partono dove il suono è già bello.
  *
  * Levare, 303, Acido FX e Macchina vengono dal live "Rave illegale" (src/demo/rave-live.ts).
+ * Salsiccia è il rack del master del live "Cripta": ingrassa tutto il mix, come un Sausage Fattener.
  *
  * Wobble, Pompa, Cancello, Acido vivo, Sirena e Colpo hanno dentro dei modulatori (LFO e
  * Inviluppo) già collegati: con il trasporto che va il suono si muove da solo, e le macro
@@ -844,9 +845,35 @@ export const HAT_IN_MOVIMENTO: RackPreset = (() => {
   ]);
 })();
 
+/** Un effetto regolato a mano: solo questi valori, con il nome del suono da cui era partito. */
+const tuned = (type: DeviceType, preset: string, params: Readonly<Record<string, number>>): SavedEffect =>
+  ({ type: type.type, preset, params, enabled: true });
+
+/** Per il master: compressione, nastro, OTT, EQ e clipper in una manopola per idea. Parte già
+ *  regolato e alza di 3 dB (macro Volume). */
+export const SALSICCIA: RackPreset = (() => {
+  const COMP = 0, TAPE = 1, OTT = 2, TONE = 3, CLIP = 4;
+  return rack('Salsiccia', null, [
+    tuned(COMPRESSOR, 'Grasso', { threshold: -15.5, ratio: 4, knee: 10, attack: 6.300000000000001, release: 109, detector: 1, auto: 1, mix: 43 }),
+    tuned(DRIVE, 'Nastro', { shape: 2, drive: 10.5, bias: 13, color: 0, low: 60, tone: 18000, auto: 1, mix: 24 }),
+    tuned(MULTIBAND, 'OTT', { depth: 100, time: 50, input: 0, output: 0, mix: 13 }),
+    tuned(EQ, 'Corpo e aria', { b2on: 1, b2freq: 70, b2gain: 0, b7on: 1, b7freq: 9000, b7gain: 0 }),
+    tuned(CLIPPER, 'Clip', { drive: 0, ceiling: -0.3, knee: 40, output: 3 }),
+  ], [
+    { name: 'Grasso', value: 55, moves: [[COMP, 'mix', 0, 100], [COMP, 'threshold', -6, -28], [TAPE, 'mix', 0, 55], [OTT, 'mix', 0, 30]] },
+    { name: 'Colore', value: 64, moves: [[TAPE, 'color', -60, 60], [TAPE, 'bias', 0, 25]] },
+    { name: 'Spinta', value: 45, moves: [[TAPE, 'drive', 4, 22]] },
+    { name: 'Corpo', moves: [[TONE, 'b2gain', 0, 5]] },
+    { name: 'Aria', moves: [[TONE, 'b7gain', 0, 5]] },
+    { name: 'Pompa', value: 55, moves: [[COMP, 'release', 260, 35], [COMP, 'attack', 15, 2]] },
+    { name: 'Clip', moves: [[CLIP, 'drive', 0, 8]] },
+    { name: 'Volume', value: 106, moves: [[CLIP, 'output', -12, 6]] },
+  ]);
+})();
+
 /** I rack di fabbrica, in ordine. */
 export const FACTORY_RACKS: readonly RackPreset[] = [
-  TORNADO, FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO, ACIDO_FX, MACCHINA,
+  TORNADO, FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO, ACIDO_FX, MACCHINA, SALSICCIA,
   ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE,
   WOBBLE, POMPA, CANCELLO, ACIDO_VIVO, SIRENA, COLPO,
   BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE, HAT_IN_MOVIMENTO,

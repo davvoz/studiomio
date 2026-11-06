@@ -5,6 +5,7 @@ import { INSTRUMENT_DEVICE, scaleOf, targetKey, type ModTarget } from '../model/
 import { mappingSpec, mappingTravel } from '../devices/rack-params';
 import { launchQuantumBeats } from '../model/launch';
 import { findRack, isSwitchMacro, MACRO_MAX, macroIndex, type Rack } from '../model/rack';
+import { isArpType } from '../devices/arp/arp';
 import { isModulatorType } from '../devices/modulators/modulators';
 import type { EffectSettings, InstrumentSettings } from '../model/device';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
@@ -371,6 +372,16 @@ export class PlaybackEngine {
     this.players.get(track)?.player.audition?.(pitch, velocity, seconds);
   }
 
+  /** Una nota suonata a mano con lo strumento della traccia: parte subito e suona finché non
+   *  arriva `releaseNote`, a trasporto fermo o mentre le clip girano. */
+  pressNote(track: TrackId, pitch: number, velocity: number): void {
+    this.players.get(track)?.player.press?.(pitch, velocity);
+  }
+
+  releaseNote(track: TrackId, pitch: number): void {
+    this.players.get(track)?.player.release?.(pitch);
+  }
+
   /** Programma tutto [from, to) a partire dall'istante `at` (export offline). */
   scheduleRange(from: Beats, to: Beats, at = 0): void {
     if (!this.project) throw new Error('nessun progetto');
@@ -448,7 +459,10 @@ export class PlaybackEngine {
     const rack = findRack(racks ?? [], target.device as DeviceId);
     if (rack) return this.macroSink(owner, rack, macroIndex(target.param), channel);
     if (target.device === INSTRUMENT_DEVICE && owner === MASTER) return null;
-    const device = target.device === INSTRUMENT_DEVICE
+    // l'arpeggiatore vive nello strumento e i suoi parametri viaggiano con i suoi
+    const inInstrument = target.device === INSTRUMENT_DEVICE
+      || this.project?.effectsOf(owner).some(e => e.id === target.device && isArpType(e.type));
+    const device = inInstrument
       ? this.players.get(owner as TrackId)?.player.instrumentModulation?.()
       : this.mixer.effect(owner, target.device)?.modulation ?? this.chainMods.get(owner)?.modulation(target.device);
     return device?.sink(target.param, channel) ?? null;

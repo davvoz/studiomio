@@ -10,6 +10,8 @@ const OTHER_KEYS: readonly (readonly [string, string])[] = [
   ['Play / Stop', 'Spazio'],
   ['Stop e torna all\'inizio', 'Invio'],
   ['Zoom della timeline', 'Ctrl+rotella'],
+  ['Zoom orizzontale del piano roll', 'Ctrl+rotella'],
+  ['Zoom verticale del piano roll', 'Ctrl+rotella sui tasti, Ctrl+Maiusc+rotella ovunque'],
   ['Trascinare senza griglia', 'Alt'],
   ['Aprire un menu', 'Alt+iniziale'],
 ];

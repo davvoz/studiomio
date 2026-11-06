@@ -1,7 +1,9 @@
 /* Il pannello dei modulatori (LFO e Inviluppo), fatto con i pezzi di Prisma: la forma da
  * disegnare o l'inviluppo con le maniglie, le manopole, e le destinazioni. Il pallino in alto
- * ("⊕ Mappa") si trascina su una manopola qualsiasi della catena (anche di un altro dispositivo,
- * o una macro di un rack) e la destinazione nasce lì; il menu di una riga dà anche volume e pan
+ * ("⊕ Mappa") sceglie una manopola qualsiasi della catena (anche di un altro dispositivo, o una
+ * macro di un rack) e la destinazione nasce lì: con un clic si accende e si cliccano le manopole,
+ * scorrendo la catena e cambiando scheda con calma, oppure si trascina direttamente sulla
+ * manopola, e la catena scorre da sola ai bordi. Il menu di una riga dà anche volume e pan
  * della traccia. Si vedono le destinazioni usate e una libera. Ogni riga ha la quantità (un cursore, che si può mappare su una macro e muovere
  * con le curve, come le manopole) e la × per toglierla. */
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
@@ -19,6 +21,8 @@ import { Slider } from '../prisma/matrix-view';
 
 /** La quantità di una destinazione appena creata, se la sua era a zero. */
 const NEW_AMOUNT = 50;
+/** Da quanti pixel il pallino si sta trascinando, e non cliccando. */
+const DRAG_START = 4;
 
 export class ModulatorDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'prisma modulator' });
@@ -32,6 +36,8 @@ export class ModulatorDisplay implements DeviceDisplay {
   private targets: readonly (ModTarget | null)[] = [];
   private enabled = true;
   private readonly family: 'env' | 'lfo';
+  /** Il pallino è acceso: i clic sulle manopole della catena sono destinazioni. */
+  private picking = false;
 
   constructor(private readonly ctx: DisplayContext) {
     this.values = resolveParams(ctx.type, ctx.settings.params);
@@ -105,7 +111,7 @@ export class ModulatorDisplay implements DeviceDisplay {
       row.element.classList.toggle('empty', !t);
       row.element.hidden = !t && i !== free;
       row.name.textContent = t ? this.host?.label(t) ?? '?' : '—';
-      row.name.title = t ? row.name.textContent : 'Libera: trascina ⊕ Mappa su una manopola, o scegli dal menu ▾';
+      row.name.title = t ? row.name.textContent : 'Libera: clicca ⊕ Mappa e poi una manopola, o scegli dal menu ▾';
     });
     const used = this.targets.filter(t => t).length;
     const count = this.head.querySelector('.prisma-chip-count');
@@ -138,50 +144,86 @@ export class ModulatorDisplay implements DeviceDisplay {
     return [
       ...items,
       ...(items.length ? [SEPARATOR] : []),
-      { label: 'Per un parametro: trascina ⊕ Mappa sulla sua manopola', disabled: true, run: () => {} },
+      { label: 'Per un parametro: clicca ⊕ Mappa, poi la sua manopola', disabled: true, run: () => {} },
       { label: 'Togli', disabled: !current, run: () => host.set(slot, null) },
     ];
   }
 
-  /** `target` in una destinazione: quella data, quella che lo muove già, o la prima libera. */
-  private assign(target: ModTarget, slot?: number): void {
+  /** `target` in una destinazione: quella data, quella che lo muove già, o la prima libera. Dice
+   *  se è diventata una destinazione nuova. */
+  private assign(target: ModTarget, slot?: number): boolean {
     const host = this.host;
-    if (!host) return;
+    if (!host) return false;
     const existing = this.targets.findIndex(t => !!t && sameTarget(t, target));
-    if (slot === undefined && existing >= 0) return host.say(`${host.label(target)}: lo muove già la destinazione ${existing + 1}`);
+    if (slot === undefined && existing >= 0) {
+      host.say(`${host.label(target)}: lo muove già la destinazione ${existing + 1}`);
+      return false;
+    }
     let at = slot ?? -1;
     if (at < 0) for (let i = 0; i < MOD_LINKS && at < 0; i++) if (!this.targets[i]) at = i;
-    if (at < 0) return host.say('Le 8 destinazioni sono tutte in uso: togline una (×) per aggiungerne un\'altra');
+    if (at < 0) {
+      host.say('Le 8 destinazioni sono tutte in uso: togline una (×) per aggiungerne un\'altra');
+      return false;
+    }
     host.set(at, target, this.values[linkAmount(at + 1)] ? undefined : NEW_AMOUNT);
+    return true;
   }
 
-  /** "⊕ Mappa": si trascina su una manopola della catena. */
+  private startPicking(chip: HTMLElement, host: ModTargetHost): void {
+    this.picking = true;
+    chip.classList.add('active');
+    host.startPicking(target => {
+      if (this.assign(target)) host.say(`${this.ctx.type.label} → ${host.label(target)}. Clicca altre manopole, Esc per finire.`);
+    }, () => {
+      this.picking = false;
+      chip.classList.remove('active');
+    });
+  }
+
+  /** "⊕ Mappa": un clic accende la scelta delle manopole, un trascinamento ne prende una. */
   private chip(): HTMLElement {
-    const chip = el('div', { className: `prisma-chip src-${this.family}`, textContent: '⊕ Mappa', title: 'Trascina su una manopola della catena (o su una macro) per modularla' });
+    const chip = el('div', { className: `prisma-chip src-${this.family}`, textContent: '⊕ Mappa', title: 'Clicca, poi clicca le manopole da modulare (anche su altri dispositivi e altre schede); Esc per finire. Oppure trascina su una manopola' });
     chip.append(el('span', { className: 'prisma-chip-count' }));
     chip.addEventListener('pointerdown', e => {
       if (e.button !== 0 || !this.host) return;
       e.preventDefault();
       chip.setPointerCapture(e.pointerId);
       const host = this.host;
+      const wasPicking = this.picking;
       let ghost: HTMLElement | null = null, over: { target: ModTarget; element: HTMLElement } | null = null;
+      let x = e.clientX, y = e.clientY, frame = 0;
+      const startX = x, startY = y;
+      // a ogni fotogramma: la catena scorre sotto il puntatore fermo, il bersaglio cambia
+      const tick = () => {
+        host.scrollToward(x);
+        hover();
+        frame = requestAnimationFrame(tick);
+      };
       const move = (m: PointerEvent) => {
+        x = m.clientX;
+        y = m.clientY;
         if (!ghost) {
+          if (Math.hypot(x - startX, y - startY) < DRAG_START) return;
           ghost = el('div', { className: `prisma-ghost src-${this.family}`, textContent: this.ctx.type.label });
           document.body.append(ghost);
           document.body.classList.add('dragging-modulator');
+          if (!wasPicking) this.startPicking(chip, host);
+          tick();
         }
-        ghost.style.left = `${m.clientX + 10}px`;
-        ghost.style.top = `${m.clientY + 10}px`;
-        const found = host.at(m.clientX, m.clientY);
+        ghost.style.left = `${x + 10}px`;
+        ghost.style.top = `${y + 10}px`;
+      };
+      const hover = () => {
+        const found = host.at(x, y);
         if (found?.element !== over?.element) {
           over?.element.classList.remove('drop-target');
           found?.element.classList.add('drop-target');
         }
         over = found;
-        ghost.textContent = found ? `${this.ctx.type.label} → ${host.label(found.target)}` : this.ctx.type.label;
+        ghost!.textContent = found ? `${this.ctx.type.label} → ${host.label(found.target)}` : this.ctx.type.label;
       };
       const up = () => {
+        cancelAnimationFrame(frame);
         chip.removeEventListener('pointermove', move);
         chip.removeEventListener('pointerup', up);
         chip.removeEventListener('pointercancel', up);
@@ -189,7 +231,11 @@ export class ModulatorDisplay implements DeviceDisplay {
         over?.element.classList.remove('drop-target');
         ghost?.remove();
         if (over) this.assign(over.target);
-        else if (!ghost) host.say('Trascina ⊕ Mappa su una manopola della catena per modularla');
+        // un trascinamento lascia tutto com'era, un clic accende o spegne
+        if (ghost ? !wasPicking : wasPicking) return host.stopPicking();
+        if (ghost) return;
+        this.startPicking(chip, host);
+        host.say('Clicca le manopole da modulare, anche su altri dispositivi e altre schede; la rotella scorre la catena. Esc per finire.');
       };
       chip.addEventListener('pointermove', move);
       chip.addEventListener('pointerup', up);

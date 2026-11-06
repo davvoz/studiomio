@@ -31,6 +31,8 @@ export interface DeviceType {
   /** Per i modulatori (LFO, Inviluppo): non toccano il suono, muovono i parametri delle loro
    *  destinazioni (vedi devices/modulators). */
   readonly modulator?: boolean;
+  /** Per chi lavora sulle note e non sul suono (l'Arpeggiatore): ha senso solo su una traccia MIDI. */
+  readonly notes?: boolean;
 }
 
 /** I valori dei parametri che un preset di `t` non cambia, tra `params`. */

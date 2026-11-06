@@ -1,4 +1,5 @@
 import type { DeviceId, TrackId } from '../core/id';
+import { isArpType } from '../devices/arp/arp';
 import { isModulatorType } from '../devices/modulators/modulators';
 import type { EffectSettings } from '../model/device';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
@@ -61,10 +62,13 @@ function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): v
   }
 }
 
-/** Gli effetti che il suono attraversa: i modulatori (LFO, Inviluppo) non lo toccano, li suona il
- *  motore. Se non ce ne sono, la stessa lista (così la catena vede che non è cambiata). */
+/** Non toccano il suono: i modulatori (LFO, Inviluppo) li suona il motore, l'Arpeggiatore lo strumento. */
+const soundless = (e: EffectSettings) => isModulatorType(e.type) || isArpType(e.type);
+
+/** Gli effetti che il suono attraversa. Se sono tutti, la stessa lista (così la catena vede che
+ *  non è cambiata). */
 const audioEffects = (effects: readonly EffectSettings[]): readonly EffectSettings[] =>
-  (effects.some(e => isModulatorType(e.type)) ? effects.filter(e => !isModulatorType(e.type)) : effects);
+  (effects.some(soundless) ? effects.filter(e => !soundless(e)) : effects);
 
 /** Le modulazioni del canale: volume (un guadagno dopo il fader) e pan (un valore sommato al pan). */
 export type MixerModulation = 'volume' | 'pan';

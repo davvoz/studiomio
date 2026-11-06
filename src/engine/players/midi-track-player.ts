@@ -1,5 +1,6 @@
 import type { Placement } from '../../model/arrangement';
-import type { InstrumentSettings } from '../../model/device';
+import { activeArp, arpParams } from '../../devices/arp/arp';
+import type { EffectSettings, InstrumentSettings } from '../../model/device';
 import type { MidiClip } from '../../model/midi-clip';
 import type { MidiTrack, Track } from '../../model/track';
 import { timeAtClock, type ScheduleWindow } from '../scheduler';
@@ -20,6 +21,8 @@ export class MidiTrackPlayer implements TrackPlayer {
   private settings: InstrumentSettings;
   /** L'ultimo suono di una clip dato allo strumento (null dopo lo stop). */
   private sound: InstrumentSettings | null = null;
+  /** L'arpeggiatore che lo strumento conosce. */
+  private arp: EffectSettings | undefined;
   /** Il tempo che lo strumento conosce. */
   private bpm: number;
   private readonly segments = new WeakMap<Placement, Segment[]>();
@@ -29,12 +32,14 @@ export class MidiTrackPlayer implements TrackPlayer {
     this.bpm = ctx.tempo();
     this.settings = track.instrument;
     this.instrument = this.connect(track.instrument);
+    this.syncArp(track, true);
   }
 
   update(track: Track): void {
     const next = track as MidiTrack;
     // il suono di una clip già mandato allo strumento torna qui dal progetto: c'è già
     if (next.instrument !== this.settings) this.setInstrument(next.instrument);
+    this.syncArp(next);
     this.track = next;
     const bpm = this.ctx.tempo();
     if (bpm !== this.bpm) {
@@ -73,6 +78,15 @@ export class MidiTrackPlayer implements TrackPlayer {
     this.instrument.play(pitch, velocity, this.ctx.graph.currentTime + 0.005, duration);
   }
 
+  press(pitch: number, velocity: number): void {
+    this.instrument.press(pitch, velocity);
+    this.ctx.notes.add(pitch, this.ctx.graph.currentTime);
+  }
+
+  release(pitch: number): void {
+    this.instrument.release(pitch);
+  }
+
   stopAll(): void {
     this.instrument.stopAll();
     this.ctx.notes.clear();
@@ -96,6 +110,14 @@ export class MidiTrackPlayer implements TrackPlayer {
     if (settings.type === this.instrument.type) return this.instrument.update(settings);
     this.instrument.dispose();
     this.instrument = this.connect(settings);
+    this.instrument.setArp(arpParams(this.arp));
+  }
+
+  private syncArp(track: Track, always = false): void {
+    const arp = activeArp(track.effects);
+    if (arp === this.arp && !always) return;
+    this.arp = arp;
+    this.instrument.setArp(arpParams(arp));
   }
 
   /** Il suono della clip dall'inizio del tratto, se è diverso dall'ultimo dato: ai giri di loop

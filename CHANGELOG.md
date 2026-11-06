@@ -6,6 +6,31 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Play MIDI tracks from the computer keyboard. Turn on the ⌨ button of a track, in the Arrangement
+  or in the Session mixer: A to L are the white keys, W E T Y U O P the black keys, Z X change the
+  octave and C V the velocity, as in Live. Notes last as long as the key is held, with the
+  transport stopped or running; more tracks can listen at once. On a Drum Machine A starts from
+  the first pad. Keys mapped to macros come first, and Ctrl shortcuts and text fields keep working.
+- Arpeggiatore, a new device for MIDI tracks. It takes the notes of the clips and the ones played
+  by hand, on the beat grid while the transport runs and from the first note when it is stopped.
+  Styles: up, down, up and down, down and up, inward, pedal, as played, random, chord. Also octaves,
+  repeat, division, gate, swing, chance, Hold, and 12 presets. Random and chance repeat the same
+  way on every loop of a clip.
+- Salsiccia, the master rack of the Cripta live, among the factory Audio Effect Racks: compression,
+  tape, OTT, EQ and clipper, with one macro per idea.
+
+### Changed
+- ⊕ Mappa on LFO and Inviluppo can be clicked instead of dragged. The mappable controls light up,
+  then scroll the chain and change tabs calmly and click as many as you want; Esc or another click
+  ends it. Dragging still works, and now the chain scrolls by itself near its edges.
+- The mouse wheel scrolls the device chain sideways, except over a control that uses the wheel.
+- Zooming the piano roll vertically is easy to find: Ctrl+wheel over the piano keys, or
+  Ctrl+Shift+wheel anywhere. Before it was only Alt+wheel, which still works.
+
+### Fixed
+- The mouse wheel also scrolls the track column of the Arrangement, not only the timeline.
+
 ## [0.3.51] - 2026-11-05
 
 ### Fixed

@@ -26,3 +26,53 @@ describe('NoteQueue', () => {
     expect(r.events).toEqual(['on 60 @0', 'on 62 @100', 'off #2 @150', 'off #1 @300']);
   });
 });
+
+describe('NoteQueue: note tenute a mano', () => {
+  it('suona dal press al release', () => {
+    const q = new NoteQueue(), r = recorder();
+    q.press(60, 100, 10);
+    r.play(q, 128);
+    expect(r.events).toEqual(['on 60 @10']);
+    q.release(60, 200);
+    r.play(q, 128);
+    expect(r.events).toEqual(['on 60 @10', 'off #1 @200']);
+  });
+
+  it('un tasto premuto e lasciato nello stesso blocco non resta acceso', () => {
+    const q = new NoteQueue(), r = recorder();
+    q.press(60, 100, 0);
+    q.release(60, 0);
+    r.play(q, 128);
+    expect(r.events).toEqual(['on 60 @0', 'off #1 @1']);
+  });
+
+  it('i tagli delle clip non toccano la nota tenuta', () => {
+    const q = new NoteQueue(), r = recorder();
+    q.press(60, 100, 0);
+    r.play(q, 128);
+    q.cutAt(100);
+    q.dropFrom(100);
+    q.release(60, 200);
+    r.play(q, 128);
+    expect(r.events).toEqual(['on 60 @0', 'off #1 @200']);
+  });
+
+  it('dopo lo stop il rilascio non fa niente', () => {
+    const q = new NoteQueue(), r = recorder();
+    q.press(60, 100, 0);
+    r.play(q, 128);
+    q.clear();
+    q.release(60, 200);
+    r.play(q, 128);
+    expect(r.events).toEqual(['on 60 @0']);
+  });
+
+  it('la stessa altezza premuta di nuovo chiude la nota prima', () => {
+    const q = new NoteQueue(), r = recorder();
+    q.press(60, 100, 0);
+    q.press(60, 100, 50);
+    q.release(60, 100);
+    r.play(q, 128);
+    expect(r.events).toEqual(['on 60 @0', 'off #1 @50', 'on 60 @50', 'off #2 @100']);
+  });
+});

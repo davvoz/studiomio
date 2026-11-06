@@ -41,6 +41,7 @@ export class UiState {
   private _keyTarget: KeyTarget | null = null;
   private _midiMapping = false;
   private _midiTarget: MidiTarget | null = null;
+  private _keyboardTracks: ReadonlySet<TrackId> = new Set();
   private readonly events = new Emitter<UiEvents>();
 
   get geometry(): TimelineGeometry { return this._geometry; }
@@ -67,6 +68,8 @@ export class UiState {
   get keyMapping(): boolean { return this._keyMapping; }
   /** Il bersaglio scelto con KEY acceso, che aspetta il suo tasto. */
   get keyTarget(): KeyTarget | null { return this._keyTarget; }
+  /** Le tracce MIDI che suonano con la tastiera del computer (vedi app/note-keyboard). */
+  get keyboardTracks(): ReadonlySet<TrackId> { return this._keyboardTracks; }
   /** "MIDI" acceso (Ctrl+M): un clic su una macro, un parametro o un controllo del mixer lo
    *  sceglie, il controllo MIDI mosso dopo lo muove. Intanto i controlli mappati non muovono niente. */
   get midiMapping(): boolean { return this._midiMapping; }
@@ -145,6 +148,21 @@ export class UiState {
     const r = this._ring;
     if (r === ring || (r && ring && r.track === ring.track && r.scene === ring.scene && r.width === ring.width && r.height === ring.height)) return;
     this._ring = ring;
+    this.events.emit('change');
+  }
+
+  toggleKeyboardTrack(id: TrackId): void {
+    const next = new Set(this._keyboardTracks);
+    if (!next.delete(id)) next.add(id);
+    this._keyboardTracks = next;
+    this.events.emit('change');
+  }
+
+  /** Le tracce che non ci sono più smettono di ascoltare la tastiera. */
+  keepKeyboardTracks(alive: (id: TrackId) => boolean): void {
+    const next = [...this._keyboardTracks].filter(alive);
+    if (next.length === this._keyboardTracks.size) return;
+    this._keyboardTracks = new Set(next);
     this.events.emit('change');
   }
 

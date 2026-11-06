@@ -393,7 +393,10 @@ export class SessionView {
     const chosen = this.deps.ui.selectedTracks;
     for (const [t, head] of this.heads) head.classList.toggle('selected', chosen.has(t));
     for (const cell of this.slots.values()) cell.classList.toggle('track-selected', chosen.has(cell.dataset.track as TrackId));
-    for (const [t, strip] of this.strips) strip.element.classList.toggle('selected', chosen.has(t));
+    for (const [t, strip] of this.strips) {
+      strip.element.classList.toggle('selected', chosen.has(t));
+      strip.showKeyboard(this.deps.ui.keyboardTracks.has(t));
+    }
   }
 
   /** Il riquadro sopra gli slot che copre; quando si sposta, lo si porta in vista. */

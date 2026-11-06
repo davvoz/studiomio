@@ -292,15 +292,16 @@ export class ArrangementView implements GestureHost {
   }
 
   /** Rotella: scorre; con Ctrl zooma attorno al puntatore; con Maiusc scorre in orizzontale.
-   *  Zoomare o scorrere in orizzontale mentre suona sospende Segui. */
-  private bindWheel(el: HTMLElement): void {
+   *  Zoomare o scorrere in orizzontale mentre suona sospende Segui. Vale anche per la colonna
+   *  delle tracce, che scorre insieme alle corsie (lì lo zoom si ancora al bordo sinistro). */
+  bindWheel(el: HTMLElement): void {
     el.addEventListener('wheel', e => {
       e.preventDefault();
       const g = this.geo;
       const r = this.lanes.canvas.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey) {
         this.pauseFollow();
-        this.ui.setGeometry(g.zoomed(g.pxPerBeat * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left));
+        this.ui.setGeometry(g.zoomed(g.pxPerBeat * Math.exp(-e.deltaY * 0.0025), Math.max(0, e.clientX - r.left)));
         return;
       }
       // Maiusc+rotella: Chromium su Windows la consegna già come deltaX (con deltaY a 0)

@@ -11,6 +11,9 @@ export interface TrackPlayer extends ScheduledSource {
   update(track: Track): void;
   /** Suona subito una nota, per chi ha uno strumento. */
   audition?(pitch: number, velocity: number, seconds: number): void;
+  /** Una nota tenuta a mano, per chi ha uno strumento: suona finché non arriva `release`. */
+  press?(pitch: number, velocity: number): void;
+  release?(pitch: number): void;
   /** I parametri modulabili dello strumento, per chi ne ha uno. */
   instrumentModulation?(): DeviceModulation | null;
   /** Dove leggono le voci dello strumento, se suona un sample (frazioni del sample). */

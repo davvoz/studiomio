@@ -129,7 +129,7 @@ describe('categorie dei dispositivi', () => {
       'Wobble', 'Pompa', 'Cancello', 'Acido vivo', 'Sirena', 'Colpo',
       'Batteria rave', 'Batteria dub', 'Batteria rotta', 'Batteria industriale', 'Cassa', 'Rullante', 'Hat in movimento',
     ]);
-    expect(names(await childrenOf(effects[0]))).toEqual(['Eco', 'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina']);
+    expect(names(await childrenOf(effects[0]))).toEqual(['Eco', 'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina', 'Salsiccia']);
     expect((await childrenOf(effects[0]))[1].payload).toEqual({ kind: 'rack', rack: TORNADO });
     expect(names(await sources.find(s => s.id === 'user-presets')!.items())).toEqual(['Audio Effect Rack']);
     // senza rack salvati la cartella c'è lo stesso

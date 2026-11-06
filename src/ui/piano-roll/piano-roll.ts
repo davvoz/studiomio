@@ -147,7 +147,8 @@ export class PianoRoll implements RollHost {
       else this.setPitches(this._pitches.scrolled(this._pitches.scrollY, this.notesHeight));
     }).observe(wrap);
     this.bind(this.surface.canvas);
-    this.keyboard.element.addEventListener('wheel', e => this.wheel(e, 0), { passive: false });
+    this.keyboard.element.addEventListener('wheel', e => this.wheel(e, 0, true), { passive: false });
+    this.keyboard.element.title = 'Ctrl+rotella: zoom verticale';
     bindKeys(this.element, this, ROLL_KEYS, true);
     deps.store.onChange(() => this.sync());
     requestAnimationFrame(this.frame);
@@ -572,12 +573,17 @@ export class PianoRoll implements RollHost {
   }
 
   /** Rotella: in verticale scorre le note; Maiusc in orizzontale; Ctrl zooma il tempo, Alt le righe. */
-  private wheel(e: WheelEvent, x: number): void {
+  /** Rotella: scorre in verticale (Maiusc: in orizzontale). Con Ctrl zooma: in orizzontale sulla
+   *  griglia, in verticale sui tasti del piano (`keys`), come sugli assi che si hanno sotto. Con
+   *  Ctrl+Maiusc o Alt zooma in verticale anche dalla griglia. */
+  private wheel(e: WheelEvent, x: number, keys = false): void {
     e.preventDefault();
     const a = this._axis, pa = this._pitches;
     const y = e.clientY - this.surface.canvas.getBoundingClientRect().top;
-    if (e.ctrlKey || e.metaKey) this.setAxis(a.zoomed(a.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x));
-    else if (e.altKey) this.setPitches(pa.zoomed(pa.rowHeight * Math.exp(-(e.deltaY || e.deltaX) * 0.002), y, this.notesHeight));
+    const ctrl = e.ctrlKey || e.metaKey;
+    // Maiusc+rotella: Chromium su Windows la consegna già come deltaX (con deltaY a 0)
+    if (e.altKey || (ctrl && (keys || e.shiftKey))) this.setPitches(pa.zoomed(pa.rowHeight * Math.exp(-(e.deltaY || e.deltaX) * 0.002), y, this.notesHeight));
+    else if (ctrl) this.setAxis(a.zoomed(a.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x));
     else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) this.setAxis(a.scrolled(a.startBeat + (e.deltaX || e.deltaY) / a.pxPerBeat));
     else this.setPitches(pa.scrolled(pa.scrollY + e.deltaY, this.notesHeight));
   }

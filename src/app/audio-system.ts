@@ -67,6 +67,16 @@ export class AudioSystem {
     this.engine.audition(track, pitch, velocity, seconds);
   }
 
+  /** Una nota suonata a mano. Senza attese: il tasto che si alza deve seguire la nota che è partita. */
+  pressNote(track: TrackId, pitch: number, velocity: number): void {
+    if (this.context.state !== 'running') void this.context.resume();
+    this.engine.pressNote(track, pitch, velocity);
+  }
+
+  releaseNote(track: TrackId, pitch: number): void {
+    this.engine.releaseNote(track, pitch);
+  }
+
   /** Lo spettro prima e dopo un effetto che suona. */
   spectrum(owner: ChainOwner, id: DeviceId): EffectSpectrum {
     return new EffectSpectrum(this.context, () => this.engine.effectMonitor(owner, id));

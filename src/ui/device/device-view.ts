@@ -4,7 +4,8 @@ import type { SampleData } from '../../devices/dsp/core';
 import type { SampleRef } from '../../model/sample';
 import { keptOnPreset, resolveParams } from '../../devices/device-type';
 import { deviceTypeAt, mappingSpec } from '../../devices/rack-params';
-import { EFFECT_TYPES, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
+import type { DeviceType } from '../../devices/device-type';
+import { chainEffectTypes, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, sampleAt, type EffectSettings, type ParamValues } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
 import type { ModTarget } from '../../model/envelope';
@@ -73,6 +74,10 @@ export interface DeviceViewDeps {
 }
 
 /** Ctrl+tasto sui dispositivi scelti. */
+/** Quanto vicino al bordo della catena un trascinamento la fa scorrere, e di quanto a fotogramma. */
+const EDGE_ZONE = 56;
+const EDGE_STEP = 14;
+
 const DEVICE_KEYS: Readonly<Record<string, (v: DeviceView) => void>> = {
   c: v => v.copySelection(),
   x: v => v.cutSelection(),
@@ -115,6 +120,8 @@ export class DeviceView {
   private readonly title = el('span', { className: 'device-title' });
   private readonly backButton = el<HTMLButtonElement>('button', { textContent: '◂ Note', title: 'Torna al piano roll' });
   private readonly chain = el('div', { className: 'device-chain' });
+  /** Il modulatore che sta scegliendo i suoi bersagli con il clic. */
+  private picking: { readonly host: ModTargetHost; readonly pick: (target: ModTarget) => void; readonly ended: () => void } | null = null;
   /** Il dispositivo che le manopole di un controller muovono (la "mano blu" di Live). */
   private controlled: ControlledDevice | null = null;
   /** I dispositivi scelti (per raggrupparli), e da dove si estende la scelta. */
@@ -171,6 +178,13 @@ export class DeviceView {
     });
     // le schede dei pannelli vanno a capo nell'altezza della catena: si rifà quando cambia
     new ResizeObserver(() => this.fitPanels()).observe(this.chain);
+    // con la rotella la catena scorre, tranne dove la usa una manopola
+    this.chain.addEventListener('wheel', e => {
+      if (!e.defaultPrevented && e.deltaY && !e.ctrlKey) this.chain.scrollLeft += e.deltaY;
+    });
+    for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick', 'wheel']) {
+      this.chain.addEventListener(type, e => this.pickEvent(e as MouseEvent), { capture: true, passive: false });
+    }
     // nel vuoto della catena (anche di una catena senza effetti) si può incollare
     this.chain.addEventListener('contextmenu', e => {
       if ((e.target as HTMLElement).closest('.device-panel, .rack-panel')) return;
@@ -240,6 +254,7 @@ export class DeviceView {
   }
 
   close(): void {
+    this.stopPicking();
     this.owner = null;
     this.element.hidden = true;
   }
@@ -305,7 +320,11 @@ export class DeviceView {
   chooseEffect(x: number, y: number): void {
     const owner = this.owner;
     if (!owner) return;
-    showContextMenu(x, y, EFFECT_TYPES.map(t => ({ label: t.label, run: () => this.deps.store.apply(addEffect(owner, t.type, t.label)) })));
+    showContextMenu(x, y, this.effectChoices(owner).map(t => ({ label: t.label, run: () => this.deps.store.apply(addEffect(owner, t.type, t.label)) })));
+  }
+
+  private effectChoices(owner: ChainOwner): readonly DeviceType[] {
+    return chainEffectTypes(this.deps.store.project.track(owner as TrackId) instanceof MidiTrack);
   }
 
   private sourceOf(owner: ChainOwner): ChainSource | null {
@@ -336,6 +355,7 @@ export class DeviceView {
 
   /** Pannelli nuovi quando cambia la forma della catena (effetti aggiunti, tolti, spostati, rack). */
   private build(owner: ChainOwner, { track, effects, racks }: ChainSource, shape: string): void {
+    this.stopPicking();
     const sameOwner = owner === this.builtOwner;
     this.builtOwner = owner;
     const scroll = sameOwner ? this.chain.scrollLeft : 0;
@@ -421,7 +441,7 @@ export class DeviceView {
         if (folded) this.folded.delete(rack.id); else this.folded.add(rack.id);
         this.sync();
       },
-      onAddEffect: (x, y) => showContextMenu(x, y, EFFECT_TYPES.map(t => ({
+      onAddEffect: (x, y) => showContextMenu(x, y, this.effectChoices(owner).map(t => ({
         label: t.label, run: () => this.deps.store.apply(addEffectToRack(owner, rack.id, t.type, t.label)),
       }))),
       onSelect: extend => this.select(rack.devices, extend, rack.id),
@@ -631,7 +651,7 @@ export class DeviceView {
   /** Per il pannello del modulatore `id`: i bersagli della catena di `owner`. */
   private modTargetHost(owner: ChainOwner, id: DeviceId): ModTargetHost {
     const { store } = this.deps;
-    return {
+    const host: ModTargetHost = {
       at: (x, y) => {
         const e = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-param]');
         if (!e || !this.chain.contains(e)) return null;
@@ -648,8 +668,61 @@ export class DeviceView {
       label: t => modTargetLabel(store.project, owner, t),
       choices: () => modTargetChoices(store.project, owner),
       set: (slot, target, amount) => store.apply(setModTarget(owner, id, slot, target, amount)),
+      startPicking: (pick, ended) => this.startPicking(id, host, pick, ended),
+      stopPicking: () => this.stopPicking(),
+      scrollToward: x => this.scrollToward(x),
       say: text => this.deps.say?.(text),
     };
+    return host;
+  }
+
+  private startPicking(id: DeviceId, host: ModTargetHost, pick: (target: ModTarget) => void, ended: () => void): void {
+    this.stopPicking();
+    this.picking = { host, pick, ended };
+    this.element.classList.add('mod-picking');
+    this.panels.get(id)?.element.classList.add('mod-source');
+    addEventListener('keydown', this.pickingKey, true);
+  }
+
+  private stopPicking(): void {
+    const picking = this.picking;
+    if (!picking) return;
+    this.picking = null;
+    this.element.classList.remove('mod-picking');
+    for (const panel of this.panels.values()) panel.element.classList.remove('mod-source');
+    removeEventListener('keydown', this.pickingKey, true);
+    picking.ended();
+  }
+
+  private readonly pickingKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    this.stopPicking();
+  };
+
+  /** Mentre un modulatore sceglie: i clic sui bersagli sono suoi, la rotella scorre la catena
+   *  (non muove la manopola sotto il puntatore), il resto funziona come sempre. */
+  private pickEvent(e: MouseEvent): void {
+    const picking = this.picking;
+    if (!picking) return;
+    if (e.type === 'wheel') {
+      e.preventDefault();
+      e.stopPropagation();
+      this.chain.scrollLeft += (e as WheelEvent).deltaY || (e as WheelEvent).deltaX;
+      return;
+    }
+    const found = picking.host.at(e.clientX, e.clientY);
+    if (!found) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'pointerdown' && e.button === 0) picking.pick(found.target);
+  }
+
+  private scrollToward(x: number): void {
+    const view = this.chain.getBoundingClientRect();
+    if (x > view.right - EDGE_ZONE) this.chain.scrollLeft += EDGE_STEP;
+    else if (x < view.left + EDGE_ZONE) this.chain.scrollLeft -= EDGE_STEP;
   }
 
   /** I controlli che un modulatore della catena muove: un segno, e nel titolo chi li muove. */

@@ -69,6 +69,13 @@ export interface ModTargetHost {
   choices(): readonly { readonly target: ModTarget; readonly label: string }[];
   /** La destinazione `slot` (da 0) muove `target` (null: libera); con `amount` anche la quantità. */
   set(slot: number, target: ModTarget | null, amount?: number): void;
+  /** Da adesso un clic su un bersaglio della catena lo passa a `pick` invece di muoverlo; la
+   *  catena si scorre e le schede si cambiano come sempre. Dura fino a `stopPicking`, a Esc o
+   *  a un'altra scelta: alla fine si chiama `ended`. */
+  startPicking(pick: (target: ModTarget) => void, ended: () => void): void;
+  stopPicking(): void;
+  /** Con il puntatore in `x` vicino a un bordo della catena (un trascinamento), la scorre di un passo. */
+  scrollToward(x: number): void;
   /** Un messaggio nella barra di stato. */
   say(text: string): void;
 }

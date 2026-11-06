@@ -58,6 +58,8 @@ class WorkletInstrument implements Instrument {
   readonly modulation = workletModulation(m => this.send(m));
   private node: AudioWorkletNode | null = null;
   private settings: InstrumentSettings;
+  /** I parametri dell'arpeggiatore: viaggiano con quelli dello strumento. */
+  private arp: Readonly<Record<string, number>> = {};
   private bpm: number;
   private anchor: TransportAnchor | null;
   private pings = 0;
@@ -83,11 +85,28 @@ class WorkletInstrument implements Instrument {
     this.send({ type: 'note', pitch, velocity, on: when, off: when + duration });
   }
 
+  press(pitch: number, velocity: number): void {
+    this.send({ type: 'press', pitch, velocity });
+  }
+
+  release(pitch: number): void {
+    this.send({ type: 'release', pitch });
+  }
+
   update(settings: InstrumentSettings, at?: number): void {
     const prev = this.settings;
     this.settings = settings;
-    if (settings.params !== prev.params) this.send({ type: 'params', params: fullParams(settings), at });
+    if (settings.params !== prev.params) this.send({ type: 'params', params: this.allParams(), at });
     if (settings.samples !== prev.samples) this.sendSamples(prev.samples, settings.samples, at);
+  }
+
+  setArp(params: Readonly<Record<string, number>>): void {
+    this.arp = params;
+    this.send({ type: 'params', params: this.allParams() });
+  }
+
+  private allParams(): Readonly<Record<string, number>> {
+    return { ...fullParams(this.settings), ...this.arp };
   }
 
   setTempo(bpm: number): void {
@@ -147,7 +166,7 @@ class WorkletInstrument implements Instrument {
 
   private build(): void {
     const processorOptions: InstrumentProcessorOptions = {
-      type: this.settings.type, params: fullParams(this.settings), samples: samplesOf(this.settings.samples, this.source),
+      type: this.settings.type, params: this.allParams(), samples: samplesOf(this.settings.samples, this.source),
       bpm: this.bpm, transport: this.anchor,
     };
     this.node = new AudioWorkletNode(this.ctx, INSTRUMENT_PROCESSOR, {

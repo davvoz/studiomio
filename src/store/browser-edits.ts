@@ -3,6 +3,7 @@
  * annullamento. */
 import type { TrackId } from '../core/id';
 import type { Preset } from '../devices/device-type';
+import { effectType } from '../devices/registry';
 import { SAMPLE_SLOT, SAMPLER } from '../devices/instruments/sampler/sampler';
 import { DEFAULT_INSTRUMENT, newEffect, withPreset, type EffectSettings, type InstrumentSettings } from '../model/device';
 import { INSTRUMENT_DEVICE } from '../model/envelope';
@@ -56,7 +57,10 @@ export const loadSampler = (track: TrackId, sample: SampleRef): Edit =>
 export const loadEffect = (owner: ChainOwner | null, type: string, label: string, preset: Preset | null): Edit =>
   edit(`Carica ${preset ? `${label}: ${preset.name}` : label}`, (p, ctx) => {
     let next = p, target = owner;
-    if (!target || (target !== MASTER && !p.track(target))) [next, target] = newTrack(p, ctx, 'audio', null);
+    // chi lavora sulle note vuole uno strumento: fuori da una traccia MIDI ne nasce una
+    const notes = !!effectType(type)?.notes;
+    if (notes && !(target && p.track(target as TrackId) instanceof MidiTrack)) [next, target] = newTrack(p, ctx, 'midi', null);
+    else if (!target || (target !== MASTER && !p.track(target))) [next, target] = newTrack(p, ctx, 'audio', null);
     const before = new Set(next.effectsOf(target).map(e => e.id));
     next = addEffect(target, type, label).apply(next, ctx);
     const added = next.effectsOf(target).find(e => !before.has(e.id));

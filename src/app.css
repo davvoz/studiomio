@@ -305,6 +305,8 @@ body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi
 /* largo uguale con qualunque nome di traccia: i nomi lunghi finiscono con … */
 .sidechain-choice select { width: 132px; text-overflow: ellipsis; }
 .header .controls .fx { padding: 1px 6px; font-size: 11px; }
+.header .controls .keyboard { padding: 1px 4px; }
+button.keyboard.on { background: var(--keys); border-color: var(--keys); color: #141414; }
 .knob { width: 62px; display: flex; flex-direction: column; align-items: center; cursor: ns-resize; user-select: none; outline: none; touch-action: none; }
 .knob-face { width: 40px; height: 40px; }
 .knob-track { fill: none; stroke: #3a3f47; stroke-width: 4; stroke-linecap: round; }
@@ -541,6 +543,7 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .strip-db { font: 600 11px/1.2 ui-monospace, monospace; color: var(--muted); }
 .strip-ms { display: flex; gap: 3px; }
 .strip-ms button { padding: 1px 8px; font-size: 11.5px; }
+.strip-ms .keyboard { padding: 1px 4px; }
 .strip.folded { padding-inline: 2px; }
 .strip.folded :is(.strip-badge, .fx, .knob, .midi-slot, .strip-db) { display: none; }
 .strip.folded .strip-ms { flex-direction: column; }
@@ -648,6 +651,8 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .prisma.has-active [data-param].modulated:not(.modulated-active) .knob-mod { opacity: .3; }
 [data-param].drop-target { outline: 2px solid #4cb8ff; outline-offset: 1px; border-radius: 6px; background: rgba(76,184,255,.14); }
 [data-param].mod-editing { cursor: ns-resize; }
+.device-view.mod-picking [data-param]:not(.mod-source [data-param]) { outline: 1px dashed rgba(76,184,255,.6); outline-offset: 1px; border-radius: 6px; cursor: crosshair; }
+.device-view.mod-picking [data-param]:not(.mod-source [data-param]):hover { outline: 2px solid #4cb8ff; background: rgba(76,184,255,.14); }
 .prisma-matrix { display: flex; gap: 14px; }
 .prisma-matrix-col { display: flex; flex-direction: column; gap: 3px; }
 .prisma-row { display: flex; align-items: center; gap: 4px; font-size: 11.5px; }

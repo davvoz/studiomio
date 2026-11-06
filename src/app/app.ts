@@ -61,6 +61,7 @@ import { PeakStore } from '../ui/waveform';
 import { AudioSystem } from './audio-system';
 import { BrowserLoader } from './browser-loader';
 import { KeyMapper } from './key-mapper';
+import { keyboardBase, NoteKeyboard, NoteKeys } from './note-keyboard';
 import { MidiMapper } from './midi-mapper';
 import { mainMenu } from './main-menu';
 import { RecentProjects } from './recent-projects';
@@ -192,6 +193,7 @@ export class App implements Commands, TimelineActions {
       dropItem,
     });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
+    this.arrangement.bindWheel(headers.element);
     const automation = this.automation = new MasterAutomation(this.store, this.ui, this.audio.engine, this.clipboard);
     const master = new MasterStrip(this.store, headerActions, meters, automation);
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this);
@@ -238,6 +240,7 @@ export class App implements Commands, TimelineActions {
     this.store.onChange(p => {
       const alive = new Set(p.tracks.flatMap(t => t.arrangement.map(x => x.id)));
       if ([...this.ui.selection].some(id => !alive.has(id))) this.ui.select([...this.ui.selection].filter(id => alive.has(id)));
+      this.ui.keepKeyboardTracks(id => !!p.track(id));
       if (this.ui.track && !p.track(this.ui.track)) this.ui.selectTrack(null);
       else if (this.ui.track && !(p.track(this.ui.track) instanceof BusTrack) && !p.visibleTracks.some(t => t.id === this.ui.track)) {
         this.ui.selectTrack(p.groupsOf(this.ui.track).filter(g => g.folded).at(-1)?.id ?? null);
@@ -247,6 +250,13 @@ export class App implements Commands, TimelineActions {
     new KeyMapper(this.store, this.ui, t => this.say(t), this.springs);
     new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
     new MidiTargets(this.store, this.ui, t => this.say(t));
+    // dopo i tasti mappati, che hanno la precedenza sulle note
+    new NoteKeys(this.ui, new NoteKeyboard({
+      base: id => keyboardBase(this.store.project, id),
+      press: (track, pitch, velocity) => this.audio.pressNote(track, pitch, velocity),
+      release: (track, pitch) => this.audio.releaseNote(track, pitch),
+      say: t => this.say(t),
+    }));
     bindKeys(document, this, KEYMAP);
     // chiudere la finestra con modifiche non salvate chiede conferma (in Electron la chiede il processo principale)
     addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });

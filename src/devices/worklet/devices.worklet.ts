@@ -1,5 +1,7 @@
 /* I processori AudioWorklet dei dispositivi: uno per tutti gli strumenti, uno per tutti gli
  * effetti. Ognuno crea il motore del tipo richiesto e riceve parametri (e note) dalla porta. */
+import { ARP } from '../arp/arp';
+import { Arpeggiator } from '../arp/arpeggiator';
 import { metersDynamics } from '../dsp/core';
 import { paramsOf, type DeviceType } from '../device-type';
 import {
@@ -32,8 +34,8 @@ type Handlers<M extends { type: string }> = { readonly [K in M['type']]: (m: Ext
 
 /** I parametri del tipo che si possono modulare: tutti, numeri e scelte (una scelta si sposta
  *  lungo le sue opzioni e scatta a metà strada, come quando si gira la sua manopola). */
-const modSpecs = (type: DeviceType | undefined): Map<string, ParamSpec> =>
-  new Map((type ? paramsOf(type) : []).map(p => [p.id, p] as const));
+const modSpecs = (...types: (DeviceType | undefined)[]): Map<string, ParamSpec> =>
+  new Map(types.flatMap(type => (type ? paramsOf(type) : [])).map(p => [p.id, p] as const));
 
 /** Collega la porta alla tabella dei messaggi. */
 function listen<M extends { type: string }>(port: MessagePort, handlers: Handlers<M>): void {
@@ -50,7 +52,8 @@ const PLAYHEADS_POST = 1 / 30;
 
 class InstrumentProcessor extends AudioWorkletProcessor {
   private readonly type: string;
-  private core: InstrumentCore;
+  /** Il motore dello strumento, con davanti l'arpeggiatore: le note passano da lui. */
+  private arp: Arpeggiator;
   private readonly queue = new NoteQueue();
   private readonly mod: ParamModulation;
   /** Il motore, se segue la battuta (il sequencer), e dove si trova il trasporto. */
@@ -75,11 +78,13 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     this.params = o.params;
     this.bpm = o.bpm;
     for (const [slot, sample] of Object.entries(o.samples ?? {})) this.samples.set(slot, sample);
-    this.core = this.build();
-    this.mod = new ParamModulation(modSpecs(instrumentType(o.type)), o.params);
+    this.arp = this.build();
+    this.mod = new ParamModulation(modSpecs(instrumentType(o.type), ARP), o.params);
     this.clock.set(o.transport);
     listen<InstrumentMessage>(this.port, {
       note: m => this.queue.add(m.pitch, m.velocity, Math.round(m.on * sampleRate), Math.round(m.off * sampleRate)),
+      press: m => this.queue.press(m.pitch, m.velocity, currentFrame),
+      release: m => this.queue.release(m.pitch, currentFrame),
       params: m => this.at(m.at, () => this.mod.setBase(m.params)),
       mod: m => this.mod.event(m.param, m.kind, m.value, m.time, m.channel),
       sample: m => this.at(m.at, () => {
@@ -88,12 +93,12 @@ class InstrumentProcessor extends AudioWorkletProcessor {
       }),
       tempo: m => {
         this.bpm = m.bpm;
-        this.core.setTempo?.(m.bpm);
+        this.arp.setTempo(m.bpm);
       },
       transport: m => this.clock.set(m.anchor),
       stop: () => {
         this.queue.clear();
-        this.core.silence();
+        this.arp.silence();
       },
       cut: m => this.queue.cutAt(Math.round(m.at * sampleRate)),
       retake: m => this.queue.dropFrom(Math.round(m.at * sampleRate)),
@@ -102,14 +107,19 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     });
   }
 
+  private get core(): InstrumentCore {
+    return this.arp.inner;
+  }
+
   /** Un motore nuovo con i parametri, i sample e il tempo che ha ricevuto quello di prima. */
-  private build(): InstrumentCore {
+  private build(): Arpeggiator {
     const core = INSTRUMENT_CORES[this.type]?.(sampleRate) ?? silentInstrument;
     if (playsSamples(core)) for (const [slot, sample] of this.samples) core.setSample(slot, sample);
-    core.setTempo?.(this.bpm);
-    core.setParams(this.params);
+    const arp = new Arpeggiator(core, sampleRate);
+    arp.setTempo(this.bpm);
+    arp.setParams(this.params);
     this.follower = followsTransport(core) ? core : null;
-    return core;
+    return arp;
   }
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
@@ -120,9 +130,11 @@ class InstrumentProcessor extends AudioWorkletProcessor {
       const now = currentFrame / sampleRate;
       while (this.later.length && this.later[0].frame < currentFrame + left.length) this.later.shift()!.run();
       const params = this.mod.paramsAt(now);
-      if (params) this.core.setParams((this.params = params));
-      this.follower?.setTransport(this.clock.at(now));
-      this.queue.renderBlock(this.core, left, right, currentFrame);
+      if (params) this.arp.setParams((this.params = params));
+      const position = this.clock.at(now);
+      this.follower?.setTransport(position);
+      this.arp.setTransport(position);
+      this.queue.renderBlock(this.arp, left, right, currentFrame);
       if (this.core.playheads) this.postHeads(left.length);
     } catch (e) {
       error = e;
@@ -131,7 +143,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
       left.fill(0);
       right.fill(0);
       if (this.faults.restart(currentFrame / sampleRate)) {
-        this.core = this.build();
+        this.arp = this.build();
         this.port.postMessage({ type: 'fault', error: error === null ? null : String(error) } satisfies InstrumentReply);
       }
     }

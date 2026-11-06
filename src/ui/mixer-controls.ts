@@ -1,11 +1,14 @@
 /* Controlli del mixer usati sia dalle intestazioni delle tracce sia dal master. */
-import { EFFECT_TYPES } from '../devices/registry';
+import { chainEffectTypes } from '../devices/registry';
+import { MidiTrack } from '../model/track';
+import type { TrackId } from '../core/id';
 import { encodeMidiTarget, type MidiTarget } from '../model/midi-map';
 import type { ChainOwner } from '../model/project';
 import { addEffect } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { showContextMenu, type MenuItem } from './context-menu';
 import { el } from './dom';
+import type { UiState } from './ui-state';
 
 /** Volume in dB: trascinato è un solo passo di annullamento, doppio clic torna a 0 dB. */
 export function volumeSlider(store: ProjectStore, value: number, mergeKey: string, set: (db: number, mergeKey?: string) => void): HTMLInputElement {
@@ -25,6 +28,12 @@ export function midiTarget<E extends HTMLElement>(e: E, target: MidiTarget): E {
 /** Un cursore non mostra il nome del suo controllo MIDI: lo porta un involucro. */
 export const midiSlot = (input: HTMLInputElement, target: MidiTarget): HTMLElement =>
   midiTarget(el('span', { className: 'midi-slot' }, input), target);
+
+/** Accende la traccia MIDI per suonarla con la tastiera del computer. */
+export const keyboardButton = (ui: UiState, track: TrackId): HTMLButtonElement => el<HTMLButtonElement>('button', {
+  className: 'keyboard', textContent: '⌨', onclick: () => ui.toggleKeyboardTrack(track),
+  title: "Suona questa traccia con la tastiera del computer: da A a L le note, W E T Y U O P i tasti neri, Z X l'ottava, C V la velocity",
+});
 
 /** "FX" con il numero degli effetti della catena; un clic la apre. */
 export function fxButton(count: number, title: string, open: () => void): HTMLButtonElement {
@@ -55,7 +64,7 @@ export function automationOnRightClick(element: HTMLElement, show: () => void): 
 
 /** "Aggiungi <effetto>" per ogni tipo: aggiunge in fondo alla catena e la apre. */
 export const addEffectItems = (store: ProjectStore, owner: ChainOwner, open: () => void): MenuItem[] =>
-  EFFECT_TYPES.map(type => ({
+  chainEffectTypes(store.project.track(owner as TrackId) instanceof MidiTrack).map(type => ({
     label: `Aggiungi ${type.label}`,
     run: () => {
       store.apply(addEffect(owner, type.type, type.label));

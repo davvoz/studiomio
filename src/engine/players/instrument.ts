@@ -12,9 +12,14 @@ export interface Instrument {
   readonly modulation?: DeviceModulation;
   /** `velocity` 1..127, tempi in secondi del contesto audio. */
   play(pitch: number, velocity: number, when: number, duration: number): void;
+  /** Una nota tenuta a mano: parte adesso e suona finché non arriva `release` per la sua altezza. */
+  press(pitch: number, velocity: number): void;
+  release(pitch: number): void;
   /** Nuovi valori dei parametri (stesso tipo di strumento): subito, o dall'istante `at` del
    *  contesto audio (il suono di una clip che parte). */
   update(settings: InstrumentSettings, at?: number): void;
+  /** I parametri dell'arpeggiatore davanti allo strumento (vedi devices/arp). */
+  setArp(params: Readonly<Record<string, number>>): void;
   /** Il tempo del progetto è cambiato (per le modulazioni a tempo dello strumento). */
   setTempo?(bpm: number): void;
   stopAll(): void;

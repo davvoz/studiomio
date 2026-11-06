@@ -29,6 +29,9 @@ export interface InstrumentProcessorOptions {
 
 export type InstrumentMessage =
   | { readonly type: 'note'; readonly pitch: number; readonly velocity: number; readonly on: number; readonly off: number }
+  /** Una nota tenuta a mano: parte subito e suona finché non arriva `release`. */
+  | { readonly type: 'press'; readonly pitch: number; readonly velocity: number }
+  | { readonly type: 'release'; readonly pitch: number }
   /** Con `at` valgono da quell'istante (il suono di una clip che parte), se no subito. */
   | { readonly type: 'params'; readonly params: Readonly<Record<string, number>>; readonly at?: number }
   | ModMessage
