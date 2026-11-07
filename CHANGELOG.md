@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.53] - 2026-11-07
+
 ### Fixed
 - With the ⌨ button on, the keys that play notes now always play, even in a project where they are
   mapped to macros or parameters: they used to move the macros instead of playing. Turn ⌨ off and
