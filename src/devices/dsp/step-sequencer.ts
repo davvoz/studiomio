@@ -117,6 +117,10 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
   private bpm = 120;
   /** Il battito all'inizio del blocco (null: trasporto fermo). */
   private blockBeat: number | null = null;
+  /** Da fermo, con una nota tenuta (si suona a mano), l'orologio è il suo e parte con la nota: il
+   *  battito all'inizio del blocco e quello dove è finito l'ultimo tratto. */
+  private freeBeat: number | null = null;
+  private freeEnd = 0;
   /** Il battito dove è finito l'ultimo tratto suonato (per riconoscere i salti). */
   private endBeat: number | null = null;
   /** Il prossimo confine di passo da suonare (in battiti). */
@@ -153,10 +157,15 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
 
   setTransport(position: TransportPosition | null): void {
     if (!position) {
-      this.blockBeat = this.endBeat = this.nextStepBeat = this.missedStepBeat = null;
-      this.release();
+      if (this.blockBeat !== null) {
+        this.blockBeat = this.endBeat = this.nextStepBeat = this.missedStepBeat = null;
+        this.release();
+      } else if (this.freeBeat !== null) {
+        this.freeBeat = this.freeEnd;
+      }
       return;
     }
+    this.freeBeat = null;
     this.bpm = position.bpm;
     // un salto (loop, cursore spostato): il giro riparte da lì
     if (this.endBeat === null || Math.abs(position.beat - this.endBeat) > 1e-3) {
@@ -197,13 +206,21 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
 
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const s = this.settings;
-    if (!s.on || this.blockBeat === null) {
+    const perFrame = this.bpm / 60 / this.sampleRate;
+    if (this.blockBeat === null) {
+      if (s.on && this.held.size) {
+        this.freeBeat ??= -from * perFrame;
+      } else if (this.freeBeat !== null) {
+        this.freeBeat = this.nextStepBeat = this.missedStepBeat = null;
+      }
+    }
+    const start = this.blockBeat ?? this.freeBeat;
+    if (!s.on || start === null) {
       this.inner.render(left, right, from, to);
-      if (this.blockBeat !== null) this.endBeat = this.blockBeat + (to * this.bpm) / 60 / this.sampleRate;
+      if (this.blockBeat !== null) this.endBeat = this.blockBeat + to * perFrame;
       return;
     }
-    const perFrame = this.bpm / 60 / this.sampleRate;
-    const beatAt = (frame: number) => this.blockBeat! + frame * perFrame;
+    const beatAt = (frame: number) => start + frame * perFrame;
     const frameAt = (beat: number) => Math.min(to, Math.max(from, from + Math.ceil((beat - beatAt(from)) / perFrame - EPS)));
     const step = s.stepBeats;
     if (this.nextStepBeat === null) {
@@ -242,7 +259,8 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     }
     if (pos < to) this.inner.render(left, right, pos, to);
     this.nextStepBeat = nextStep;
-    this.endBeat = beatAt(to);
+    if (this.blockBeat !== null) this.endBeat = beatAt(to);
+    else this.freeEnd = beatAt(to);
   }
 
   /** Il passo che comincia al battito `boundary`. */

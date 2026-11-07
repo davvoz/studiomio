@@ -246,17 +246,17 @@ export class App implements Commands, TimelineActions {
         this.ui.selectTrack(p.groupsOf(this.ui.track).filter(g => g.folded).at(-1)?.id ?? null);
       }
     });
-    // prima delle scorciatoie: i tasti mappati sulle macro e sui parametri
-    new KeyMapper(this.store, this.ui, t => this.say(t), this.springs);
-    new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
-    new MidiTargets(this.store, this.ui, t => this.say(t));
-    // dopo i tasti mappati, che hanno la precedenza sulle note
+    // prima dei tasti mappati: con ⌨ acceso i tasti delle note suonano, anche se sono mappati
     new NoteKeys(this.ui, new NoteKeyboard({
       base: id => keyboardBase(this.store.project, id),
       press: (track, pitch, velocity) => this.audio.pressNote(track, pitch, velocity),
       release: (track, pitch) => this.audio.releaseNote(track, pitch),
       say: t => this.say(t),
     }));
+    // prima delle scorciatoie: i tasti mappati sulle macro e sui parametri
+    new KeyMapper(this.store, this.ui, t => this.say(t), this.springs);
+    new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
+    new MidiTargets(this.store, this.ui, t => this.say(t));
     bindKeys(document, this, KEYMAP);
     // chiudere la finestra con modifiche non salvate chiede conferma (in Electron la chiede il processo principale)
     addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });

@@ -32,7 +32,7 @@ export const midiSlot = (input: HTMLInputElement, target: MidiTarget): HTMLEleme
 /** Accende la traccia MIDI per suonarla con la tastiera del computer. */
 export const keyboardButton = (ui: UiState, track: TrackId): HTMLButtonElement => el<HTMLButtonElement>('button', {
   className: 'keyboard', textContent: '⌨', onclick: () => ui.toggleKeyboardTrack(track),
-  title: "Suona questa traccia con la tastiera del computer: da A a L le note, W E T Y U O P i tasti neri, Z X l'ottava, C V la velocity",
+  title: "Suona questa traccia con la tastiera del computer: da A a L le note, W E T Y U O P i tasti neri, Z X l'ottava, C V la velocity. Accesa, questi tasti suonano anche se sono mappati: la mappatura torna spegnendola",
 });
 
 /** "FX" con il numero degli effetti della catena; un clic la apre. */

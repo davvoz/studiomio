@@ -161,12 +161,32 @@ describe('sequencer a passi', () => {
   });
 
   it('fermo il trasporto, tace; un salto riparte da lì', () => {
-    const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 0, off: 40 * STEP }], 20 * STEP, f => (f < 8 * STEP ? null : { beat: 100 + (f - 8 * STEP) / BEAT, bpm: BPM, beatsPerBar: 4 }));
+    const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 8 * STEP, off: 40 * STEP }], 20 * STEP, f => (f < 8 * STEP ? null : { beat: 100 + (f - 8 * STEP) / BEAT, bpm: BPM, beatsPerBar: 4 }));
     // dal battito 100 i passi cadono di nuovo sui sedicesimi
     const on = ons(events).filter(e => e.frame < 20 * STEP);
     expect(on[0].frame).toBe(8 * STEP);
     expect(on).toHaveLength(12);
     on.forEach((e, k) => expect(e.frame).toBe((8 + k) * STEP));
+  });
+
+  it('da fermo una nota tenuta lo fa girare, dal primo passo e finché la si tiene', () => {
+    const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 3 * STEP, off: 7 * STEP }], 12 * STEP, () => null);
+    const on = ons(events);
+    expect(on.map(e => e.frame)).toEqual([3, 4, 5, 6].map(k => k * STEP));
+    expect(new Set(on.map(e => e.pitch))).toEqual(new Set([36]));
+    expect(events.filter(e => e.kind === 'off')).toHaveLength(on.length);
+  });
+
+  it("una nota dopo l'altra, da fermo, riparte ogni volta dal primo passo", () => {
+    const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 0, off: 2 * STEP }, { pitch: 40, on: 5 * STEP + 100, off: 6 * STEP + 100 }], 10 * STEP, () => null);
+    expect(ons(events).map(e => e.frame)).toEqual([0, STEP, 5 * STEP + 100]);
+  });
+
+  it('il trasporto che parte con una nota tenuta riprende la griglia', () => {
+    const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 0, off: 12 * STEP }], 12 * STEP, f => (f < 4 * STEP + 7 ? null : { beat: (f - 4 * STEP) / BEAT, bpm: BPM, beatsPerBar: 4 }));
+    const after = ons(events).filter(e => e.frame >= 5 * STEP);
+    after.forEach((e, k) => expect(e.frame).toBe((5 + k) * STEP));
+    expect(after).toHaveLength(7);
   });
 
   it('le velocità: ottavi, sedicesimi, terzine, trentaduesimi', () => {

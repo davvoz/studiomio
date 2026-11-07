@@ -2,7 +2,8 @@
  * sono i tasti bianchi, quella sopra i neri, Z X l'ottava, C V la velocity. Suona le tracce MIDI
  * accese con il pulsante ⌨. I tasti si riconoscono dalla posizione (`code`), non dalla lettera:
  * la disposizione resta la stessa con qualunque lingua della tastiera. Con Ctrl o Alt restano
- * scorciatoie, nei campi di testo si scrive, e i tasti mappati sulle macro vengono prima. */
+ * scorciatoie e nei campi di testo si scrive. Con una traccia accesa questi tasti suonano anche se
+ * sono mappati sulle macro: la mappatura torna spegnendo ⌨, e gli altri tasti mappati restano. */
 import type { TrackId } from '../core/id';
 import { resolveParams } from '../devices/device-type';
 import { instrumentType } from '../devices/registry';
@@ -138,10 +139,10 @@ export class NoteKeys {
   private down(e: KeyboardEvent): void {
     const { keyboard, ui } = this;
     if (!ui.keyboardTracks.size || !keyboard.owns(e.code) || ui.keyMapping || ui.midiMapping) return;
-    // `defaultPrevented`: lo ha già preso un tasto mappato
-    if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented || this.ownedElsewhere(e)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || this.ownedElsewhere(e)) return;
     e.preventDefault();
-    e.stopPropagation();
+    // anche i tasti mappati, in ascolto sulla stessa finestra
+    e.stopImmediatePropagation();
     if (!e.repeat) keyboard.down(e.code, ui.keyboardTracks);
   }
 

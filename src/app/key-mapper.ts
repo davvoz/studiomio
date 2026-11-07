@@ -1,7 +1,7 @@
 /* La tastiera del computer sulle macro e sui parametri (vedi model/key-map). Con "KEY" acceso il
  * tasto premuto va al bersaglio scelto (Canc lo toglie, Esc spegne KEY). Spento, i tasti mappati
- * muovono i loro bersagli prima di ogni altro tasto, come in Live; con Ctrl o Alt restano
- * scorciatoie, e nei campi di testo si scrive. */
+ * muovono i loro bersagli prima di ogni altro tasto, come in Live, tranne quelli delle note con
+ * ⌨ acceso (vedi app/note-keyboard); con Ctrl o Alt restano scorciatoie, e nei campi di testo si scrive. */
 import { keyLabel, targetsOf } from '../model/key-map';
 import { holdKey, pressKey, setKey, springTargets, type MacroTarget } from '../store/key-edits';
 import type { MacroSprings } from '../store/macro-springs';

@@ -6,6 +6,14 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- With the ⌨ button on, the keys that play notes now always play, even in a project where they are
+  mapped to macros or parameters: they used to move the macros instead of playing. Turn ⌨ off and
+  the mappings work again; keys outside the note layout stay mapped all the time.
+- An Analog or Neuro with its step sequencer on stayed silent when played by hand with the
+  transport stopped. Now a held note runs the sequencer on its own clock, from the first step, and
+  the transport takes back the grid when it starts.
+
 ## [0.3.52] - 2026-11-07
 
 ### Added

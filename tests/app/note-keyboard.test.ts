@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { keyboardBase, NoteKeyboard } from '../../src/app/note-keyboard';
-import type { TrackId } from '../../src/core/id';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { KeyMapper } from '../../src/app/key-mapper';
+import { keyboardBase, NoteKeyboard, NoteKeys } from '../../src/app/note-keyboard';
+import type { DeviceId, TrackId } from '../../src/core/id';
 import { DRUMS } from '../../src/devices/instruments/drums/drums';
+import type { KeyMap } from '../../src/model/key-map';
 import type { Project } from '../../src/model/project';
 import { loadInstrument } from '../../src/store/browser-edits';
+import type { ProjectStore } from '../../src/store/project-store';
+import type { UiState } from '../../src/ui/ui-state';
 import { setup } from '../helpers/fixtures';
 
 const A = 'a' as TrackId, B = 'b' as TrackId;
@@ -74,6 +78,56 @@ describe('NoteKeyboard', () => {
     keys.releaseAll();
     keys.up('KeyA');
     expect(log).toEqual(['on a 60 100', 'on a 64 100', 'off a 60', 'off a 64']);
+  });
+});
+
+describe('la tastiera accesa e i tasti mappati', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  /** La finestra con i due ascoltatori nell'ordine di app/app: A è mappato su una macro, Q anche. */
+  function windowRig(on: boolean) {
+    const listeners: ((e: KeyboardEvent) => void)[] = [];
+    vi.stubGlobal('HTMLElement', class {});
+    vi.stubGlobal('addEventListener', (type: string, listener: (e: KeyboardEvent) => void) => {
+      if (type === 'keydown') listeners.push(listener);
+    });
+    const target = { kind: 'macro', owner: 'master', rack: 'r' as DeviceId, index: 0 } as const;
+    const keyMap: KeyMap = [{ key: 'KeyA', target }, { key: 'KeyQ', target: { ...target, index: 1 } }];
+    const store = { project: { keyMap, racksOf: () => [] }, apply: vi.fn() };
+    const ui = { keyboardTracks: new Set(on ? [A] : []), keyMapping: false, midiMapping: false, onChange: () => {} } as unknown as UiState;
+    const { keys, log } = rig();
+    new NoteKeys(ui, keys);
+    new KeyMapper(store as unknown as ProjectStore, ui, () => {});
+    const press = (code: string) => {
+      let stopped = false;
+      const e = {
+        code, key: code.slice(-1).toLowerCase(), target: null, repeat: false, ctrlKey: false, metaKey: false, altKey: false,
+        preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() { stopped = true; },
+      } as unknown as KeyboardEvent;
+      for (const listener of listeners) if (!stopped) listener(e);
+    };
+    return { press, store, log };
+  }
+
+  it('accesa, un tasto delle note suona anche se è mappato e non muove la macro', () => {
+    const { press, store, log } = windowRig(true);
+    press('KeyA');
+    expect(log).toEqual(['on a 60 100']);
+    expect(store.apply).not.toHaveBeenCalled();
+  });
+
+  it('accesa, un tasto mappato fuori dalle note muove la sua macro', () => {
+    const { press, store, log } = windowRig(true);
+    press('KeyQ');
+    expect(log).toEqual([]);
+    expect(store.apply).toHaveBeenCalled();
+  });
+
+  it('spenta, il tasto torna alla sua macro', () => {
+    const { press, store, log } = windowRig(false);
+    press('KeyA');
+    expect(log).toEqual([]);
+    expect(store.apply).toHaveBeenCalled();
   });
 });
 
