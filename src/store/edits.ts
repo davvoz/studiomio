@@ -35,6 +35,10 @@ export const setLoopRegion = (patch: Partial<LoopRegion>): Edit => edit('Loop re
 export const setMasterAutomation = (target: ModTarget, points: readonly EnvelopePoint[]): Edit =>
   edit(points.length ? 'Master curve' : 'Delete the master curve', p => p.withMasterAutomation(target, points));
 
+/** Switches the master's curves on or off: switched off they stay, but don't play. */
+export const setMasterAutomationOn = (on: boolean): Edit =>
+  edit(on ? 'Master automation on' : 'Master automation off', p => (p.masterAutomationOn === on ? p : p.withMasterAutomationOn(on)));
+
 export const setLaunchQuantization = (id: string): Edit =>
   edit('Launch quantization', p => (p.launchQuantization === id ? p : p.withLaunchQuantization(id)));
 

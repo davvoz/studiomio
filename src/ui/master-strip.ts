@@ -46,6 +46,10 @@ export class MasterStrip {
       showContextMenu(e.clientX, e.clientY, [
         { label: 'Master effects', run: open },
         { label: automation.isOpen ? 'Hide the automation' : 'Show the automation', run: () => automation.toggle() },
+        ...(store.project.masterAutomation.length ? [{
+          label: store.project.masterAutomationOn ? 'Switch the automation off' : 'Switch the automation on',
+          run: () => automation.switchOn(!store.project.masterAutomationOn),
+        }] : []),
         ...addEffectItems(store, MASTER, open),
         { label: store.project.master.mute ? 'Unmute' : 'Mute', run: toggleMute },
       ]);

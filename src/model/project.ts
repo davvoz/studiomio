@@ -53,6 +53,8 @@ export interface ProjectProps {
   /** The master's curves on the timeline (absent: none): like the clip modulations, but in
    *  timeline beats, on a parameter of a master effect or a macro of one of its racks. */
   readonly masterAutomation?: readonly ClipEnvelope[];
+  /** The master's curves switched off (absent: on): they stay in the project but don't play. */
+  readonly masterAutomationOff?: boolean;
   /** Launch quantization of the session clips (an id of LAUNCH_QUANTA). */
   readonly launchQuantization: string;
   /** The computer keys on macros and parameters (absent: none). */
@@ -124,6 +126,10 @@ export class Project {
   get masterEffects(): EffectList { return this.props.masterEffects; }
   get masterRacks(): RackList { return this.props.masterRacks ?? NO_RACKS; }
   get masterAutomation(): readonly ClipEnvelope[] { return this.props.masterAutomation ?? NO_AUTOMATION; }
+  /** Whether the master's curves play (on by default). */
+  get masterAutomationOn(): boolean { return !this.props.masterAutomationOff; }
+  /** The master's curves that play: none when they're switched off. */
+  get playingMasterAutomation(): readonly ClipEnvelope[] { return this.masterAutomationOn ? this.masterAutomation : NO_AUTOMATION; }
   get launchQuantization(): string { return this.props.launchQuantization; }
 
   /** The keyboard mappings whose racks and devices exist (the others wait for an
@@ -223,6 +229,9 @@ export class Project {
     const list = withEnvelope(this.masterAutomation, target, points);
     return this.with({ masterAutomation: list.length ? list : undefined });
   }
+
+  /** Switches the master's curves on or off, keeping them. */
+  withMasterAutomationOn(on: boolean): Project { return this.with({ masterAutomationOff: on ? undefined : true }); }
 
   /** The master's curve on `target`, if any. */
   masterCurve(target: ModTarget): ClipEnvelope | undefined {

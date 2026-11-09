@@ -6,7 +6,7 @@ import type { PlaybackEngine } from '../engine/playback-engine';
 import type { ModTarget } from '../model/envelope';
 import type { Project } from '../model/project';
 import type { Clipboard } from '../store/clipboard';
-import { setMasterAutomation } from '../store/edits';
+import { setMasterAutomation, setMasterAutomationOn } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { BeatAxis } from './clip-editor/clip-geometry';
 import { el } from './dom';
@@ -23,6 +23,8 @@ export class MasterAutomation {
   readonly header = el('div', { className: 'master-auto-header', hidden: true });
   readonly lane = el('div', { className: 'master-auto-lane', hidden: true });
   readonly button: HTMLButtonElement;
+  /** On/off of all the master's curves: switched off they stay, but don't play. */
+  private readonly power: HTMLButtonElement;
   private readonly hint = el('div', { className: 'master-auto-hint' });
   private readonly editor: ModulationEditor;
   private axisOf: { geo: TimelineGeometry; axis: BeatAxis } | null = null;
@@ -47,6 +49,8 @@ export class MasterAutomation {
       layout: visible => { this.hint.hidden = visible; },
     }, 'Automation');
     this.button = el<HTMLButtonElement>('button', { className: 'auto', textContent: 'A', onclick: () => this.toggle() });
+    this.power = el<HTMLButtonElement>('button', { className: 'mini power', onclick: () => this.switchOn(!store.project.masterAutomationOn) });
+    this.editor.head.querySelector('span')!.after(this.power);
     this.header.append(this.editor.controls);
     this.lane.append(this.editor.lane.element, this.hint);
     store.onChange(() => this.sync());
@@ -66,6 +70,11 @@ export class MasterAutomation {
     this.header.hidden = this.lane.hidden = !open;
     if (open) this.editor.opened();
     this.sync();
+  }
+
+  /** Switches all the master's curves on or off, keeping them. */
+  switchOn(on: boolean): void {
+    this.store.apply(setMasterAutomationOn(on));
   }
 
   /** Opens the lane on parameter `target`. */
@@ -102,10 +111,18 @@ export class MasterAutomation {
   }
 
   private sync(): void {
-    const p = this.store.project, n = p.masterAutomation.length;
+    const p = this.store.project, n = p.masterAutomation.length, on = p.masterAutomationOn;
     this.button.classList.toggle('on', this.isOpen);
     this.button.classList.toggle('has', n > 0);
-    this.button.title = `Master automation: curves on the timeline for its effects and the macros of its racks${n ? ` (${n === 1 ? '1 curve' : `${n} curves`})` : ''}`;
+    this.button.classList.toggle('off', !on);
+    const count = n ? ` (${n === 1 ? '1 curve' : `${n} curves`}${on ? '' : ', switched off'})` : '';
+    this.button.title = `Master automation: curves on the timeline for its effects and the macros of its racks${count}`;
+    this.power.textContent = on ? 'On' : 'Off';
+    this.power.classList.toggle('on', on);
+    this.power.title = on
+      ? 'The master curves play: click to switch them all off (they stay, the knobs take over)'
+      : 'The master curves are switched off: click to switch them back on';
+    this.lane.classList.toggle('off', !on);
     this.hint.textContent = p.masterEffects.length
       ? 'Choose a master effect and a parameter on the left: here you draw its curve on the timeline'
       : 'Add an effect to the master (FX or right click) to automate its parameters';

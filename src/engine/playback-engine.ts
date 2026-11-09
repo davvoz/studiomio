@@ -299,8 +299,8 @@ export class PlaybackEngine {
     const changed = this.syncPlayers(next);
     const mods = this.syncChainModulators(next, changed);
     // the master's curves are picked up again even if its chain changes (the targets are there)
-    const curves = this.masterModulator.update(next.masterAutomation);
-    const master = curves || (!!prev && (prev.masterEffects !== next.masterEffects || prev.masterRacks !== next.masterRacks) && next.masterAutomation.length > 0);
+    const curves = this.masterModulator.update(next.playingMasterAutomation);
+    const master = curves || (!!prev && (prev.masterEffects !== next.masterEffects || prev.masterRacks !== next.masterRacks) && next.playingMasterAutomation.length > 0);
     if (!this.playing) return;
     if (prev && prev.signature !== next.signature) this.anchors.resend();
     if (!prev || prev.tempo !== next.tempo || prev.loop !== next.loop) this.resume();

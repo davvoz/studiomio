@@ -6,6 +6,11 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Master automation on/off: the "On" button in the master's automation lane (or the master's right-click
+  menu) switches all its curves off without deleting them; the knobs take over until you switch them
+  back on. It's saved with the project and can be undone.
+
 ## [0.3.54] - 2026-11-09
 
 ### Changed

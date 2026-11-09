@@ -20,6 +20,8 @@ const MARK = '● ';
 
 export class ModulationEditor {
   readonly controls = el('div', { className: 'mod-controls' });
+  /** The title row with the drawing buttons: a host can add its own. */
+  readonly head = el('div', { className: 'mod-head' });
   readonly lane: EnvelopeLane;
   /** Under the piano roll's keyboard: the parameter's name. */
   readonly side = el('div', { className: 'mod-side', hidden: true });
@@ -48,9 +50,8 @@ export class ModulationEditor {
     });
     this.device.onchange = () => this.chooseDevice(this.device.value);
     this.param.onchange = () => this.choose(this.paramTargets().find(t => targetKey(t) === this.param.value) ?? null);
-    this.controls.append(
-      el('div', { className: 'mod-head' }, el('span', { textContent: title }), this.drawButton, this.shapesButton, this.clearButton),
-      this.device, this.param);
+    this.head.append(el('span', { textContent: title }), this.drawButton, this.shapesButton, this.clearButton);
+    this.controls.append(this.head, this.device, this.param);
   }
 
   /** The shown target (for automated tests). */

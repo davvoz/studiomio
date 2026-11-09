@@ -384,6 +384,9 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .master-header .controls .auto.has:not(.on)::after {
   content: ''; position: absolute; right: -2px; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: var(--master-curve);
 }
+.master-header .controls .auto.has.off:not(.on)::after { background: var(--muted); }
+.master-auto-header .power { min-width: 34px; }
+.master-auto-lane.off .mod-lane { opacity: 0.4; }
 .master-auto-header { height: 104px; padding: 4px 8px; border-top: 1px solid var(--line); border-right: 1px solid var(--line); background: var(--panel); overflow: hidden; }
 .master-auto-header .mod-controls { margin-top: 0; padding-top: 0; border-top: none; }
 .master-auto-lane { position: relative; height: 104px; min-width: 0; border-top: 1px solid var(--line); background: #15171a; overflow: hidden; }

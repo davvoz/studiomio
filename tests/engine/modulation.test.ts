@@ -14,7 +14,7 @@ import {
 import { MidiClip } from '../../src/model/midi-clip';
 import { MASTER, Project } from '../../src/model/project';
 import { ProjectCodec } from '../../src/persistence/project-codec';
-import { addEffect, addMidiClip, addTrack, resizePlacement, setEffectParam, setLoopRegion, setMasterAutomation, setSlot, updateClip } from '../../src/store/edits';
+import { addEffect, addMidiClip, addTrack, resizePlacement, setEffectParam, setLoopRegion, setMasterAutomation, setMasterAutomationOn, setSlot, updateClip } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 import { groupDevices, mapMacro, setMacroMode, setMappingRange } from '../../src/store/rack-edits';
 import { macroParam } from '../../src/model/rack';
@@ -528,6 +528,32 @@ describe('master curves on the timeline', () => {
     const ev = r.delay('feedback');
     expect(replay(ev, 0, 1.02)).toBe(-0.5); // until the restart it holds the value: no jump
     expect(replay(ev, 0, 1.2)).toBe(0);
+  });
+
+  it('switched off they stay in the project and in the file, but do not play; on again they follow', () => {
+    const r = masterRig();
+    const target: ModTarget = { kind: 'device', device: r.fx, param: 'feedback' };
+    r.store.apply(setMasterAutomation(target, pts([0, -0.5])));
+    r.store.apply(setMasterAutomationOn(false));
+    expect(r.store.project.masterAutomationOn).toBe(false);
+    expect(r.store.project.masterCurve(target)?.points).toEqual(pts([0, -0.5]));
+    const codec = new ProjectCodec();
+    const json = JSON.parse(codec.stringify(r.store.project));
+    expect(json.masterAutomationOff).toBe(true);
+    expect(codec.decode(json).masterAutomationOn).toBe(false);
+    delete json.masterAutomationOff;
+    expect(codec.decode(json).masterAutomationOn).toBe(true); // older files: on
+    r.engine.play(0);
+    r.runUntil(1);
+    expect(replay(r.delay('feedback'), 0, 1)).toBe(0); // off from the start: neutral
+    r.store.apply(setMasterAutomationOn(true));
+    r.runUntil(2);
+    expect(replay(r.delay('feedback'), 0, 1.2)).toBe(-0.5);
+    r.store.apply(setMasterAutomationOn(false));
+    r.runUntil(3);
+    expect(replay(r.delay('feedback'), 0, 2.2)).toBe(0); // off while playing: back to neutral
+    r.store.undo();
+    expect(r.store.project.masterAutomationOn).toBe(true);
   });
 
   it('a curve on a button macro of a master rack makes it snap, like pressing it', () => {
