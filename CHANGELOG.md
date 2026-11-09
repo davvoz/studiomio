@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.57] - 2026-11-10
+
 ### Changed
 - More code cleanup from the code-quality analysis: unused internal code removed, with no change in
   how anything works or sounds.
