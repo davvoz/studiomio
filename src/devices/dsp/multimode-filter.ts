@@ -1,24 +1,24 @@
-/* Un filtro risonante da performance: passa-basso, passa-alto, passa-banda o notch, a 12 dB
- * (uno stadio a variabili di stato, TPT) o 24 dB per ottava (due in fila, con i Q di un
- * Butterworth del quarto ordine così senza risonanza resta piatto). La risonanza alza il Q
- * dell'ultimo stadio fino quasi all'autooscillazione. Stabile con il cutoff che si muove di
- * continuo: va bene per LFO e inviluppi. Puro: niente Web Audio. */
+/* A performance resonant filter: low-pass, high-pass, band-pass or notch, at 12 dB
+ * (one state-variable stage, TPT) or 24 dB per octave (two in a row, with the Qs of a
+ * fourth-order Butterworth so without resonance it stays flat). The resonance raises the Q
+ * of the last stage almost to self-oscillation. Stable with the cutoff moving
+ * continuously: good for LFOs and envelopes. Pure: no Web Audio. */
 
 export const FILTER_TYPES = ['Low-pass', 'High-pass', 'Band-pass', 'Notch'] as const;
 export const FILTER_TYPE = { lowPass: 0, highPass: 1, bandPass: 2, notch: 3 } as const;
 export const FILTER_SLOPES = ['12 dB', '24 dB'] as const;
 
-/** I Q degli stadi senza risonanza: un Butterworth (12 dB) e i due di un Butterworth a 4 poli (24 dB). */
+/** The Qs of the stages without resonance: a Butterworth (12 dB) and the two of a 4-pole Butterworth (24 dB). */
 const FLAT_Q_12 = Math.SQRT1_2;
 const FLAT_Q_24 = [0.5412, 1.3066] as const;
-/** Il Q più alto, con la risonanza al massimo. */
+/** The highest Q, with the resonance at maximum. */
 const MAX_Q = 25;
 
-/** Le uscite di uno stadio, per tipo: dagli stati del filtro (v1 banda, v2 basso) e dall'ingresso. */
+/** The outputs of a stage, by type: from the filter's states (v1 band, v2 low) and from the input. */
 const OUTPUTS: readonly ((v0: number, v1: number, v2: number, k: number) => number)[] = [
   (_v0, _v1, v2) => v2,
   (v0, v1, v2, k) => v0 - k * v1 - v2,
-  (_v0, v1, _v2, k) => k * v1, // guadagno 1 al centro
+  (_v0, v1, _v2, k) => k * v1, // gain 1 at the centre
   (v0, v1, _v2, k) => v0 - k * v1,
 ];
 
@@ -53,7 +53,7 @@ export class MultimodeFilter {
 
   constructor(private readonly sampleRate: number) {}
 
-  /** `resonance` 0..1; `type` indice in FILTER_TYPES; `poles` 2 (12 dB) o 4 (24 dB). */
+  /** `resonance` 0..1; `type` index into FILTER_TYPES; `poles` 2 (12 dB) or 4 (24 dB). */
   set(cutoff: number, resonance: number, type: number, poles: 2 | 4): void {
     const fc = Math.max(10, Math.min(cutoff, this.sampleRate * 0.45));
     const g = Math.tan((Math.PI * fc) / this.sampleRate);
@@ -63,7 +63,7 @@ export class MultimodeFilter {
     this.poles = poles;
     const flat = poles === 4 ? FLAT_Q_24 : [FLAT_Q_12];
     for (let s = 0; s < flat.length; s++) {
-      // la risonanza alza solo l'ultimo stadio, in modo esponenziale (si sente uniforme)
+      // the resonance raises only the last stage, exponentially (it sounds uniform)
       const q = s === flat.length - 1 ? flat[s] * Math.pow(MAX_Q / flat[s], r * r) : flat[s];
       const k = 1 / q;
       this.k[s] = k;

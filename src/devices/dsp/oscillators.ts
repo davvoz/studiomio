@@ -1,10 +1,10 @@
-/* Forme d'onda con fase in [0, 1). Dente di sega e quadra usano PolyBLEP: lo scalino viene
- * arrotondato sul campione in cui cade, così le armoniche sopra Nyquist quasi spariscono
- * (niente fischi metallici sulle note acute). */
+/* Waveforms with phase in [0, 1). Saw and square use PolyBLEP: the step is
+ * rounded off on the sample it falls on, so the harmonics above Nyquist almost vanish
+ * (no metallic whistles on high notes). */
 
 export type Wave = (phase: number, dt: number) => number;
 
-/** Correzione PolyBLEP attorno a una discontinuità in fase 0; `dt` = incremento di fase. */
+/** PolyBLEP correction around a discontinuity at phase 0; `dt` = phase increment. */
 export function polyBlep(t: number, dt: number): number {
   if (t < dt) {
     const x = t / dt;
@@ -22,8 +22,8 @@ const square: Wave = (t, dt) => (t < 0.5 ? 1 : -1) + polyBlep(t, dt) - polyBlep(
 const triangle: Wave = t => 1 - 4 * Math.abs(t - 0.5);
 const sine: Wave = t => Math.sin(2 * Math.PI * t);
 
-/** Nell'ordine delle opzioni dei parametri "onda" (Saw, Square, Triangle, Sine). */
+/** In the order of the options of the "wave" parameters (Saw, Square, Triangle, Sine). */
 export const WAVE_TABLE: readonly Wave[] = [saw, square, triangle, sine];
 
-/** Onde dell'LFO (Sine, Triangle, Square), senza correzioni: va lento. */
+/** LFO waves (Sine, Triangle, Square), without corrections: it goes slowly. */
 export const LFO_TABLE: readonly Wave[] = [sine, triangle, t => (t < 0.5 ? 1 : -1)];

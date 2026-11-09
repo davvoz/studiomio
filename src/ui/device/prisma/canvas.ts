@@ -1,6 +1,6 @@
-/* Piccoli aiuti comuni ai disegni del pannello di Prisma. */
+/* Small helpers shared by the Prisma panel's drawings. */
 
-/** Un canvas nitido, ridimensionato al suo posto; null se non ha ancora misure (nascosto). */
+/** A sharp canvas, resized to its place; null if it has no size yet (hidden). */
 export function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
   const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
   if (!w || !h) return null;
@@ -15,8 +15,8 @@ export const BACKGROUND = '#15181c';
 export const GRID = 'rgba(255,255,255,0.06)';
 export const LABEL = 'rgba(255,255,255,0.5)';
 
-/** Un trascinamento con il puntatore catturato: `move` riceve lo spostamento dall'inizio,
- *  `end` arriva alla fine (anche se annullato). */
+/** A drag with the pointer captured: `move` receives the offset from the start,
+ *  `end` arrives at the end (even if cancelled). */
 export function drag(e: PointerEvent, target: HTMLElement, move: (dx: number, dy: number, ev: PointerEvent) => void, end: () => void): void {
   const x0 = e.clientX, y0 = e.clientY;
   target.setPointerCapture(e.pointerId);

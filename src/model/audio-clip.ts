@@ -5,11 +5,11 @@ import { Clip, fullRange, type ClipProps, type Color } from './clip';
 import { sampleDuration, type SampleRef } from './sample';
 import { WarpMarkers } from './warp-markers';
 
-/** Opzioni di ogni modalità di warp. Si conservano tutte, come in Live: cambiando
- *  modalità e tornando indietro le impostazioni restano quelle di prima. */
+/** Options of each warp mode. They're all kept, as in Live: changing
+ *  mode and going back the settings stay as they were. */
 export interface WarpOptions {
   readonly beats: {
-    /** 'transients' oppure la griglia in battiti (0.25 = sedicesimi). */
+    /** 'transients' or the grid in beats (0.25 = sixteenths). */
     readonly preserve: 'transients' | Beats;
     readonly loop: BeatsLoopMode;
     /** 0..100 */
@@ -29,7 +29,7 @@ export const DEFAULT_WARP_OPTIONS: WarpOptions = {
 };
 
 export interface WarpSettings {
-  /** Senza warp il sample suona alla sua velocità, indipendentemente dal tempo del progetto. */
+  /** Without warp the sample plays at its own speed, regardless of the project's tempo. */
   readonly enabled: boolean;
   readonly mode: WarpMode;
   readonly markers: WarpMarkers;
@@ -39,36 +39,36 @@ export interface WarpSettings {
 export interface AudioClipProps extends ClipProps {
   readonly sample: SampleId;
   readonly warp: WarpSettings;
-  /** Semitoni, −48..48 */
+  /** Semitones, −48..48 */
   readonly transpose: number;
-  /** Centesimi, −50..50 */
+  /** Cents, −50..50 */
   readonly detune: number;
-  /** Volume della clip, indipendente dal mixer: GAIN_MIN_DB..GAIN_MAX_DB */
+  /** Clip volume, independent of the mixer: GAIN_MIN_DB..GAIN_MAX_DB */
   readonly gainDb: number;
-  /** Suona il sample al contrario. I secondi della clip (marker, transienti) sono quelli
-   *  del sample rovesciato: il secondo `t` è il secondo `durata − t` del file. */
+  /** Plays the sample backwards. The clip's seconds (markers, transients) are those
+   *  of the reversed sample: second `t` is second `duration − t` of the file. */
   readonly reversed: boolean;
 }
 
 export const GAIN_MIN_DB = -70;
 export const GAIN_MAX_DB = 24;
 
-/** I secondi del sample (es. i transienti dell'analisi) come li vede la clip: specchiati e
- *  riordinati se la clip è al contrario. */
+/** The sample's seconds (e.g. the analysis's transients) as the clip sees them: mirrored and
+ *  re-sorted if the clip is reversed. */
 export function clipTimes(clip: AudioClip, times: readonly Seconds[], duration: Seconds): readonly Seconds[] {
   return clip.reversed ? times.map(t => duration - t).reverse() : times;
 }
 
-/** Il crop di una clip audio, come "Crop" in Live: resta solo la parte che suona. */
+/** An audio clip's crop, like "Crop" in Live: only the part that plays remains. */
 export interface AudioCrop {
-  /** Il tratto da tenere, in secondi del file (mai rovesciati, anche se la clip lo è). */
+  /** The stretch to keep, in seconds of the file (never reversed, even if the clip is). */
   readonly fileStart: Seconds;
   readonly fileEnd: Seconds;
-  /** La clip che suona il file ritagliato `sample`: si sente come prima. */
+  /** The clip playing the cropped file `sample`: it sounds as before. */
   readonly clip: (sample: SampleId) => AudioClip;
 }
 
-/** Clip che suona (una parte di) un sample, adattata al tempo del progetto dal warp. */
+/** Clip playing (part of) a sample, adapted to the project's tempo by the warp. */
 export class AudioClip extends Clip<AudioClipProps> {
   readonly kind = 'audio';
 
@@ -76,7 +76,7 @@ export class AudioClip extends Clip<AudioClipProps> {
     return new AudioClip(props);
   }
 
-  /** Clip appena importata: warp a tempo costante sul tempo rilevato, tutto il sample. */
+  /** Newly imported clip: constant-tempo warp on the detected tempo, the whole sample. */
   static fromSample(id: ClipId, sample: SampleRef, color: Color): AudioClip {
     const bpm = sample.analysis?.tempo ?? 120;
     const markers = WarpMarkers.straight(bpm, sampleDuration(sample));
@@ -100,7 +100,7 @@ export class AudioClip extends Clip<AudioClipProps> {
   get gainDb(): number { return this.props.gainDb; }
   get reversed(): boolean { return this.props.reversed; }
 
-  /** Trasposizione totale in semitoni (centesimi come decimali). */
+  /** Total transposition in semitones (cents as decimals). */
   get pitch(): number {
     return this.transpose + this.detune / 100;
   }
@@ -129,9 +129,9 @@ export class AudioClip extends Clip<AudioClipProps> {
     return this.with({ gainDb: Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, db)) });
   }
 
-  /** Al contrario (o di nuovo dritta). Regione e loop restano dove sono e i marker si
-   *  specchiano attorno alla parte che suona (il loop, se attivo): si sente lo stesso tratto
-   *  di audio, rovesciato. Rovesciare due volte riporta la clip com'era. */
+  /** Reversed (or straight again). Region and loop stay where they are and the markers are
+   *  mirrored around the playing part (the loop, if active): you hear the same stretch
+   *  of audio, reversed. Reversing twice brings the clip back as it was. */
   withReversed(reversed: boolean, duration: Seconds): AudioClip {
     if (reversed === this.reversed) return this;
     const { region, loop } = this;
@@ -139,25 +139,25 @@ export class AudioClip extends Clip<AudioClipProps> {
     return this.with({ reversed, warp: { ...this.warp, markers: this.warp.markers.mirrored(duration, axis) } });
   }
 
-  /** Crop del loop (se attivo, altrimenti della regione): il tratto di sample sotto di esso
-   *  diventa un file nuovo e la clip suona solo quello, dall'inizio del loop. Null se il
-   *  tratto cade tutto fuori dal sample. */
+  /** Crop of the loop (if active, otherwise of the region): the stretch of sample under it
+   *  becomes a new file and the clip plays only that, from the start of the loop. Null if the
+   *  stretch falls entirely outside the sample. */
   cropped(duration: Seconds, tempo: TempoMap): AudioCrop | null {
     const { start, end } = this.loop.enabled ? this.loop : this.region;
-    // battiti e secondi della clip come nel motore: senza warp il sample parte dal battito 0
-    // e scorre al tempo del progetto, alla velocità data dal transpose
+    // the clip's beats and seconds as in the engine: without warp the sample starts from beat 0
+    // and flows at the project's tempo, at the speed given by the transpose
     const warp = this.warp.enabled, rate = Math.pow(2, this.pitch / 12);
     const toSeconds = (b: Beats) => (warp ? this.warp.markers.timeOf(b) : tempo.secondsAt(b) * rate);
     const t0 = Math.max(0, toSeconds(start)), t1 = Math.min(duration, toSeconds(end));
     if (!(t1 - t0 > 1e-3)) return null;
-    // senza warp il file nuovo riparte dal battito 0: tutto scorre indietro di quanto si taglia
+    // without warp the new file restarts from beat 0: everything shifts back by as much as is cut
     const shift = warp ? 0 : tempo.beatAt(t0 / rate);
     const cropped = this.warp.markers.cropped(t0, t1);
     const markers = shift ? WarpMarkers.of(cropped.markers.map(m => ({ t: m.t, b: m.b - shift })), cropped.baseBpm) : cropped;
     const envelopes = shift ? this.envelopes.map(e => ({ ...e, points: e.points.map(p => ({ ...p, beat: p.beat - shift })) })) : this.envelopes;
     const s = start - shift, e = end - shift;
     return {
-      // nel sample rovesciato il secondo t è il secondo durata − t del file
+      // in the reversed sample second t is second duration − t of the file
       fileStart: this.reversed ? duration - t1 : t0,
       fileEnd: this.reversed ? duration - t0 : t1,
       clip: sample => this.with({

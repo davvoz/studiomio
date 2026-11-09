@@ -1,13 +1,13 @@
-/* "Acido crudo": un piccolo live hard acid a 150 BPM in La, fatto per suonare nella session.
- * Le batterie sono i sample dell'utente sui pad di quattro Drum Machine (cassa, clap e
- * rullanti, piatti, percussioni) più una per gli effetti (riser, crash, sirena); le linee acid
- * sono due Analog a una voce con slide e accenti, distorte dal Drive; il rumble è un seno che
- * rotola sui sedicesimi in levare, tra una cassa e l'altra, saturato.
+/* "Acido crudo": a small hard acid live at 150 BPM in A, made to play in the session.
+ * The drums are the user's samples on the pads of four Drum Machines (kick, clap and
+ * snares, cymbals, percussion) plus one for the effects (riser, crash, siren); the acid lines
+ * are two monophonic Analogs with slides and accents, distorted by the Drive; the rumble is a sine
+ * rolling on the offbeat sixteenths, between one kick and the next, saturated.
  *
- * Le parti si scrivono come si programma una drum machine o una 303 (vedi patterns.ts),
- * le dieci scene sono le sezioni del live e la timeline ne tiene una "registrazione" di circa
- * 4 minuti, le stesse clip una dopo l'altra. I sample arrivano già pronti (SampleRef):
- * chi costruisce il progetto li copia nella cartella (vedi scripts/build-acid-live.ts). */
+ * The parts are written the way you program a drum machine or a 303 (see patterns.ts),
+ * the ten scenes are the live's sections and the timeline holds a "recording" of about
+ * 4 minutes, the same clips one after the other. The samples arrive ready (SampleRef):
+ * whoever builds the project copies them into the folder (see scripts/build-acid-live.ts). */
 import { SHAPE } from '../devices/effects/drive/drive';
 import { VOICE_MODE } from '../devices/instruments/analog/analog';
 import { padNote, padParam } from '../devices/instruments/drums/drums';
@@ -22,7 +22,7 @@ import { acid, BAR, bars, curve, repeat, steps } from './patterns';
 
 export const ACID_LIVE_BPM = 150;
 
-/** I suoni che il live usa, per ruolo (chi costruisce il progetto dà il file di ognuno). */
+/** The sounds the live uses, by role (whoever builds the project gives the file for each). */
 export const ACID_LIVE_SOUNDS = [
   'kick', 'kickHard', 'kickDeep',
   'clap', 'snare', 'snareRoll',
@@ -35,7 +35,7 @@ export type AcidLiveSound = (typeof ACID_LIVE_SOUNDS)[number];
 
 // ------------------------------------------------------------------ le parti
 
-/** I pad di ogni Drum Machine, per nome. */
+/** The pads of each Drum Machine, by name. */
 const KICK = { main: 0, hard: 1, deep: 2 } as const;
 const CLAP = { clap: 0, snare: 1, roll: 2 } as const;
 const HATS = { closed: 0, open: 1, ride: 2, alt: 3 } as const;
@@ -47,15 +47,15 @@ const A1 = 33;
 const PARTS = {
   kickDeep: bars(KICK.deep, 'x...x...x...x...', 4),
   kick: bars(KICK.main, 'X...x...x...x...', 4, 'X...x...x...x.o.'),
-  // il martello: la cassa dura sotto la principale, e un rullo di casse a fine giro
+  // the hammer: the hard kick under the main one, and a kick roll at the end of the round
   kickHammer: [...bars(KICK.main, 'X...x...x...x...', 4, 'X...x...x.x.xxxx'), ...bars(KICK.hard, 'x...x...x...x...', 4, 'x...x...x.......')],
-  /** Il rumble: un seno che rotola in levare, dopo il corpo della cassa (che sta nei primi
-   *  250 ms del battito: lì il rumble la coprirebbe). */
+  /** The rumble: a sine rolling on the offbeat, after the kick's body (which sits in the first
+   *  250 ms of the beat: there the rumble would cover it). */
   rumble: repeat([0.5, 0.75].map((at, k) => ({ pitch: A1, start: at, duration: 0.2, velocity: [120, 104][k] })), 1, 16),
   rumbleHammer: repeat([0.375, 0.5, 0.75].map((at, k) => ({ pitch: k === 2 ? A1 + 12 : A1, start: at, duration: k ? 0.2 : 0.1, velocity: [90, 127, 104][k] })), 1, 16),
   clap: [...bars(CLAP.clap, '....X.......X...', 4), ...bars(CLAP.snare, '....x.......x...', 4, '....x.......x.oo')],
   clapHammer: [...bars(CLAP.clap, '....X.......X...', 4), ...bars(CLAP.snare, '....x.....o.x..o', 4, '....x.....o.xoxx')],
-  /** Il rullo del break: da quarti a sedicesimi in 8 battute, sempre più forte. */
+  /** The break's roll: from quarters to sixteenths in 8 bars, louder and louder. */
   snareRoll: [
     ...[0, 1, 2, 3, 4, 5, 6, 7].map(b => ({ pitch: padNote(CLAP.roll), start: b, duration: 0.25, velocity: 60 + b * 2 })),
     ...Array.from({ length: 16 }, (_, k) => ({ pitch: padNote(CLAP.roll), start: 8 + k * 0.5, duration: 0.25, velocity: 76 + k })),
@@ -64,17 +64,17 @@ const PARTS = {
   ],
   hatsIntro: bars(HATS.closed, '..x...x...x...x.', 4),
   hats: bars(HATS.closed, 'o.x.o.x.o.x.o.xo', 4),
-  /** Pieni: aperti in levare, chiusi sui sedicesimi intorno (lo choke ferma l'aperto). */
+  /** Full: open on the offbeat, closed on the sixteenths around (the choke stops the open one). */
   hatsFull: [...bars(HATS.open, '..x...x...x...x.', 4), ...bars(HATS.closed, 'oo.ooo.ooo.ooo.o', 4)],
   hatsDrop: [...bars(HATS.open, '..x...x...x...x.', 4), ...bars(HATS.closed, 'oo.ooo.ooo.ooo.o', 4), ...bars(HATS.ride, 'x...x...x...x...', 4)],
   hatsHammer: [...bars(HATS.alt, 'xoXoxoXoxoXoxoXo', 4), ...bars(HATS.ride, '..x...x...x...x.', 4)],
   perc: [...bars(PERC.perc, '...x..x....x.x..', 4), ...bars(PERC.metal, '................', 4, '..............x.')],
   percFull: [...bars(PERC.perc, '...x..x....x.x..', 4), ...bars(PERC.metal, '.......x........', 4), ...bars(PERC.stab, '................', 4, 'x...............')],
-  /** Il tom che spinge nell'ultima battuta del break. */
+  /** The tom pushing in the break's last bar. */
   tomFill: steps(PERC.tom, 'x.......x...x.x.' + 'x.x.x.x.xxxxxxxx', 6 * BAR),
 };
 
-/** Le linee acid, in La: tonica, ottave, la terza minore e la seconda bemolle che graffia. */
+/** The acid lines, in A: root, octaves, the minor third and the scratching flat second. */
 const ACID = {
   intro: repeat(acid(`
     A2 a2 a3~ g3   a2 .  C3 a2   a2 A3 .  a2   eb3~ e3 a2 g2 |
@@ -85,7 +85,7 @@ const ACID = {
   hammer: repeat(acid(`
     A2 a2 A3 a2    a2 A2 a3 a2   A2 a2 A3 a2    G2~ a2 C3 a2 |
     A2 a2 A3 a2    a2 A2 a3 a2   A2 a2 A3 a2    E3~ eb3 a2 A3`), 8, 4),
-  /** La seconda: quadra, un'ottava sopra, ipnotica. */
+  /** The second: square, an octave up, hypnotic. */
   lead: repeat(acid(`
     A3 .  a3 c4~   a3 .  G3 .    a3 e4~ eb4 .   A3 .  c4 . |
     A3 .  a3 c4~   a3 .  G3 a3   .  A4~ g4 e4   .  C4 bb3~ a3`), 8, 4),
@@ -94,7 +94,7 @@ const ACID = {
 // ------------------------------------------------------------------ i suoni
 
 const KITS: Readonly<Record<string, readonly PadSound<AcidLiveSound>[]>> = {
-  // le casse di partenza sono quasi in Sol#: un semitono su, in La come il rumble
+  // the starting kicks are almost in G#: a semitone up, in A like the rumble
   kick: [
     { sound: 'kick', tune: 1, decay: 0.36, snap: 15 },
     { sound: 'kickHard', decay: 0.32, tone: 62, level: -8 },
@@ -143,7 +143,7 @@ const ANALOG_SOUNDS = {
   },
 } satisfies Record<string, ParamValues>;
 
-// ------------------------------------------------------------------ tracce e scene
+// ------------------------------------------------------------------ tracks and scenes
 
 type TrackKey = 'kick' | 'rumble' | 'acid' | 'lead' | 'clap' | 'hats' | 'perc' | 'fx';
 
@@ -180,7 +180,7 @@ const TRACKS: readonly TrackSpec<AcidLiveSound, TrackKey>[] = [
 
 const CUTOFF = instrumentParam('cutoff'), RESONANCE = instrumentParam('resonance');
 
-/** Le clip che tornano in più scene. */
+/** The clips that come back in several scenes. */
 const C = {
   kick: clip('Cassa', PARTS.kick, 16),
   rumble: clip('Rumble', PARTS.rumble, 16),
@@ -208,21 +208,21 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Entra l\'acido', bars: 16, clips: {
       kick: C.kick, rumble: C.rumble, hats: clip('Piatti', PARTS.hats, 16), perc: C.perc, clap: C.clap,
-      // il filtro si apre piano in 8 battute
+      // the filter opens slowly over 8 bars
       acid: clip('Acido entra', ACID.intro, 32, [{ target: CUTOFF, points: curve([0, -0.16], [32, 0.12]) }]),
     },
   },
   { name: 'Acido pieno', bars: 16, clips: { kick: C.kick, rumble: C.rumble, hats: C.hatsFull, perc: C.percFull, clap: C.clap, acid: C.acidFull } },
   {
     name: 'Break', bars: 8, clips: {
-      // niente cassa: l'acido risuona e si apre, il rullo sale (anche d'intonazione), il riser arriva al drop
+      // no kick: the acid resonates and opens, the roll rises (in pitch too), the riser reaches the drop
       acid: clip('Acido break', ACID.intro, 32, [
         { target: CUTOFF, points: curve([0, -0.2], [24, 0.22], [32, 0.3]) },
         { target: RESONANCE, points: curve([0, 0.1], [32, 0.12]) },
       ]),
       clap: clip('Rullo', PARTS.snareRoll, 32, [{ target: instrumentParam(padParam(CLAP.roll, 'tune')), points: curve([0, 0], [16, 0.04], [32, 0.25]) }]),
       perc: clip('Tom', PARTS.tomFill, 32),
-      // il riser dura 27 battiti e mezzo: parte in modo da finire sul drop
+      // the riser lasts 27 and a half beats: it starts so as to end on the drop
       fx: clip('Riser', [{ pitch: padNote(FX.riser), start: 4.5, duration: 0.25, velocity: 120 }], 32),
     },
   },
@@ -235,7 +235,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Acido 2', bars: 16, clips: {
       kick: C.kick, rumble: C.rumble, hats: C.hatsFull, perc: C.perc, clap: C.clap,
-      // la seconda linea da sola; nell'ultima battuta l'eco si alza e la lancia
+      // the second line alone; in the last bar the echo rises and launches it
       lead: clip('Acido 2 solo', ACID.lead, 32, [
         { target: CUTOFF, points: curve([0, 0], [16, 0.2], [28, 0.05], [32, 0.25]) },
         { target: effectParam(2, 'mix'), points: curve([0, 0], [28, 0], [28, 0.3], [32, 0.3]) },
@@ -250,7 +250,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       hats: clip('Piatti martello', PARTS.hatsHammer, 16),
       clap: clip('Clap martello', PARTS.clapHammer, 16),
       perc: C.percFull,
-      // l'acido più basso e più sporco: il Drive sale a scalini, il filtro con lui
+      // the acid lower and dirtier: the Drive rises in steps, the filter with it
       acid: clip('Acido martello', ACID.hammer, 32, [
         { target: CUTOFF, points: curve([0, 0.04], [8, 0.04], [8, 0.12], [16, 0.12], [16, 0.08], [24, 0.08], [24, 0.2], [32, 0.2]) },
         { target: effectParam(0, 'drive'), points: curve([0, 0], [16, 0.12], [32, 0.3]) },
@@ -265,7 +265,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       ]),
       lead: clip('Acido 2 lontano', ACID.lead, 32, [{ target: VOLUME, points: curve([0, 0.35], [32, 0.8]) }]),
       hats: clip('Ride', bars(HATS.ride, 'x...x...x...x...', 8), 32),
-      // la discesa dopo il drop, poi la salita che porta al prossimo
+      // the descent after the drop, then the climb leading to the next one
       fx: clip('Discesa e salita', [
         { pitch: padNote(FX.downlifter), start: 0, duration: 0.25, velocity: 115 },
         { pitch: padNote(FX.sweepUp), start: 16, duration: 0.25, velocity: 120 },
@@ -277,7 +277,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       kick: clip('Cassa fonda', PARTS.kickDeep, 16),
       hats: clip('Piatti', PARTS.hats, 16),
       perc: C.perc,
-      // l'acido si chiude e si spegne in 16 battute
+      // the acid closes and fades out over 16 bars
       acid: clip('Acido via', repeat(ACID.intro, 32, 2), 64, [
         { target: CUTOFF, points: curve([0, 0.05], [64, -0.25]) },
         { target: VOLUME, points: curve([0, 1], [48, 0.7], [64, 0]) },
@@ -286,11 +286,11 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   },
 ];
 
-/** L'ordine delle scene nella "registrazione" sulla timeline: il secondo break riporta al drop. */
+/** The order of the scenes in the "recording" on the timeline: the second break leads back to the drop. */
 const ARRANGEMENT: readonly number[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 5, 9];
 
-/** Il live intero; il master ha margine (le tracce sono tante e forti) e un Drive a nastro
- *  leggero che incolla e tiene i picchi. */
+/** The whole live; the master has headroom (the tracks are many and loud) and a light tape
+ *  Drive that glues and holds the peaks. */
 export const ACID_LIVE: LiveSpec<AcidLiveSound, TrackKey> = {
   name: 'Acido crudo',
   bpm: ACID_LIVE_BPM,
@@ -300,7 +300,7 @@ export const ACID_LIVE: LiveSpec<AcidLiveSound, TrackKey> = {
   arrangement: ARRANGEMENT,
 };
 
-/** Costruisce il live nel progetto (vuoto) dello store. */
+/** Builds the live in the store's (empty) project. */
 export function buildAcidLive(store: ProjectStore, sounds: Readonly<Record<AcidLiveSound, SampleRef>>): void {
   buildLive(store, ACID_LIVE, sounds);
 }

@@ -1,6 +1,6 @@
-/* Il pannello dell'EQ: il grafico con spettro, curva e punti delle bande (si trascinano:
- * orizzontale = frequenza, verticale = guadagno, rotella = Q), sotto le bande e i controlli
- * di quella scelta. Ogni gesto è un passo di annullamento. */
+/* The EQ's panel: the graph with spectrum, curve and band points (they're dragged:
+ * horizontal = frequency, vertical = gain, wheel = Q), below the bands and the controls
+ * of the chosen one. Each gesture is an undo step. */
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import { BAND_TYPES, bandParam, bandsOf, EQ_BANDS, MAX_FREQ, MAX_GAIN, MIN_FREQ, SLOPES, type BandKey, type EqBand } from '../../../devices/effects/eq/eq';
 import { formatParam, paramFromUnit, paramToUnit, type ParamSpec } from '../../../devices/params';
@@ -12,23 +12,23 @@ import type { DeviceDisplay, DisplayContext, SpectrumTap } from '../displays';
 import { BAND_COLORS, EqGraph, type Spectrum } from './eq-graph';
 import { SPECTRUM_BOTTOM } from './eq-scale';
 
-/** Quanto tempo (ms) ha richiesto in media un disegno del grafico: per le prove. */
+/** How long (ms) a drawing of the graph took on average: for tests. */
 export const eqDrawStats = { frames: 0, ms: 0 };
 
-/** I controlli della banda scelta, nell'ordine in cui compaiono. */
+/** The controls of the chosen band, in the order they appear. */
 const BAND_CONTROLS: readonly BandKey[] = ['type', 'freq', 'gain', 'q', 'slope'];
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const signedDb = (db: number) => `${db > 0 ? '+' : ''}${db.toFixed(1)} dB`;
 
-/** Un punto che si trascina: dove è partito, e i valori mandati per ultimi. */
+/** A dragged point: where it started, and the values last sent. */
 interface Drag {
   readonly band: number;
   readonly pointerId: number;
-  /** Distanza tra il punto della banda e il mouse quando si è preso. */
+  /** Distance between the band's point and the mouse when it was grabbed. */
   readonly dx: number;
   readonly dy: number;
-  /** Posizione del punto (si muove meno del mouse con Maiusc). */
+  /** Position of the point (it moves less than the mouse with Shift). */
   x: number;
   y: number;
   lastX: number;
@@ -43,7 +43,7 @@ export class EqDisplay implements DeviceDisplay {
   private readonly bandButtons: HTMLButtonElement[];
   private readonly controls = el('div', { className: 'eq-controls' });
   private readonly bandControls = new Map<string, { spec: ParamSpec; control: ParamControl }>();
-  private readonly power = el<HTMLButtonElement>('button', { className: 'mini power', textContent: '⏻', title: 'Accendi/spegni la banda (doppio clic sul punto)' });
+  private readonly power = el<HTMLButtonElement>('button', { className: 'mini power', textContent: '⏻', title: 'Turn the band on/off (double click on the point)' });
   private readonly tap: SpectrumTap;
   private readonly pre: Float32Array<ArrayBuffer>;
   private readonly post: Float32Array<ArrayBuffer>;
@@ -56,7 +56,7 @@ export class EqDisplay implements DeviceDisplay {
   private pointer: { x: number; y: number } | null = null;
   private drag: Drag | null = null;
   private dirty = true;
-  /** Lo spettro era disegnato nell'ultimo fotogramma (serve un disegno in più quando si spegne). */
+  /** The spectrum was drawn in the last frame (an extra drawing is needed when it turns off). */
   private spectrumShown = false;
 
   constructor(private readonly ctx: DisplayContext) {
@@ -65,7 +65,7 @@ export class EqDisplay implements DeviceDisplay {
     this.pre = new Float32Array(this.tap.binCount);
     this.post = new Float32Array(this.tap.binCount);
     this.bandButtons = Array.from({ length: EQ_BANDS }, (_, i) => {
-      const b = el<HTMLButtonElement>('button', { className: 'eq-band', textContent: String(i + 1), title: `Banda ${i + 1}` });
+      const b = el<HTMLButtonElement>('button', { className: 'eq-band', textContent: String(i + 1), title: `Band ${i + 1}` });
       b.style.setProperty('--band', BAND_COLORS[i]);
       b.onclick = () => this.select(i);
       b.ondblclick = () => this.toggle(i);
@@ -76,7 +76,7 @@ export class EqDisplay implements DeviceDisplay {
     this.bindGraph();
     this.update(ctx.settings, true);
     this.select(Math.max(0, this.bands.findIndex(b => b.on)), true);
-    // il grafico prende l'altezza che resta nel pannello: si ridisegna quando cambia
+    // the graph takes the height left in the panel: it's redrawn when it changes
     new ResizeObserver(() => { this.dirty = true; }).observe(this.canvas);
     requestAnimationFrame(this.frame);
   }
@@ -91,7 +91,7 @@ export class EqDisplay implements DeviceDisplay {
     this.refresh();
   }
 
-  /** Bande, interruttore e controlli dai valori attuali. */
+  /** Bands, switch and controls from the current values. */
   private refresh(): void {
     this.bandButtons.forEach((b, i) => {
       b.classList.toggle('on', this.bands[i].on);
@@ -105,7 +105,7 @@ export class EqDisplay implements DeviceDisplay {
     this.dirty = true;
   }
 
-  // ---------------------------------------------------------------- bande e controlli
+  // ---------------------------------------------------------------- bands and controls
 
   private select(i: number, force = false): void {
     if (i === this.selected && !force) return;
@@ -122,7 +122,7 @@ export class EqDisplay implements DeviceDisplay {
     return paramSpec(this.ctx.type, bandParam(i, key))!;
   }
 
-  /** I controlli della banda scelta e quello dell'uscita, generati dai loro parametri. */
+  /** The controls of the chosen band and the output's, generated from their parameters. */
   private buildControls(): void {
     const i = this.selected;
     this.bandControls.clear();
@@ -131,7 +131,7 @@ export class EqDisplay implements DeviceDisplay {
       this.bandControls.set(spec.id, { spec, control });
       return control.element;
     };
-    const title = el('div', { className: 'eq-band-title', textContent: `Banda ${i + 1}` });
+    const title = el('div', { className: 'eq-band-title', textContent: `Band ${i + 1}` });
     title.style.setProperty('--band', BAND_COLORS[i]);
     this.controls.replaceChildren(
       el('div', { className: 'eq-band-head' }, title, this.power),
@@ -141,7 +141,7 @@ export class EqDisplay implements DeviceDisplay {
     this.ctx.controlsChanged();
   }
 
-  // ---------------------------------------------------------------- gesti sul grafico
+  // ---------------------------------------------------------------- gestures on the graph
 
   private local(e: MouseEvent): { x: number; y: number } {
     const r = this.canvas.getBoundingClientRect();
@@ -207,7 +207,7 @@ export class EqDisplay implements DeviceDisplay {
     });
   }
 
-  /** Muove il punto della banda: frequenza in orizzontale, guadagno in verticale (Maiusc: fine). */
+  /** Moves the band's point: frequency horizontally, gain vertically (Shift: fine). */
   private dragTo(d: Drag, p: { x: number; y: number }, fine: boolean): void {
     const scale = this.graph.geometry;
     if (fine) {
@@ -226,7 +226,7 @@ export class EqDisplay implements DeviceDisplay {
     this.ctx.setParams(values, false);
   }
 
-  /** Doppio clic dove non c'è un punto: accende lì la prima banda spenta. */
+  /** Double click where there's no point: turns on the first off band there. */
   private addAt(p: { x: number; y: number }): void {
     const i = this.bands.findIndex(b => !b.on);
     if (i < 0) return;
@@ -250,17 +250,17 @@ export class EqDisplay implements DeviceDisplay {
       })),
       SEPARATOR,
       ...(BAND_TYPES[band.type]?.cut ? SLOPES.map((s, slope) => ({
-        label: `Pendenza ${s.label}`, checked: band.slope === slope,
+        label: `Slope ${s.label}`, checked: band.slope === slope,
         run: () => this.ctx.setParams({ [bandParam(i, 'slope')]: slope }, true),
       })) : []),
-      { label: band.on ? `Spegni la banda ${i + 1}` : `Accendi la banda ${i + 1}`, shortcut: 'doppio clic', run: () => this.toggle(i) },
-      { label: 'Riporta la banda com\'era', run: () => this.ctx.setParams(reset, true) },
+      { label: band.on ? `Turn band ${i + 1} off` : `Turn band ${i + 1} on`, shortcut: 'double-click', run: () => this.toggle(i) },
+      { label: 'Put the band back as it was', run: () => this.ctx.setParams(reset, true) },
     ];
   }
 
-  // ---------------------------------------------------------------- disegno
+  // ---------------------------------------------------------------- drawing
 
-  /** Testo della banda sotto il mouse (o trascinata). */
+  /** Text of the band under the mouse (or dragged). */
   private label(): string {
     const i = this.drag?.band ?? this.hover;
     if (i === null) return '';
@@ -270,10 +270,10 @@ export class EqDisplay implements DeviceDisplay {
     if (type.gain) parts.push(signedDb(band.gain));
     parts.push(`Q ${fmt('q')}`);
     if (type.cut) parts.push(fmt('slope'));
-    return parts.join(' · ') + (band.on ? '' : ' (spenta)');
+    return parts.join(' · ') + (band.on ? '' : ' (off)');
   }
 
-  /** Frequenza e guadagno sotto il mouse, quando non è su un punto. */
+  /** Frequency and gain under the mouse, when it isn't on a point. */
   private readout(): string {
     if (!this.pointer || this.hover !== null || this.drag) return '';
     const s = this.graph.geometry;
@@ -287,7 +287,7 @@ export class EqDisplay implements DeviceDisplay {
       return;
     }
     requestAnimationFrame(this.frame);
-    if (this.element.offsetParent === null) return; // pannello nascosto
+    if (this.element.offsetParent === null) return; // hidden panel
     const live = this.tap.read(this.pre, this.post) && this.post.some(v => v > SPECTRUM_BOTTOM - 10);
     if (!this.dirty && !live && !this.spectrumShown) return;
     const spectrum: Spectrum | null = live ? { pre: this.pre, post: this.post, sampleRate: this.tap.sampleRate } : null;

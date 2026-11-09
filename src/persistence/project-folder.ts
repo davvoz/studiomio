@@ -11,22 +11,22 @@ export const AUDIO_DIR = 'audio';
 
 export interface LoadedProject {
   readonly project: Project;
-  /** Sample citati dal progetto ma assenti dalla cartella. */
+  /** Samples referenced by the project but missing from the folder. */
   readonly missing: readonly SampleRef[];
 }
 
-/** Toglie dal nome i caratteri che i file system non accettano. */
+/** Removes from the name the characters file systems don't accept. */
 export function safeFileName(name: string): string {
   const clean = name.normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/^[\s.]+|[\s.]+$/g, '');
   return clean.slice(0, 120) || 'audio';
 }
 
-/** La cartella di un progetto:
- *    progetto.json      tracce, clip, marker, mixer (leggibile e confrontabile)
- *    progetto.bak.json  la versione salvata prima di quella attuale
- *    progetto.recupero.json  le modifiche non ancora salvate, scritte da sole ogni tanto: se
- *                       l'app si blocca o si chiude male si riaprono da qui (salvando sparisce)
- *    audio/             i file audio originali, copiati all'importazione */
+/** A project's folder:
+ *    progetto.json      tracks, clips, markers, mixer (readable and diffable)
+ *    progetto.bak.json  the version saved before the current one
+ *    progetto.recupero.json  the changes not yet saved, written by themselves every so often: if
+ *                       the app hangs or closes badly they're reopened from here (saving removes it)
+ *    audio/             the original audio files, copied on import */
 export class ProjectFolder {
   constructor(readonly dir: Directory, private readonly codec = new ProjectCodec()) {}
 
@@ -41,19 +41,19 @@ export class ProjectFolder {
   async save(project: Project): Promise<void> {
     await this.requireSamples(project);
     const text = this.codec.stringify(project);
-    // si serializza prima di toccare i file: se fallisce, la cartella resta com'era
+    // it's serialized before touching the files: if it fails, the folder stays as it was
     if (await this.dir.exists(PROJECT_FILE)) await this.dir.writeBytes(BACKUP_FILE, await this.dir.readBytes(PROJECT_FILE));
     await writeText(this.dir, PROJECT_FILE, text);
     await this.dropRecovery();
   }
 
-  /** La copia di recupero: il progetto com'è adesso, senza toccare quello salvato. Non controlla
-   *  i file audio: deve riuscire anche a metà di un lavoro. */
+  /** The recovery copy: the project as it is now, without touching the saved one. It doesn't check
+   *  the audio files: it must succeed even halfway through a job. */
   async saveRecovery(project: Project): Promise<void> {
     await writeText(this.dir, RECOVERY_FILE, this.codec.stringify(project));
   }
 
-  /** La copia di recupero, se c'è e si legge (una copia rovinata non deve impedire di aprire). */
+  /** The recovery copy, if there is one and it can be read (a damaged copy mustn't prevent opening). */
   async loadRecovery(): Promise<LoadedProject | null> {
     if (!(await this.dir.exists(RECOVERY_FILE))) return null;
     try {
@@ -73,7 +73,7 @@ export class ProjectFolder {
     return { project, missing: await this.missingSamples(project) };
   }
 
-  /** Copia un file audio in audio/ con un nome libero; restituisce il percorso relativo. */
+  /** Copies an audio file into audio/ with a free name; returns the relative path. */
   async importAudio(fileName: string, data: Uint8Array): Promise<string> {
     const safe = safeFileName(fileName);
     const dot = safe.lastIndexOf('.');
@@ -86,9 +86,9 @@ export class ProjectFolder {
     return path;
   }
 
-  /** Raccogli e salva: il progetto con i soli sample che usa, come voci di uno ZIP dentro la
-   *  cartella `root`. Estratto, è una cartella di progetto completa; non ci sono il backup, la
-   *  copia di recupero né i file audio che il progetto non usa più. */
+  /** Collect and save: the project with only the samples it uses, as entries of a ZIP inside the
+   *  folder `root`. Extracted, it's a complete project folder; there's no backup, no
+   *  recovery copy nor the audio files the project no longer uses. */
   async archive(project: Project, root: string): Promise<ZipEntry[]> {
     const collected = project.withoutUnusedSamples();
     await this.requireSamples(collected);
@@ -104,7 +104,7 @@ export class ProjectFolder {
     return this.dir.readBytes(sample.file);
   }
 
-  /** File in audio/ che il progetto non usa più (da proporre all'utente per la pulizia). */
+  /** Files in audio/ the project no longer uses (to offer the user for cleanup). */
   async unusedAudio(project: Project): Promise<string[]> {
     const used = new Set(project.samples.map(s => s.file.toLowerCase()));
     return (await this.dir.list(AUDIO_DIR)).map(n => `${AUDIO_DIR}/${n}`).filter(p => !used.has(p.toLowerCase()));
@@ -112,7 +112,7 @@ export class ProjectFolder {
 
   private async requireSamples(project: Project): Promise<void> {
     const missing = await this.missingSamples(project);
-    if (missing.length) throw new Error(`mancano i file audio: ${missing.map(s => s.file).join(', ')}`);
+    if (missing.length) throw new Error(`audio files are missing: ${missing.map(s => s.file).join(', ')}`);
   }
 
   private async missingSamples(project: Project): Promise<SampleRef[]> {
@@ -121,20 +121,20 @@ export class ProjectFolder {
   }
 }
 
-/** La cartella di progetto dentro uno ZIP (fatto con Raccogli e salva, o a mano), in memoria.
- *  È quella di progetto.json più in alto: lo ZIP può contenerla o esserla. `name`: il nome se
- *  la cartella è lo ZIP stesso. */
+/** The project folder inside a ZIP (made with Collect and save, or by hand), in memory.
+ *  It's the one with the topmost progetto.json: the ZIP can contain it or be it. `name`: the name if
+ *  the folder is the ZIP itself. */
 export async function unpackProject(zip: Uint8Array, name: string): Promise<MemoryDirectory> {
   const entries = await readZip(zip);
   const depth = (path: string) => path.split('/').length;
   const top = entries.map(e => e.name).filter(n => n === PROJECT_FILE || n.endsWith(`/${PROJECT_FILE}`))
     .sort((a, b) => depth(a) - depth(b))[0];
-  if (top === undefined) throw new Error(`"${name}" non contiene un progetto studiomio`);
+  if (top === undefined) throw new Error(`"${name}" doesn't contain a studiomio project`);
   const prefix = top.slice(0, -PROJECT_FILE.length);
   const dir = new MemoryDirectory(prefix ? prefix.slice(0, -1).split('/').pop() : name);
   for (const e of entries) {
     const path = e.name.slice(prefix.length);
-    // niente fuori dalla cartella del progetto (né "..": splitPath lo rifiuterebbe)
+    // nothing outside the project folder (nor "..": splitPath would reject it)
     if (!e.name.startsWith(prefix) || path === BACKUP_FILE || path === RECOVERY_FILE || path.split('/').includes('..')) continue;
     await dir.writeBytes(path, e.data);
   }

@@ -1,5 +1,5 @@
-// Ciò che l'app (src/) può chiedere al processo principale: per ora i file dei preset e dei
-// rack dell'utente. Il resto dell'app non sa di girare in Electron.
+// What the app (src/) can ask the main process for: for now the user's preset and rack
+// files. The rest of the app doesn't know it runs in Electron.
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('studiomioDesktop', {

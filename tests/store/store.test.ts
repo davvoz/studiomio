@@ -8,7 +8,7 @@ import { edit } from '../../src/store/project-store';
 import { setup } from '../helpers/fixtures';
 
 describe('ProjectStore', () => {
-  it('annulla e ripeti', () => {
+  it('undo and redo', () => {
     const { store } = setup();
     store.apply(setTempo(90));
     store.apply(setTempo(100));
@@ -20,10 +20,10 @@ describe('ProjectStore', () => {
     store.redo();
     expect(store.project.tempo.bpm).toBe(90);
     store.apply(setTempo(70));
-    expect(store.canRedo).toBe(false); // una modifica nuova cancella il "ripeti"
+    expect(store.canRedo).toBe(false); // a new edit clears the "redo"
   });
 
-  it('le modifiche continue con la stessa chiave sono un solo passo', () => {
+  it('the continuous edits with the same key are a single step', () => {
     const { store } = setup();
     const before = store.project;
     for (const bpm of [121, 122, 123]) store.apply(setTempo(bpm), { mergeKey: 'drag-tempo' });
@@ -35,7 +35,7 @@ describe('ProjectStore', () => {
     expect(store.project).toBe(before);
   });
 
-  it('una modifica che non cambia nulla non entra nella cronologia', () => {
+  it('an edit that changes nothing doesn\'t enter the history', () => {
     const { store } = setup();
     const listener = vi.fn();
     store.onChange(listener);
@@ -44,15 +44,15 @@ describe('ProjectStore', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('se una modifica fallisce il progetto resta com\'era', () => {
+  it('if an edit fails the project stays as it was', () => {
     const { store } = setup();
     const before = store.project;
-    expect(() => store.apply(edit('rotta', () => { throw new Error('no'); }))).toThrow('no');
+    expect(() => store.apply(edit('broken', () => { throw new Error('no'); }))).toThrow('no');
     expect(store.project).toBe(before);
     expect(store.canUndo).toBe(false);
   });
 
-  it('avvisa chi ascolta, con la causa', () => {
+  it('notifies the listeners, with the cause', () => {
     const { store } = setup();
     const causes: string[] = [];
     store.onChange((_p, _prev, cause) => causes.push(cause));
@@ -65,14 +65,14 @@ describe('ProjectStore', () => {
   });
 });
 
-describe('modifiche', () => {
-  it('nomi e colori delle tracce nuove', () => {
+describe('edits', () => {
+  it('names and colours of the new tracks', () => {
     const { store } = setup({ audio: 2, midi: 1 });
     expect(store.project.tracks.map(t => t.name)).toEqual(['1 Audio', '2 Audio', '1 MIDI']);
     expect(new Set(store.project.tracks.map(t => t.color)).size).toBe(3);
   });
 
-  it('inserire un sample, spostarlo su un\'altra traccia, accorciarlo da sinistra', () => {
+  it('inserting a sample, moving it onto another track, shortening it from the left', () => {
     const { store, track, sampleId } = setup({ audio: 2, sample: true });
     store.apply(placeSample(track(0), sampleId, 4));
     const pl = store.project.tracks[0].arrangement[0];
@@ -85,12 +85,12 @@ describe('modifiche', () => {
     store.apply(resizePlacement(track(1), pl.id, { start: 18 }));
     const r = store.project.tracks[1].arrangement[0];
     expect([r.start, r.length, r.offset]).toEqual([18, 6, 2]);
-    // il bordo sinistro non può andare prima dell'inizio del contenuto
+    // the left edge can't go before the start of the content
     store.apply(resizePlacement(track(1), pl.id, { start: 0 }));
     expect(store.project.tracks[1].arrangement[0].start).toBe(16);
   });
 
-  it('una clip MIDI non va su una traccia audio', () => {
+  it('a MIDI clip doesn\'t go on an audio track', () => {
     const { store, track } = setup({ audio: 1, midi: 1 });
     store.apply(addMidiClip(track(1), 0, 4));
     const id = store.project.tracks[1].arrangement[0].id;
@@ -98,7 +98,7 @@ describe('modifiche', () => {
     expect(store.project.tracks[1].arrangement).toHaveLength(1);
   });
 
-  it('duplicare crea una copia indipendente subito dopo', () => {
+  it('duplicating creates an independent copy right after', () => {
     const { store, track } = setup({ midi: 1 });
     store.apply(addMidiClip(track(0), 0, 4));
     const pl = store.project.tracks[0].arrangement[0];
@@ -112,7 +112,7 @@ describe('modifiche', () => {
     expect(store.project.tracks[0].arrangement).toHaveLength(2);
   });
 
-  it('modificare il contenuto di una clip posata', () => {
+  it('editing the content of a placed clip', () => {
     const { store, track, sampleId } = setup({ audio: 1, sample: true });
     store.apply(placeSample(track(0), sampleId, 0));
     const id = store.project.tracks[0].arrangement[0].id;
@@ -121,7 +121,7 @@ describe('modifiche', () => {
     expect(store.undoLabel).toBe('Transpose');
   });
 
-  it('session, scene, mixer e nomi', () => {
+  it('session, scenes, mixer and names', () => {
     const { store, track } = setup({ midi: 1 });
     store.apply(addScene());
     expect(store.project.tracks[0].slots).toHaveLength(5);
@@ -131,8 +131,8 @@ describe('modifiche', () => {
     store.apply(setSlot(track(0), 4, store.project.tracks[0].arrangement[0].clip));
     expect(store.project.tracks[0].slots[4]).not.toBeNull();
     store.apply(setMixer(track(0), { volumeDb: -6, solo: true }));
-    store.apply(renameTrack(track(0), 'Basso'));
+    store.apply(renameTrack(track(0), 'Bass'));
     expect(store.project.tracks[0].mixer).toMatchObject({ volumeDb: -6, solo: true, mute: false });
-    expect(store.project.tracks[0].name).toBe('Basso');
+    expect(store.project.tracks[0].name).toBe('Bass');
   });
 });

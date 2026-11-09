@@ -1,22 +1,22 @@
-/* La barra dei menu dell'app: File, Modifica, Crea, Vista, Opzioni, Aiuto (come in Live).
- * Ogni voce chiama un comando dell'app; le scorciatoie scritte qui sono quelle di KEYMAP. */
+/* The app's menu bar: File, Edit, Create, View, Options, Help (as in Live).
+ * Each item calls an app command; the shortcuts written here are those of KEYMAP. */
 import { KEY, SEPARATOR, type MenuAction, type MenuItem } from '../ui/context-menu';
 import { definitionTable, showDialog } from '../ui/dialog';
 import type { Menu } from '../ui/menu-bar';
 import type { App } from './app';
 
-/** Scorciatoie che non stanno in nessun menu, per la finestra delle scorciatoie. */
+/** Shortcuts that aren't in any menu, for the shortcuts window. */
 const OTHER_KEYS: readonly (readonly [string, string])[] = [
-  ['Play / Stop', 'Spazio'],
-  ['Stop e torna all\'inizio', 'Invio'],
-  ['Zoom della timeline', 'Ctrl+rotella'],
-  ['Zoom orizzontale del piano roll', 'Ctrl+rotella'],
-  ['Zoom verticale del piano roll', 'Ctrl+rotella sui tasti, Ctrl+Maiusc+rotella ovunque'],
-  ['Trascinare senza griglia', 'Alt'],
-  ['Aprire un menu', 'Alt+iniziale'],
+  ['Play / Stop', 'Space'],
+  ['Stop and return to the start', 'Enter'],
+  ['Timeline zoom', 'Ctrl+wheel'],
+  ['Piano roll horizontal zoom', 'Ctrl+wheel'],
+  ['Piano roll vertical zoom', 'Ctrl+wheel on the keys, Ctrl+Shift+wheel anywhere'],
+  ['Drag without the grid', 'Alt'],
+  ['Opening a menu', 'Alt+initial'],
 ];
 
-/** I progetti recenti, in fila sotto "Apri" (i menu non hanno sottomenu), con il numero come
+/** The recent projects, in a row under "Open" (menus have no submenus), numbered as
  *  in Live. */
 function recentItems(app: App): MenuItem[] {
   const list = app.recent.list;
@@ -24,7 +24,7 @@ function recentItems(app: App): MenuItem[] {
   return [
     SEPARATOR,
     ...list.map((h, i) => ({ label: `${i + 1}  ${h.name}`, run: () => app.openRecent(h) })),
-    { label: 'Svuota l\'elenco dei recenti', run: () => void app.recent.clear() },
+    { label: 'Clear the recent list', run: () => void app.recent.clear() },
   ];
 }
 
@@ -34,110 +34,110 @@ export function mainMenu(app: App): Menu[] {
     {
       label: 'File',
       items: () => [
-        { label: 'Nuovo progetto', shortcut: 'Ctrl+N', run: () => app.newProject() },
-        { label: 'Apri progetto…', shortcut: 'Ctrl+O', run: () => app.open() },
-        { label: 'Apri progetto da ZIP…', run: () => app.chooseArchive() },
+        { label: 'New project', shortcut: 'Ctrl+N', run: () => app.newProject() },
+        { label: 'Open project…', shortcut: 'Ctrl+O', run: () => app.open() },
+        { label: 'Open project from ZIP…', run: () => app.chooseArchive() },
         ...recentItems(app),
         SEPARATOR,
-        { label: 'Salva', shortcut: 'Ctrl+S', run: () => app.save() },
-        { label: 'Salva con nome…', shortcut: 'Ctrl+Maiusc+S', run: () => app.saveAs() },
-        { label: 'Raccogli e salva in ZIP…', run: () => app.collectAndSave() },
+        { label: 'Save', shortcut: 'Ctrl+S', run: () => app.save() },
+        { label: 'Save as…', shortcut: 'Ctrl+Shift+S', run: () => app.saveAs() },
+        { label: 'Collect and save as ZIP…', run: () => app.collectAndSave() },
         SEPARATOR,
-        { label: 'Importa audio…', run: () => app.chooseAudioFiles() },
-        { label: 'Esporta il mix in WAV…', run: () => app.exportMix() },
+        { label: 'Import audio…', run: () => app.chooseAudioFiles() },
+        { label: 'Export the mix as WAV…', run: () => app.exportMix() },
         SEPARATOR,
-        { label: 'Carica il progetto demo', run: () => app.loadDemo() },
+        { label: 'Load the demo project', run: () => app.loadDemo() },
       ],
     },
     {
-      label: 'Modifica',
+      label: 'Edit',
       items: () => [
-        { label: store.undoLabel ? `Annulla: ${store.undoLabel}` : 'Annulla', shortcut: 'Ctrl+Z', disabled: !store.canUndo, run: () => app.undo() },
-        { label: store.redoLabel ? `Ripeti: ${store.redoLabel}` : 'Ripeti', shortcut: 'Ctrl+Y', disabled: !store.canRedo, run: () => app.redo() },
+        { label: store.undoLabel ? `Undo: ${store.undoLabel}` : 'Undo', shortcut: 'Ctrl+Z', disabled: !store.canUndo, run: () => app.undo() },
+        { label: store.redoLabel ? `Redo: ${store.redoLabel}` : 'Repeat', shortcut: 'Ctrl+Y', disabled: !store.canRedo, run: () => app.redo() },
         SEPARATOR,
-        { label: 'Taglia', shortcut: KEY.cut, run: () => app.cutSelection() },
-        { label: 'Copia', shortcut: KEY.copy, run: () => app.copySelection() },
-        { label: 'Incolla', shortcut: KEY.paste, disabled: !app.canPaste, run: () => app.paste() },
-        { label: 'Duplica', shortcut: KEY.duplicate, run: () => app.duplicateSelection() },
-        { label: 'Duplica loop', shortcut: KEY.duplicateLoop, run: () => app.duplicateLoop() },
-        { label: 'Dividi al cursore', shortcut: KEY.split, run: () => app.splitAtCursor() },
-        { label: 'Consolida', shortcut: KEY.consolidate, run: () => app.consolidateSelection() },
-        { label: 'Copia nella session', run: () => app.selectionToSession() },
-        { label: 'Elimina', shortcut: KEY.delete, run: () => app.deleteSelection() },
+        { label: 'Cut', shortcut: KEY.cut, run: () => app.cutSelection() },
+        { label: 'Copy', shortcut: KEY.copy, run: () => app.copySelection() },
+        { label: 'Paste', shortcut: KEY.paste, disabled: !app.canPaste, run: () => app.paste() },
+        { label: 'Duplicate', shortcut: KEY.duplicate, run: () => app.duplicateSelection() },
+        { label: 'Duplicate loop', shortcut: KEY.duplicateLoop, run: () => app.duplicateLoop() },
+        { label: 'Split at the cursor', shortcut: KEY.split, run: () => app.splitAtCursor() },
+        { label: 'Consolidate', shortcut: KEY.consolidate, run: () => app.consolidateSelection() },
+        { label: 'Copy to session', run: () => app.selectionToSession() },
+        { label: 'Delete', shortcut: KEY.delete, run: () => app.deleteSelection() },
         SEPARATOR,
-        { label: 'Seleziona tutto', shortcut: KEY.selectAll, run: () => app.selectAll() },
+        { label: 'Select all', shortcut: KEY.selectAll, run: () => app.selectAll() },
       ],
     },
     {
-      label: 'Crea',
+      label: 'Create',
       items: () => [
-        { label: 'Nuova traccia audio', run: () => app.addTrack('audio') },
-        { label: 'Nuova traccia MIDI', run: () => app.addTrack('midi') },
-        { label: 'Nuovo bus', run: () => app.addBus() },
+        { label: 'New audio track', run: () => app.addTrack('audio') },
+        { label: 'New MIDI track', run: () => app.addTrack('midi') },
+        { label: 'New bus', run: () => app.addBus() },
         SEPARATOR,
-        { label: 'Raggruppa le tracce', shortcut: 'Ctrl+G', run: () => app.groupTracks() },
-        { label: 'Separa il gruppo', shortcut: 'Ctrl+Maiusc+G', run: () => app.ungroupTracks() },
+        { label: 'Group tracks', shortcut: 'Ctrl+G', run: () => app.groupTracks() },
+        { label: 'Ungroup', shortcut: 'Ctrl+Shift+G', run: () => app.ungroupTracks() },
       ],
     },
     {
-      label: 'Vista',
+      label: 'View',
       items: () => [
         { label: 'Arrangement', shortcut: 'Tab', checked: !app.sessionView.isVisible, run: () => app.showView('arrangement') },
         { label: 'Session', shortcut: 'Tab', checked: app.sessionView.isVisible, run: () => app.showView('session') },
         SEPARATOR,
         { label: 'Browser', shortcut: 'Ctrl+Alt+B', checked: app.browser.isOpen, run: () => app.toggleBrowser() },
-        { label: 'Cerca nel browser', shortcut: 'Ctrl+F', run: () => app.searchBrowser() },
+        { label: 'Search the browser', shortcut: 'Ctrl+F', run: () => app.searchBrowser() },
         SEPARATOR,
-        { label: 'Zoom avanti', shortcut: '+', run: () => app.zoom(1.25) },
-        { label: 'Zoom indietro', shortcut: '−', run: () => app.zoom(0.8) },
+        { label: 'Zoom in', shortcut: '+', run: () => app.zoom(1.25) },
+        { label: 'Zoom out', shortcut: '−', run: () => app.zoom(0.8) },
         SEPARATOR,
-        { label: 'Torna all\'arrangement', disabled: !engine.arrangementOverridden, run: () => engine.backToArrangement() },
+        { label: 'Back to the arrangement', disabled: !engine.arrangementOverridden, run: () => engine.backToArrangement() },
       ],
     },
     {
-      label: 'Opzioni',
+      label: 'Options',
       items: () => {
         const surfaces = app.surfaces, name = surfaces.connected;
         return [
-          { label: 'Aggancio alla griglia', shortcut: 'Ctrl+4', checked: app.ui.snap, run: () => app.toggleSnap() },
+          { label: 'Snap to grid', shortcut: 'Ctrl+4', checked: app.ui.snap, run: () => app.toggleSnap() },
           { label: 'Loop', shortcut: 'Ctrl+L', checked: store.project.loop.enabled, run: () => app.toggleLoop() },
-          { label: 'Metronomo', shortcut: 'Ctrl+Maiusc+M', checked: engine.metronomeOn, run: () => app.toggleMetronome() },
-          { label: 'Segui la testina', shortcut: 'Ctrl+Maiusc+F', checked: app.ui.follow, run: () => app.toggleFollow() },
-          { label: 'Mappa la tastiera del computer', shortcut: 'Ctrl+K', checked: app.ui.keyMapping, run: () => app.toggleKeyMap() },
-          { label: 'Mappa il MIDI', shortcut: 'Ctrl+M', checked: app.ui.midiMapping, run: () => app.toggleMidiMap() },
+          { label: 'Metronome', shortcut: 'Ctrl+Shift+M', checked: engine.metronomeOn, run: () => app.toggleMetronome() },
+          { label: 'Follow the playhead', shortcut: 'Ctrl+Shift+F', checked: app.ui.follow, run: () => app.toggleFollow() },
+          { label: 'Map the computer keyboard', shortcut: 'Ctrl+K', checked: app.ui.keyMapping, run: () => app.toggleKeyMap() },
+          { label: 'Map MIDI', shortcut: 'Ctrl+M', checked: app.ui.midiMapping, run: () => app.toggleMidiMap() },
           SEPARATOR,
           name ? { label: `Controller MIDI: ${name}`, checked: true, disabled: true, run: () => {} }
-            : surfaces.enabled ? { label: 'Controller MIDI: collega un APC40 mkII o un Launchpad', disabled: true, run: () => {} }
-              : { label: 'Attiva i controller MIDI…', run: () => app.run(() => surfaces.enable()) },
+            : surfaces.enabled ? { label: 'MIDI controllers: connect an APC40 mkII or a Launchpad', disabled: true, run: () => {} }
+              : { label: 'Enable the MIDI controllers…', run: () => app.run(() => surfaces.enable()) },
         ];
       },
     },
     {
-      label: 'Aiuto',
+      label: 'Help',
       items: () => [
-        { label: 'Scorciatoie da tastiera', run: () => showShortcuts(menus) },
+        { label: 'Keyboard shortcuts', run: () => showShortcuts(menus) },
         SEPARATOR,
-        { label: 'Informazioni su studiomio', run: showAbout },
+        { label: 'About studiomio', run: showAbout },
       ],
     },
   ];
   return menus;
 }
 
-/** Le scorciatoie, prese dai menu stessi (così non si scrivono due volte). */
+/** The shortcuts, taken from the menus themselves (so they're not written twice). */
 function showShortcuts(menus: readonly Menu[]): void {
   const sections = menus.map(m => ({
     title: m.label,
     rows: m.items().filter((i): i is MenuAction => typeof i === 'object' && 'shortcut' in i && !!i.shortcut)
       .map(i => [i.label.replace(/:.*/, ''), i.shortcut!] as const),
   })).filter(s => s.rows.length);
-  showDialog('Scorciatoie da tastiera', definitionTable([...sections, { title: 'Altro', rows: OTHER_KEYS }]));
+  showDialog('Keyboard shortcuts', definitionTable([...sections, { title: 'Other', rows: OTHER_KEYS }]));
 }
 
 function showAbout(): void {
   const p = (text: string, className = '') => Object.assign(document.createElement('p'), { textContent: text, className });
   showDialog('studiomio',
-    p(`Versione ${__APP_VERSION__}`, 'version'),
-    p('DAW con warp in stile Ableton Live: arrangement, session, strumenti ed effetti, controller APC40 mkII e Launchpad.'),
+    p(`Version ${__APP_VERSION__}`, 'version'),
+    p('DAW with Ableton Live-style warp: arrangement, session, instruments and effects, APC40 mkII and Launchpad controllers.'),
     p('© David'));
 }

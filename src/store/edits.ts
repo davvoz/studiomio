@@ -1,5 +1,5 @@
-/* Modifiche del progetto, una per azione dell'utente. Sono funzioni pure: ricevono i
- * parametri e restituiscono un Edit che lo store applica e può annullare. */
+/* Project edits, one per user action. They're pure functions: they receive the
+ * parameters and return an Edit that the store applies and can undo. */
 import type { DeviceId, IdFactory, PlacementId, SampleId, SceneId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { placementEnd, type Placement } from '../model/arrangement';
@@ -26,27 +26,27 @@ import { reapplyMacros } from './rack-edits';
 
 export const setTempo = (bpm: number): Edit => edit('Tempo', p => (p.tempo.bpm === bpm ? p : p.withTempo(bpm)));
 
-export const renameProject = (name: string): Edit => edit('Rinomina progetto', p => p.withName(name));
+export const renameProject = (name: string): Edit => edit('Rename project', p => p.withName(name));
 
-export const setLoopRegion = (patch: Partial<LoopRegion>): Edit => edit('Regione di loop', p => p.withLoop(patch));
+export const setLoopRegion = (patch: Partial<LoopRegion>): Edit => edit('Loop region', p => p.withLoop(patch));
 
-/** La curva del master su un parametro di un suo effetto o una macro di un suo rack (battiti
- *  della timeline); senza punti la toglie. */
+/** The master's curve on a parameter of one of its effects or a macro of one of its racks (timeline
+ *  beats); without points it removes it. */
 export const setMasterAutomation = (target: ModTarget, points: readonly EnvelopePoint[]): Edit =>
-  edit(points.length ? 'Curva del master' : 'Cancella la curva del master', p => p.withMasterAutomation(target, points));
+  edit(points.length ? 'Master curve' : 'Delete the master curve', p => p.withMasterAutomation(target, points));
 
 export const setLaunchQuantization = (id: string): Edit =>
-  edit('Quantizzazione del lancio', p => (p.launchQuantization === id ? p : p.withLaunchQuantization(id)));
+  edit('Launch quantization', p => (p.launchQuantization === id ? p : p.withLaunchQuantization(id)));
 
-/** Il progetto con cui si comincia, come in Live: una traccia MIDI, una audio e due bus. */
+/** The project you start with, as in Live: a MIDI track, an audio one and two buses. */
 export function starterProject(name: string, ids: IdFactory): Project {
   const ctx = { ids };
   return [addTrack('midi'), addTrack('audio'), addBus(), addBus()].reduce((p, e) => e.apply(p, ctx), Project.empty(name, ids));
 }
 
-// ------------------------------------------------------------------ tracce
+// ------------------------------------------------------------------ tracks
 
-/** Fabbriche delle tracce per tipo: aggiungere un tipo di traccia è aggiungere una voce. */
+/** Track factories by kind: adding a track kind is adding an entry. */
 const trackFactories = {
   audio: { label: 'Audio', create: AudioTrack.empty },
   midi: { label: 'MIDI', create: MidiTrack.empty },
@@ -54,12 +54,12 @@ const trackFactories = {
 
 export type TrackKind = keyof typeof trackFactories;
 
-/** Dove va una traccia nuova: subito dopo una traccia (e ciò che contiene), nel suo stesso
- *  gruppo, oppure in fondo a un gruppo. Senza: in fondo al progetto. */
+/** Where a new track goes: right after a track (and what it contains), in its same
+ *  group, or at the end of a group. Without: at the end of the project. */
 export type TrackPlace = { readonly after: TrackId } | { readonly inGroup: TrackId };
 
 export const addTrack = (kind: TrackKind, place?: TrackPlace): Edit =>
-  edit(`Nuova traccia ${trackFactories[kind].label}`, (p, { ids }) => {
+  edit(`New ${trackFactories[kind].label} track`, (p, { ids }) => {
     const { label, create } = trackFactories[kind];
     const n = p.tracks.filter(t => t.kind === kind).length + 1;
     const track = create(ids.next('track'), `${n} ${label}`, paletteColor(p.tracks.length), p.scenes.length);
@@ -69,87 +69,87 @@ export const addTrack = (kind: TrackKind, place?: TrackPlace): Edit =>
   });
 
 export const removeTrack = (id: TrackId): Edit =>
-  edit('Elimina traccia', p => p.removingTrack(id));
+  edit('Delete track', p => p.removingTrack(id));
 
 // ------------------------------------------------------------------ bus
 
-/** Aggiunge un bus in fondo ai bus: "A Bus", "B Bus"… (la prima lettera libera da lì). */
+/** Adds a bus at the end of the buses: "A Bus", "B Bus"… (the first free letter from there). */
 export const addBus = (): Edit =>
-  edit('Nuovo bus', (p, { ids }) => {
+  edit('New bus', (p, { ids }) => {
     const taken = new Set(p.buses.map(b => b.name));
     let n = p.buses.length;
     while (taken.has(`${busLetter(n)} Bus`)) n++;
     return p.addingBus(BusTrack.empty(ids.next('track'), `${busLetter(n)} Bus`, paletteColor(p.tracks.length + p.buses.length)));
   });
 
-/** Il livello della mandata della traccia verso il bus, in dB (fino a SEND_OFF_DB: chiusa). */
+/** The level of the track's send to the bus, in dB (down to SEND_OFF_DB: closed). */
 export const setSend = (track: TrackId, bus: TrackId, db: number): Edit =>
-  edit('Mandata', p => {
-    if (!(p.track(bus) instanceof BusTrack)) throw new Error(`la traccia ${bus} non è un bus`);
+  edit('Send', p => {
+    if (!(p.track(bus) instanceof BusTrack)) throw new Error(`the track ${bus} isn't a bus`);
     return p.updatingTrack(track, t => {
-      if (t instanceof BusTrack) throw new TypeError(`il bus ${t.name} non ha mandate`);
+      if (t instanceof BusTrack) throw new TypeError(`the bus ${t.name} has no sends`);
       return t.withSend(bus, db);
     });
   });
 
-// ------------------------------------------------------------------ gruppi
+// ------------------------------------------------------------------ groups
 
-/** Raggruppa le tracce in un gruppo nuovo (Ctrl+G), che prende il posto della prima. */
+/** Groups the tracks into a new group (Ctrl+G), which takes the place of the first. */
 export const groupTracks = (ids: Iterable<TrackId>): Edit =>
-  edit('Raggruppa tracce', (p, { ids: f }) => {
+  edit('Group tracks', (p, { ids: f }) => {
     const n = p.tracks.filter(t => t instanceof GroupTrack).length + 1;
-    return p.groupingTracks(ids, GroupTrack.empty(f.next('track'), `${n} Gruppo`, paletteColor(p.tracks.length), p.scenes.length));
+    return p.groupingTracks(ids, GroupTrack.empty(f.next('track'), `${n} Group`, paletteColor(p.tracks.length), p.scenes.length));
   });
 
-/** Toglie il gruppo, le sue tracce restano (Ctrl+Maiusc+G). */
-export const ungroupTracks = (group: TrackId): Edit => edit('Separa gruppo', p => p.ungroupingTrack(group));
+/** Removes the group, its tracks stay (Ctrl+Shift+G). */
+export const ungroupTracks = (group: TrackId): Edit => edit('Ungroup', p => p.ungroupingTrack(group));
 
-/** Chiude o apre un gruppo: chiuso, le sue tracce non si vedono ma suonano. */
+/** Closes or opens a group: closed, its tracks aren't visible but they play. */
 export const setGroupFolded = (group: TrackId, folded: boolean): Edit =>
-  edit(folded ? 'Chiudi gruppo' : 'Apri gruppo', p => p.updatingTrack(group, t => {
-    if (!(t instanceof GroupTrack)) throw new TypeError(`la traccia ${t.name} non è un gruppo`);
+  edit(folded ? 'Close group' : 'Open group', p => p.updatingTrack(group, t => {
+    if (!(t instanceof GroupTrack)) throw new TypeError(`the track ${t.name} isn't a group`);
     return t.withFolded(folded);
   }));
 
-/** Dove lasciare una traccia trascinata: prima di una traccia o dopo una traccia (e ciò che
- *  contiene), nel gruppo di quella; in cima alle tracce di un gruppo; in fondo, fuori dai gruppi. */
+/** Where to drop a dragged track: before a track or after a track (and what it
+ *  contains), in that one's group; at the top of a group's tracks; at the end, outside the groups. */
 export type TrackDrop =
   | { readonly before: TrackId } | { readonly after: TrackId } | { readonly first: TrackId } | { readonly end: true };
 
-/** Sposta la traccia (un gruppo con le sue tracce) dove è stata lasciata. */
-export const moveTrack = (id: TrackId, drop: TrackDrop): Edit => edit('Sposta traccia', p => {
+/** Moves the track (a group with its tracks) where it was dropped. */
+export const moveTrack = (id: TrackId, drop: TrackDrop): Edit => edit('Move track', p => {
   const moved = new Set(p.trackBlock(id).map(t => t.id));
   const rest = p.tracks.filter(t => !moved.has(t.id));
   const at = (anchor: TrackId) => {
-    if (moved.has(anchor)) throw new Error('una traccia non va dentro sé stessa');
+    if (moved.has(anchor)) throw new Error('a track doesn\'t go inside itself');
     return rest.findIndex(t => t.id === anchor);
   };
   if ('end' in drop) return p.movingTrack(id, rest.length, null);
   if ('first' in drop) return p.movingTrack(id, at(drop.first) + 1, drop.first);
   if ('before' in drop) return p.movingTrack(id, at(drop.before), p.track(drop.before)!.group);
-  // dopo la traccia e tutte quelle del suo gruppo, nel gruppo che la contiene
+  // after the track and all those of its group, in the group containing it
   let end = at(drop.after) + 1;
   while (end < rest.length && p.isInGroup(rest[end].id, drop.after)) end++;
   return p.movingTrack(id, end, p.track(drop.after)!.group);
 });
 
-/** Sposta il bus in `toIndex` tra gli altri bus. */
-export const moveBus = (id: TrackId, toIndex: number): Edit => edit('Sposta bus', p => p.movingBus(id, toIndex));
+/** Moves the bus to `toIndex` among the other buses. */
+export const moveBus = (id: TrackId, toIndex: number): Edit => edit('Move bus', p => p.movingBus(id, toIndex));
 
-/** Comprime o espande la colonna di un bus nella session. */
+/** Collapses or expands a bus's column in the session. */
 export const setBusFolded = (bus: TrackId, folded: boolean): Edit =>
-  edit(folded ? 'Comprimi bus' : 'Espandi bus', p => p.updatingTrack(bus, t => {
-    if (!(t instanceof BusTrack)) throw new TypeError(`la traccia ${t.name} non è un bus`);
+  edit(folded ? 'Collapse bus' : 'Expand bus', p => p.updatingTrack(bus, t => {
+    if (!(t instanceof BusTrack)) throw new TypeError(`the track ${t.name} isn't a bus`);
     return t.withFolded(folded);
   }));
 
 export const renameTrack = (id: TrackId, name: string): Edit =>
-  edit('Rinomina traccia', p => p.updatingTrack(id, t => t.withName(name)));
+  edit('Rename track', p => p.updatingTrack(id, t => t.withName(name)));
 
 export const setMixer = (id: TrackId, patch: Partial<MixerSettings>): Edit =>
   edit('Mixer', p => p.updatingTrack(id, t => t.withMixer(patch)));
 
-/** Volume e mute del master. */
+/** The master's volume and mute. */
 export const setMasterMixer = (patch: Partial<Pick<MixerSettings, 'volumeDb' | 'mute'>>): Edit =>
   edit('Master', p => p.withMaster(patch));
 
@@ -157,46 +157,46 @@ export const setMasterMixer = (patch: Partial<Pick<MixerSettings, 'volumeDb' | '
 
 const updatingInstrument = (label: string, id: TrackId, fn: (s: InstrumentSettings) => InstrumentSettings): Edit =>
   edit(label, p => p.updatingTrack(id, t => {
-    if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
+    if (!(t instanceof MidiTrack)) throw new TypeError(`the track ${t.name} has no instrument`);
     return t.withInstrument(fn(t.instrument));
   }));
 
-/** Cambia lo strumento; se è di un altro tipo, le macro che lo muovevano lo lasciano. */
+/** Changes the instrument; if it's of another type, the macros that moved it let it go. */
 export const setInstrument = (id: TrackId, settings: InstrumentSettings): Edit =>
-  edit('Strumento', p => {
+  edit('Instrument', p => {
     const before = p.track(id);
     const next = p.updatingTrack(id, t => {
-      if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
+      if (!(t instanceof MidiTrack)) throw new TypeError(`the track ${t.name} has no instrument`);
       const same = settings.type === t.instrument.type;
       const racks = same ? t.racks : withoutMappingsOf(t.racks, INSTRUMENT_DEVICE);
       return t.withInstrument(settings).withChain(same ? t.effects : withoutTargetsOf(t.effects, INSTRUMENT_DEVICE), racks);
     });
-    // un altro strumento ha altri parametri: i loro tasti e controlli MIDI non valgono più
+    // another instrument has other parameters: their keys and MIDI controls no longer apply
     const same = before instanceof MidiTrack && before.instrument.type === settings.type;
     return same ? next : next.updatingKeyMap(map => withoutParamKeysOf(map, id, INSTRUMENT_DEVICE))
       .updatingMidiMap(map => withoutParamControlsOf(map, id, INSTRUMENT_DEVICE));
   });
 
 export const setInstrumentParam = (id: TrackId, param: string, value: number): Edit =>
-  updatingInstrument('Parametro dello strumento', id, s => withParam(s, param, value));
+  updatingInstrument('Instrument parameter', id, s => withParam(s, param, value));
 
-/** Più parametri dello strumento insieme (es. il suono di un pad con i suoi valori). */
+/** Several instrument parameters together (e.g. a pad's sound with its values). */
 export const setInstrumentParams = (id: TrackId, values: ParamValues): Edit =>
-  updatingInstrument('Parametri dello strumento', id, s => withParams(s, values));
+  updatingInstrument('Instrument parameters', id, s => withParams(s, values));
 
-/** Lo strumento prende il suono di una clip che è partita (solo dello stesso tipo: il motore
- *  ignora gli altri). Si applica come cambio che non si annulla, come un program change. */
+/** The instrument takes the sound of a clip that started (only of the same type: the engine
+ *  ignores the others). It's applied as a change that isn't undone, like a program change. */
 export const followClipSound = (id: TrackId, sound: InstrumentSettings): Edit =>
-  edit('Suono della clip', p => {
+  edit('Clip sound', p => {
     const t = p.track(id);
     if (!(t instanceof MidiTrack) || t.instrument === sound || t.instrument.type !== sound.type) return p;
     return p.updatingTrack(id, () => t.withInstrument(sound));
   });
 
-/** Sample nello strumento, per posto (null: tolto), insieme ai parametri che servono a suonarli
- *  (es. il modello Sample del pad): un passo solo. Un sample nuovo entra anche nel progetto. */
+/** Samples in the instrument, by slot (null: removed), together with the parameters needed to play them
+ *  (e.g. the pad's Sample model): a single step. A new sample also enters the project. */
 export const setInstrumentSamples = (id: TrackId, changes: Readonly<Record<string, SampleRef | SampleId | null>>, values: ParamValues = {}): Edit =>
-  edit('Sample dello strumento', p => {
+  edit('Instrument samples', p => {
     let next = p;
     const ids: Record<string, SampleId | null> = {};
     for (const [slot, s] of Object.entries(changes)) {
@@ -204,50 +204,50 @@ export const setInstrumentSamples = (id: TrackId, changes: Readonly<Record<strin
       ids[slot] = s && typeof s === 'object' ? s.id : s;
     }
     return next.updatingTrack(id, t => {
-      if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
+      if (!(t instanceof MidiTrack)) throw new TypeError(`the track ${t.name} has no instrument`);
       const settings = Object.entries(ids).reduce((s, [slot, sample]) => withSample(s, slot, sample), withParams(t.instrument, values));
       return t.withInstrument(settings);
     });
   });
 
-/** Carica un preset: i parametri tornano ai predefiniti del tipo più quelli del preset (quelli
- *  mappati su una macro restano dove la macro li tiene). */
+/** Loads a preset: the parameters go back to the type's defaults plus the preset's (those
+ *  mapped to a macro stay where the macro holds them). */
 export const loadPreset = (id: TrackId, name: string, params: ParamValues): Edit =>
   edit(`Preset ${name}`, (p, ctx) => reapplyMacros(updatingInstrument('', id, s => withPreset(s, name, params)).apply(p, ctx), id));
 
-// ------------------------------------------------------------------ effetti
-// Valgono per la catena di una traccia e per quella del master (`owner`).
+// ------------------------------------------------------------------ effects
+// They apply to a track's chain and to the master's (`owner`).
 
 const updatingEffect = (label: string, owner: ChainOwner, id: DeviceId, fn: (e: EffectSettings) => EffectSettings): Edit =>
   edit(label, p => p.updatingEffects(owner, list => chain.update(list, id, fn)));
 
-/** Aggiunge un effetto di tipo `type` alla catena (in fondo, o in posizione `index`). */
+/** Adds an effect of type `type` to the chain (at the end, or at position `index`). */
 export const addEffect = (owner: ChainOwner, type: string, label: string, index?: number): Edit =>
-  edit(`Aggiungi ${label}`, (p, { ids }) => p.updatingEffects(owner, list => chain.add(list, newEffect(ids.next('device'), type), index)));
+  edit(`Add ${label}`, (p, { ids }) => p.updatingEffects(owner, list => chain.add(list, newEffect(ids.next('device'), type), index)));
 
 export const removeEffect = (owner: ChainOwner, id: DeviceId): Edit =>
-  edit('Elimina effetto', p => p.updatingEffects(owner, list => chain.remove(list, id)));
+  edit('Delete effect', p => p.updatingEffects(owner, list => chain.remove(list, id)));
 
 export const moveEffect = (owner: ChainOwner, id: DeviceId, index: number): Edit =>
-  edit('Sposta effetto', p => p.updatingEffects(owner, list => chain.move(list, id, index)));
+  edit('Move effect', p => p.updatingEffects(owner, list => chain.move(list, id, index)));
 
 export const setEffectEnabled = (owner: ChainOwner, id: DeviceId, enabled: boolean): Edit =>
-  updatingEffect(enabled ? 'Accendi effetto' : 'Spegni effetto', owner, id, e => ({ ...e, enabled }));
+  updatingEffect(enabled ? 'Turn the effect on' : 'Turn the effect off', owner, id, e => ({ ...e, enabled }));
 
 export const setEffectParam = (owner: ChainOwner, id: DeviceId, param: string, value: number): Edit =>
-  updatingEffect("Parametro dell'effetto", owner, id, e => withParam(e, param, value));
+  updatingEffect('Effect parameter', owner, id, e => withParam(e, param, value));
 
 export const setEffectParams = (owner: ChainOwner, id: DeviceId, values: ParamValues): Edit =>
-  updatingEffect("Parametri dell'effetto", owner, id, e => withParams(e, values));
+  updatingEffect('Effect parameters', owner, id, e => withParams(e, values));
 
-/** Il rilevatore dell'effetto ascolta la traccia `source` (null: di nuovo il proprio ingresso). */
+/** The effect's detector listens to track `source` (null: its own input again). */
 export const setEffectSidechain = (owner: ChainOwner, id: DeviceId, source: TrackId | null): Edit =>
-  updatingEffect(source ? 'Sidechain' : 'Togli il sidechain', owner, id, e => withSidechain(e, source));
+  updatingEffect(source ? 'Sidechain' : 'Remove the sidechain', owner, id, e => withSidechain(e, source));
 
-/** La destinazione `slot` (da 0) di un modulatore muove `target` (null: la libera); con
- *  `amount` anche la sua quantità (in %). */
+/** Target `slot` (from 0) of a modulator moves `target` (null: frees it); with
+ *  `amount` also its amount (in %). */
 export const setModTarget = (owner: ChainOwner, id: DeviceId, slot: number, target: ModTarget | null, amount?: number): Edit =>
-  updatingEffect(target ? 'Destinazione del modulatore' : 'Togli la destinazione', owner, id, e => {
+  updatingEffect(target ? 'Modulator target' : 'Remove the target', owner, id, e => {
     const next = withTarget(e, slot, target);
     return amount === undefined ? next : withParam(next, linkAmount(slot + 1), amount);
   });
@@ -257,27 +257,27 @@ export const loadEffectPreset = (owner: ChainOwner, id: DeviceId, name: string, 
 
 // ------------------------------------------------------------------ sample e clip
 
-export const addSample = (sample: SampleRef): Edit => edit('Importa sample', p => p.addingSample(sample));
+export const addSample = (sample: SampleRef): Edit => edit('Import sample', p => p.addingSample(sample));
 
-/** Mette sulla timeline una clip con tutto il sample, a partire da `start`. */
+/** Puts on the timeline a clip with the whole sample, starting from `start`. */
 export const placeSample = (trackId: TrackId, sampleId: SampleId, start: Beats): Edit =>
-  edit('Inserisci clip audio', (p, { ids }) => {
+  edit('Insert audio clip', (p, { ids }) => {
     const sample = p.sample(sampleId);
-    if (!sample) throw new Error(`sample ${sampleId} non trovato`);
+    if (!sample) throw new Error(`sample ${sampleId} not found`);
     const track = p.track(trackId);
     const clip = AudioClip.fromSample(ids.next('clip'), sample, track?.color ?? paletteColor(0));
     return p.updatingTrack(trackId, t => t.placing(fullPlacement(ids.next('placement'), clip, start), ids));
   });
 
 export const addMidiClip = (trackId: TrackId, start: Beats, length: Beats): Edit =>
-  edit('Nuova clip MIDI', (p, { ids }) => p.updatingTrack(trackId, t => {
+  edit('New MIDI clip', (p, { ids }) => p.updatingTrack(trackId, t => {
     const clip = MidiClip.empty(ids.next('clip'), 'Clip MIDI', t.color, length);
     return t.placing({ id: ids.next('placement'), clip, start, length, offset: 0 }, ids);
   }));
 
-/** Sposta una clip sulla timeline, anche su un'altra traccia dello stesso tipo. */
+/** Moves a clip on the timeline, also onto another track of the same kind. */
 export const movePlacement = (from: TrackId, id: PlacementId, start: Beats, to: TrackId = from): Edit =>
-  edit('Sposta clip', (p, { ids }) => {
+  edit('Move clip', (p, { ids }) => {
     const placement = requirePlacement(p.track(from), id);
     const moved = { ...placement, start: Math.max(0, start) };
     if (to === from) return p.updatingTrack(from, t => t.updatingPlacement(id, () => moved, ids));
@@ -286,48 +286,48 @@ export const movePlacement = (from: TrackId, id: PlacementId, start: Beats, to: 
       .updatingTrack(to, t => t.placing(moved, ids));
   });
 
-/** Cambia i bordi di una clip posata: spostando l'inizio cambia anche l'offset, così il
- *  contenuto resta fermo sulla timeline (come trascinare il bordo sinistro in Live). */
+/** Changes a placed clip's edges: moving the start also changes the offset, so the
+ *  content stays still on the timeline (like dragging the left edge in Live). */
 export const resizePlacement = (trackId: TrackId, id: PlacementId, edges: { start?: Beats; end?: Beats }): Edit =>
-  edit('Ridimensiona clip', (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => {
+  edit('Resize clip', (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => {
     const start = Math.max(edges.start ?? pl.start, pl.start - pl.offset);
     const end = edges.end ?? placementEnd(pl);
     return { ...pl, start, length: end - start, offset: pl.offset + (start - pl.start) };
   }, ids)));
 
-/** Le dissolvenze di una clip audio posata (0 ne toglie una). */
+/** The fades of a placed audio clip (0 removes one). */
 export const setFades = (trackId: TrackId, id: PlacementId, fades: { fadeIn?: Beats; fadeOut?: Beats }): Edit =>
-  edit('Dissolvenza', (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => ({ ...pl, ...fades }), ids)));
+  edit('Fade', (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => ({ ...pl, ...fades }), ids)));
 
 export const splitPlacement = (trackId: TrackId, id: PlacementId, at: Beats): Edit =>
-  edit('Dividi clip', (p, { ids }) => p.updatingTrack(trackId, t => t.splitting(id, at, ids)));
+  edit('Split clip', (p, { ids }) => p.updatingTrack(trackId, t => t.splitting(id, at, ids)));
 
 export const deletePlacement = (trackId: TrackId, id: PlacementId): Edit =>
-  edit('Elimina clip', p => p.updatingTrack(trackId, t => t.removingPlacement(id)));
+  edit('Delete clip', p => p.updatingTrack(trackId, t => t.removingPlacement(id)));
 
-/** Copia la clip subito dopo l'originale, con una copia indipendente del contenuto. */
+/** Copies the clip right after the original, with an independent copy of the content. */
 export const duplicatePlacement = (trackId: TrackId, id: PlacementId): Edit =>
-  edit('Duplica clip', (p, { ids }) => p.updatingTrack(trackId, t => {
+  edit('Duplicate clip', (p, { ids }) => p.updatingTrack(trackId, t => {
     const pl = requirePlacement(t, id);
     const copy = { ...pl, id: ids.next('placement'), clip: pl.clip.withId(ids.next('clip')), start: placementEnd(pl) };
     return t.placing(copy, ids);
   }));
 
-/** Modifica il contenuto di una clip posata (warp, note, nome…). */
+/** Changes the content of a placed clip (warp, notes, name…). */
 export const updateClip = <C extends Clip>(label: string, trackId: TrackId, id: PlacementId, fn: (c: C) => Clip): Edit =>
   edit(label, (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => ({ ...pl, clip: fn(pl.clip as C) }), ids)));
 
-/** Scala il tempo di una clip MIDI posata (vedi MidiClip.scaledTime) e con lei la sua durata
- *  sulla timeline: l'inizio resta fermo, la clip si allunga o si accorcia. */
+/** Scales the time of a placed MIDI clip (see MidiClip.scaledTime) and with it its length
+ *  on the timeline: the start stays still, the clip lengthens or shortens. */
 export const scaleMidiPlacement = (label: string, trackId: TrackId, id: PlacementId, factor: number): Edit =>
   edit(label, (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => ({
     ...pl, clip: (pl.clip as unknown as MidiClip).scaledTime(factor), length: pl.length * factor, offset: pl.offset * factor,
   }), ids)));
 
-/** "Dupl. Loop" su una clip MIDI posata (vedi MidiClip.duplicatingLoop). Se la clip sulla timeline
- *  finiva proprio alla fine del loop, si allunga per far sentire la copia; più lunga, resta com'è. */
+/** "Dupl. Loop" on a placed MIDI clip (see MidiClip.duplicatingLoop). If the clip on the timeline
+ *  ended right at the end of the loop, it lengthens to let the copy be heard; longer, it stays as it is. */
 export const duplicateLoopPlacement = (trackId: TrackId, id: PlacementId): Edit =>
-  edit('Duplica loop', (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => {
+  edit('Duplicate loop', (p, { ids }) => p.updatingTrack(trackId, t => t.updatingPlacement(id, pl => {
     const clip = pl.clip as unknown as MidiClip;
     const { start, end } = clip.loop.enabled ? clip.loop : clip.region;
     const endsAtLoop = Math.abs(clip.region.start + pl.offset + pl.length - end) < 1e-9;
@@ -337,14 +337,14 @@ export const duplicateLoopPlacement = (trackId: TrackId, id: PlacementId): Edit 
 // ------------------------------------------------------------------ session
 
 export const setSlot = (trackId: TrackId, sceneIndex: number, clip: Clip | null): Edit =>
-  edit(clip ? 'Clip nella session' : 'Svuota slot', p => p.updatingTrack(trackId, t => t.withSlot(sceneIndex, clip)));
+  edit(clip ? 'Clip in the session' : 'Clear slot', p => p.updatingTrack(trackId, t => t.withSlot(sceneIndex, clip)));
 
 export const addScene = (index?: number): Edit =>
-  edit('Nuova scena', (p, { ids }) => p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, index));
+  edit('New scene', (p, { ids }) => p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, index));
 
-export const removeScene = (id: SceneId): Edit => edit('Elimina scena', p => p.removingScene(id));
+export const removeScene = (id: SceneId): Edit => edit('Delete scene', p => p.removingScene(id));
 
-// ------------------------------------------------------------------ aiuti
+// ------------------------------------------------------------------ helpers
 
 function fullPlacement(id: PlacementId, clip: Clip, start: Beats): Placement {
   return { id, clip, start: Math.max(0, start), length: clip.region.end - clip.region.start, offset: 0 };
@@ -352,6 +352,6 @@ function fullPlacement(id: PlacementId, clip: Clip, start: Beats): Placement {
 
 function requirePlacement(track: Track | undefined, id: PlacementId): Placement {
   const pl = track?.placement(id);
-  if (!pl) throw new Error(`clip ${id} non trovata`);
+  if (!pl) throw new Error(`clip ${id} not found`);
   return pl;
 }

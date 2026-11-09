@@ -1,7 +1,7 @@
-/* Il consolida di Live (Ctrl+J): su ogni traccia le clip di un tratto diventano una clip sola,
- * che si sente come prima (i giri di loop diventano contenuto vero). Note e modulazioni si
- * mettono in fila qui; l'audio va renderizzato in un file nuovo (lo fa l'app, con il progetto
- * di `soloAudioProject`) e qui si fa la clip che lo suona. */
+/* Live's consolidate (Ctrl+J): on each track the clips of a stretch become a single clip,
+ * which sounds as before (the loop rounds become real content). Notes and modulations are
+ * lined up here; the audio has to be rendered into a new file (the app does it, with the project
+ * from `soloAudioProject`) and here the clip playing it is made. */
 import type { ClipId, IdFactory, PlacementId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { placementSegments, type Segment } from '../engine/segments';
@@ -19,13 +19,13 @@ import { findPlacement, type PlacementRef } from './selection-edits';
 
 const EPS = 1e-9;
 
-/** Il tratto da consolidare su una traccia. */
+/** The stretch to consolidate on a track. */
 export interface ConsolidateSpan extends TimeRange {
   readonly track: TrackId;
 }
 
-/** Su ogni traccia della selezione, il tratto dalla prima all'ultima clip selezionata (come la
- *  selezione di tempo che in Live le copre), o il tratto `range` se c'è. */
+/** On each track of the selection, the stretch from the first to the last selected clip (like the
+ *  time selection covering them in Live), or the stretch `range` if given. */
 export function consolidateSpans(project: Project, refs: readonly PlacementRef[], range: TimeRange | null): ConsolidateSpan[] {
   const byTrack = new Map<TrackId, Placement[]>();
   for (const r of refs) {
@@ -39,19 +39,19 @@ export function consolidateSpans(project: Project, refs: readonly PlacementRef[]
   }));
 }
 
-/** Le clip della traccia dentro il tratto (anche quelle in mezzo non selezionate, come in Live). */
+/** The track's clips inside the stretch (also the unselected ones in between, as in Live). */
 export function placementsIn(project: Project, span: ConsolidateSpan): Placement[] {
   return between(project.track(span.track)?.arrangement ?? [], span.start, span.end);
 }
 
-/** I tratti continui delle clip posate, in ordine di tempo, con la loro clip. */
+/** The continuous stretches of the placed clips, in time order, with their clip. */
 const segmentsOf = (placements: readonly Placement[]) =>
   placements.flatMap(pl => placementSegments(pl).map(s => ({ s, clip: pl.clip }))).sort((a, b) => a.s.start - b.s.start);
 
 const inSegment = (s: Segment, contentBeat: Beats) => contentBeat >= s.contentStart - EPS && contentBeat < s.contentStart + (s.end - s.start) - EPS;
 
-/** Le note che suonano nelle clip posate, nel tempo di una clip che parte da `from`. Una nota non
- *  va oltre il tratto in cui suona. */
+/** The notes playing in the placed clips, in the time of a clip starting at `from`. A note doesn't
+ *  go beyond the stretch it plays in. */
 export function consolidatedNotes(placements: readonly Placement<MidiClip>[], from: Beats): Note[] {
   return segmentsOf(placements).flatMap(({ s, clip }) => (clip as MidiClip).notes.filter(n => inSegment(s, n.start)).map(n => {
     const start = s.start + n.start - s.contentStart;
@@ -59,9 +59,9 @@ export function consolidatedNotes(placements: readonly Placement<MidiClip>[], fr
   }));
 }
 
-/** Le modulazioni delle clip posate messe in fila, nel tempo di una clip che copre [from, to):
- *  in ogni tratto la curva della sua clip, il valore neutro dove la clip non ne ha una o dove
- *  non suona niente. */
+/** The modulations of the placed clips lined up, in the time of a clip covering [from, to):
+ *  in each stretch its clip's curve, the neutral value where the clip doesn't have one or where
+ *  nothing plays. */
 export function consolidatedEnvelopes(placements: readonly Placement[], from: Beats, to: Beats): ClipEnvelope[] {
   const targets = new Map<string, ModTarget>();
   for (const pl of placements) for (const e of pl.clip.envelopes) targets.set(targetKey(e.target), e.target);
@@ -85,7 +85,7 @@ export function consolidatedEnvelopes(placements: readonly Placement[], from: Be
   });
 }
 
-/** La clip MIDI consolidata: lunga quanto il tratto, in loop come una clip nuova. */
+/** The consolidated MIDI clip: as long as the stretch, looping like a new clip. */
 export function consolidatedMidiClip(id: ClipId, placements: readonly Placement<MidiClip>[], from: Beats, to: Beats): MidiClip {
   const first = placements[0].clip;
   return MidiClip.create({
@@ -95,10 +95,10 @@ export function consolidatedMidiClip(id: ClipId, placements: readonly Placement<
   });
 }
 
-/** La clip per uno slot della session che suona come le clip posate in [from, to), se si fa senza
- *  renderizzare: una clip sola che copre il tratto ripetendo sempre lo stesso pezzo (suonato una
- *  volta, o il suo loop a giri interi) resta lei, ritagliata su quel pezzo; le note si mettono in
- *  fila. null: l'audio va renderizzato. */
+/** The clip for a session slot playing like the clips placed in [from, to), if it can be done without
+ *  rendering: a single clip covering the stretch always repeating the same piece (played once,
+ *  or its loop in whole rounds) stays itself, cropped to that piece; the notes are lined
+ *  up. null: the audio has to be rendered. */
 export function sessionClip(id: ClipId, placements: readonly Placement[], from: Beats, to: Beats): Clip | null {
   const segments = placements.length === 1 ? placementSegments(placements[0]) : [];
   const [first] = segments, same = (a: number, b: number) => Math.abs(a - b) < EPS;
@@ -110,8 +110,8 @@ export function sessionClip(id: ClipId, placements: readonly Placement[], from: 
   return placements[0]?.clip instanceof MidiClip ? consolidatedMidiClip(id, placements as Placement<MidiClip>[], from, to) : null;
 }
 
-/** La clip che suona il file renderizzato `sample`: warp dritto sul tempo del progetto, con la
- *  modalità di warp e le modulazioni delle clip di partenza. */
+/** The clip playing the rendered file `sample`: straight warp at the project's tempo, with the
+ *  warp mode and the modulations of the starting clips. */
 export function consolidatedAudioClip(id: ClipId, placements: readonly Placement<AudioClip>[], sample: SampleRef, bpm: number, from: Beats, to: Beats): AudioClip {
   const first = placements[0].clip, len = to - from;
   return AudioClip.fromSample(id, sample, first.color)
@@ -122,32 +122,32 @@ export function consolidatedAudioClip(id: ClipId, placements: readonly Placement
     .withEnvelopes(consolidatedEnvelopes(placements, from, to));
 }
 
-/** Un progetto con una sola traccia audio, senza effetti e a volume pieno, che suona le clip come
- *  sono ma senza modulazioni (restano sulla clip consolidata): il suo mixdown è l'audio da
- *  consolidare. */
+/** A project with a single audio track, without effects and at full volume, playing the clips as
+ *  they are but without modulations (they stay on the consolidated clip): its mixdown is the audio to
+ *  consolidate. */
 export function soloAudioProject(project: Project, placements: readonly Placement<AudioClip>[], ids: IdFactory): Project {
-  let p = Project.empty('Consolida', ids, 0).withTempo(project.tempo.bpm).withSignature(project.signature);
+  let p = Project.empty('Consolidate', ids, 0).withTempo(project.tempo.bpm).withSignature(project.signature);
   for (const pl of placements) {
     const s = project.sample(pl.clip.sample);
     if (s && !p.sample(s.id)) p = p.addingSample(s);
   }
   const track = placements.reduce<AudioTrack>(
     (t, pl) => t.placing({ ...pl, clip: pl.clip.withEnvelopes([]) }, ids),
-    AudioTrack.empty(ids.next('track'), 'Consolida', placements[0].clip.color, 0),
+    AudioTrack.empty(ids.next('track'), 'Consolidate', placements[0].clip.color, 0),
   );
   return p.addingTrack(track);
 }
 
-/** Una clip consolidata, pronta da posare al posto delle clip del suo tratto. */
+/** A consolidated clip, ready to place in place of the clips of its stretch. */
 export interface Consolidated {
   readonly span: ConsolidateSpan;
   readonly placement: PlacementId;
   readonly clip: Clip;
-  /** Il file renderizzato, per le clip audio. */
+  /** The rendered file, for the audio clips. */
   readonly sample?: SampleRef;
 }
 
-/** Ogni clip consolidata al posto delle clip del suo tratto. */
+/** Each consolidated clip in place of the clips of its stretch. */
 export function withConsolidated(project: Project, items: readonly Consolidated[], ids: IdFactory): Project {
   return items.reduce((p, { span, placement, clip, sample }) => {
     const next = sample && !p.sample(sample.id) ? p.addingSample(sample) : p;

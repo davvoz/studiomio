@@ -1,11 +1,11 @@
-/* Geometria del grafico dell'EQ: frequenza in orizzontale (logaritmica, 20 Hz – 20 kHz), dB
- * in verticale. Lo spettro ha una sua scala in dB, inclinata come negli analizzatori delle
- * DAW: +4.5 dB per ottava attorno a 1 kHz, così un mix "normale" appare quasi piatto. */
+/* Geometry of the EQ's graph: frequency horizontally (logarithmic, 20 Hz – 20 kHz), dB
+ * vertically. The spectrum has its own dB scale, tilted as in DAW
+ * analysers: +4.5 dB per octave around 1 kHz, so a "normal" mix looks almost flat. */
 import { MAX_FREQ, MAX_GAIN, MIN_FREQ } from '../../../devices/effects/eq/eq';
 
-/** Margine sopra e sotto la scala del guadagno, in pixel. */
+/** Margin above and below the gain scale, in pixels. */
 const PAD_Y = 10;
-/** Scala dello spettro (dopo l'inclinazione), in dB. */
+/** Spectrum scale (after the tilt), in dB. */
 export const SPECTRUM_TOP = -12, SPECTRUM_BOTTOM = -96;
 const TILT_DB_PER_OCTAVE = 4.5;
 
@@ -30,14 +30,14 @@ export class EqScale {
     return ((this.height / 2 - y) / (this.height / 2 - PAD_Y)) * this.range;
   }
 
-  /** y di un valore dello spettro alla frequenza `freq` (con l'inclinazione). */
+  /** y of a spectrum value at frequency `freq` (with the tilt). */
   spectrumToY(db: number, freq: number): number {
     const tilted = db + TILT_DB_PER_OCTAVE * Math.log2(freq / 1000);
     return this.height * (1 - (tilted - SPECTRUM_BOTTOM) / (SPECTRUM_TOP - SPECTRUM_BOTTOM));
   }
 }
 
-/** Frequenze delle righe verticali della griglia, con l'etichetta per quelle principali. */
+/** Frequencies of the grid's vertical lines, with the label for the main ones. */
 export const FREQ_GRID: readonly (readonly [freq: number, label: string])[] = [
   [30, ''], [40, ''], [50, '50'], [60, ''], [70, ''], [80, ''], [90, ''], [100, '100'],
   [200, '200'], [300, ''], [400, ''], [500, '500'], [600, ''], [700, ''], [800, ''], [900, ''], [1000, '1k'],
@@ -45,9 +45,9 @@ export const FREQ_GRID: readonly (readonly [freq: number, label: string])[] = [
   [20000, ''],
 ];
 
-/** Il valore dello spettro per ogni colonna di pixel: dove una colonna copre più bande della
- *  FFT (alte frequenze) prende la più forte, dove ne copre meno di una (basse) interpola.
- *  `bins` in dB, come li dà l'AnalyserNode; `out` ha una voce per colonna. */
+/** The spectrum's value for each pixel column: where a column covers several FFT bands
+ *  (high frequencies) it takes the strongest, where it covers less than one (low) it interpolates.
+ *  `bins` in dB, as the AnalyserNode gives them; `out` has one entry per column. */
 export function spectrumColumns(bins: Float32Array, sampleRate: number, scale: EqScale, out: Float32Array): void {
   const binHz = sampleRate / (2 * bins.length);
   const columns = out.length, step = scale.width / columns;

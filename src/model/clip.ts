@@ -2,16 +2,16 @@ import type { ClipId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { sameTarget, withEnvelope, type ClipEnvelope, type EnvelopePoint, type ModTarget } from './envelope';
 
-/** Colore in esadecimale, "#rrggbb". */
+/** Colour in hexadecimal, "#rrggbb". */
 export type Color = string;
 
-/** Parte della clip che suona, in battiti della clip. */
+/** Part of the clip that plays, in clip beats. */
 export interface ClipRegion {
   readonly start: Beats;
   readonly end: Beats;
 }
 
-/** Con il loop attivo la clip suona da `region.start` fino a `end`, poi ripete [start, end). */
+/** With the loop active the clip plays from `region.start` up to `end`, then repeats [start, end). */
 export interface ClipLoop {
   readonly enabled: boolean;
   readonly start: Beats;
@@ -24,15 +24,15 @@ export interface ClipProps {
   readonly color: Color;
   readonly region: ClipRegion;
   readonly loop: ClipLoop;
-  /** Le modulazioni (inviluppi di clip); se manca, nessuna. */
+  /** The modulations (clip envelopes); if missing, none. */
   readonly envelopes?: readonly ClipEnvelope[];
 }
 
 const NO_ENVELOPES: readonly ClipEnvelope[] = [];
 
-/** Proprietà comuni di una clip, qualunque sia il contenuto (audio, note MIDI, …).
- *  Immutabile: i metodi `with…` restituiscono una copia. Ogni tipo di clip estende questa
- *  classe con il suo contenuto e dichiara il suo `kind`. */
+/** Properties common to a clip, whatever the content (audio, MIDI notes, …).
+ *  Immutable: the `with…` methods return a copy. Each clip kind extends this
+ *  class with its content and declares its `kind`. */
 export abstract class Clip<P extends ClipProps = ClipProps> {
   abstract readonly kind: string;
   protected readonly props: P;
@@ -42,7 +42,7 @@ export abstract class Clip<P extends ClipProps = ClipProps> {
     this.props = props;
   }
 
-  /** Crea un'istanza dello stesso tipo con altre proprietà. */
+  /** Creates an instance of the same kind with other properties. */
   protected abstract create(props: P): this;
 
   protected with(patch: Partial<P>): this {
@@ -56,7 +56,7 @@ export abstract class Clip<P extends ClipProps = ClipProps> {
   get loop(): ClipLoop { return this.props.loop; }
   get envelopes(): readonly ClipEnvelope[] { return this.props.envelopes ?? NO_ENVELOPES; }
 
-  /** La modulazione di un bersaglio, se la clip ce l'ha. */
+  /** A target's modulation, if the clip has it. */
   envelope(target: ModTarget): ClipEnvelope | undefined {
     return this.envelopes.find(e => sameTarget(e.target, target));
   }
@@ -67,17 +67,17 @@ export abstract class Clip<P extends ClipProps = ClipProps> {
   withRegion(region: ClipRegion): this { return this.with({ region } as Partial<P>); }
   withLoop(loop: ClipLoop): this { return this.with({ loop } as Partial<P>); }
   withEnvelopes(envelopes: readonly ClipEnvelope[]): this { return this.with({ envelopes } as Partial<P>); }
-  /** La modulazione del bersaglio con questi punti (senza punti la modulazione sparisce). */
+  /** The target's modulation with these points (without points the modulation disappears). */
   withEnvelope(target: ModTarget, points: readonly EnvelopePoint[]): this {
     return this.withEnvelopes(withEnvelope(this.envelopes, target, points));
   }
 
-  /** Durata di una riproduzione dall'inizio; Infinity se la clip è in loop. */
+  /** Length of a playback from the start; Infinity if the clip is looping. */
   get playLength(): Beats {
     return this.loop.enabled ? Infinity : this.region.end - this.region.start;
   }
 
-  /** Battito della clip che suona `elapsed` battiti dopo l'inizio, o null se è già finita. */
+  /** The clip beat playing `elapsed` beats after the start, or null if it has already ended. */
   contentBeatAt(elapsed: Beats): Beats | null {
     if (elapsed < 0) return null;
     const pos = this.region.start + elapsed;
@@ -88,13 +88,13 @@ export abstract class Clip<P extends ClipProps = ClipProps> {
   }
 
   private static validate({ region, loop }: ClipProps): void {
-    if (!(region.end > region.start)) throw new RangeError(`regione della clip vuota: ${region.start}–${region.end}`);
-    if (!(loop.end > loop.start)) throw new RangeError(`loop della clip vuoto: ${loop.start}–${loop.end}`);
-    if (loop.enabled && region.start >= loop.end) throw new RangeError('la clip parte dopo la fine del loop');
+    if (!(region.end > region.start)) throw new RangeError(`empty clip region: ${region.start}–${region.end}`);
+    if (!(loop.end > loop.start)) throw new RangeError(`empty clip loop: ${loop.start}–${loop.end}`);
+    if (loop.enabled && region.start >= loop.end) throw new RangeError('the clip starts after the end of the loop');
   }
 }
 
-/** Regione e loop iniziali che coprono tutto [start, end). */
+/** Initial region and loop covering all of [start, end). */
 export const fullRange = (start: Beats, end: Beats, loop = false): Pick<ClipProps, 'region' | 'loop'> => ({
   region: { start, end },
   loop: { enabled: loop, start, end },

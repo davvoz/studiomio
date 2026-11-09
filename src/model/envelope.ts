@@ -1,47 +1,47 @@
-/* Le modulazioni di una clip (gli inviluppi di clip di Live): curve disegnate nel tempo della
- * clip che muovono un parametro della traccia mentre la clip suona, relative al valore che il
- * parametro ha (la manopola resta dov'è: la curva la sposta). Girano con il loop della clip e
- * valgono sia sulla timeline sia nella session. Qui ci sono i dati e le operazioni pure. */
+/* A clip's modulations (Live's clip envelopes): curves drawn in the clip's time
+ * that move a track parameter while the clip plays, relative to the value the
+ * parameter has (the knob stays where it is: the curve moves it). They loop with the clip and
+ * apply both on the timeline and in the session. Here are the data and the pure operations. */
 import type { DeviceId } from '../core/id';
 import type { Beats } from '../core/music-time';
 
-/** Cosa muove una curva: volume o pan della traccia, un parametro di un dispositivo della
- *  traccia (lo strumento, o un effetto per id) o il transpose della clip audio stessa. */
+/** What a curve moves: volume or pan of the track, a parameter of a device of the
+ *  track (the instrument, or an effect by id) or the transpose of the audio clip itself. */
 export type ModTarget =
   | { readonly kind: 'mixer'; readonly param: 'volume' | 'pan' }
   | { readonly kind: 'device'; readonly device: DeviceId | typeof INSTRUMENT_DEVICE; readonly param: string }
   | { readonly kind: 'clip'; readonly param: 'transpose' };
 
-/** Il transpose di una clip audio, come la curva "Transposition" di Live: semitoni sommati a
- *  quelli della clip. */
+/** An audio clip's transpose, like Live's "Transposition" curve: semitones added to
+ *  the clip's. */
 export const CLIP_TRANSPOSE: ModTarget = { kind: 'clip', param: 'transpose' };
 
-/** Il dispositivo "strumento" nei bersagli (gli effetti hanno il loro id). */
+/** The "instrument" device in the targets (the effects have their own id). */
 export const INSTRUMENT_DEVICE = 'instrument';
 
 export interface EnvelopePoint {
-  /** Battito della clip (come le note e il warp). */
+  /** Clip beat (like the notes and the warp). */
   readonly beat: Beats;
-  /** Nella scala del tipo di bersaglio (vedi MOD_SCALES). */
+  /** In the scale of the target type (see MOD_SCALES). */
   readonly value: number;
 }
 
 export interface ClipEnvelope {
   readonly target: ModTarget;
-  /** Ordinati per battito; due punti nello stesso battito fanno uno scalino. */
+  /** Sorted by beat; two points on the same beat make a step. */
   readonly points: readonly EnvelopePoint[];
 }
 
-/** La scala dei valori di un tipo di bersaglio: limiti e valore neutro (nessuna modulazione). */
+/** The scale of a target type's values: limits and neutral value (no modulation). */
 export interface ModScale {
   readonly min: number;
   readonly max: number;
   readonly neutral: number;
 }
 
-/** Volume: quanto del volume della traccia resta (1 = tutto, 0 = silenzio). Pan: spostamento
- *  (−1 tutto a sinistra … +1 tutto a destra). Parametro: spostamento della manopola, in
- *  frazioni della sua corsa (−1 … +1). */
+/** Volume: how much of the track's volume remains (1 = all, 0 = silence). Pan: offset
+ *  (−1 all the way left … +1 all the way right). Parameter: knob offset, in
+ *  fractions of its travel (−1 … +1). */
 export const MOD_SCALES = {
   volume: { min: 0, max: 1, neutral: 1 },
   pan: { min: -1, max: 1, neutral: 0 },
@@ -55,11 +55,11 @@ export const scaleKindOf = (t: ModTarget): ModScaleKind => (t.kind === 'device' 
 
 export const scaleOf = (t: ModTarget): ModScale => MOD_SCALES[scaleKindOf(t)];
 
-/** Una chiave che identifica il bersaglio: "mixer:volume", "clip:transpose", "instrument:cutoff",
- *  "<id effetto>:time". */
+/** A key identifying the target: "mixer:volume", "clip:transpose", "instrument:cutoff",
+ *  "<effect id>:time". */
 export const targetKey = (t: ModTarget): string => (t.kind === 'device' ? `${t.device}:${t.param}` : `${t.kind}:${t.param}`);
 
-/** Il bersaglio di una chiave (al contrario di targetKey), o null se non è valida. */
+/** The target of a key (the opposite of targetKey), or null if it isn't valid. */
 export function parseTargetKey(key: string): ModTarget | null {
   const i = key.indexOf(':');
   if (i <= 0 || i === key.length - 1) return null;
@@ -73,13 +73,13 @@ export const sameTarget = (a: ModTarget, b: ModTarget): boolean => targetKey(a) 
 
 const clamp = (v: number, s: ModScale) => Math.max(s.min, Math.min(s.max, v));
 
-/** Il valore della curva al battito `beat`: prima del primo punto vale il primo, dopo l'ultimo
- *  l'ultimo, in mezzo la retta tra i due vicini. Su uno scalino vale già il punto dopo. */
+/** The curve's value at beat `beat`: before the first point it's the first, after the last
+ *  the last, in between the straight line between the two neighbours. On a step it's already the next point. */
 export function envelopeValueAt(points: readonly EnvelopePoint[], beat: Beats): number {
   const n = points.length;
   if (n === 0) return NaN;
   if (beat < points[0].beat) return points[0].value;
-  // l'ultimo punto con battito <= beat (ricerca binaria)
+  // the last point with beat <= beat (binary search)
   let lo = 0, hi = n - 1;
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1;
@@ -91,8 +91,8 @@ export function envelopeValueAt(points: readonly EnvelopePoint[], beat: Beats): 
   return a.value + ((b.value - a.value) * (beat - a.beat)) / (b.beat - a.beat);
 }
 
-/** I tratti di [from, to) in cui la curva, arrotondata all'intero più vicino, resta uguale
- *  (il transpose suona a semitoni): ogni tratto con il suo valore. */
+/** The stretches of [from, to) in which the curve, rounded to the nearest integer, stays the same
+ *  (the transpose plays in semitones): each stretch with its value. */
 export function steppedRuns(points: readonly EnvelopePoint[], from: Beats, to: Beats): { from: Beats; to: Beats; value: number }[] {
   const out: { from: Beats; to: Beats; value: number }[] = [];
   const add = (a: Beats, b: Beats, value: number) => {
@@ -106,12 +106,12 @@ export function steppedRuns(points: readonly EnvelopePoint[], from: Beats, to: B
   for (let i = 0; i + 1 < cuts.length; i++) {
     const a = cuts[i], b = cuts[i + 1];
     if (b - a <= 1e-9) continue;
-    // tra due punti la curva è una retta: i valori appena dentro i due estremi
+    // between two points the curve is a straight line: the values just inside the two ends
     const eps = (b - a) * 1e-6;
     const va = envelopeValueAt(points, a + eps), vb = envelopeValueAt(points, b - eps);
     let at = a, value = round(va);
     const dir = Math.sign(vb - va);
-    // dove la retta passa per k ± 0,5 il semitono cambia
+    // where the line crosses k ± 0.5 the semitone changes
     for (let k = value; dir !== 0 && k !== round(vb); k += dir) {
       const edge = a + eps + ((k + dir / 2 - va) / (vb - va)) * (b - a - 2 * eps);
       add(at, edge, k);
@@ -123,7 +123,7 @@ export function steppedRuns(points: readonly EnvelopePoint[], from: Beats, to: B
   return out;
 }
 
-/** I semitoni interi che la curva tocca (dal più basso al più alto). */
+/** The whole semitones the curve touches (from the lowest to the highest). */
 export function steppedValues(points: readonly EnvelopePoint[]): number[] {
   if (!points.length) return [];
   const vs = points.map(p => Math.round(p.value));
@@ -132,8 +132,8 @@ export function steppedValues(points: readonly EnvelopePoint[]): number[] {
   return out;
 }
 
-/** Punti validi: dentro la scala, battiti non negativi, in ordine (l'ordine di chi ha lo stesso
- *  battito resta quello dato: decide da che parte sta lo scalino). */
+/** Valid points: inside the scale, non-negative beats, in order (the order of those with the same
+ *  beat stays the given one: it decides which side the step is on). */
 export function normalizePoints(points: readonly EnvelopePoint[], scale: ModScale): EnvelopePoint[] {
   return points
     .map((p, i) => ({ p: { beat: Math.max(0, p.beat), value: clamp(p.value, scale) }, i }))
@@ -141,7 +141,7 @@ export function normalizePoints(points: readonly EnvelopePoint[], scale: ModScal
     .map(x => x.p);
 }
 
-/** Le curve con quella del bersaglio sostituita (o aggiunta); senza punti la curva sparisce. */
+/** The curves with the target's one replaced (or added); without points the curve disappears. */
 export function withEnvelope(envelopes: readonly ClipEnvelope[], target: ModTarget, points: readonly EnvelopePoint[]): ClipEnvelope[] {
   if (!points.length) return envelopes.filter(e => !sameTarget(e.target, target));
   const env = { target, points: normalizePoints(points, scaleOf(target)) };

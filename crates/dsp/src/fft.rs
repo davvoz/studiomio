@@ -1,4 +1,4 @@
-//! FFT complessa radix-2 in place, identica a `src/dsp/fft.ts`.
+//! In-place radix-2 complex FFT, identical to `src/dsp/fft.ts`.
 
 use std::f64::consts::PI;
 
@@ -11,7 +11,7 @@ pub struct Fft {
 
 impl Fft {
     pub fn new(n: usize) -> Self {
-        assert!(n >= 2 && n.is_power_of_two(), "FFT: {n} non è una potenza di 2");
+        assert!(n >= 2 && n.is_power_of_two(), "FFT: {n} is not a power of 2");
         let bits = n.trailing_zeros();
         let rev = (0..n as u32).map(|i| i.reverse_bits() >> (32 - bits)).collect();
         let half = n / 2;
@@ -24,7 +24,7 @@ impl Fft {
         self.transform(re, im, -1.0);
     }
 
-    /// Inversa, già normalizzata per 1/n.
+    /// Inverse, already normalized by 1/n.
     pub fn inverse(&self, re: &mut [f64], im: &mut [f64]) {
         self.transform(re, im, 1.0);
         let s = 1.0 / self.n as f64;
@@ -66,7 +66,7 @@ impl Fft {
     }
 }
 
-/// Dopo la FFT di (x + i·y), con x e y reali, separa gli spettri di x e y (bin 0..n/2).
+/// After the FFT of (x + i·y), with x and y real, separates the spectra of x and y (bins 0..n/2).
 pub fn split_pair(re: &[f64], im: &[f64], xr: &mut [f64], xi: &mut [f64], yr: &mut [f64], yi: &mut [f64]) {
     let n = re.len();
     for k in 0..=n / 2 {
@@ -78,7 +78,7 @@ pub fn split_pair(re: &[f64], im: &[f64], xr: &mut [f64], xi: &mut [f64], yr: &m
     }
 }
 
-/// Inverso di `split_pair`: con `y` assente il secondo segnale è silenzio.
+/// Inverse of `split_pair`: with `y` absent the second signal is silence.
 pub fn join_pair(xr: &[f64], xi: &[f64], y: Option<(&[f64], &[f64])>, re: &mut [f64], im: &mut [f64]) {
     let n = re.len();
     let h = n / 2;

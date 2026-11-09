@@ -1,22 +1,22 @@
-/* Dove sono adesso le modulazioni, per l'interfaccia: mentre una curva suona la manopola del
- * parametro la segue. Ogni bersaglio si ricorda gli scalini e le rampe programmati sulla sua
- * destinazione, con le regole degli AudioParam (la stessa ModTimeline del worklet), e ne calcola
- * il valore di adesso; ciò che è già passato si dimentica. */
+/* Where the modulations are now, for the interface: while a curve plays the parameter's knob
+ * follows it. Each target remembers the steps and ramps scheduled on its
+ * destination, with the AudioParam rules (the same ModTimeline as the worklet), and computes
+ * the current value; what's past is forgotten. */
 import { ModTimeline } from '../devices/worklet/mod-timeline';
 import type { ModSink } from './modulation';
 
-/** Le tracce di tutti i bersagli, per chiave; `now` è l'ora del contesto audio. Un bersaglio
- *  può averne più d'una, una per fonte (le curve delle clip, ogni destinazione di un LFO): si
- *  combinano come nel suono. */
+/** The traces of all the targets, by key; `now` is the audio context's time. A target
+ *  can have more than one, one per source (the clip curves, each target of an LFO): they
+ *  combine as in the sound. */
 export class ModTraces {
   private readonly lines = new Map<string, ModTimeline>();
-  /** Per bersaglio, le chiavi delle tracce delle altre fonti. */
+  /** Per target, the trace keys of the other sources. */
   private readonly channels = new Map<string, Set<string>>();
 
   constructor(private readonly now: () => number) {}
 
-  /** La destinazione `inner` che si ricorda anche ciò che riceve, nella traccia `key` (con
-   *  `channel`, quella della fonte). */
+  /** The destination `inner` that also remembers what it receives, in trace `key` (with
+   *  `channel`, the source's). */
   wrap(key: string, neutral: number, inner: ModSink, channel?: string): ModSink {
     const trace = channel ? `${key}|${channel}` : key;
     if (channel) {
@@ -27,7 +27,7 @@ export class ModTraces {
     let line = this.lines.get(trace);
     if (!line) this.lines.set(trace, (line = new ModTimeline(neutral)));
     const l = line;
-    // anche se nessuno la legge, la traccia butta ciò che è passato
+    // even if nobody reads it, the trace throws away what's past
     const add = (kind: 'set' | 'ramp', value: number, time: number) => {
       l.add({ kind, value, time });
       l.valueAt(this.now());
@@ -39,8 +39,8 @@ export class ModTraces {
     };
   }
 
-  /** Il valore di adesso nella traccia `key`, o null se lì non è mai arrivato niente. Con le
-   *  altre fonti: gli spostamenti si sommano, i guadagni (`multiply`) si moltiplicano. */
+  /** The current value in trace `key`, or null if nothing ever arrived there. With the
+   *  other sources: the offsets add up, the gains (`multiply`) multiply. */
   current(key: string, multiply = false): number | null {
     const now = this.now();
     let value = this.lines.get(key)?.valueAt(now) ?? null;

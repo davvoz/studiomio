@@ -1,14 +1,14 @@
-/* Il suono dello Snare (vedi snare.ts). Ogni colpo è una voce con i suoi strati: il colpo (un
- * seno acuto che cade, rumore filtrato o il sample del colpo), la pelle (i due modi della
- * membrana, la nota e 1,59 volte la nota, con una piccola caduta d'intonazione e il secondo che
- * si spegne prima, piegati dalla Forma; o il sample della pelle) e la cordiera (rumore, tenuto
- * fermo qualche campione quanto dice la Grana, tra un passa-alto e un passa-basso, che parte dopo
- * il Ritardo). Un colpo nuovo fa sfumare in pochi millisecondi quello prima. I colpi piano sono
- * più deboli e, quanto dice "Vel → tono", più scuri: meno colpo e una cordiera meno brillante.
- * Dopo la saturazione la stanza: per canale quattro filtri a pettine e due passa-tutto (un
- * piccolo riverbero alla Schroeder), con i ritardi un po' diversi a sinistra e a destra. In fondo
- * il taglio dei bassi e il volume. Gira nell'AudioWorklet; qui niente Web Audio, così si prova (e
- * si disegna) anche fuori. */
+/* The Snare's sound (see snare.ts). Each hit is a voice with its layers: the hit (a
+ * high falling sine, filtered noise or the hit sample), the skin (the two modes of the
+ * membrane, the note and 1.59 times the note, with a small pitch drop and the second
+ * dying out earlier, bent by the Shape; or the skin sample) and the wires (noise, held
+ * still for a few samples as much as the Grain says, between a high-pass and a low-pass, starting after
+ * the Delay). A new hit fades the previous one out in a few milliseconds. Soft hits are
+ * weaker and, as much as "Vel → tone" says, darker: less hit and duller wires.
+ * After the saturation the room: per channel four comb filters and two allpasses (a
+ * small Schroeder reverb), with slightly different delays left and right. At the end
+ * the low cut and the volume. Runs in the AudioWorklet; no Web Audio here, so it's also tested (and
+ * drawn) outside. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { decayCoef } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
@@ -18,11 +18,11 @@ import { BODY_SLOT, FOLLOW, noteHz, OVERTONE, ROOT_NOTE, SNAP_SLOT, SNAP_SOURCE,
 
 const FLOOR = 1e-5;
 const CHOKE_TIME = 0.004;
-/** L'attacco della pelle e della cordiera: abbastanza per non fare click. */
+/** The attack of the skin and the wires: enough not to click. */
 const ATTACK_TIME = 0.0003;
 const TWO_PI = 2 * Math.PI;
 const LP = 0, BP = 1, HP = 2;
-/** I ritardi dei pettini e dei passa-tutto della stanza, in secondi (a destra un po' più lunghi). */
+/** The delays of the room's combs and allpasses, in seconds (a little longer on the right). */
 const COMBS = [0.0113, 0.0137, 0.0161, 0.0187];
 const ALLPASSES = [0.0051, 0.0017];
 const SPREAD = 0.0007;
@@ -48,7 +48,7 @@ function hermite(x: Float32Array, k: number, f: number): number {
   return ((c3 * f + c2) * f + c1) * f + y1;
 }
 
-/** I parametri del motore, già nelle sue unità. */
+/** The engine's parameters, already in its units. */
 interface Settings {
   note: number;
   follow: boolean;
@@ -75,7 +75,7 @@ interface Settings {
   velTone: number;
 }
 
-/** Un colpo. Dopo `step`, `out` è il suo valore in questo campione. */
+/** A hit. After `step`, `out` is its value at this sample. */
 class SnareVoice {
   out = 0;
   active = false;
@@ -85,7 +85,7 @@ class SnareVoice {
   private gain = 1;
   private t = 0;
   private attackN = 1;
-  // la pelle
+  // the skin
   private synth = true;
   private base = 200;
   private semis = 0;
@@ -103,7 +103,7 @@ class SnareVoice {
   private bodySample: MonoSample | null = null;
   private bodyPos = 0;
   private bodyStep = 1;
-  // il colpo
+  // the hit
   private snapSource = 0;
   private snapAmp = 0;
   private snapK = 0;
@@ -115,7 +115,7 @@ class SnareVoice {
   private snapStep = 1;
   private readonly noise = new Noise(0x1b873593);
   private readonly snapFilter: Svf;
-  // la cordiera
+  // the snare wires
   private wiresGain = 0;
   private wiresAmp = 1;
   private wiresK = 0;
@@ -136,7 +136,7 @@ class SnareVoice {
 
   trigger(s: Settings, pitch: number, velocity: number, body: MonoSample | null, snap: MonoSample | null): void {
     const sr = this.sampleRate, shift = s.follow ? pitch - ROOT_NOTE : 0, vel = velocity / 127;
-    // piano: più debole e, quanto dice "Vel → tono", più scuro
+    // soft: weaker and, as much as "Vel → tone" says, darker
     const bright = 1 - s.velTone * (1 - vel) * 0.8;
     this.active = true;
     this.fade = 1;
@@ -193,7 +193,7 @@ class SnareVoice {
   step(): void {
     const sr = this.sampleRate, t = this.t++;
     const rise = t < this.attackN ? t / this.attackN : 1;
-    // la pelle
+    // the skin
     let body = 0;
     if (this.synth) {
       this.pitchEnv *= this.pitchK;
@@ -213,7 +213,7 @@ class SnareVoice {
     }
     this.amp1 *= this.k1;
     this.amp2 *= this.k2;
-    // il colpo
+    // the hit
     let snap = 0;
     if (this.snapAmp >= FLOOR) {
       if (this.snapSource === SNAP_SOURCE.click) {
@@ -231,7 +231,7 @@ class SnareVoice {
       }
       this.snapAmp *= this.snapK;
     }
-    // la cordiera, dopo il ritardo; con la grana il rumore resta fermo qualche campione
+    // the wires, after the delay; with the grain the noise stays still for a few samples
     let wires = 0;
     if (t >= this.wiresStart) {
       if (this.heldFor-- <= 0) {
@@ -249,7 +249,7 @@ class SnareVoice {
   }
 }
 
-/** Un filtro a pettine con lo smorzamento degli acuti nel giro. */
+/** A comb filter with high damping in the loop. */
 class Comb {
   private readonly buffer: Float32Array;
   private index = 0;
@@ -280,7 +280,7 @@ class Comb {
   }
 }
 
-/** Un passa-tutto di Schroeder: sparpaglia gli echi dei pettini senza colorare. */
+/** A Schroeder allpass: scatters the combs' echoes without colouring. */
 class Allpass {
   private readonly buffer: Float32Array;
   private index = 0;
@@ -301,7 +301,7 @@ class Allpass {
   }
 }
 
-/** La stanza di un canale. */
+/** A channel's room. */
 class Room {
   private readonly combs: Comb[];
   private readonly allpasses: Allpass[];
@@ -346,7 +346,7 @@ export class SnareCore implements InstrumentCore, SamplePlayer {
   private drive = 0;
   private driveType = 0;
   private volume = 1;
-  /** Campioni da quando l'ultimo colpo si è spento: la stanza suona ancora un po'. */
+  /** Samples since the last hit died out: the room still rings a little. */
   private quiet = 0;
   private readonly roomTail: number;
 
@@ -393,7 +393,7 @@ export class SnareCore implements InstrumentCore, SamplePlayer {
     this.quiet = 0;
   }
 
-  /** Il rullante suona fino in fondo: il rilascio della nota non conta. */
+  /** The snare rings to the end: the note's release doesn't count. */
   noteOff(): void {}
 
   silence(): void {
@@ -405,7 +405,7 @@ export class SnareCore implements InstrumentCore, SamplePlayer {
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const [a, b] = this.voices;
     const room = this.roomOn;
-    // riaccesa, la stanza riparte pulita
+    // turned on again, the room starts clean
     if (room && !this.roomWasOn) { this.roomL.clear(); this.roomR.clear(); }
     this.roomWasOn = room;
     if (!a.active && !b.active && (!room || this.quiet > this.roomTail)) return;

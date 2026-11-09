@@ -7,32 +7,32 @@ import { WarpMarkers } from '../model/warp-markers';
 import { decodeInstrument, encodeInstrument } from './device-codec';
 import type { JsonObject, JsonReader } from './json-reader';
 
-/** Conversione JSON di un tipo di clip. */
+/** JSON conversion of a clip kind. */
 export interface ClipCodec<C extends Clip = Clip> {
   readonly kind: string;
-  /** Vero se questo codec sa scrivere la clip. */
+  /** True if this codec can write the clip. */
   handles(clip: Clip): clip is C;
   encode(clip: C): JsonObject;
   decode(r: JsonReader): C;
 }
 
-// -------------------------------------------------- proprietà comuni a tutte le clip
+// -------------------------------------------------- properties common to all clips
 
 const encodeBase = (c: Clip): JsonObject => ({
   kind: c.kind, id: c.id, name: c.name, color: c.color,
   region: { start: c.region.start, end: c.region.end },
   loop: { enabled: c.loop.enabled, start: c.loop.start, end: c.loop.end },
-  // le modulazioni solo se ci sono: { "mixer:volume": [[battito, valore], …] }
+  // the modulations only if there are any: { "mixer:volume": [[beat, value], …] }
   ...(c.envelopes.length ? { envelopes: encodeEnvelopes(c.envelopes) } : {}),
 });
 
-/** Le curve come oggetto JSON: { "bersaglio": [[battito, valore], …] } (clip e master). */
+/** The curves as a JSON object: { "target": [[beat, value], …] } (clips and master). */
 export const encodeEnvelopes = (envelopes: readonly ClipEnvelope[]): JsonObject =>
   Object.fromEntries(envelopes.map(e => [targetKey(e.target), e.points.map(p => [p.beat, p.value])]));
 
 export const decodeEnvelopes = (r: JsonReader): ClipEnvelope[] =>
   r.keys().map(key => ({
-    target: parseTargetKey(key) ?? r.get(key).fail(`modulazione sconosciuta: ${key}`),
+    target: parseTargetKey(key) ?? r.get(key).fail(`unknown modulation: ${key}`),
     points: r.array(key).map(p => {
       const [beat, value] = p.tuple(2);
       return { beat, value };
@@ -49,7 +49,7 @@ const decodeBase = (r: JsonReader): ClipProps => {
   };
 };
 
-/** Il costruttore della clip valida regione e loop: l'errore riporta il percorso nel file. */
+/** The clip's constructor validates region and loop: the error reports the path in the file. */
 const guarded = <T>(r: JsonReader, build: () => T): T => {
   try {
     return build();
@@ -95,7 +95,7 @@ export const audioClipCodec: ClipCodec<AudioClip> = {
     warp: {
       enabled: c.warp.enabled, mode: c.warp.mode,
       baseBpm: c.warp.markers.baseBpm,
-      // [secondo nel sample, battito] in coppie: compatto e leggibile
+      // [second in the sample, beat] in pairs: compact and readable
       markers: c.warp.markers.markers.map(m => [m.t, m.b]),
       options: encodeWarpOptions(c.warp.options),
     },
@@ -117,7 +117,7 @@ export const audioClipCodec: ClipCodec<AudioClip> = {
         options: decodeWarpOptions(warp.get('options')),
       },
       transpose: r.num('transpose'), detune: r.num('detune'), gainDb: r.num('gainDb'),
-      // i progetti salvati prima del reverse non hanno il campo
+      // projects saved before reverse don't have the field
       reversed: r.has('reversed') && r.bool('reversed'),
     }));
   },
@@ -130,7 +130,7 @@ export const midiClipCodec: ClipCodec<MidiClip> = {
   handles: (c): c is MidiClip => c instanceof MidiClip,
   encode: c => ({
     ...encodeBase(c),
-    // [altezza, inizio, durata, velocity]: un progetto può avere migliaia di note
+    // [pitch, start, duration, velocity]: a project can have thousands of notes
     notes: c.notes.map(n => [n.pitch, n.start, n.duration, n.velocity]),
     ...(c.sound ? { sound: encodeInstrument(c.sound) } : {}),
   }),

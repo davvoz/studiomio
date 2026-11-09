@@ -6,11 +6,11 @@ import { detectTransients } from './transients';
 
 export interface AudioAnalysis {
   readonly tempo: number;
-  /** Posizioni dei transienti in campioni. */
+  /** Transient positions in samples. */
   readonly transients: number[];
 }
 
-/** Analisi completa di un sample appena caricato: tempo e transienti. */
+/** Complete analysis of a newly loaded sample: tempo and transients. */
 export function analyzeAudio({ channels, sampleRate }: AudioData, sensitivity: number): AudioAnalysis {
   const mono = mixMono(channels);
   const envl = onsetEnvelope(mono, sampleRate);

@@ -1,12 +1,12 @@
 import type { EffectCore } from '../dsp/core';
 
-/** Durata della dissolvenza tra effetto e suono diretto, in secondi. */
+/** Length of the crossfade between effect and direct sound, in seconds. */
 const FADE = 0.01;
 
-/** Fa lavorare un effetto e ne gestisce lo spegnimento per tutti i tipi: acceso/spento passa
- *  con una breve dissolvenza (niente click); spento, l'effetto non lavora e il suono passa. */
+/** Runs an effect and handles turning it off for all types: on/off goes
+ *  with a short crossfade (no clicks); off, the effect doesn't work and the sound passes. */
 export class EffectRunner {
-  /** Quanto effetto si sente: 1 acceso, 0 spento, in mezzo durante la dissolvenza. */
+  /** How much effect is heard: 1 on, 0 off, in between during the fade. */
   private amount: number;
   private target: number;
   private readonly step: number;

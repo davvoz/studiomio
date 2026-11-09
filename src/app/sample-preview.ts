@@ -1,14 +1,14 @@
-/* L'anteprima dei sample del browser: suona l'audio così com'è (senza warp), direttamente
- * all'uscita, fuori dal mixer, come il pre-ascolto di Live. I file del disco si decodificano
- * una volta: gli ultimi restano in memoria per riascoltarli subito. */
+/* The browser's sample preview: plays the audio as it is (without warp), straight
+ * to the output, outside the mixer, like Live's preview. Disk files are decoded
+ * once: the latest stay in memory to replay them right away. */
 import type { BrowserPayload } from '../browser/item';
 import type { SampleId } from '../core/id';
 import type { AudioData } from '../dsp/types';
 import type { BrowserPreview } from '../ui/browser/browser-view';
 
-/** Quanti file decodificati tenere. */
+/** How many decoded files to keep. */
 const CACHED = 8;
-/** L'anteprima suona un po' più bassa del mix, come in Live. */
+/** The preview plays a little quieter than the mix, as in Live. */
 const PREVIEW_GAIN = 0.7;
 
 export class SamplePreview implements BrowserPreview {
@@ -25,7 +25,7 @@ export class SamplePreview implements BrowserPreview {
     const known = this.decoded.get(key);
     if (known) {
       this.decoded.delete(key);
-      this.decoded.set(key, known); // il più recente in fondo
+      this.decoded.set(key, known); // the most recent at the end
       return known;
     }
     const buf = await this.context.decodeAudioData(await file.arrayBuffer());
@@ -54,7 +54,7 @@ export class SamplePreview implements BrowserPreview {
   }
 
   stop(): void {
-    try { this.source?.stop(); } catch { /* già finito */ }
+    try { this.source?.stop(); } catch { /* already finished */ }
     this.source = null;
   }
 }

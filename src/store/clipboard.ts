@@ -1,5 +1,5 @@
-/* Appunti dell'app (interni, non quelli del sistema): clip, note del piano roll, dispositivi o
- * un tratto di una curva di modulazione. Si copia una fotografia immutabile; incollare crea copie con id nuovi. */
+/* The app's clipboard (internal, not the system's): clips, piano roll notes, devices or
+ * a stretch of a modulation curve. An immutable snapshot is copied; pasting creates copies with new ids. */
 import { asId, type TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { placementEnd, type Placement } from '../model/arrangement';
@@ -13,47 +13,47 @@ import { edit, type Edit } from './project-store';
 import { findPlacement, type PlacementRef } from './selection-edits';
 import type { SlotRef } from './session-edits';
 
-/** Una clip copiata: la sua traccia è relativa alla prima traccia copiata, l'inizio al primo battito. */
+/** A copied clip: its track is relative to the first copied track, the start to the first beat. */
 export interface CopiedPlacement {
   readonly trackOffset: number;
   readonly placement: Placement;
-  /** Copiata dalla session: la sua scena, relativa alla prima copiata. */
+  /** Copied from the session: its scene, relative to the first copied one. */
   readonly slotOffset?: number;
 }
 
 export interface CopiedClips {
   readonly kind: 'clips';
   readonly items: readonly CopiedPlacement[];
-  /** Dall'inizio della prima clip alla fine dell'ultima. */
+  /** From the start of the first clip to the end of the last. */
   readonly span: Beats;
-  /** La traccia più in alto da cui si è copiato. */
+  /** The topmost track copied from. */
   readonly sourceTrack: TrackId;
 }
 
 export interface CopiedNotes {
   readonly kind: 'notes';
-  /** Inizi relativi alla prima nota; altezze invariate. */
+  /** Starts relative to the first note; pitches unchanged. */
   readonly notes: readonly Note[];
   readonly span: Beats;
-  /** Dove iniziava la prima nota copiata. */
+  /** Where the first copied note started. */
   readonly origin: Beats;
 }
 
-/** Un tratto di una curva di modulazione: si incolla su un altro parametro o in un'altra clip. */
+/** A stretch of a modulation curve: it's pasted on another parameter or in another clip. */
 export interface CopiedEnvelope {
   readonly kind: 'envelope';
-  /** Battiti relativi all'inizio del tratto. */
+  /** Beats relative to the start of the stretch. */
   readonly points: readonly EnvelopePoint[];
   readonly span: Beats;
-  /** Dove iniziava il tratto. */
+  /** Where the stretch started. */
   readonly origin: Beats;
-  /** Il tipo di valori della curva: incollata su un altro tipo si riscala. */
+  /** The kind of values of the curve: pasted on another kind it's rescaled. */
   readonly scale: ModScale;
 }
 
 export type ClipboardContent = CopiedClips | CopiedNotes | CopiedDevices | CopiedEnvelope;
 
-/** Il contenuto degli appunti, condiviso da timeline e piano roll. */
+/** The clipboard's content, shared by timeline and piano roll. */
 export class Clipboard {
   content: ClipboardContent | null = null;
 
@@ -76,7 +76,7 @@ export class Clipboard {
 
 // ------------------------------------------------------------------ clip
 
-/** Le posizioni delle tracce sono quelle delle righe della timeline (le tracce che si vedono). */
+/** The track positions are those of the timeline's rows (the visible tracks). */
 export function copyClips(project: Project, refs: readonly PlacementRef[]): CopiedClips | null {
   const found = refs.flatMap(r => {
     const pl = findPlacement(project, r);
@@ -94,10 +94,10 @@ export function copyClips(project: Project, refs: readonly PlacementRef[]): Copi
   };
 }
 
-/** Incolla dal battito `at`, con la prima traccia copiata su quella di indice `firstTrack`.
- *  Le clip che finirebbero su una traccia che non c'è o di un altro tipo vengono saltate. */
+/** Pastes from beat `at`, with the first copied track on the one at index `firstTrack`.
+ *  The clips that would end up on a track that doesn't exist or of another kind are skipped. */
 export const pasteClips = (content: CopiedClips, firstTrack: number, at: Beats): Edit =>
-  edit('Incolla', (project, { ids }) => content.items.reduce((p, { trackOffset, placement }) => {
+  edit('Paste', (project, { ids }) => content.items.reduce((p, { trackOffset, placement }) => {
     const track = p.visibleTracks[firstTrack + trackOffset];
     if (!track?.accepts(placement.clip)) return p;
     const placed: Placement = {
@@ -120,7 +120,7 @@ export function copyNotes(notes: readonly Note[], sel: Selection): CopiedNotes |
   };
 }
 
-/** Le note degli appunti a partire dal battito `at`; restano selezionate. */
+/** The clipboard's notes starting from beat `at`; they stay selected. */
 export function pasteNotes(notes: readonly Note[], content: CopiedNotes, at: Beats): NoteChange {
   const pasted = content.notes.map(n => ({ ...n, start: Math.max(0, at) + n.start }));
   return { notes: [...notes, ...pasted], selected: pasted };
@@ -128,16 +128,16 @@ export function pasteNotes(notes: readonly Note[], content: CopiedNotes, at: Bea
 
 // ------------------------------------------------------------------ session
 
-/** Quanto dura una clip della session, se la si mette sulla timeline. */
+/** How long a session clip lasts, if it's put on the timeline. */
 const slotLength = (clip: Clip): Beats => (clip.loop.enabled ? clip.loop.end : clip.region.end) - clip.region.start;
 
-/** La clip di uno slot negli appunti, come una clip copiata dalla timeline: si incolla in un
- *  altro slot o, al cursore, sulla timeline. */
+/** A slot's clip in the clipboard, like a clip copied from the timeline: it's pasted in another
+ *  slot or, at the cursor, on the timeline. */
 export const copySlotClip = (project: Project, track: TrackId, slot: number): CopiedClips | null =>
   copySlotClips(project, [{ track, slot }]);
 
-/** Le clip di più slot negli appunti, ricordando come stavano nella griglia: si incollano con la
- *  stessa forma da uno slot in poi. Sulla timeline le scene vanno una dopo l'altra. */
+/** The clips of several slots in the clipboard, remembering how they sat in the grid: they're pasted with the
+ *  same shape from one slot on. On the timeline the scenes go one after the other. */
 export function copySlotClips(project: Project, refs: readonly SlotRef[]): CopiedClips | null {
   const columns = new Map(project.visibleTracks.map((t, i) => [t.id, i]));
   const found = refs.flatMap(({ track, slot }) => {
@@ -146,7 +146,7 @@ export function copySlotClips(project: Project, refs: readonly SlotRef[]): Copie
   });
   if (!found.length) return null;
   const left = Math.min(...found.map(f => f.column)), top = Math.min(...found.map(f => f.slot));
-  // l'inizio di ogni scena: dopo la clip più lunga di quelle prima
+  // the start of each scene: after the longest clip of those before
   const rows = [...new Set(found.map(f => f.slot))].sort((a, b) => a - b);
   const starts = new Map<number, Beats>();
   const span = rows.reduce((at, row) => {
@@ -157,12 +157,12 @@ export function copySlotClips(project: Project, refs: readonly SlotRef[]): Copie
     kind: 'clips', span, sourceTrack: found.find(f => f.column === left)!.track,
     items: found.map(f => ({
       trackOffset: f.column - left, slotOffset: f.slot - top,
-      placement: { id: asId('copiata'), clip: f.clip, start: starts.get(f.slot)!, length: f.length, offset: 0 },
+      placement: { id: asId('copied'), clip: f.clip, start: starts.get(f.slot)!, length: f.length, offset: 0 },
     })),
   };
 }
 
-/** Dove andrebbe ogni clip degli appunti incollata con la forma della griglia dallo slot dato. */
+/** Where each clipboard clip would go if pasted with the grid's shape from the given slot. */
 function gridTargets(p: Project, content: CopiedClips, track: TrackId, slot: number) {
   const tracks = p.visibleTracks, first = tracks.findIndex(t => t.id === track);
   return content.items.flatMap(({ trackOffset, slotOffset = 0, placement }) => {
@@ -171,30 +171,30 @@ function gridTargets(p: Project, content: CopiedClips, track: TrackId, slot: num
   });
 }
 
-/** Le clip degli appunti che hanno la forma di una griglia (copiate dalla session). */
+/** The clipboard clips that have the shape of a grid (copied from the session). */
 const isGrid = (content: CopiedClips) => content.items.length > 1 && content.items.every(i => i.slotOffset !== undefined);
 
-/** Gli slot che un incolla riempirà. */
+/** The slots a paste will fill. */
 export function pasteSlots(p: Project, content: CopiedClips, track: TrackId, slot: number): SlotRef[] {
   if (!isGrid(content)) return [{ track, slot }];
   return gridTargets(p, content, track, slot).map(t => ({ track: t.track, slot: t.slot }));
 }
 
-/** Incolla nello slot: più clip copiate dalla session riprendono la loro forma (quelle che
- *  finirebbero su una traccia che non c'è o di un altro tipo vengono saltate, e se servono si
- *  aggiungono scene in fondo); se no, la prima clip degli appunti che la traccia accetta. Sempre
- *  in loop, come le clip della session. Se non va bene nessuna, TypeError. */
+/** Pastes into the slot: several clips copied from the session take back their shape (those that
+ *  would end up on a track that doesn't exist or of another kind are skipped, and if needed scenes
+ *  are added at the bottom); otherwise, the first clipboard clip the track accepts. Always
+ *  looping, like the session clips. If none fits, TypeError. */
 export const pasteToSlot = (content: CopiedClips, track: TrackId, slot: number): Edit =>
-  edit('Incolla', (p, { ids }) => {
+  edit('Paste', (p, { ids }) => {
     if (isGrid(content)) {
       const targets = gridTargets(p, content, track, slot);
-      if (!targets.length) throw new TypeError('negli appunti non ci sono clip per queste tracce');
+      if (!targets.length) throw new TypeError('the clipboard has no clips for these tracks');
       let next = p;
       while (next.scenes.length <= Math.max(...targets.map(t => t.slot))) next = next.addingScene({ id: ids.next('scene'), name: String(next.scenes.length + 1) });
       return targets.reduce((q, t) => q.updatingTrack(t.track, x => x.withSlot(t.slot, t.clip.withId(ids.next('clip')).withLoop({ ...t.clip.loop, enabled: true }))), next);
     }
     const t = p.track(track);
     const clip = content.items.map(i => i.placement.clip).find(c => t?.accepts(c));
-    if (!clip) throw new TypeError('negli appunti non ci sono clip per questa traccia');
+    if (!clip) throw new TypeError('the clipboard has no clips for this track');
     return p.updatingTrack(track, x => x.withSlot(slot, clip.withId(ids.next('clip')).withLoop({ ...clip.loop, enabled: true })));
   });

@@ -1,17 +1,17 @@
-/* Il suono del Chorus. L'ingresso (più il feedback) va su un nastro corto; ogni voce lo rilegge
- * a un ritardo che ondeggia con l'LFO (seno), sfasata dalle altre: due voci in controfase per il
- * Chorus, tre a un terzo di giro per l'Ensemble, una per il Vibrato. Il canale destro ha l'LFO
- * spostato fino a un quarto di giro (Larghezza). Il mix scorre morbido. Gira nell'AudioWorklet;
- * qui niente Web Audio. */
+/* The Chorus's sound. The input (plus the feedback) goes onto a short tape; each voice reads it back
+ * at a delay wobbling with the LFO (sine), offset from the others: two voices in antiphase for the
+ * Chorus, three a third of a cycle apart for the Ensemble, one for the Vibrato. The right channel has the LFO
+ * shifted up to a quarter of a cycle (Width). The mix glides smoothly. Runs in the AudioWorklet;
+ * no Web Audio here. */
 import type { EffectCore, TransportFollower, TransportPosition } from '../../dsp/core';
 import { LFO_SHAPE, LfoClock, lfoAt, type LfoRate } from '../../dsp/lfo';
 import { TapeBuffer } from '../../dsp/tape-buffer';
 import { TEMPO_RATES } from '../../rates';
 import { CHORUS_MODE, CHORUS_SYNC, MAX_DELAY_MS, MAX_DEPTH_MS } from './chorus';
 
-/** Le fasi delle voci di ogni modo, in giri. */
+/** The voice phases of each mode, in cycles. */
 const VOICES: readonly (readonly number[])[] = [[0, 0.5], [0, 1 / 3, 2 / 3], [0]];
-/** Di quanto si sposta l'LFO del destro con Larghezza al 100%, in giri. */
+/** How much the right channel's LFO shifts with Width at 100%, in cycles. */
 const MAX_WIDTH = 0.25;
 const SMOOTH = 0.02;
 
@@ -38,7 +38,7 @@ export class ChorusCore implements EffectCore, TransportFollower {
 
   constructor(sampleRate: number) {
     this.ms = sampleRate / 1000;
-    // il Vibrato arriva al Ritardo più due volte la Profondità
+    // the Vibrato reaches Delay plus twice the Depth
     this.tape = new TapeBuffer(Math.ceil((MAX_DELAY_MS + 2 * MAX_DEPTH_MS + 2) * this.ms) + 8);
     this.clock = new LfoClock(sampleRate);
     this.smoothK = 1 - Math.exp(-1 / (SMOOTH * sampleRate));
@@ -53,7 +53,7 @@ export class ChorusCore implements EffectCore, TransportFollower {
     this.rate = { beats: v('sync', CHORUS_SYNC.hz) === CHORUS_SYNC.tempo ? beats : null, hz: v('rate', 0.8) };
     this.depth = v('depth', 40) / 100;
     this.width = v('width', 100) / 100;
-    // il Vibrato è solo voce: niente suono diritto
+    // the Vibrato is voice only: no dry sound
     this.targetMix = this.mode === CHORUS_MODE.vibrato ? 1 : v('mix', 50) / 100;
     if (this.fresh) this.mix = this.targetMix;
   }
@@ -66,7 +66,7 @@ export class ChorusCore implements EffectCore, TransportFollower {
     this.transport = position;
   }
 
-  /** Il ritardo della voce `voice` sul canale `channel` adesso, in ms (per i test e per disegnarlo). */
+  /** The delay of voice `voice` on channel `channel` now, in ms (for tests and for drawing it). */
   delayMs(voice: number, channel: 0 | 1): number {
     const phases = VOICES[this.mode] ?? VOICES[0];
     return this.voiceDelay(this.clock.cycles + (phases[voice] ?? 0) + channel * this.width * MAX_WIDTH);
@@ -101,8 +101,8 @@ export class ChorusCore implements EffectCore, TransportFollower {
     }
   }
 
-  /** Il ritardo in ms con l'LFO a `cycles` giri: dal Ritardo sale e scende di Profondità. Il
-   *  Vibrato parte sopra lo zero di quanto oscilla, così non legge mai nel futuro. */
+  /** The delay in ms with the LFO at `cycles` cycles: from Delay it rises and falls by Depth. The
+   *  Vibrato starts above zero by as much as it oscillates, so it never reads into the future. */
   private voiceDelay(cycles: number): number {
     const swing = this.depth * MAX_DEPTH_MS;
     const base = this.mode === CHORUS_MODE.vibrato ? this.delay + swing : this.delay;

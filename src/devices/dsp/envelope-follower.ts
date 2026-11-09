@@ -1,6 +1,6 @@
-/* Un inseguitore d'inviluppo: quanto è forte il suono adesso (il picco, 0..1 e oltre), con un
- * attacco e un rilascio. Muove un parametro con il suono: il filtro dell'Auto Filter che si
- * apre sui colpi. Puro: niente Web Audio. */
+/* An envelope follower: how loud the sound is now (the peak, 0..1 and beyond), with an
+ * attack and a release. It moves a parameter with the sound: the Auto Filter's filter opening
+ * on the hits. Pure: no Web Audio. */
 
 export class EnvelopeFollower {
   value = 0;
@@ -9,13 +9,13 @@ export class EnvelopeFollower {
 
   constructor(private readonly sampleRate: number) {}
 
-  /** Attacco e rilascio in secondi (il tempo per fare circa due terzi della strada). */
+  /** Attack and release in seconds (the time to go about two thirds of the way). */
   set(attack: number, release: number): void {
     this.attack = 1 - Math.exp(-1 / (Math.max(1e-5, attack) * this.sampleRate));
     this.release = 1 - Math.exp(-1 / (Math.max(1e-5, release) * this.sampleRate));
   }
 
-  /** Il livello dopo il campione `x` (per lo stereo: il più forte dei due canali). */
+  /** The level after sample `x` (for stereo: the louder of the two channels). */
   process(x: number): number {
     const a = Math.abs(x), v = this.value;
     const next = v + (a > v ? this.attack : this.release) * (a - v);

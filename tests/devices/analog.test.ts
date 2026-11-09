@@ -8,7 +8,7 @@ import { TEMPO_RATE } from '../../src/devices/rates';
 
 const SR = 48000, BLOCK = 128;
 
-/** Fa suonare `core` per `frames` campioni, a blocchi come l'AudioWorklet. */
+/** Plays `core` for `frames` samples, in blocks like the AudioWorklet. */
 function run(core: AnalogCore, queue: NoteQueue, frames: number, start = 0): Float32Array {
   const out = new Float32Array(frames), right = new Float32Array(BLOCK);
   for (let f = 0; f < frames; f += BLOCK) {
@@ -26,7 +26,7 @@ const synth = (params: Record<string, number> = {}) => {
   return { core, queue: new NoteQueue() };
 };
 
-/** Seno puro, senza filtro né inviluppi che colorano. */
+/** Pure sine, without filter or colouring envelopes. */
 const PURE = { oscA: 3, mix: 0, cutoff: 20000, filterEnv: 0, keyTrack: 0, attack: 0.001, sustain: 100, velocity: 0, volume: 0 };
 
 const rms = (x: Float32Array, from = 0, to = x.length) => {
@@ -35,14 +35,14 @@ const rms = (x: Float32Array, from = 0, to = x.length) => {
   return Math.sqrt(s / Math.max(1, to - from));
 };
 
-describe('parametri', () => {
+describe('parameters', () => {
   const cutoff = paramSpec(ANALOG, 'cutoff')!;
   const wave = paramSpec(ANALOG, 'oscA')!;
 
-  it('scala logaritmica, limiti, passi e formato', () => {
+  it('logarithmic scale, limits, steps and format', () => {
     expect(paramToUnit(cutoff, 20)).toBe(0);
     expect(paramToUnit(cutoff, 20000)).toBe(1);
-    expect(paramFromUnit(cutoff, 0.5)).toBeCloseTo(Math.sqrt(20 * 20000), 6); // metà manopola = metà delle ottave
+    expect(paramFromUnit(cutoff, 0.5)).toBeCloseTo(Math.sqrt(20 * 20000), 6); // half knob = half the octaves
     expect(paramFromUnit(cutoff, paramToUnit(cutoff, 1234))).toBeCloseTo(1234, 6);
     expect(clampParam(cutoff, 99999)).toBe(20000);
     expect(clampParam(paramSpec(ANALOG, 'oscBSemi')!, 3.4)).toBe(3);
@@ -52,7 +52,7 @@ describe('parametri', () => {
     expect(clampParam(wave, 7)).toBe(3);
   });
 
-  it('valori mancanti → predefiniti; valori fuori range → limitati', () => {
+  it('missing values → defaults; out-of-range values → clamped', () => {
     const r = resolveParams(ANALOG, { cutoff: 5, unknown: 3 });
     expect(r.cutoff).toBe(20);
     expect(r.resonance).toBe(20);
@@ -60,7 +60,7 @@ describe('parametri', () => {
     expect(Object.keys(r)).toHaveLength(paramsOf(ANALOG).length);
   });
 
-  it('i preset usano solo parametri esistenti, nei loro limiti', () => {
+  it('the presets use only existing parameters, within their limits', () => {
     for (const preset of ANALOG.presets) {
       for (const [id, v] of Object.entries(preset.params)) {
         const spec = paramSpec(ANALOG, id);
@@ -72,7 +72,7 @@ describe('parametri', () => {
 });
 
 describe('Analog', () => {
-  it('la nota parte esattamente al campione programmato, anche a metà blocco', () => {
+  it('the note starts exactly at the scheduled sample, even halfway through a block', () => {
     const { core, queue } = synth(PURE);
     queue.add(69, 100, 1000, 5000);
     const out = run(core, queue, 2000);
@@ -80,7 +80,7 @@ describe('Analog', () => {
     expect(out[1001]).not.toBe(0);
   });
 
-  it('intonazione: un La4 è a 440 Hz', () => {
+  it('tuning: an A4 is at 440 Hz', () => {
     const { core, queue } = synth(PURE);
     queue.add(69, 100, 0, SR);
     const out = run(core, queue, SR / 2);
@@ -89,16 +89,16 @@ describe('Analog', () => {
     expect(crossings / (out.length / SR - 0.1)).toBeCloseTo(440, -0.5);
   });
 
-  it('dopo il rilascio il suono si spegne e la voce si libera', () => {
+  it('after the release the sound dies out and the voice is freed', () => {
     const { core, queue } = synth({ ...PURE, release: 0.1 });
     queue.add(60, 100, 0, 4800);
     const out = run(core, queue, SR);
     expect(rms(out, 2400, 4800)).toBeGreaterThan(0.3);
-    expect(rms(out, 4800 + 0.2 * SR, SR)).toBe(0); // 60 dB in 0.1 s, silenzio vero a −100 dB
+    expect(rms(out, 4800 + 0.2 * SR, SR)).toBe(0); // 60 dB in 0.1 s, true silence at −100 dB
     expect(core.activeVoices).toBe(0);
   });
 
-  it('16 voci: la diciassettesima ruba la più vecchia, nessun NaN', () => {
+  it('16 voices: the seventeenth steals the oldest, no NaN', () => {
     const { core, queue } = synth();
     for (let k = 0; k < 17; k++) queue.add(48 + k, 100, k * 64, SR);
     const out = run(core, queue, SR / 4);
@@ -107,7 +107,7 @@ describe('Analog', () => {
     expect(Math.max(...out.map(Math.abs))).toBeLessThan(4);
   });
 
-  it('il filtro passa-basso toglie gli acuti', () => {
+  it('the low-pass filter removes the highs', () => {
     const brightness = (cutoff: number) => {
       const { core, queue } = synth({ oscA: 0, mix: 0, cutoff, filterEnv: 0, keyTrack: 0, resonance: 0, sustain: 100, volume: 0 });
       queue.add(48, 100, 0, SR);
@@ -118,7 +118,7 @@ describe('Analog', () => {
     expect(brightness(300)).toBeLessThan(brightness(8000) / 3);
   });
 
-  it('stop: tutto in silenzio in pochi millisecondi', () => {
+  it('stop: all silent in a few milliseconds', () => {
     const { core, queue } = synth({ release: 3 });
     queue.add(60, 100, 0, SR * 10);
     queue.add(64, 100, 0, SR * 10);
@@ -130,18 +130,18 @@ describe('Analog', () => {
     expect(core.activeVoices).toBe(0);
   });
 
-  it('cambiare i parametri mentre suona non crea discontinuità nel volume', () => {
+  it('changing the parameters while playing doesn\'t create discontinuities in the volume', () => {
     const { core, queue } = synth(PURE);
     queue.add(69, 100, 0, SR);
     run(core, queue, 4800);
     core.setParams(resolveParams(ANALOG, { ...PURE, volume: -24 }));
     const out = run(core, queue, 256, 4800);
-    // il guadagno scende gradualmente: i primi campioni sono ancora quasi pieni
+    // the gain drops gradually: the first samples are still almost full
     expect(Math.max(...out.subarray(0, 32).map(Math.abs))).toBeGreaterThan(0.5);
   });
 });
 
-/** Frequenza dai passaggi per lo zero in [from, to). */
+/** Frequency from the zero crossings in [from, to). */
 const frequency = (x: Float32Array, from: number, to: number) => {
   let first = -1, last = -1, n = 0;
   for (let i = from + 1; i < to; i++) {
@@ -154,34 +154,34 @@ const frequency = (x: Float32Array, from: number, to: number) => {
   return n ? (n * SR) / (last - first) : 0;
 };
 
-describe('Analog a una voce: legato, glide, accento', () => {
-  it('Legato: due note sovrapposte scivolano senza ripartire, su una voce sola', () => {
+describe('monophonic Analog: legato, glide, accent', () => {
+  it('Legato: two overlapping notes slide without restarting, on a single voice', () => {
     const { core, queue } = synth({ ...PURE, voiceMode: VOICE_MODE.legato, glide: 40, decay: 0.05, sustain: 50 });
-    queue.add(57, 100, 0, 9600); // La3 220 Hz, tenuta fin dentro la nota dopo
+    queue.add(57, 100, 0, 9600); // A3 220 Hz, held into the next note
     queue.add(69, 100, 7200, 14400); // La4 440 Hz
     const out = run(core, queue, 14400);
     expect(core.activeVoices).toBe(1);
     expect(frequency(out, 2400, 7000)).toBeCloseTo(220, -0.5);
     expect(frequency(out, 7200 + 0.1 * SR, 14000)).toBeCloseTo(440, -0.5);
-    // a metà del glide l'intonazione sta in mezzo
+    // halfway through the glide the pitch is in the middle
     const mid = frequency(out, 7200 + 0.004 * SR, 7200 + 0.016 * SR);
     expect(mid).toBeGreaterThan(240);
     expect(mid).toBeLessThan(420);
-    // gli inviluppi non ripartono: il livello resta quello del sustain, niente nuovo attacco
+    // the envelopes don't restart: the level stays at the sustain, no new attack
     expect(rms(out, 7200, 7200 + 480)).toBeCloseTo(rms(out, 6000, 7200), 1);
   });
 
-  it('Legato: note staccate ripartono da capo, senza glide', () => {
+  it('Legato: detached notes restart from the top, without glide', () => {
     const { core, queue } = synth({ ...PURE, voiceMode: VOICE_MODE.legato, glide: 200, decay: 0.05, sustain: 50 });
     queue.add(57, 100, 0, 4800);
     queue.add(69, 100, 7200, 14400);
     const out = run(core, queue, 14400);
     expect(frequency(out, 7200 + 0.002 * SR, 7200 + 0.03 * SR)).toBeCloseTo(440, -0.5);
-    // l'attacco riparte: il livello all'inizio della seconda nota è sopra il sustain
+    // the attack restarts: the level at the start of the second note is above the sustain
     expect(rms(out, 7200, 7200 + 480)).toBeGreaterThan(rms(out, 12000, 14000) * 1.3);
   });
 
-  it('Mono: ogni nota riparte, il glide parte dalla nota di prima', () => {
+  it('Mono: every note restarts, the glide starts from the previous note', () => {
     const { core, queue } = synth({ ...PURE, voiceMode: VOICE_MODE.mono, glide: 100 });
     queue.add(57, 100, 0, 4800);
     queue.add(69, 100, 7200, 24000);
@@ -191,7 +191,7 @@ describe('Analog a una voce: legato, glide, accento', () => {
     expect(core.activeVoices).toBe(1);
   });
 
-  it('accento: le note oltre velocity 100 suonano più forti e più aperte', () => {
+  it('accent: the notes above velocity 100 play louder and more open', () => {
     const play = (accent: number, velocity: number) => {
       const { core, queue } = synth({ oscA: 0, mix: 0, cutoff: 300, resonance: 50, filterEnv: 30, keyTrack: 0, sustain: 100, velocity: 0, volume: 0,
         voiceMode: VOICE_MODE.legato, accent });
@@ -203,23 +203,23 @@ describe('Analog a una voce: legato, glide, accento', () => {
     const plain = play(100, 90), accented = play(100, 127), off = play(0, 127);
     expect(accented.level).toBeGreaterThan(plain.level * 1.4);
     expect(accented.bright).toBeGreaterThan(plain.bright * 1.5);
-    expect(off.level).toBeCloseTo(plain.level, 2); // senza accento la velocity alta non cambia nulla
+    expect(off.level).toBeCloseTo(plain.level, 2); // without accent the high velocity changes nothing
   });
 
-  it('passare da poli a una voce ferma quello che suona e riparte pulito', () => {
+  it('switching from poly to mono stops what plays and restarts clean', () => {
     const { core, queue } = synth();
     for (const p of [48, 52, 55]) queue.add(p, 100, 0, SR);
     run(core, queue, 4800);
     core.setParams(resolveParams(ANALOG, { voiceMode: VOICE_MODE.mono }));
     queue.add(60, 100, 4800 + 2400, 4800 + 9600);
     const out = run(core, queue, 4800, 4800);
-    expect(core.activeVoices).toBe(1); // le tre di prima sono sfumate, suona solo la nuova
+    expect(core.activeVoices).toBe(1); // the previous three faded out, only the new one plays
     expect(out.every(Number.isFinite)).toBe(true);
   });
 });
 
 describe('Analog: unison', () => {
-  /** Fa suonare a blocchi e restituisce i due canali. */
+  /** Plays in blocks and returns the two channels. */
   const stereo = (params: Record<string, number>, pitch = 57) => {
     const { core, queue } = synth({ oscA: 0, mix: 0, cutoff: 20000, filterEnv: 0, keyTrack: 0, sustain: 100, velocity: 0, volume: 0, ...params });
     queue.add(pitch, 100, 0, SR);
@@ -238,7 +238,7 @@ describe('Analog: unison', () => {
     return ab / Math.sqrt(aa * bb);
   };
 
-  it('sette copie aperte: lo stereo si allarga, il livello resta quello di una', () => {
+  it('seven spread copies: the stereo widens, the level stays that of one', () => {
     const one = stereo({ unison: 1 }), seven = stereo({ unison: 7, detune: 30, spread: 100 });
     expect(corr(one.l, one.r)).toBeCloseTo(1, 6);
     expect(corr(seven.l, seven.r)).toBeLessThan(0.8);
@@ -247,12 +247,12 @@ describe('Analog: unison', () => {
     expect(seven.l.every(Number.isFinite)).toBe(true);
   });
 
-  it('senza apertura resta al centro; la scordatura allarga la nota attorno alla sua altezza', () => {
+  it('without spread it stays in the centre; the detune widens the note around its pitch', () => {
     const narrow = stereo({ unison: 5, detune: 30, spread: 0 });
     expect(corr(narrow.l, narrow.r)).toBeCloseTo(1, 4);
-    // le copie scordate battono tra loro: il volume a breve termine ondeggia (con una sola è piatto)
+    // the detuned copies beat against each other: the short-term volume wobbles (with only one it's flat)
     const wobble = (x: Float32Array) => {
-      const w = 2182, levels: number[] = []; // dieci periodi esatti di 220 Hz
+      const w = 2182, levels: number[] = []; // exactly ten periods of 220 Hz
       for (let i = 4800; i + w <= x.length; i += w) levels.push(rms(x, i, i + w));
       const mean = levels.reduce((a, b) => a + b) / levels.length;
       return Math.sqrt(levels.reduce((a, b) => a + (b - mean) ** 2, 0) / levels.length) / mean;
@@ -263,13 +263,13 @@ describe('Analog: unison', () => {
 });
 
 describe('Analog: LFO a tempo', () => {
-  /** Il periodo del vibrato (in campioni): fra due volte che l'intonazione sale oltre la sua media. */
+  /** The vibrato's period (in samples): between two times the pitch rises above its average. */
   const vibratoPeriod = (params: Record<string, number>, bpm: number) => {
     const { core, queue } = synth({ ...PURE, lfoPitch: 100, ...params });
     core.setTempo(bpm);
     queue.add(69, 100, 0, SR * 2);
     const x = run(core, queue, SR * 2);
-    // attraversamenti dello zero in salita, interpolati: la loro distanza è il periodo della nota
+    // rising zero crossings, interpolated: their distance is the note's period
     const ups: number[] = [];
     for (let i = 1; i < x.length; i++) if (x[i - 1] < 0 && x[i] >= 0) ups.push(i - 1 + x[i - 1] / (x[i - 1] - x[i]));
     const periods = ups.slice(1).map((u, i) => u - ups[i]);
@@ -279,22 +279,22 @@ describe('Analog: LFO a tempo', () => {
     return rising[2] - rising[1];
   };
 
-  it('a tempo il giro dura la divisione al bpm del progetto; in Hz non segue il tempo', () => {
+  it('synced the cycle lasts the division at the project\'s bpm; in Hz it doesn\'t follow the tempo', () => {
     const quarter = { lfoSync: LFO_SYNC.tempo, lfoDivision: TEMPO_RATE['1/8'] };
-    // 1/8 a 120 bpm = 0,25 s; a 60 bpm = 0,5 s
+    // 1/8 at 120 bpm = 0.25 s; at 60 bpm = 0.5 s
     expect(vibratoPeriod(quarter, 120) / SR).toBeCloseTo(0.25, 1);
     expect(vibratoPeriod(quarter, 60) / SR).toBeCloseTo(0.5, 1);
     const free = { lfoSync: LFO_SYNC.hz, lfoRate: 4 };
     expect(vibratoPeriod(free, 60) / SR).toBeCloseTo(0.25, 1);
   });
 
-  it('senza lfoSync (progetti vecchi) resta in Hz', () => {
+  it('without lfoSync (old projects) it stays in Hz', () => {
     expect(resolveParams(ANALOG, {}).lfoSync).toBe(LFO_SYNC.hz);
   });
 });
 
 describe('NoteQueue', () => {
-  it('a parità di campione lo spegnimento viene prima dell\'accensione', () => {
+  it('at equal samples the note-off comes before the note-on', () => {
     const calls: string[] = [];
     const core = {
       setParams() {}, silence() {}, render() {},

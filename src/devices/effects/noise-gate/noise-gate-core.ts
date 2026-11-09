@@ -1,19 +1,19 @@
-/* Il suono del Noise Gate. I due canali sono legati (lo stesso guadagno a entrambi):
+/* The Noise Gate's sound. The two channels are linked (the same gain to both):
  *
- *   ingresso ─┬───────────────────────────────────────── × guadagno ─ uscita
- *             └─ filtri → livello → aperto/chiuso → rampa ─┘
+ *   input ─┬───────────────────────────────────────── × gain ─ output
+ *          └─ filters → level → open/closed → ramp ─┘
  *
- * Il livello è il picco con una discesa breve, così il gate non si chiude a ogni passaggio per lo
- * zero. Si apre appena il livello supera la soglia; per chiudersi aspetta "Tieni". Il guadagno
- * segue una rampa in dB, lunga l'attacco in salita e il rilascio in discesa: niente click, e la
- * coda si spegne come un suono vero. Con il sidechain il rilevatore ascolta la chiave.
- * Gira nell'AudioWorklet; qui niente Web Audio. */
+ * The level is the peak with a short fall, so the gate doesn't close at every zero
+ * crossing. It opens as soon as the level exceeds the threshold; to close it waits for "Hold". The gain
+ * follows a ramp in dB, as long as the attack going up and the release going down: no clicks, and the
+ * tail dies out like a real sound. With the sidechain the detector listens to the key.
+ * Runs in the AudioWorklet; no Web Audio here. */
 import { dbToGain, type DynamicsMeter, type EffectCore, type KeyedEffect } from '../../dsp/core';
 
-/** Quanto scende il livello tra una semionda e l'altra (secondi). */
+/** How much the level falls between one half-wave and the next (seconds). */
 const LEVEL_FALL = 0.01;
 const LOG_TO_DB = 20 / Math.LN10;
-/** Il rientro più basso: lì il gate chiuso è silenzio, non −80 dB. */
+/** The lowest range: there the closed gate is silence, not −80 dB. */
 const SILENCE_DB = 80;
 
 const coef = (seconds: number, sampleRate: number) => Math.exp(-1 / Math.max(1, seconds * sampleRate));
@@ -29,7 +29,7 @@ export class NoiseGateCore implements EffectCore, KeyedEffect, DynamicsMeter {
   private hpK = 0;
   private lpK = 1;
   private readonly fallK: number;
-  /** Il rilevatore: i filtri dei due canali e il livello (lineare). */
+  /** The detector: the filters of the two channels and the level (linear). */
   private hpL = 0;
   private hpR = 0;
   private prevL = 0;
@@ -39,7 +39,7 @@ export class NoiseGateCore implements EffectCore, KeyedEffect, DynamicsMeter {
   private level = 0;
   private open = false;
   private holding = 0;
-  /** Quanto è aperto: da 0 (al rientro) a 1 (tutto il suono), in proporzione ai dB. */
+  /** How open it is: from 0 (at the range) to 1 (the whole sound), proportionally to the dB. */
   private position = 0;
   private keyL: Float32Array | null = null;
   private keyR: Float32Array | null = null;

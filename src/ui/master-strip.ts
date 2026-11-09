@@ -8,13 +8,13 @@ import { LevelMeter, PeakReadout, type MeterBoard } from './meters/meter-board';
 import { addEffectItems, fxButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 import type { HeaderActions } from './track-headers';
 
-/** La riga del master in fondo all'arrangement, come in Live: a sinistra mute, volume ed
- *  effetti (allineati alle intestazioni delle tracce), a destra una corsia vuota; un clic su
- *  tutte e due (fuori dai controlli) apre la sua catena.
- *  I controlli si costruiscono una volta e poi si aggiornano, così un trascinamento continua. */
+/** The master's row at the bottom of the arrangement, as in Live: on the left mute, volume and
+ *  effects (aligned with the track headers), on the right an empty lane; a click on
+ *  both (outside the controls) opens its chain.
+ *  The controls are built once and then updated, so a drag continues. */
 export class MasterStrip {
   readonly header = el('div', { className: 'header master-header' });
-  readonly lane = el('div', { className: 'master-lane', title: 'Effetti del master: un clic li apre' });
+  readonly lane = el('div', { className: 'master-lane', title: 'Master effects: a click opens them' });
   private readonly mute: HTMLButtonElement;
   private readonly volume: HTMLInputElement;
   private readonly fx: HTMLButtonElement;
@@ -22,10 +22,10 @@ export class MasterStrip {
   constructor(store: ProjectStore, actions: HeaderActions, meters: MeterBoard, automation: MasterAutomation) {
     const open = () => actions.openDevices(MASTER);
     const toggleMute = () => store.apply(setMasterMixer({ mute: !store.project.master.mute }));
-    this.mute = midiTarget(el<HTMLButtonElement>('button', { textContent: 'M', title: 'Mute del master', onclick: toggleMute }), { kind: 'mixer', owner: MASTER, control: 'mute' });
+    this.mute = midiTarget(el<HTMLButtonElement>('button', { textContent: 'M', title: 'Master mute', onclick: toggleMute }), { kind: 'mixer', owner: MASTER, control: 'mute' });
     this.volume = volumeSlider(store, store.project.master.volumeDb, 'vol-master',
       (volumeDb, mergeKey) => store.apply(setMasterMixer({ volumeDb }), mergeKey ? { mergeKey } : {}));
-    this.fx = fxButton(0, 'Effetti del master', open);
+    this.fx = fxButton(0, 'Master effects', open);
     const reset = () => meters.resetClip(MASTER);
     const meter = new LevelMeter('master-meter', reset), peak = new PeakReadout(reset);
     meters.attach(MASTER, meter);
@@ -35,8 +35,8 @@ export class MasterStrip {
       el('div', { className: 'controls' }, this.mute, midiSlot(this.volume, { kind: 'mixer', owner: MASTER, control: 'volume' }), this.fx, automation.button),
       meter.element);
     this.lane.onclick = open;
-    // un clic sull'intestazione (non sui suoi controlli) apre gli effetti, come FX
-    this.header.title = 'Master: un clic apre gli effetti';
+    // a click on the header (not on its controls) opens the effects, like FX
+    this.header.title = 'Master: a click opens the effects';
     this.header.onclick = e => {
       if (!(e.target as HTMLElement).closest('button, input, .midi-slot, .level-meter')) open();
     };
@@ -44,10 +44,10 @@ export class MasterStrip {
       e.preventDefault();
       e.stopPropagation();
       showContextMenu(e.clientX, e.clientY, [
-        { label: 'Effetti del master', run: open },
-        { label: automation.isOpen ? 'Nascondi l\'automazione' : 'Mostra l\'automazione', run: () => automation.toggle() },
+        { label: 'Master effects', run: open },
+        { label: automation.isOpen ? 'Hide the automation' : 'Show the automation', run: () => automation.toggle() },
         ...addEffectItems(store, MASTER, open),
-        { label: store.project.master.mute ? 'Togli il mute' : 'Mute', run: toggleMute },
+        { label: store.project.master.mute ? 'Unmute' : 'Mute', run: toggleMute },
       ]);
     };
     this.header.oncontextmenu = menu;

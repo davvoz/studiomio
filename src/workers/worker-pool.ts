@@ -8,18 +8,18 @@ export interface PooledWorker extends MessagePortLike {
 
 export type WorkerFactory = () => PooledWorker;
 
-/** Rifiuto di un compito sostituito da uno più recente con la stessa chiave. */
+/** Rejection of a task replaced by a more recent one with the same key. */
 export class SupersededError extends Error {
   constructor(key: string) {
-    super(`compito "${key}" sostituito da uno più recente`);
+    super(`task "${key}" replaced by a more recent one`);
     this.name = 'SupersededError';
   }
 }
 
 export interface CallOptions {
-  /** Compiti con la stessa chiave si sostituiscono: conta solo l'ultimo. */
+  /** Tasks with the same key replace each other: only the last counts. */
   readonly key?: string;
-  /** Buffer da trasferire invece di copiare: diventano inutilizzabili per il chiamante. */
+  /** Buffers to transfer instead of copy: they become unusable for the caller. */
   readonly transfer?: Transferable[];
 }
 
@@ -35,14 +35,14 @@ interface Task {
 
 interface Slot {
   readonly worker: PooledWorker;
-  /** Compito in corso (al massimo uno: il worker elabora una richiesta per volta). */
+  /** Task in progress (at most one: the worker processes one request at a time). */
   task: Task | null;
 }
 
-/** Un gruppo di worker che si dividono i compiti di un protocollo RPC.
- *  - `call`: un compito va al primo worker libero, gli altri aspettano in coda;
- *  - `broadcast`: un messaggio arriva a tutti i worker (es. caricare un sample). Ogni
- *    worker elabora i messaggi in ordine, quindi i compiti successivi lo trovano già fatto. */
+/** A group of workers sharing the tasks of an RPC protocol.
+ *  - `call`: a task goes to the first free worker, the others wait in the queue;
+ *  - `broadcast`: a message reaches all the workers (e.g. loading a sample). Each
+ *    worker processes the messages in order, so the following tasks find it already done. */
 export class WorkerPool<C extends CommandMap> {
   private readonly slots: Slot[];
   private readonly queue: Task[] = [];
@@ -63,7 +63,7 @@ export class WorkerPool<C extends CommandMap> {
   }
 
   call<K extends Command<C>>(command: K, payload: RequestOf<C, K>, opts: CallOptions = {}): Promise<ResultOf<C, K>> {
-    if (this.disposed) return Promise.reject(new Error('WorkerPool chiuso'));
+    if (this.disposed) return Promise.reject(new Error('WorkerPool closed'));
     return new Promise<ResultOf<C, K>>((resolve, reject) => {
       if (opts.key !== undefined) this.supersede(opts.key);
       this.queue.push({
@@ -76,11 +76,11 @@ export class WorkerPool<C extends CommandMap> {
   }
 
   broadcast<K extends Command<C>>(command: K, payload: RequestOf<C, K>): Promise<ResultOf<C, K>[]> {
-    if (this.disposed) return Promise.reject(new Error('WorkerPool chiuso'));
+    if (this.disposed) return Promise.reject(new Error('WorkerPool closed'));
     return Promise.all(this.slots.map(slot => new Promise<ResultOf<C, K>>((resolve, reject) => {
       const id = this.nextId++;
       this.pending.set(id, { slot: null, settle: r => (r.ok ? resolve(r.result as ResultOf<C, K>) : reject(new Error(r.error))) });
-      // niente transfer: lo stesso payload va a tutti (con SharedArrayBuffer è condiviso, non copiato)
+      // no transfer: the same payload goes to all (with SharedArrayBuffer it's shared, not copied)
       slot.worker.postMessage({ id, command, payload });
     })));
   }
@@ -88,7 +88,7 @@ export class WorkerPool<C extends CommandMap> {
   dispose(): void {
     this.disposed = true;
     for (const s of this.slots) s.worker.terminate();
-    const err = new Error('WorkerPool chiuso');
+    const err = new Error('WorkerPool closed');
     for (const t of this.queue.splice(0)) t.reject(err);
     for (const s of this.slots) s.task?.reject(err);
     this.pending.clear();
@@ -100,7 +100,7 @@ export class WorkerPool<C extends CommandMap> {
     }
     for (const s of this.slots) {
       if (s.task?.key === key && !s.task.stale) {
-        // non si può interrompere un calcolo in corso: il risultato verrà scartato
+        // a computation in progress can't be interrupted: the result will be discarded
         s.task.stale = true;
         s.task.reject(new SupersededError(key));
       }

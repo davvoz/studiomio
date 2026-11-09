@@ -1,22 +1,22 @@
-/* La modulazione dei parametri dei dispositivi, nell'AudioWorklet. Il thread principale manda
- * per ogni parametro scalini e rampe con il loro istante, come si fa con un AudioParam; qui si
- * calcola lo spostamento a ogni blocco e lo si somma al valore della manopola. Puro: si prova
- * anche in Node. */
+/* The modulation of the devices' parameters, in the AudioWorklet. The main thread sends
+ * for each parameter steps and ramps with their instant, as with an AudioParam; here the
+ * offset is computed at each block and added to the knob's value. Pure: it's also tested
+ * in Node. */
 import { paramFromUnit, paramToUnit, type ParamSpec } from '../params';
 
-/** Uno scalino al valore all'istante dato, o una rampa lineare che ci arriva. */
+/** A step to the value at the given instant, or a linear ramp reaching it. */
 export interface ModEvent {
   readonly kind: 'set' | 'ramp';
   readonly value: number;
-  /** Secondi del contesto audio. */
+  /** Seconds of the audio context. */
   readonly time: number;
 }
 
-/** Gli eventi di un parametro nel tempo, con le regole degli AudioParam: una rampa parte dal
- *  valore e dall'istante dell'evento prima; a parità di istante vale l'ultimo arrivato. */
+/** A parameter's events over time, with the AudioParam rules: a ramp starts from the
+ *  value and instant of the previous event; at equal instants the last to arrive wins. */
 export class ModTimeline {
   private events: ModEvent[] = [];
-  /** L'ultimo evento passato (da cui parte una rampa). */
+  /** The last past event (where a ramp starts from). */
   private last: { time: number; value: number };
 
   constructor(neutral: number) {
@@ -24,20 +24,20 @@ export class ModTimeline {
   }
 
   add(e: ModEvent): void {
-    // dopo quelli con lo stesso istante: di solito arrivano in ordine e finiscono in coda
+    // after those with the same instant: usually they arrive in order and end up at the end
     let i = this.events.length;
     while (i > 0 && this.events[i - 1].time > e.time) i--;
     this.events.splice(i, 0, e);
   }
 
-  /** Da `time` resta il valore che c'è; ciò che era programmato dopo si dimentica. */
+  /** From `time` the current value stays; what was scheduled after is forgotten. */
   hold(time: number): void {
     const value = this.evaluate(time);
     this.events = this.events.filter(e => e.time < time);
     this.add({ kind: 'set', value, time });
   }
 
-  /** Il valore all'istante `time` (che va solo avanti): gli eventi passati si dimenticano. */
+  /** The value at instant `time` (which only goes forward): past events are forgotten. */
   valueAt(time: number): number {
     let n = 0;
     while (n < this.events.length && this.events[n].time <= time) this.last = this.events[n++];
@@ -45,13 +45,13 @@ export class ModTimeline {
     return this.evaluate(time);
   }
 
-  /** Il valore all'istante `time` senza dimenticare niente (si può chiedere anche indietro, fin
-   *  dove gli eventi non sono già stati dimenticati da `valueAt`). */
+  /** The value at instant `time` without forgetting anything (it can also be asked backwards, as far as
+   *  the events haven't already been forgotten by `valueAt`). */
   peek(time: number): number {
     return this.evaluate(time);
   }
 
-  /** Vero se ci sono eventi ancora da arrivare. */
+  /** True if there are still events to come. */
   get pending(): boolean {
     return this.events.length > 0;
   }
@@ -69,15 +69,15 @@ export class ModTimeline {
   }
 }
 
-/** I parametri di un dispositivo con le modulazioni: i valori delle manopole (`base`) più gli
- *  spostamenti nel tempo, in frazioni della corsa della manopola (−1 … +1). Ogni fonte (le curve
- *  delle clip, ogni destinazione di un LFO o di un inviluppo) ha il suo canale: gli spostamenti
- *  dei canali di un parametro si sommano. */
+/** A device's parameters with the modulations: the knob values (`base`) plus the
+ *  offsets over time, in fractions of the knob's travel (−1 … +1). Each source (the clip
+ *  curves, each target of an LFO or an envelope) has its own channel: the offsets
+ *  of a parameter's channels are summed. */
 export class ParamModulation {
   private base: Readonly<Record<string, number>>;
-  /** Per canale (vedi `lineKey`): il parametro e i suoi eventi. */
+  /** Per channel (see `lineKey`): the parameter and its events. */
   private readonly lines = new Map<string, { readonly param: string; readonly line: ModTimeline }>();
-  /** Gli spostamenti usati per ultimi, per canale, diversi da zero. */
+  /** The offsets used last, per channel, non-zero. */
   private readonly offsets = new Map<string, number>();
   private dirty = true;
 
@@ -90,8 +90,8 @@ export class ParamModulation {
     this.dirty = true;
   }
 
-  /** Un evento per un parametro del dispositivo (gli sconosciuti si ignorano) nel canale
-   *  `channel` (assente: quello delle curve delle clip); 'hold' tiene il valore da lì. */
+  /** An event for a parameter of the device (unknown ones are ignored) in the channel
+   *  `channel` (absent: the clip curves' one); 'hold' holds the value from there. */
   event(param: string, kind: ModEvent['kind'] | 'hold', value: number, time: number, channel?: string): void {
     if (!this.specs.has(param)) return;
     const key = lineKey(param, channel);
@@ -101,7 +101,7 @@ export class ParamModulation {
     else entry.line.add({ kind, value, time });
   }
 
-  /** I parametri da dare al motore all'istante `time`, o null se non sono cambiati. */
+  /** The parameters to give the engine at instant `time`, or null if they didn't change. */
   paramsAt(time: number): Readonly<Record<string, number>> | null {
     let changed = this.dirty;
     for (const [key, { line }] of this.lines) {
@@ -111,7 +111,7 @@ export class ParamModulation {
         if (v === 0) this.offsets.delete(key);
         else this.offsets.set(key, v);
       }
-      // finita e a riposo: non serve più
+      // finished and at rest: no longer needed
       if (!line.pending && v === 0) this.lines.delete(key);
     }
     if (!changed) return null;
@@ -131,7 +131,7 @@ export class ParamModulation {
   }
 }
 
-/** Il canale di un parametro: il nome del parametro (le curve delle clip) o "parametro␁canale". */
+/** A parameter's channel: the parameter's name (the clip curves) or "parameter␁channel". */
 const SEPARATOR = '';
 const lineKey = (param: string, channel: string | undefined): string => (channel ? `${param}${SEPARATOR}${channel}` : param);
 const paramOfKey = (key: string): string => {

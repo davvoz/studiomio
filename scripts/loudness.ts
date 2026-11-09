@@ -1,8 +1,8 @@
-/* La loudness di un mix secondo ITU-R BS.1770-4 / EBU R128: pesatura K (scaffale + passa-alto
- * RLB, coefficienti ricalcolati per la frequenza di campionamento), blocchi da 400 ms con
- * gating assoluto (−70 LUFS) e relativo (−10 LU) per l'integrata, finestre da 3 s per la
- * short-term, e il true peak misurato su una copia sovracampionata 4× (lo stesso Oversampler
- * del Limiter). */
+/* The loudness of a mix according to ITU-R BS.1770-4 / EBU R128: K weighting (shelf + RLB
+ * high-pass, coefficients recomputed for the sample rate), 400 ms blocks with
+ * absolute (−70 LUFS) and relative (−10 LU) gating for the integrated, 3 s windows for the
+ * short-term, and the true peak measured on a 4× oversampled copy (the same Oversampler
+ * as the Limiter). */
 import { Oversampler } from '../src/devices/dsp/oversampler';
 
 interface Biquad { b: readonly number[]; a: readonly number[] }
@@ -37,9 +37,9 @@ function filter(x: Float32Array, { b, a }: Biquad): Float64Array {
 }
 
 export interface Loudness {
-  /** LUFS integrati (con il gating). */
+  /** Integrated LUFS (with gating). */
   readonly integrated: number;
-  /** La short-term (3 s) più alta. */
+  /** The highest short-term (3 s). */
   readonly shortTermMax: number;
   /** dBTP. */
   readonly truePeak: number;
@@ -48,7 +48,7 @@ export interface Loudness {
 const lufs = (meanSquare: number) => -0.691 + 10 * Math.log10(meanSquare + 1e-20);
 
 export function measureLoudness(left: Float32Array, right: Float32Array, sampleRate: number): Loudness {
-  // potenza pesata K dei due canali, sommata
+  // K-weighted power of the two channels, summed
   const [shelf, hp] = kWeighting(sampleRate);
   const l = filter(Float32Array.from(filter(left, shelf)), hp), r = filter(Float32Array.from(filter(right, shelf)), hp);
   const cum = new Float64Array(l.length + 1);

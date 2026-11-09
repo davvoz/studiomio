@@ -1,5 +1,5 @@
-/* Disegno della timeline su canvas: corsie, griglia, clip (con forma d'onda o note),
- * righello, loop, testina e anteprime dei gesti. */
+/* Drawing the timeline on canvas: lanes, grid, clips (with waveform or notes),
+ * ruler, loop, playhead and gesture previews. */
 import type { PlacementId, TrackId } from '../../core/id';
 import type { Beats, TimeSignature } from '../../core/music-time';
 import { dbToGain } from '../../engine/audio-graph';
@@ -30,20 +30,20 @@ export interface LanePaint {
   readonly height: number;
   readonly grid: Beats;
   readonly selection: ReadonlySet<PlacementId>;
-  /** Il tratto di tempo selezionato dentro le clip selezionate, o null se sono selezionate intere. */
+  /** The selected time range inside the selected clips, or null if they're selected whole. */
   readonly range: TimeRange | null;
-  /** La clip sotto il puntatore: mostra le maniglie delle dissolvenze. */
+  /** The clip under the pointer: shows the fade handles. */
   readonly hovered: PlacementId | null;
   readonly peaks: (clip: AudioClip) => Peaks | null;
-  /** Clip da non disegnare (sono in anteprima altrove durante un trascinamento). */
+  /** Clips not to draw (they're previewed elsewhere during a drag). */
   readonly hidden: ReadonlySet<PlacementId>;
-  /** Tracce prese dalla session: la loro timeline non suona e si mostra spenta. */
+  /** Tracks taken by the session: their timeline doesn't play and is shown off. */
   readonly taken: ReadonlySet<TrackId>;
-  /** Le tracce scelte: la loro corsia si colora appena. */
+  /** The chosen tracks: their lane is slightly coloured. */
   readonly selectedTracks: ReadonlySet<TrackId>;
 }
 
-/** Contenuto di un tipo di clip dentro il suo rettangolo: un pittore per tipo. */
+/** Content of a clip kind inside its rectangle: one painter per kind. */
 type ContentPainter = (g: CanvasRenderingContext2D, pl: Placement, box: Box, lp: LanePaint) => void;
 interface Box { readonly x: number; readonly y: number; readonly w: number; readonly h: number }
 
@@ -52,8 +52,8 @@ const contentPainters: Readonly<Record<string, ContentPainter>> = {
   midi: (g, pl, box, lp) => paintNotes(g, pl as Placement<MidiClip>, box, lp),
 };
 
-/** Le corsie sono le tracce che si vedono: quelle di un gruppo chiuso no, il gruppo sì (con il
- *  riassunto delle loro clip). */
+/** The lanes are the visible tracks: not those of a closed group, the group yes (with the
+ *  summary of their clips). */
 export function paintLanes(g: CanvasRenderingContext2D, lp: LanePaint): void {
   const { project, geo, width, height } = lp;
   const rows = project.visibleTracks;
@@ -90,8 +90,8 @@ export function paintLanes(g: CanvasRenderingContext2D, lp: LanePaint): void {
   });
 }
 
-/** La corsia di un gruppo, come in Live: le clip delle sue tracce in piccolo, una striscia per
- *  traccia, nel loro colore. */
+/** A group's lane, as in Live: the clips of its tracks in small, one strip per
+ *  track, in their colour. */
 function paintGroupLane(g: CanvasRenderingContext2D, group: GroupTrack, index: number, lp: LanePaint): void {
   const members = lp.project.soundingTracks(group.id);
   if (!members.length) return;
@@ -157,7 +157,7 @@ function paintClip(g: CanvasRenderingContext2D, pl: Placement, trackIndex: numbe
     for (const x of [handles.in, handles.out]) g.fillRect(Math.round(x - FADE_HANDLE_PX / 2), box.y + 1, FADE_HANDLE_PX, FADE_HANDLE_PX);
   }
   if (!selected) return;
-  // con un tratto selezionato si evidenzia solo quello
+  // with a selected range only that is highlighted
   const r = lp.range;
   const sel = r ? clipBox(lp.geo, trackIndex, Math.max(pl.start, r.start), Math.min(placementEnd(pl), r.end)) : box;
   if (r) {
@@ -173,8 +173,8 @@ function paintClip(g: CanvasRenderingContext2D, pl: Placement, trackIndex: numbe
 
 const clipLabel = (c: Clip): string => (c instanceof AudioClip && c.transpose ? `${c.name}  ${c.transpose > 0 ? '+' : ''}${c.transpose} st` : c.name);
 
-/** Le dissolvenze, come in Live: la retta del volume che sale dall'angolo in basso e scende
- *  verso l'altro, con la parte tolta in ombra. */
+/** The fades, as in Live: the volume line rising from the bottom corner and falling
+ *  towards the other, with the removed part in shadow. */
 function paintFades(g: CanvasRenderingContext2D, pl: Placement, body: Box, geo: TimelineGeometry): void {
   if (!pl.fadeIn && !pl.fadeOut) return;
   const top = body.y, bottom = body.y + body.h, x0 = body.x, x1 = body.x + body.w;
@@ -198,7 +198,7 @@ function paintFades(g: CanvasRenderingContext2D, pl: Placement, body: Box, geo: 
   if (pl.fadeOut) wedge(x1, xo);
 }
 
-/** Linee tratteggiate dove la clip ricomincia il loop. */
+/** Dashed lines where the clip restarts the loop. */
 function paintLoopSeams(g: CanvasRenderingContext2D, pl: Placement, body: Box, geo: TimelineGeometry): void {
   const segs = placementSegments(pl);
   g.fillStyle = 'rgba(0,0,0,0.45)';
@@ -208,13 +208,13 @@ function paintLoopSeams(g: CanvasRenderingContext2D, pl: Placement, body: Box, g
   }
 }
 
-/** Forma d'onda passando per la mappa di warp: ogni colonna di pixel mostra la parte del
- *  sample che suona in quel punto della timeline. */
+/** Waveform going through the warp map: each pixel column shows the part of the
+ *  sample playing at that point of the timeline. */
 function paintWaveform(g: CanvasRenderingContext2D, pl: Placement<AudioClip>, body: Box, lp: LanePaint): void {
   const peaks = lp.peaks(pl.clip);
   if (!peaks) return;
   const { geo, project } = lp;
-  // l'altezza segue il gain della clip, come la si sente
+  // the height follows the clip's gain, as it's heard
   const clip = pl.clip, mid = body.y + body.h / 2, amp = body.h / 2 - 1, gain = dbToGain(clip.gainDb);
   const toSeconds = contentToSeconds(clip, project.tempo);
   for (const s of placementSegments(pl)) {
@@ -246,7 +246,7 @@ function paintNotes(g: CanvasRenderingContext2D, pl: Placement<MidiClip>, body: 
   }
 }
 
-// ------------------------------------------------------------------ righello e sovrapposizioni
+// ------------------------------------------------------------------ ruler and overlaps
 
 export const RULER_LOOP_BAND = 11;
 
@@ -258,7 +258,7 @@ export function paintRuler(g: CanvasRenderingContext2D, project: Project, geo: T
   g.fillStyle = loop.enabled ? COLORS.loop : COLORS.loopOff;
   g.fillRect(lx0, 1, lx1 - lx0, RULER_LOOP_BAND - 2);
   const sig = project.signature, bar = sig.beatsPerBar;
-  // etichette ogni N battute, in modo che non si sovrappongano
+  // labels every N bars, so that they don't overlap
   const labelEvery = [1, 2, 4, 8, 16, 32, 64].find(n => n * bar * geo.pxPerBeat >= 36) ?? 64;
   const step = Math.max(grid, 1 / 4);
   g.font = '10.5px system-ui, sans-serif';
@@ -276,7 +276,7 @@ export function paintRuler(g: CanvasRenderingContext2D, project: Project, geo: T
   g.fillRect(0, height - 1, width, 1);
 }
 
-/** Testina (mentre suona) e punto di partenza (cursore) sopra a tutto. */
+/** Playhead (while playing) and starting point (cursor) on top of everything. */
 export function paintPlayhead(g: CanvasRenderingContext2D, geo: TimelineGeometry, height: number, cursor: Beats, playhead: Beats | null): void {
   g.fillStyle = COLORS.cursor;
   g.fillRect(Math.round(geo.beatToX(cursor)), 0, 1, height);
@@ -286,7 +286,7 @@ export function paintPlayhead(g: CanvasRenderingContext2D, geo: TimelineGeometry
   }
 }
 
-/** Anteprima di una clip durante un gesto. */
+/** Preview of a clip during a gesture. */
 export function paintGhost(g: CanvasRenderingContext2D, geo: TimelineGeometry, trackIndex: number, start: Beats, end: Beats, color: string): void {
   const box = clipBox(geo, trackIndex, start, end);
   g.fillStyle = withAlpha(color, 0.45);

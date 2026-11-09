@@ -1,15 +1,15 @@
-/* Il disegno del grafico dell'EQ su canvas: griglia, spettro (prima e dopo l'EQ), la curva
- * di ogni banda e quella totale, i punti. Le curve si ricalcolano solo quando cambiano i
- * parametri; a ogni fotogramma si ridisegna con lo spettro nuovo. */
+/* The drawing of the EQ's graph on canvas: grid, spectrum (before and after the EQ), the curve
+ * of each band and the total one, the points. The curves are recomputed only when the
+ * parameters change; at every frame it's redrawn with the new spectrum. */
 import { BAND_TYPES, type EqBand } from '../../../devices/effects/eq/eq';
 import { bandResponseDb } from '../../../devices/effects/eq/eq-math';
 import { EqScale, FREQ_GRID, spectrumColumns, SPECTRUM_BOTTOM } from './eq-scale';
 
 export const BAND_COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
 
-/** Distanza tra due punti delle curve, in pixel. */
+/** Distance between two points of the curves, in pixels. */
 const STEP = 2;
-/** Raggio dei punti delle bande e distanza entro cui si prendono col mouse. */
+/** Radius of the band points and the distance within which they're grabbed with the mouse. */
 const NODE_R = 7, HIT_R = 12;
 
 export interface GraphState {
@@ -18,7 +18,7 @@ export interface GraphState {
   readonly enabled: boolean;
   readonly selected: number;
   readonly hover: number | null;
-  /** Testo in alto a sinistra (la banda sotto il mouse) e a destra (dove punta il mouse). */
+  /** Text at the top left (the band under the mouse) and right (where the mouse points). */
   readonly label: string;
   readonly readout: string;
 }
@@ -31,7 +31,7 @@ export interface Spectrum {
 
 export class EqGraph {
   private scale = new EqScale(1, 1);
-  /** Risposta in dB di ogni banda, per colonna, e la loro somma con l'uscita. */
+  /** Response in dB of each band, per column, and their sum with the output. */
   private curves: Float32Array[] = [];
   private total = new Float32Array(0);
   private curvesFor: { bands: readonly EqBand[]; output: number; width: number } | null = null;
@@ -44,12 +44,12 @@ export class EqGraph {
     return this.scale;
   }
 
-  /** Il punto della banda: sulla sua frequenza, all'altezza del guadagno (i tagli sullo zero). */
+  /** The band's point: on its frequency, at the gain's height (the cuts on zero). */
   nodeAt(band: EqBand): { x: number; y: number } {
     return { x: this.scale.freqToX(band.freq), y: this.scale.dbToY(BAND_TYPES[band.type]?.gain ? band.gain : 0) };
   }
 
-  /** La banda il cui punto è sotto (x, y), la più vicina; null se nessuna. */
+  /** The band whose point is under (x, y), the nearest; null if none. */
   hit(bands: readonly EqBand[], x: number, y: number): number | null {
     let best: number | null = null, bestD = HIT_R;
     bands.forEach((b, i) => {
@@ -139,7 +139,7 @@ export class EqGraph {
       }
       return p;
     };
-    // prima dell'EQ: una linea tenue; dopo: pieno
+    // before the EQ: a faint line; after: filled
     g.strokeStyle = 'rgba(255,255,255,0.2)';
     g.lineWidth = 1;
     g.stroke(path(this.columnsPre));
@@ -163,7 +163,7 @@ export class EqGraph {
     return p;
   }
 
-  /** La banda scelta (o sotto il mouse): la sua curva riempita fino allo zero, nel suo colore. */
+  /** The chosen band (or under the mouse): its curve filled down to zero, in its colour. */
   private bandFill(g: CanvasRenderingContext2D, state: GraphState): void {
     const i = state.hover ?? state.selected, band = state.bands[i];
     if (!band?.on) return;

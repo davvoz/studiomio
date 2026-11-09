@@ -1,6 +1,6 @@
-/* Banco di prova del motore DSP: verifica nel browser la catena completa
- * (server con COOP/COEP → memoria condivisa → worker pool → render). Non è l'interfaccia
- * dell'app, che arriverà con il modello del progetto e l'arrangement. */
+/* DSP engine test bench: checks the complete chain in the browser
+ * (server with COOP/COEP → shared memory → worker pool → render). It isn't the app's
+ * interface, which will come with the project model and the arrangement. */
 import { drumLoop } from './demo/demo-loop';
 import type { AudioAnalysis } from './dsp/analysis/analyze';
 import type { StretchSettings, WarpMode } from './dsp/stretch/stretcher';
@@ -19,7 +19,7 @@ let current: { audio: AudioData; analysis: AudioAnalysis; name: string } | null 
 let rendered: Float32Array[] | null = null;
 let playing: AudioBufferSourceNode | null = null;
 
-/** Impostazioni predefinite di ogni modalità (le stesse di WarpMio). */
+/** Default settings for each mode (the same as WarpMio). */
 const defaultSettings: Record<WarpMode, (a: AudioAnalysis) => StretchSettings> = {
   complex: a => ({ mode: 'complex', fftSize: 4096, transients: a.transients }),
   beats: a => ({ mode: 'beats', slices: a.transients, loopMode: 'forward', envelope: 100 }),
@@ -50,8 +50,8 @@ async function showEnvironment(): Promise<void> {
   const yes = (v: boolean, ok: string, ko: string) => `<span class="${v ? 'ok' : 'bad'}">${v ? ok : ko}</span>`;
   const info = await dsp.info();
   $('env').innerHTML = `
-    <dt>Isolamento cross-origin</dt><dd>${yes(crossOriginIsolated, 'attivo', 'assente (servono le intestazioni COOP/COEP)')}</dd>
-    <dt>SharedArrayBuffer</dt><dd>${yes(typeof SharedArrayBuffer !== 'undefined' && crossOriginIsolated, 'disponibile: i worker condividono i sample', 'non disponibile: i sample vengono copiati')}</dd>
+    <dt>Cross-origin isolation</dt><dd>${yes(crossOriginIsolated, 'active', 'missing (the COOP/COEP headers are needed)')}</dd>
+    <dt>SharedArrayBuffer</dt><dd>${yes(typeof SharedArrayBuffer !== 'undefined' && crossOriginIsolated, 'available: the workers share the samples', 'not available: the samples are copied')}</dd>
     <dt>Core / worker DSP</dt><dd>${navigator.hardwareConcurrency} / ${dsp.workers}</dd>
     <dt>Implementazioni</dt><dd>${Object.entries(info).map(([m, impl]) => `${m}: ${impl}`).join(' · ')}</dd>`;
 }
@@ -66,8 +66,8 @@ async function loadSource(name: string, audio: AudioData): Promise<void> {
   const analysis = await dsp.analyze('preview');
   current = { audio, analysis, name };
   const secs = audio.channels[0].length / audio.sampleRate;
-  $('source').textContent = `${name} · ${secs.toFixed(2)} s · ${audio.channels.length} canali · ${audio.sampleRate} Hz`;
-  log(`Caricato "${name}" nei worker in ${tLoad}. Analisi: ${analysis.tempo} BPM, ${analysis.transients.length} transienti (${ms(t1)}).`);
+  $('source').textContent = `${name} · ${secs.toFixed(2)} s · ${audio.channels.length} channels · ${audio.sampleRate} Hz`;
+  log(`Loaded "${name}" into the workers in ${tLoad}. Analysis: ${analysis.tempo} BPM, ${analysis.transients.length} transients (${ms(t1)}).`);
   for (const id of ['render', 'parallel']) $<HTMLButtonElement>(id).disabled = false;
 }
 
@@ -83,11 +83,11 @@ async function render(): Promise<void> {
   }
   const secs = job.outLength / current.audio.sampleRate;
   const took = performance.now() - t0;
-  log(`Render ${job.settings.mode}: ${secs.toFixed(2)} s di audio in ${Math.round(took)} ms (${Math.round((secs * 1000) / took)}× tempo reale).`);
+  log(`Render ${job.settings.mode}: ${secs.toFixed(2)} s of audio in ${Math.round(took)} ms (${Math.round((secs * 1000) / took)}× real time).`);
   $<HTMLButtonElement>('play').disabled = false;
 }
 
-/** Lo stesso render N volte insieme: misura quanto rende dividere il lavoro tra i core. */
+/** The same render N times together: measures how much splitting the work across cores pays. */
 async function renderParallel(): Promise<void> {
   if (!current) return;
   const job = buildJob(), n = dsp.workers;
@@ -97,7 +97,7 @@ async function renderParallel(): Promise<void> {
   t0 = performance.now();
   await Promise.all(Array.from({ length: n }, () => dsp.renderWarp('preview', job)));
   const all = performance.now() - t0;
-  log(`${n} render in parallelo: ${Math.round(all)} ms contro ${Math.round(single * n)} ms uno dopo l'altro → ${((single * n) / all).toFixed(1)}× più veloce.`);
+  log(`${n} renders in parallel: ${Math.round(all)} ms versus ${Math.round(single * n)} ms one after the other → ${((single * n) / all).toFixed(1)}× faster.`);
 }
 
 function play(): void {
@@ -127,7 +127,7 @@ async function decodeFile(file: File): Promise<AudioData> {
 }
 
 const guard = (fn: () => Promise<void> | void) => () => {
-  Promise.resolve(fn()).catch(e => log(`Errore: ${e instanceof Error ? e.message : e}`));
+  Promise.resolve(fn()).catch(e => log(`Error: ${e instanceof Error ? e.message : e}`));
 };
 
 $('demo').addEventListener('click', guard(() => loadSource('Loop demo', { channels: drumLoop(4, 120), sampleRate: 44100 })));
@@ -140,7 +140,7 @@ $('play').addEventListener('click', guard(play));
 $('parallel').addEventListener('click', guard(renderParallel));
 guard(showEnvironment)();
 
-// ?auto: esegue da solo loop demo → render → render in parallelo (per le verifiche automatiche)
+// ?auto: runs demo loop → render → parallel render by itself (for automated checks)
 if (new URLSearchParams(location.search).has('auto')) {
   guard(async () => {
     await loadSource('Loop demo', { channels: drumLoop(4, 120), sampleRate: 44100 });

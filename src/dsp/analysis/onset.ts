@@ -2,17 +2,17 @@ import { Fft, splitPair } from '../fft';
 import { hann, readFrame } from '../signal';
 import type { Samples } from '../types';
 
-/** Curva di "novità" del segnale, base per transienti, tempo e beat tracking. */
+/** "Novelty" curve of the signal, basis for transients, tempo and beat tracking. */
 export interface OnsetEnvelope {
   readonly flux: Float32Array;
-  /** Campioni tra un frame e il successivo. */
+  /** Samples between one frame and the next. */
   readonly hop: number;
-  /** Frame al secondo. */
+  /** Frames per second. */
   readonly frameRate: number;
 }
 
-/** Spectral flux su magnitudo log-compressa, sommato per bande logaritmiche così che una
- *  cassa (pochi bin bassi) pesi quanto un piatto (centinaia di bin alti). */
+/** Spectral flux on log-compressed magnitude, summed over logarithmic bands so that a
+ *  kick (few low bins) weighs as much as a cymbal (hundreds of high bins). */
 export function onsetEnvelope(mono: Samples, sampleRate: number): OnsetEnvelope {
   const N = sampleRate > 60000 ? 2048 : 1024, hop = N >> 2, nb = (N >> 1) + 1;
   const fft = Fft.of(N), win = hann(N);
@@ -42,7 +42,7 @@ export function onsetEnvelope(mono: Samples, sampleRate: number): OnsetEnvelope 
     flux[f] = f === 0 ? 0 : s;
     [prev, cur] = [cur, prev];
   };
-  // Due frame per FFT: uno nella parte reale, il successivo in quella immaginaria.
+  // Two frames per FFT: one in the real part, the next in the imaginary one.
   for (let f = 0; f < frames; f += 2) {
     readFrame(mono, f * hop - (N >> 1), win, re);
     readFrame(mono, (f + 1) * hop - (N >> 1), win, im);

@@ -8,7 +8,7 @@ export interface SourcePayload {
   readonly sampleRate: number;
 }
 
-/** Protocollo tra thread principale e worker DSP. */
+/** Protocol between the main thread and the DSP workers. */
 export type DspProtocol = {
   loadSource: { req: SourcePayload; res: null };
   dropSource: { req: { readonly sourceId: string }; res: null };

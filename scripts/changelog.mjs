@@ -1,10 +1,10 @@
-// Il CHANGELOG.md nelle release:
-//   node scripts/changelog.mjs check          "Unreleased" deve avere almeno una voce
-//   node scripts/changelog.mjs release        le voci di "Unreleased" vanno alla versione
-//                                             di package.json, con la data di oggi
-//   node scripts/changelog.mjs notes 0.1.8    stampa le voci di quella versione (testo della
-//                                             release su GitHub)
-// check e release girano da soli con npm version (preversion e version in package.json).
+// CHANGELOG.md in releases:
+//   node scripts/changelog.mjs check          "Unreleased" must have at least one entry
+//   node scripts/changelog.mjs release        the "Unreleased" entries go to the package.json
+//                                             version, with today's date
+//   node scripts/changelog.mjs notes 0.1.8    prints the entries of that version (text of the
+//                                             GitHub release)
+// check and release run by themselves with npm version (preversion and version in package.json).
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const FILE = new URL('../CHANGELOG.md', import.meta.url);
@@ -13,7 +13,7 @@ const UNRELEASED = 'Unreleased';
 const [command, arg] = process.argv.slice(2);
 const lines = readFileSync(FILE, 'utf8').split(/\r?\n/);
 
-/** Le righe della sezione "## [nome]", fino alla sezione successiva. */
+/** The lines of the "## [name]" section, up to the next section. */
 function section(name) {
   const start = lines.findIndex(line => line.startsWith(`## [${name}]`));
   if (start < 0) return null;
@@ -21,7 +21,7 @@ function section(name) {
   return { start, body: lines.slice(start + 1, next < 0 ? lines.length : next) };
 }
 
-/** Le voci vere: senza righe vuote e senza i titoli delle sottosezioni. */
+/** The real entries: without empty lines and without the subsection titles. */
 const entries = body => body.filter(line => line.trim() && !line.startsWith('#'));
 
 function fail(message) {
@@ -32,26 +32,26 @@ function fail(message) {
 const unreleased = section(UNRELEASED);
 switch (command) {
   case 'check':
-    if (!unreleased) fail(`manca la sezione "## [${UNRELEASED}]".`);
+    if (!unreleased) fail(`the "## [${UNRELEASED}]" section is missing.`);
     if (!entries(unreleased.body).length)
-      fail(`nessuna voce sotto "${UNRELEASED}": scrivi le novità della release e committale.`);
+      fail(`no entries under "${UNRELEASED}": write the release notes and commit them.`);
     break;
 
   case 'release': {
-    if (!unreleased) fail(`manca la sezione "## [${UNRELEASED}]".`);
+    if (!unreleased) fail(`the "## [${UNRELEASED}]" section is missing.`);
     const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-    if (section(version)) fail(`la versione ${version} c'è già.`);
-    const today = new Date().toLocaleDateString('sv'); // AAAA-MM-GG, ora locale
+    if (section(version)) fail(`version ${version} already exists.`);
+    const today = new Date().toLocaleDateString('sv'); // YYYY-MM-DD, local time
     lines.splice(unreleased.start, 1, `## [${UNRELEASED}]`, '', `## [${version}] - ${today}`);
     writeFileSync(FILE, lines.join('\n'));
-    console.log(`CHANGELOG.md: voci assegnate alla ${version}.`);
+    console.log(`CHANGELOG.md: entries assigned to ${version}.`);
     break;
   }
 
   case 'notes': {
     const found = arg && section(arg);
-    if (!found) fail(`manca la sezione della versione ${arg ?? '(nessuna)'}.`);
-    // nelle release GitHub ogni a capo è un a capo: le righe rientrate continuano la voce sopra
+    if (!found) fail(`the section for version ${arg ?? '(none)'} is missing.`);
+    // in GitHub releases every newline is a newline: indented lines continue the entry above
     const joined = found.body.reduce((out, line) => {
       if (/^\s+\S/.test(line) && out.length && out.at(-1).trim()) out[out.length - 1] += ` ${line.trim()}`;
       else out.push(line);
@@ -62,5 +62,5 @@ switch (command) {
   }
 
   default:
-    fail('uso: node scripts/changelog.mjs check | release | notes <versione>');
+    fail('usage: node scripts/changelog.mjs check | release | notes <version>');
 }

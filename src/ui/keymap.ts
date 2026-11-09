@@ -1,4 +1,4 @@
-/** Comandi dell'app richiamabili da tastiera (e dai pulsanti). */
+/** App commands callable from the keyboard (and from the buttons). */
 export interface Commands {
   togglePlay(): void;
   stopAndRewind(): void;
@@ -10,32 +10,32 @@ export interface Commands {
   copySelection(): void;
   paste(): void;
   splitAtCursor(): void;
-  /** Le clip selezionate (o il tratto di tempo) in una clip sola, come in Live (Ctrl+J). */
+  /** The selected clips (or the time range) into a single clip, as in Live (Ctrl+J). */
   consolidateSelection(): void;
   selectAll(): void;
   toggleLoop(): void;
-  /** Copia il tratto del loop subito dopo e ci sposta il loop (Ctrl+Maiusc+D). */
+  /** Copies the loop range right after and moves the loop there (Ctrl+Shift+D). */
   duplicateLoop(): void;
   toggleMetronome(): void;
   toggleSnap(): void;
-  /** Segui la testina (Ctrl+Maiusc+F); se è sospeso, lo riprende. */
+  /** Follow the playhead (Ctrl+Shift+F); if it's suspended, it resumes it. */
   toggleFollow(): void;
   zoom(factor: number): void;
   newProject(): void;
   save(): void;
   saveAs(): void;
   open(): void;
-  /** Passa da arrangement a session e viceversa. */
+  /** Switches from arrangement to session and vice versa. */
   toggleView(): void;
-  /** Raggruppa le tracce scelte (Ctrl+G) · separa il gruppo scelto (Ctrl+Maiusc+G). */
+  /** Groups the chosen tracks (Ctrl+G) · ungroups the chosen group (Ctrl+Shift+G). */
   groupTracks(): void;
   ungroupTracks(): void;
-  /** Mostra o nasconde il browser (Ctrl+Alt+B) · porta il cursore nella sua ricerca (Ctrl+F). */
+  /** Shows or hides the browser (Ctrl+Alt+B) · brings the cursor into its search (Ctrl+F). */
   toggleBrowser(): void;
   searchBrowser(): void;
-  /** Mappa la tastiera del computer sulle macro e sui parametri (Ctrl+K, come in Live). */
+  /** Maps the computer keyboard to the macros and parameters (Ctrl+K, as in Live). */
   toggleKeyMap(): void;
-  /** Mappa il MIDI di un controller qualsiasi sulle macro, sui parametri e sul mixer (Ctrl+M, come in Live). */
+  /** Maps any controller's MIDI to the macros, parameters and mixer (Ctrl+M, as in Live). */
   toggleMidiMap(): void;
 }
 
@@ -43,13 +43,13 @@ export interface Binding<C = Commands> {
   readonly key: string;
   readonly ctrl?: boolean;
   readonly shift?: boolean;
-  /** Solo le scorciatoie che lo nominano guardano Alt. */
+  /** Only the shortcuts naming it look at Alt. */
   readonly alt?: boolean;
   readonly run: (c: C) => void;
 }
 
-/** Scorciatoie: una riga per comando, nessun switch. `key` è KeyboardEvent.key in minuscolo
- *  oppure KeyboardEvent.code (per i tasti come Spazio). */
+/** Shortcuts: one line per command, no switch. `key` is KeyboardEvent.key in lowercase
+ *  or KeyboardEvent.code (for keys like Space). */
 export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'Space', run: c => c.togglePlay() },
   { key: 'tab', run: c => c.toggleView() },
@@ -86,30 +86,30 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'm', ctrl: true, run: c => c.toggleMidiMap() },
 ];
 
-/** Campi in cui si scrive: lì tutti i tasti sono loro. */
+/** Fields you type in: there all the keys are theirs. */
 const TEXT_INPUTS = new Set(['text', 'number', 'search', 'email', 'url', 'password', 'tel']);
-/** Tasti che un cursore (volume) usa per sé; gli altri, come Ctrl+Z, restano scorciatoie. */
+/** Keys a slider (volume) uses for itself; the others, like Ctrl+Z, stay shortcuts. */
 const SLIDER_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
 
-/** Il tasto spetta a un campo di testo (o un cursore), non alle scorciatoie. */
+/** The key belongs to a text field (or a slider), not to the shortcuts. */
 export function ownedByField(t: HTMLElement | null, e: KeyboardEvent): boolean {
   if (!t) return false;
   if (t.isContentEditable || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') return true;
   return t instanceof HTMLInputElement && (TEXT_INPUTS.has(t.type) || SLIDER_KEYS.has(e.key));
 }
 
-/** La scorciatoia di un tasto premuto, se c'è. */
+/** The shortcut of a pressed key, if there is one. */
 export function findBinding<C>(keymap: readonly Binding<C>[], e: KeyboardEvent): Binding<C> | undefined {
   const ctrl = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
-  // Maiusc conta solo se la scorciatoia lo nomina o usa Ctrl: "+" richiede Maiusc su molte tastiere
+  // Shift counts only if the shortcut names it or uses Ctrl: "+" requires Shift on many keyboards
   return keymap.find(k => (k.key === e.code || k.key === key) && !!k.ctrl === ctrl
     && (k.shift === undefined ? !(ctrl && e.shiftKey) : k.shift === e.shiftKey)
     && (k.alt === undefined || k.alt === e.altKey));
 }
 
-/** Collega la tastiera ai comandi (ignorando i tasti che spettano ai campi di testo). Con
- *  `ownKeys` i tasti usati non arrivano più su (un editor ha la precedenza sulla timeline). */
+/** Connects the keyboard to the commands (ignoring the keys belonging to text fields). With
+ *  `ownKeys` the used keys don't go further up (an editor takes priority over the timeline). */
 export function bindKeys<C>(target: Document | HTMLElement, commands: C, keymap: readonly Binding<C>[], ownKeys = false): void {
   target.addEventListener('keydown', ev => {
     const e = ev as KeyboardEvent;

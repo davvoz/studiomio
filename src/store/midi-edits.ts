@@ -1,10 +1,10 @@
-/* Il MIDI di un controller qualsiasi sulle macro, sui parametri e sul mixer: dare un controllo
- * a un bersaglio e muoverlo. Un CC (manopola, fader) porta il bersaglio al punto della sua corsa:
- * il volume come il fader di Live (0 dB all'85%), il pan con il centro a 64, mute, solo,
- * interruttori e pulsanti accesi da 64 in su. Una nota fa come un tasto del computer (vedi
- * key-edits): un interruttore o un menu cambia, una manopola salta da un capo all'altro, una
- * macro pulsante resta accesa finché la nota suona; sul mixer mute e solo cambiano, il volume
- * passa da 0 dB a −∞ e ritorno, una mandata da chiusa a 0 dB, il pan torna al centro. */
+/* Any controller's MIDI on macros, parameters and mixer: giving a control
+ * to a target and moving it. A CC (knob, fader) takes the target to the point of its travel:
+ * the volume like Live's fader (0 dB at 85%), the pan with the centre at 64, mute, solo,
+ * toggles and buttons on from 64 up. A note acts like a computer key (see
+ * key-edits): a switch or a menu changes, a knob jumps from one end to the other, a
+ * button macro stays on while the note plays; on the mixer mute and solo change, the volume
+ * goes from 0 dB to −∞ and back, a send from closed to 0 dB, the pan returns to the centre. */
 import { faderToDb, knobToPan, SILENT_DB } from '../control/mixer-scale';
 import { paramFromUnit } from '../devices/params';
 import { mappingSpec } from '../devices/rack-params';
@@ -18,35 +18,35 @@ import { hold, macroAt, press, springTargets } from './key-edits';
 import { edit, type Edit, type EditContext } from './project-store';
 import { setMacro } from './rack-edits';
 
-/** Il valore più alto di un CC. */
+/** The highest value of a CC. */
 const CC_MAX = 127;
 
-/** Dà un controllo MIDI a un bersaglio (null: lo toglie). */
+/** Gives a MIDI control to a target (null: removes it). */
 export const setMidi = (target: MidiTarget, control: MidiControl | null): Edit =>
-  edit(control ? 'Mappa sul MIDI' : 'Togli il MIDI', p => {
-    if (!p.hasMidiTarget(target)) throw new RangeError('il bersaglio del MIDI non c\'è');
+  edit(control ? 'Map to MIDI' : 'Remove the MIDI', p => {
+    if (!p.hasMidiTarget(target)) throw new RangeError('the MIDI target doesn\'t exist');
     const before = controlOf(p.midiMap, target);
     if (!before && !control) return p;
     return p.updatingMidiMap(map => withControl(map, target, control));
   });
 
-/** Un CC arrivato (0…127): i bersagli vanno al punto della loro corsa. Le macro pulsante sono
- *  di `holdMidi`, le molle di `pullMidi`. */
+/** An arrived CC (0…127): the targets go to the point of their travel. The button macros belong
+ *  to `holdMidi`, the springs to `pullMidi`. */
 export const moveMidi = (control: MidiControl, value: number): Edit =>
   edit('MIDI', (p, ctx) => {
     for (const t of midiTargetsOf(p.midiMap, control)) p = turn(p, ctx, t, value);
     return p;
   });
 
-/** Una nota suonata: interruttori, manopole, parametri e mixer cambiano (un passo di annullamento). */
+/** A played note: toggles, knobs, parameters and mixer change (one undo step). */
 export const pressMidi = (control: MidiControl): Edit =>
   edit('MIDI', (p, ctx) => {
     for (const t of midiTargetsOf(p.midiMap, control)) p = t.kind === 'macro' || t.kind === 'param' ? press(p, ctx, t) : toggleMixer(p, ctx, t);
     return p;
   });
 
-/** Le macro pulsante: accese finché la nota suona o il CC sta da 64 in su; le molle tirate fino in
- *  fondo da una nota (un cambio che si disfa da solo, da applicare `transient`). */
+/** The button macros: on while the note plays or the CC stays from 64 up; the springs pulled all the way
+ *  by a note (a change that undoes itself, to apply `transient`). */
 export const holdMidi = (control: MidiControl, down: boolean, note = true): Edit =>
   edit('MIDI', (p, ctx) => {
     for (const t of midiTargetsOf(p.midiMap, control)) {
@@ -57,8 +57,8 @@ export const holdMidi = (control: MidiControl, down: boolean, note = true): Edit
     return p;
   });
 
-/** Un CC sulle macro molla: le porta al punto della corsa senza farne un passo di annullamento
- *  (le riporta la molla; da applicare `transient`). */
+/** A CC on the spring macros: it takes them to the point of the travel without making an undo step
+ *  (the spring brings them back; to apply `transient`). */
 export const pullMidi = (control: MidiControl, value: number): Edit =>
   edit('MIDI', (p, ctx) => {
     for (const t of springTargets(p, midiTargetsOf(p.midiMap, control))) {
@@ -78,7 +78,7 @@ function turn(p: Project, ctx: EditContext, t: MidiTarget, value: number): Proje
       return setMacro(t.owner, t.rack, t.index, Math.round(unit * MACRO_MAX)).apply(p, ctx);
     }
     case 'param': {
-      // un parametro mappato su una macro lo muove la macro
+      // a parameter mapped to a macro is moved by the macro
       if (macroOf(p.racksOf(t.owner), t.device, t.param)) return p;
       const spec = mappingSpec(p, t.owner, t);
       if (!spec) return p;
@@ -114,7 +114,7 @@ function toggleMixer(p: Project, ctx: EditContext, t: Extract<MidiTarget, { kind
   }
 }
 
-/** Il mixer di una traccia o del master (che ha solo volume e mute); un valore uguale non cambia niente. */
+/** The mixer of a track or of the master (which has only volume and mute); an equal value changes nothing. */
 function mixer(p: Project, ctx: EditContext, owner: MidiTarget['owner'], patch: Partial<MixerSettings>): Project {
   if (owner === MASTER) {
     const { volumeDb, mute } = patch;

@@ -1,6 +1,6 @@
 import type { Beats, Seconds } from '../core/music-time';
 
-/** Un punto della mappa di warp: il secondo `t` del sample cade sul battito `b` della clip. */
+/** A point of the warp map: second `t` of the sample falls on beat `b` of the clip. */
 export interface WarpMarker {
   readonly t: Seconds;
   readonly b: Beats;
@@ -8,16 +8,16 @@ export interface WarpMarker {
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
-/** Distanza minima tra marker: in tempo (spostando l'audio) e in battiti (trascinando). */
+/** Minimum distance between markers: in time (moving the audio) and in beats (dragging). */
 const MIN_GAP_T = 0.001;
 const MIN_GAP_B = 0.01;
 
-/** Mappa di warp di una clip audio (come in WarpMio e in Live): lineare a tratti tra i marker,
- *  estrapolata al tempo di base fuori da essi. Immutabile: ogni modifica restituisce una
- *  nuova mappa. */
+/** An audio clip's warp map (as in WarpMio and in Live): piecewise linear between the markers,
+ *  extrapolated at the base tempo outside them. Immutable: every change returns a
+ *  new map. */
 export class WarpMarkers {
   readonly markers: readonly WarpMarker[];
-  /** Tempo del sample usato fuori dai marker e quando ce n'è meno di due. */
+  /** The sample's tempo used outside the markers and when there are fewer than two. */
   readonly baseBpm: number;
 
   private constructor(markers: readonly WarpMarker[], baseBpm: number) {
@@ -25,9 +25,9 @@ export class WarpMarkers {
     this.baseBpm = baseBpm;
   }
 
-  /** Marker ordinati, senza doppioni e con battiti crescenti. */
+  /** Sorted markers, without duplicates and with increasing beats. */
   static of(markers: readonly WarpMarker[], baseBpm: number): WarpMarkers {
-    if (!(baseBpm > 0)) throw new RangeError(`tempo di base non valido: ${baseBpm}`);
+    if (!(baseBpm > 0)) throw new RangeError(`invalid base tempo: ${baseBpm}`);
     const sorted = [...markers].sort((p, q) => p.t - q.t);
     const out: WarpMarker[] = [];
     for (const m of sorted) {
@@ -38,8 +38,8 @@ export class WarpMarkers {
     return new WarpMarkers(out, baseBpm);
   }
 
-  /** Tempo costante: il secondo `firstBeatAt` è il battito 0 (1.1.1), con un marker anche
-   *  all'inizio del sample se il primo battito non è lì, e uno alla fine. */
+  /** Constant tempo: second `firstBeatAt` is beat 0 (1.1.1), with a marker also
+   *  at the start of the sample if the first beat isn't there, and one at the end. */
   static straight(bpm: number, duration: Seconds, firstBeatAt: Seconds = 0): WarpMarkers {
     const ms: WarpMarker[] = [];
     if (firstBeatAt > 0) ms.push({ t: 0, b: (-firstBeatAt * bpm) / 60 });
@@ -52,7 +52,7 @@ export class WarpMarkers {
     return this.markers.length;
   }
 
-  /** Battito della clip in cui suona il secondo `t` del sample. */
+  /** Clip beat at which second `t` of the sample plays. */
   beatOf(t: Seconds): Beats {
     const ms = this.markers, n = ms.length, k = this.baseBpm / 60;
     if (n === 0) return t * k;
@@ -62,7 +62,7 @@ export class WarpMarkers {
     return a.b + ((t - a.t) * (c.b - a.b)) / (c.t - a.t);
   }
 
-  /** Secondo del sample che suona al battito `b` della clip. */
+  /** Second of the sample playing at beat `b` of the clip. */
   timeOf(b: Beats): Seconds {
     const ms = this.markers, n = ms.length, k = this.baseBpm / 60;
     if (n === 0) return b / k;
@@ -72,14 +72,14 @@ export class WarpMarkers {
     return a.t + ((b - a.b) * (c.t - a.t)) / (c.b - a.b);
   }
 
-  /** Tempo medio tra il primo e l'ultimo marker. */
+  /** Average tempo between the first and the last marker. */
   get globalBpm(): number {
     const m = this.markers;
     if (m.length < 2) return this.baseBpm;
     return (60 * (m[m.length - 1].b - m[0].b)) / (m[m.length - 1].t - m[0].t);
   }
 
-  /** Tempo del segmento che parte dal marker `i` (l'ultimo marker usa il segmento prima). */
+  /** Tempo of the segment starting at marker `i` (the last marker uses the segment before). */
   segmentBpm(i: number): number {
     const m = this.markers;
     if (i < 0 || m.length < 2) return this.globalBpm;
@@ -87,13 +87,13 @@ export class WarpMarkers {
     return (60 * (m[j + 1].b - m[j].b)) / (m[j + 1].t - m[j].t);
   }
 
-  /** Indice del marker entro `tolerance` secondi da `t`, o -1. */
+  /** Index of the marker within `tolerance` seconds of `t`, or -1. */
   indexNear(t: Seconds, tolerance = 0.002): number {
     return this.markers.findIndex(m => Math.abs(m.t - t) < tolerance);
   }
 
-  /** Aggiunge un marker in `t` senza cambiare la mappa (cade dove già suona).
-   *  Se ce n'è già uno vicino restituisce la mappa invariata e il suo indice. */
+  /** Adds a marker at `t` without changing the map (it falls where it already plays).
+   *  If there's already one nearby it returns the unchanged map and its index. */
   withMarkerAt(t: Seconds): { readonly markers: WarpMarkers; readonly index: number } {
     const near = this.indexNear(t);
     if (near >= 0) return { markers: this, index: near };
@@ -101,17 +101,17 @@ export class WarpMarkers {
     return { markers: added, index: added.indexNear(t) };
   }
 
-  /** Servono sempre almeno due marker. */
+  /** At least two markers are always needed. */
   canRemove(i: number): boolean {
     return i >= 0 && i < this.markers.length && this.markers.length > 2;
   }
 
   without(i: number): WarpMarkers {
-    if (!this.canRemove(i)) throw new RangeError('servono almeno due warp marker');
+    if (!this.canRemove(i)) throw new RangeError('at least two warp markers are needed');
     return new WarpMarkers(this.markers.filter((_, j) => j !== i), this.baseBpm);
   }
 
-  /** Trascina il marker `i` sul battito `b` (l'audio si allunga o si accorcia attorno). */
+  /** Drags marker `i` onto beat `b` (the audio stretches or shrinks around it). */
   withMarkerBeat(i: number, b: Beats): WarpMarkers {
     const ms = this.markers;
     const lo = i > 0 ? ms[i - 1].b + MIN_GAP_B : -Infinity;
@@ -119,7 +119,7 @@ export class WarpMarkers {
     return this.replace(i, { t: ms[i].t, b: clamp(b, lo, hi) });
   }
 
-  /** Sposta l'audio sotto il marker `i`: cambia il secondo del sample, il battito resta. */
+  /** Moves the audio under marker `i`: changes the sample's second, the beat stays. */
   withMarkerTime(i: number, t: Seconds, duration: Seconds): WarpMarkers {
     const ms = this.markers;
     const lo = i > 0 ? ms[i - 1].t + MIN_GAP_T : 0;
@@ -127,7 +127,7 @@ export class WarpMarkers {
     return this.replace(i, { t: clamp(t, lo, hi), b: ms[i].b });
   }
 
-  /** Imposta il tempo del segmento che parte dal marker `i`: i marker successivi scorrono. */
+  /** Sets the tempo of the segment starting at marker `i`: the following markers shift. */
   withSegmentBpm(i: number, bpm: number): WarpMarkers {
     const m = this.markers;
     if (m.length < 2) return this.withGlobalBpm(bpm);
@@ -136,19 +136,19 @@ export class WarpMarkers {
     return new WarpMarkers(m.map((x, k) => (k > j ? { t: x.t, b: x.b + d } : x)), this.baseBpm);
   }
 
-  /** Scala tutta la mappa al nuovo tempo, tenendo fermo il primo marker. */
+  /** Scales the whole map to the new tempo, keeping the first marker still. */
   withGlobalBpm(bpm: number): WarpMarkers {
     const m = this.markers, old = this.globalBpm, b0 = m.length ? m[0].b : 0;
     return new WarpMarkers(m.map(x => ({ t: x.t, b: b0 + ((x.b - b0) * bpm) / old })), bpm);
   }
 
-  /** Il secondo `t` diventa il battito 0 (1.1.1). */
+  /** Second `t` becomes beat 0 (1.1.1). */
   withOrigin(t: Seconds): WarpMarkers {
     const d = this.beatOf(t);
     return new WarpMarkers(this.markers.map(m => ({ t: m.t, b: m.b - d })), this.baseBpm);
   }
 
-  /** Porta i battiti dei marker sulla griglia `step`, scartando quelli che collidono. */
+  /** Brings the markers' beats onto grid `step`, discarding those that collide. */
   quantized(step: Beats): WarpMarkers {
     const out: WarpMarker[] = [];
     for (const m of this.markers) {
@@ -158,21 +158,21 @@ export class WarpMarkers {
     return new WarpMarkers(out, this.baseBpm);
   }
 
-  /** Riparte da un tempo costante (il tempo medio attuale), mantenendo la posizione di inizio. */
+  /** Restarts from a constant tempo (the current average tempo), keeping the start position. */
   cleared(duration: Seconds): WarpMarkers {
     const b0 = this.beatOf(0), bpm = this.globalBpm;
     return WarpMarkers.of([{ t: 0, b: b0 }, { t: duration, b: b0 + (duration * bpm) / 60 }], bpm);
   }
 
-  /** La mappa per il sample rovesciato: il secondo `t` diventa `duration − t` e il battito `b`
-   *  diventa `axis − b`, così il battito `axis − b` suona l'audio che prima suonava in `b`. */
+  /** The map for the reversed sample: second `t` becomes `duration − t` and beat `b`
+   *  becomes `axis − b`, so beat `axis − b` plays the audio that used to play at `b`. */
   mirrored(duration: Seconds, axis: Beats): WarpMarkers {
     const ms = this.markers.length >= 2 ? this.markers : [{ t: 0, b: this.beatOf(0) }, { t: duration, b: this.beatOf(duration) }];
     return WarpMarkers.of(ms.map(m => ({ t: duration - m.t, b: axis - m.b })), this.baseBpm);
   }
 
-  /** Solo il tratto [from, to] del sample, diventato un file a sé (il crop): i secondi
-   *  ripartono da 0, i battiti restano quelli di prima e su ogni bordo c'è un marker. */
+  /** Only the stretch [from, to] of the sample, turned into a file of its own (the crop): the seconds
+   *  restart from 0, the beats stay as before and there's a marker on each edge. */
   cropped(from: Seconds, to: Seconds): WarpMarkers {
     const inside = this.markers.filter(m => m.t > from && m.t < to);
     const ms = [{ t: from, b: this.beatOf(from) }, ...inside, { t: to, b: this.beatOf(to) }];
@@ -188,7 +188,7 @@ export class WarpMarkers {
     return new WarpMarkers(this.markers.map((x, k) => (k === i ? m : x)), this.baseBpm);
   }
 
-  /** Segmento [i, i+1] che contiene v (il primo o l'ultimo se v è fuori). */
+  /** Segment [i, i+1] containing v (the first or the last if v is outside). */
   private static segment(n: number, key: (i: number) => number, v: number): number {
     if (v >= key(n - 1)) return n - 2;
     if (v <= key(0)) return 0;

@@ -7,52 +7,52 @@ import { AudioTrack, MidiTrack } from '../../src/model/track';
 import { sampleRef } from '../helpers/fixtures';
 
 describe('Project', () => {
-  it('una traccia aggiunta prende uno slot per scena', () => {
+  it('an added track takes one slot per scene', () => {
     const ids = sequentialIds();
     const p = Project.empty('p', ids, 5).addingTrack(AudioTrack.empty(ids.next('track'), 'a', '#fff', 2));
     expect(p.tracks[0].slots).toHaveLength(5);
   });
 
-  it('scene aggiunte e tolte in tutte le tracce', () => {
+  it('scenes added and removed in all the tracks', () => {
     const ids = sequentialIds();
     const clip = MidiClip.empty(ids.next('clip'), 'm', '#fff');
     let p = Project.empty('p', ids, 3)
       .addingTrack(MidiTrack.empty(ids.next('track'), 'm', '#fff', 3))
       .addingTrack(AudioTrack.empty(ids.next('track'), 'a', '#fff', 3));
     p = p.updatingTrack(p.tracks[0].id, t => t.withSlot(2, clip));
-    p = p.addingScene({ id: ids.next('scene'), name: 'nuova' }, 0);
+    p = p.addingScene({ id: ids.next('scene'), name: 'new' }, 0);
     expect(p.tracks.map(t => t.slots.length)).toEqual([4, 4]);
-    expect(p.tracks[0].slots[3]).toBe(clip); // la clip scorre con la sua scena
+    expect(p.tracks[0].slots[3]).toBe(clip); // the clip moves with its scene
     p = p.removingScene(p.scenes[3].id);
     expect(p.tracks[0].slots).toEqual([null, null, null]);
   });
 
-  it('una traccia accetta solo il suo tipo di clip', () => {
+  it('a track accepts only its own kind of clip', () => {
     const ids = sequentialIds();
     const audio = AudioTrack.empty(ids.next('track'), 'a', '#fff', 2);
     const midi = MidiClip.empty(ids.next('clip'), 'm', '#fff');
-    expect(() => audio.withSlot(0, midi)).toThrow(/audio non può contenere una clip midi/);
+    expect(() => audio.withSlot(0, midi)).toThrow(/audio track can't contain a midi clip/);
     expect(() => audio.placing({ id: ids.next('placement'), clip: midi, start: 0, length: 4, offset: 0 }, ids)).toThrow(TypeError);
   });
 
-  it('i sample usati non si possono togliere', () => {
+  it('the used samples can\'t be removed', () => {
     const ids = sequentialIds();
     const s = sampleRef(ids);
     const clip = AudioClip.fromSample(ids.next('clip'), s, '#fff');
     let p = Project.empty('p', ids, 1).addingSample(s).addingSample(sampleRef(ids, { file: 'audio/b.wav' }));
     p = p.addingTrack(AudioTrack.empty(ids.next('track'), 'a', '#fff', 1).withSlot(0, clip));
-    expect(() => p.removingSample(s.id)).toThrow(/usato/);
+    expect(() => p.removingSample(s.id)).toThrow(/is used/);
     expect(p.withoutUnusedSamples().samples.map(x => x.id)).toEqual([s.id]);
   });
 
-  it('una clip che usa un sample assente rende il progetto non valido', () => {
+  it('a clip using a missing sample makes the project invalid', () => {
     const ids = sequentialIds();
     const clip = AudioClip.fromSample(ids.next('clip'), sampleRef(ids), '#fff');
     const track = AudioTrack.empty(ids.next('track'), 'a', '#fff', 1).withSlot(0, clip);
-    expect(() => Project.empty('p', ids, 1).addingTrack(track)).toThrow(/non è nel progetto/);
+    expect(() => Project.empty('p', ids, 1).addingTrack(track)).toThrow(/isn't in the project/);
   });
 
-  it('le parti non toccate sono condivise tra le versioni', () => {
+  it('the untouched parts are shared between the versions', () => {
     const ids = sequentialIds();
     const p = Project.empty('p', ids, 1)
       .addingTrack(AudioTrack.empty(asId('track-a'), 'a', '#fff', 1))

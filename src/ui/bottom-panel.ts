@@ -1,11 +1,11 @@
-/** Una vista dell'area in basso (editor audio, piano roll, strumento). */
+/** A view of the bottom area (audio editor, piano roll, instrument). */
 export interface BottomView {
   readonly element: HTMLElement;
   readonly isOpen: boolean;
   close(): void;
 }
 
-/** L'area sotto la timeline: mostra una vista alla volta. */
+/** The area below the timeline: it shows one view at a time. */
 export class BottomPanel {
   readonly element = Object.assign(document.createElement('div'), { className: 'bottom' });
   private readonly views: BottomView[] = [];
@@ -15,7 +15,7 @@ export class BottomPanel {
     this.element.append(...views.map(v => v.element));
   }
 
-  /** La vista aperta, se ce n'è una. */
+  /** The open view, if there is one. */
   get open(): BottomView | null {
     return this.views.find(v => v.isOpen) ?? null;
   }
@@ -24,7 +24,7 @@ export class BottomPanel {
     for (const v of this.views) if (v.isOpen) v.close();
   }
 
-  /** Apre `view` con `open` (che dice se ci è riuscita) e chiude le altre. */
+  /** Opens `view` with `open` (which says whether it succeeded) and closes the others. */
   show(view: BottomView, open: () => boolean): boolean {
     for (const v of this.views) if (v !== view && v.isOpen) v.close();
     return open();

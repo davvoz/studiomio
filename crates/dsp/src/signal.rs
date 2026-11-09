@@ -1,21 +1,21 @@
-//! Funzioni di base sul segnale, identiche a `src/dsp/signal.ts`.
+//! Basic signal functions, identical to `src/dsp/signal.ts`.
 
 use std::f64::consts::PI;
 
-/// Arrotondamento come `Math.round` di JavaScript (le metà vanno verso +∞), così i
-/// risultati coincidono con la versione TypeScript.
+/// Rounding like JavaScript's `Math.round` (halves go towards +∞), so the
+/// results match the TypeScript version.
 #[inline]
 pub fn js_round(x: f64) -> f64 {
     (x + 0.5).floor()
 }
 
-/// Fase riportata in [-π, π].
+/// Phase wrapped into [-π, π].
 #[inline]
 pub fn princarg(p: f64) -> f64 {
     p - 2.0 * PI * js_round(p / (2.0 * PI))
 }
 
-/// Finestra di Hann periodica.
+/// Periodic Hann window.
 pub fn hann(n: usize) -> Vec<f64> {
     (0..n).map(|i| 0.5 - 0.5 * (2.0 * PI * i as f64 / n as f64).cos()).collect()
 }
@@ -35,7 +35,7 @@ pub fn mix_mono(channels: &[&[f32]]) -> Vec<f32> {
     m
 }
 
-/// Copia in `dst` il frame che parte da `start`, moltiplicato per la finestra (zeri fuori).
+/// Copies into `dst` the frame starting at `start`, multiplied by the window (zeros outside).
 pub fn read_frame(x: &[f32], start: i64, win: &[f64], dst: &mut [f64]) {
     let n = win.len();
     let len = x.len() as i64;
@@ -52,7 +52,7 @@ pub fn read_frame(x: &[f32], start: i64, win: &[f64], dst: &mut [f64]) {
     }
 }
 
-/// Overlap-add normalizzato: divide per la somma delle finestre.
+/// Normalized overlap-add: divides by the sum of the windows.
 pub fn normalize_overlap(out: &mut [f32], wsum: &[f32]) {
     for (y, &w) in out.iter_mut().zip(wsum) {
         if w > 1e-3 {

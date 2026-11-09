@@ -1,10 +1,10 @@
-// I rack salvati dall'utente come file: uno per rack, sotto Documenti\studiomio\Rack. Come per i
-// preset, chi è il rack (il nome) è scritto nel file, non nel suo nome: l'utente può spostare,
-// rinominare o copiare i file. Il contenuto lo controlla l'app quando li rilegge.
+// The racks saved by the user as files: one per rack, under Documents\studiomio\Rack. As for
+// presets, who the rack is (the name) is written in the file, not in its name: the user can move,
+// rename or copy the files. The app checks the content when it reads them back.
 import { rm } from 'node:fs/promises';
 import { freePath, safeName, scanJson, writeJson } from './presets.js';
 
-/** Un rack come lo manda l'app: il nome e il resto (dispositivi e macro). */
+/** A rack as the app sends it: the name and the rest (devices and macros). */
 export interface StoredRack {
   readonly name: string;
   readonly [field: string]: unknown;
@@ -15,12 +15,12 @@ interface RackFile {
   readonly path: string;
 }
 
-/** Tutti i rack nella cartella (e sotto); i file che non sono rack si saltano. */
+/** All the racks in the folder (and below); files that aren't racks are skipped. */
 export async function loadRacks(root: string): Promise<StoredRack[]> {
   return (await scan(root)).map(f => f.rack);
 }
 
-/** Scrive il rack: sopra il suo file se c'è già (stesso nome), se no in un file nuovo. */
+/** Writes the rack: over its file if it already exists (same name), otherwise in a new file. */
 export async function saveRack(root: string, rack: StoredRack): Promise<void> {
   const existing = (await scan(root)).find(f => f.rack.name === rack.name);
   const path = existing?.path ?? await freePath(root, safeName(rack.name));
@@ -28,7 +28,7 @@ export async function saveRack(root: string, rack: StoredRack): Promise<void> {
   await writeJson(path, { studiomio: 'rack', version: 1, ...body });
 }
 
-/** Elimina i file del rack (per nome). */
+/** Deletes the rack's files (by name). */
 export async function removeRack(root: string, name: string): Promise<void> {
   for (const f of await scan(root)) {
     if (f.rack.name === name) await rm(f.path, { force: true });

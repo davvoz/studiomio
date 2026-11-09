@@ -1,28 +1,28 @@
-/* La matematica del Drive, comune al suono (drive-core.ts) e al disegno della curva nel pannello:
- * così la curva che si vede è esattamente quella che si sente. Funzioni pure.
+/* The Drive's maths, shared by the sound (drive-core.ts) and the curve drawing in the panel:
+ * so the curve you see is exactly the one you hear. Pure functions.
  *
- * Ogni curva ha anche la sua primitiva (antiderivata) esatta: il motore la usa per l'antialiasing
- * "ADAA" — al posto di f(x) a ogni campione si prende la pendenza media della curva tra il
- * campione prima e questo, (F(x) − F(x₋₁)) / (x − x₋₁). Le armoniche altissime che la distorsione
- * crea si attenuano prima di ripiegarsi; insieme al sovracampionamento l'aliasing sparisce. */
+ * Each curve also has its exact antiderivative: the engine uses it for "ADAA"
+ * antialiasing — instead of f(x) at each sample it takes the curve's average slope between the
+ * previous sample and this one, (F(x) − F(x₋₁)) / (x − x₋₁). The very high harmonics the distortion
+ * creates are attenuated before folding back; together with oversampling the aliasing disappears. */
 
 export interface Shape {
   readonly id: string;
   readonly label: string;
-  /** La curva: per segnali piccoli quasi una retta, poi satura. */
+  /** The curve: for small signals almost a straight line, then it saturates. */
   readonly fn: (x: number) => number;
-  /** La sua primitiva (F' = fn), per l'antialiasing. */
+  /** Its antiderivative (F' = fn), for antialiasing. */
   readonly integral: (x: number) => number;
 }
 
 const LN2 = Math.LN2;
-/** ln(cosh x) senza traboccare per x grandi. */
+/** ln(cosh x) without overflowing for large x. */
 const logCosh = (x: number): number => {
   const a = Math.abs(x);
   return a + Math.log1p(Math.exp(-2 * a)) - LN2;
 };
 
-/** Il clip "duro": lineare fino a KNEE, poi un ginocchio corto fino a 1. */
+/** The "hard" clip: linear up to KNEE, then a short knee up to 1. */
 const KNEE = 0.9, SOFT = 0.1;
 const hard = (x: number): number => {
   const a = Math.abs(x);
@@ -33,36 +33,36 @@ const hardIntegral = (x: number): number => {
   return a <= KNEE ? (a * a) / 2 : (KNEE * KNEE) / 2 + KNEE * (a - KNEE) + SOFT * SOFT * logCosh((a - KNEE) / SOFT);
 };
 
-/** La valvola: tanh più una parte pari (tanh²) che rende la curva asimmetrica. */
+/** The tube: tanh plus an even part (tanh²) making the curve asymmetric. */
 const TUBE_EVEN = 0.25;
 
-/** Le curve, nell'ordine dei valori del parametro "Forma". */
+/** The curves, in the order of the values of the "Shape" parameter. */
 export const SHAPES: readonly Shape[] = [
-  // simmetrica: armoniche dispari, morbida
-  { id: 'soft', label: 'Morbida', fn: x => Math.tanh(x), integral: logCosh },
-  // asimmetrica: il lato positivo arriva più in alto, nascono le armoniche pari (calde)
+  // symmetric: odd harmonics, soft
+  { id: 'soft', label: 'Soft', fn: x => Math.tanh(x), integral: logCosh },
+  // asymmetric: the positive side goes higher, even (warm) harmonics are born
   {
-    id: 'tube', label: 'Valvola',
+    id: 'tube', label: 'Tube',
     fn: x => { const t = Math.tanh(x); return t + TUBE_EVEN * t * t; },
     integral: x => logCosh(x) + TUBE_EVEN * (x - Math.tanh(x)),
   },
-  // ginocchio larghissimo: comprime piano, come il nastro
-  { id: 'tape', label: 'Nastro', fn: x => x / Math.sqrt(1 + x * x), integral: x => Math.sqrt(1 + x * x) },
-  { id: 'hard', label: 'Dura', fn: hard, integral: hardIntegral },
-  // molto asimmetrica: il lato positivo urla, il negativo si schiaccia prima
+  // very wide knee: it compresses gently, like tape
+  { id: 'tape', label: 'Tape', fn: x => x / Math.sqrt(1 + x * x), integral: x => Math.sqrt(1 + x * x) },
+  { id: 'hard', label: 'Hard', fn: hard, integral: hardIntegral },
+  // very asymmetric: the positive side screams, the negative squashes earlier
   {
     id: 'fuzz', label: 'Fuzz',
     fn: x => (x >= 0 ? 1 - Math.exp(-2 * x) : -0.7 * (1 - Math.exp(1.4 * x))),
     integral: x => (x >= 0 ? x + (Math.exp(-2 * x) - 1) / 2 : -0.7 * x + 0.5 * (Math.exp(1.4 * x) - 1)),
   },
-  // ripiegamento: oltre il massimo il suono torna indietro, armoniche ovunque
+  // folding: beyond the maximum the sound turns back, harmonics everywhere
   { id: 'fold', label: 'Fold', fn: x => Math.sin(x), integral: x => 1 - Math.cos(x) },
 ];
 
-/** La primitiva in tabella, per il motore: interpolazione cubica di Hermite che usa i valori di
- *  F e della sua pendenza esatta (la curva) a ogni nodo, quindi resta liscia e coerente con la
- *  curva anche sulle differenze minuscole dell'antialiasing; fuori dalla tabella la curva è
- *  ormai piatta e la primitiva prosegue in linea retta. Molto più veloce di log, exp e tanh. */
+/** The tabulated antiderivative, for the engine: cubic Hermite interpolation using the values of
+ *  F and its exact slope (the curve) at each node, so it stays smooth and consistent with the
+ *  curve even on antialiasing's tiny differences; outside the table the curve is
+ *  flat by now and the antiderivative continues in a straight line. Much faster than log, exp and tanh. */
 export class IntegralTable {
   private readonly F: Float64Array;
   private readonly f: Float64Array;
@@ -87,49 +87,49 @@ export class IntegralTable {
   }
 }
 
-/** Le forme che girano in tondo (il fold) non si possono mettere in una tabella finita. */
+/** The shapes that go round in circles (the fold) can't be put in a finite table. */
 const PERIODIC = new Set(['fold']);
 
-/** La primitiva più veloce per il motore: in tabella, o quella esatta per le forme periodiche. */
+/** The fastest antiderivative for the engine: tabulated, or the exact one for periodic shapes. */
 export const fastIntegral = (shape: Shape): ((x: number) => number) => {
   if (PERIODIC.has(shape.id)) return shape.integral;
-  // il nastro si appiattisce piano: tabella più lunga
+  // tape flattens slowly: longer table
   const table = new IntegralTable(shape, shape.id === 'tape' ? 96 : 24);
   return x => table.at(x);
 };
 
-/** Sotto questa distanza tra due campioni la pendenza media è la curva nel punto di mezzo. */
+/** Below this distance between two samples the average slope is the curve at the midpoint. */
 const ADAA_EPS = 1e-5;
 
-/** Un passo di antialiasing: il valore "medio" della curva tra `prev` e `x`. */
+/** An antialiasing step: the "average" value of the curve between `prev` and `x`. */
 export function adaa(shape: Shape, x: number, prev: number, fPrev: number, fx: number): number {
   const d = x - prev;
   return Math.abs(d) > ADAA_EPS ? (fx - fPrev) / d : shape.fn((x + prev) / 2);
 }
 
-/** Lo spostamento massimo del bias (asimmetria), sul segnale già amplificato. */
+/** The maximum shift of the bias (asymmetry), on the already amplified signal. */
 export const MAX_BIAS = 0.5;
 
 export interface DriveSettings {
   readonly shape: number;
-  /** Guadagno prima della curva, lineare. */
+  /** Gain before the curve, linear. */
   readonly drive: number;
   /** −1 … +1. */
   readonly bias: number;
 }
 
-/** La curva con drive e bias, senza scalino in continua: y(0) = 0. */
+/** The curve with drive and bias, without a DC step: y(0) = 0. */
 export function transfer(s: DriveSettings): (x: number) => number {
   const f = (SHAPES[s.shape] ?? SHAPES[0]).fn, b = s.bias * MAX_BIAS, g = s.drive, f0 = f(b);
   return x => f(g * x + b) - f0;
 }
 
-/** Livello di riferimento della compensazione: un seno a −6 dBFS esce allo stesso volume. */
+/** Reference level of the makeup: a sine at −6 dBFS comes out at the same volume. */
 const REF_AMPLITUDE = 0.5;
 const REF_POINTS = 256;
 
-/** Il guadagno che riporta un seno di riferimento al suo volume dopo la curva (RMS, senza la
- *  continua che il bias lascia). Alzare il drive cambia il colore, non (molto) il volume. */
+/** The gain bringing a reference sine back to its volume after the curve (RMS, without the
+ *  DC the bias leaves). Raising the drive changes the colour, not (much) the volume. */
 export function autoGain(s: DriveSettings): number {
   const t = transfer(s);
   let sum = 0, sum2 = 0;

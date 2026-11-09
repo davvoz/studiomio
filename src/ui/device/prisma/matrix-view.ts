@@ -1,7 +1,7 @@
-/* La matrice delle modulazioni di Prisma: un posto per riga, con la fonte, la quantità (in
- * frazione della corsa della manopola di destinazione), la polarità, la curva, la fonte aux che
- * la scala e la destinazione. La quantità è un cursore che si può mappare su una macro del rack
- * e modulare dalle clip, come una manopola. */
+/* Prisma's modulation matrix: one slot per row, with the source, the amount (as a
+ * fraction of the target knob's travel), the polarity, the curve, the aux source
+ * scaling it and the target. The amount is a slider that can be mapped to a rack macro
+ * and modulated from the clips, like a knob. */
 import {
   DESTINATIONS, MOD_SLOTS, POLARITIES, slotParam, SOURCES,
 } from '../../../devices/instruments/prisma/prisma';
@@ -10,8 +10,8 @@ import type { ParamValues } from '../../../model/device';
 import { el } from '../../dom';
 import type { ParamControl } from '../controls';
 
-/** Un cursore orizzontale: trascinare (Maiusc: fine), rotella, doppio clic per il predefinito.
- *  Se il minimo è negativo si riempie dallo zero. */
+/** A horizontal slider: drag (Shift: fine), wheel, double click for the default.
+ *  If the minimum is negative it fills from zero. */
 export class Slider implements ParamControl {
   readonly element = el('div', { className: 'prisma-slider', tabIndex: 0 });
   private readonly fill = el('div', { className: 'prisma-slider-fill' });
@@ -22,7 +22,7 @@ export class Slider implements ParamControl {
     this.value = value;
     this.element.append(this.fill, this.text);
     this.element.dataset.param = spec.id;
-    this.element.title = `${spec.label}: trascina in orizzontale (Maiusc: fine) · doppio clic: 0`;
+    this.element.title = `${spec.label}: drag horizontally (Shift: fine) · double click: 0`;
     this.element.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
       e.preventDefault();
@@ -74,7 +74,7 @@ export class Slider implements ParamControl {
   }
 }
 
-/** Le destinazioni nel menu, raggruppate. */
+/** The targets in the menu, grouped. */
 function destinationOptions(): HTMLElement[] {
   const groups = new Map<string, HTMLElement>();
   DESTINATIONS.forEach((d, i) => {
@@ -90,19 +90,19 @@ const sourceOptions = (none: string) => SOURCES.map((s, i) => el('option', { val
 export interface MatrixHost {
   values(): Readonly<Record<string, number>>;
   set(values: ParamValues, final: boolean): void;
-  /** Il cursore della quantità di un posto, registrato come gli altri controlli. */
+  /** A slot's amount slider, registered like the other controls. */
   slider(id: string, label?: string): Slider;
 }
 
-/** Una riga della matrice. */
+/** A row of the matrix. */
 class Row {
   readonly element: HTMLElement;
-  private readonly src = el<HTMLSelectElement>('select', { className: 'prisma-src-select', title: 'Fonte' }, ...sourceOptions('— fonte —'));
-  private readonly dst = el<HTMLSelectElement>('select', { className: 'prisma-dst-select', title: 'Destinazione' }, ...destinationOptions());
-  private readonly aux = el<HTMLSelectElement>('select', { className: 'prisma-aux-select', title: 'Aux: una fonte che scala la modulazione (es. la velocity, o una macro come "quanto")' }, ...sourceOptions('aux'));
-  private readonly pol = el<HTMLButtonElement>('button', { className: 'mini prisma-pol', title: 'Uni: sposta da una parte · Bi: attorno alla manopola' });
+  private readonly src = el<HTMLSelectElement>('select', { className: 'prisma-src-select', title: 'Source' }, ...sourceOptions('— source —'));
+  private readonly dst = el<HTMLSelectElement>('select', { className: 'prisma-dst-select', title: 'Target' }, ...destinationOptions());
+  private readonly aux = el<HTMLSelectElement>('select', { className: 'prisma-aux-select', title: 'Aux: a source scaling the modulation (e.g. the velocity, or a macro as "how much")' }, ...sourceOptions('aux'));
+  private readonly pol = el<HTMLButtonElement>('button', { className: 'mini prisma-pol', title: 'Uni: moves in one direction · Bi: around the knob' });
   private readonly curve: Slider;
-  private readonly clear = el<HTMLButtonElement>('button', { className: 'mini', textContent: '×', title: 'Svuota il posto' });
+  private readonly clear = el<HTMLButtonElement>('button', { className: 'mini', textContent: '×', title: 'Clear the slot' });
 
   constructor(private readonly n: number, host: MatrixHost) {
     const p = (f: Parameters<typeof slotParam>[1]) => slotParam(n, f);
@@ -118,7 +118,7 @@ class Row {
     this.curve = host.slider(p('Curve'), '⤴ ');
     this.curve.element.classList.add('prisma-curve');
     this.curve.element.removeAttribute('data-param');
-    this.curve.element.title = 'Curva della fonte: positiva sale subito, negativa tardi (doppio clic: diritta)';
+    this.curve.element.title = 'Source curve: positive rises right away, negative late (double click: straight)';
     this.element = el('div', { className: 'prisma-row' },
       el('span', { className: 'prisma-row-n', textContent: String(n) }), this.src, amount.element, this.pol, this.curve.element, this.aux, this.dst, this.clear);
   }

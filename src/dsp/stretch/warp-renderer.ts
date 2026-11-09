@@ -8,14 +8,14 @@ import type { StretchSettings, StretcherTable, TimeStretcher } from './stretcher
 import { TextureStretcher, TonesStretcher } from './wsola';
 
 export interface WarpJob {
-  /** Mappa di warp: [campione di uscita, campione di ingresso], crescenti. */
+  /** Warp map: [output sample, input sample], increasing. */
   readonly points: readonly MapPoint[];
-  /** Lunghezza del risultato in campioni. */
+  /** Length of the result in samples. */
   readonly outLength: number;
-  /** Semitoni (con i centesimi come decimali). Ignorato dagli algoritmi che cambiano già l'intonazione. */
+  /** Semitones (with the cents as decimals). Ignored by the algorithms that already change the pitch. */
   readonly transpose: number;
   readonly settings: StretchSettings;
-  /** Il sample si legge al contrario: i punti della mappa sono nel sample rovesciato. */
+  /** The sample is read backwards: the map's points are in the reversed sample. */
   readonly reverse?: boolean;
 }
 
@@ -29,8 +29,8 @@ export const defaultStretchers = (): StretcherTable => ({
   complex: new ComplexStretcher(),
 });
 
-/** Applica un warp: sceglie l'algoritmo dalla tabella e gestisce la trasposizione
- *  (stretch più lungo/corto di 2^(st/12), poi ricampionamento alla durata richiesta). */
+/** Applies a warp: chooses the algorithm from the table and handles the transposition
+ *  (stretch longer/shorter by 2^(st/12), then resampling to the requested length). */
 export class WarpRenderer {
   constructor(private readonly stretchers: StretcherTable = defaultStretchers()) {}
 
@@ -45,7 +45,7 @@ export class WarpRenderer {
   }
 
   private stretcherFor(settings: StretchSettings): TimeStretcher {
-    // La tabella è tipizzata per modalità: qui l'abbinamento è garantito da StretcherTable.
+    // The table is typed per mode: here the pairing is guaranteed by StretcherTable.
     return this.stretchers[settings.mode] as TimeStretcher;
   }
 }

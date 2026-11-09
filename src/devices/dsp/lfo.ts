@@ -1,14 +1,14 @@
-/* Un LFO che, a tempo e con il trasporto che va, si aggancia alla battuta: la sua posizione si
- * calcola dal battito della timeline, non da quando il dispositivo è partito. Così un giro di
- * 1/4 comincia sempre sul quarto, anche dopo un salto, a ogni giro di loop e nell'export, e lo
- * stesso punto del brano dà sempre lo stesso valore (anche nelle onde casuali). Da fermo, o in
- * Hz, gira libero. Puro: niente Web Audio, si prova in Node. */
+/* An LFO that, tempo-synced and with the transport running, locks to the bar: its position is
+ * computed from the timeline beat, not from when the device started. So a 1/4
+ * cycle always starts on the quarter, even after a jump, at every loop round and in export, and the
+ * same point of the piece always gives the same value (also in the random waves). When stopped, or in
+ * Hz, it runs free. Pure: no Web Audio, tested in Node. */
 import type { TransportPosition } from './core';
 
-export const LFO_SHAPES = ['Sine', 'Triangle', 'Saw ↓', 'Saw ↑', 'Square', 'S&H', 'S&H morbido'] as const;
+export const LFO_SHAPES = ['Sine', 'Triangle', 'Saw ↓', 'Saw ↑', 'Square', 'S&H', 'Smooth S&H'] as const;
 export const LFO_SHAPE = { sine: 0, triangle: 1, sawDown: 2, sawUp: 3, square: 4, sampleHold: 5, smoothRandom: 6 } as const;
 
-/** Un valore casuale in −1..1 per il giro `cycle` (sempre lo stesso per lo stesso giro e seme). */
+/** A random value in −1..1 for cycle `cycle` (always the same for the same cycle and seed). */
 export function cycleRandom(cycle: number, seed = 0): number {
   let h = (Math.floor(cycle) ^ Math.imul(seed, 0x9e3779b1)) | 0;
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
@@ -17,8 +17,8 @@ export function cycleRandom(cycle: number, seed = 0): number {
   return h / 0x80000000;
 }
 
-/** Le onde, da −1 a 1, alla fase `p` (0..1) del giro `k`: il seno e il triangolo partono da 0
- *  e salgono, i denti di sega e l'onda quadra dagli estremi. */
+/** The waves, from −1 to 1, at phase `p` (0..1) of cycle `k`: sine and triangle start from 0
+ *  and rise, the saws and the square from the extremes. */
 const WAVES: readonly ((p: number, k: number, seed: number) => number)[] = [
   p => Math.sin(2 * Math.PI * p),
   p => (p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4),
@@ -32,23 +32,23 @@ const WAVES: readonly ((p: number, k: number, seed: number) => number)[] = [
   },
 ];
 
-/** Il valore dell'onda `shape` dopo `cycles` giri (la parte intera dice quale giro, la
- *  frazione dove dentro il giro). */
+/** The value of wave `shape` after `cycles` cycles (the integer part says which cycle, the
+ *  fraction where inside the cycle). */
 export function lfoAt(shape: number, cycles: number, seed = 0): number {
   const k = Math.floor(cycles);
   return (WAVES[shape] ?? WAVES[0])(cycles - k, k, seed);
 }
 
-/** Come gira un LFO in questo blocco: `beats` quarti per giro (a tempo) o `hz` giri al secondo. */
+/** How an LFO runs in this block: `beats` quarters per cycle (synced) or `hz` cycles per second. */
 export interface LfoRate {
   readonly beats: number | null;
   readonly hz: number;
 }
 
-/** Dove si trova un LFO, in giri. A ogni blocco `start` lo riallinea alla battuta (se è a
- *  tempo e il trasporto va) o lo lascia correre; `next` avanza di un campione. */
+/** Where an LFO is, in cycles. At each block `start` realigns it to the bar (if it's
+ *  synced and the transport is running) or lets it run; `next` advances by one sample. */
 export class LfoClock {
-  /** I giri fatti: la frazione è la fase. */
+  /** The cycles done: the fraction is the phase. */
   cycles = 0;
   private step = 0;
 

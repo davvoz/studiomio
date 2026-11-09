@@ -1,9 +1,9 @@
-/* Ciò che hanno in comune i controller della session (APC40 mkII, Launchpad): il riquadro che
- * suonano (prima traccia, prima scena, larghezza e altezza), lo stato di slot, scene e blocchi da
- * cui si accendono i pad, la traccia scelta, il dispositivo che muovono, i controlli continui
- * (si applica l'ultimo valore a ogni giro, e una corsa è un solo annullamento) e i LED, mandati
- * solo quando cambiano e a raffiche limitate. Ogni controller ci mette il suo protocollo: come
- * si avvia, cosa fa ogni pulsante, di che colore è ogni LED e come lo si accende. */
+/* What the session controllers (APC40 mkII, Launchpad) have in common: the box they
+ * play (first track, first scene, width and height), the state of slots, scenes and blocks the
+ * pads light up from, the chosen track, the device they move, the continuous controls
+ * (the last value is applied each round, and a sweep is a single undo) and the LEDs, sent
+ * only when they change and in limited bursts. Each controller brings its protocol: how
+ * it starts, what each button does, what colour each LED is and how it's lit. */
 import type { DeviceId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { MAX_BPM, MIN_BPM } from '../core/music-time';
@@ -25,7 +25,7 @@ import type { Edit, ProjectStore } from '../store/project-store';
 import { setMacro } from '../store/rack-edits';
 import type { ControlledDevice, SessionRing, UiState } from '../ui/ui-state';
 
-/** Ciò che il controller usa del motore (PlaybackEngine lo è già). */
+/** What the controller uses of the engine (PlaybackEngine already is one). */
 export interface SurfaceEngine {
   readonly playing: boolean;
   readonly position: Beats;
@@ -35,15 +35,15 @@ export interface SurfaceEngine {
   stopTrack(track: TrackId): void;
   stopAllClips(): void;
   sessionState(track: Track): TrackSessionState;
-  /** Dove una curva che suona porta adesso un parametro (spostamento della manopola, −1 … +1),
-   *  o null: anelli e fader mostrano il valore che si sente. */
+  /** Where a playing curve takes a parameter now (knob offset, −1 … +1),
+   *  or null: rings and faders show the value that's heard. */
   modulationAt?(owner: ChainOwner, target: ModTarget): number | null;
 }
 
-/** Cosa mostra l'area in basso dell'app. */
+/** What the app's bottom area shows. */
 export type DetailView = 'devices' | 'clip' | null;
 
-/** L'app vista dal controller. */
+/** The app as the controller sees it. */
 export interface SurfaceHost {
   readonly store: ProjectStore;
   readonly ui: UiState;
@@ -58,19 +58,19 @@ export interface SurfaceHost {
   say(text: string): void;
 }
 
-/** Il dispositivo di una catena, come lo vedono le manopole. Un rack è un dispositivo con 8
- *  parametri, le sue macro, e viene prima dei suoi dispositivi (come in Live). */
+/** A chain's device, as the knobs see it. A rack is a device with 8
+ *  parameters, its macros, and comes before its devices (as in Live). */
 export interface ChainDevice {
-  /** "instrument" per lo strumento, altrimenti l'id dell'effetto o del rack. */
+  /** "instrument" for the instrument, otherwise the id of the effect or the rack. */
   readonly key: string;
   readonly type: DeviceType;
   readonly settings: DeviceSettings;
-  /** Solo gli effetti si spengono. */
+  /** Only effects can be turned off. */
   readonly enabled: boolean | null;
   readonly rack?: Rack;
 }
 
-/** Il dispositivo che le manopole muovono adesso, con i suoi parametri. */
+/** The device the knobs move now, with its parameters. */
 export interface Controlled {
   readonly owner: ChainOwner;
   readonly chain: readonly ChainDevice[];
@@ -81,36 +81,36 @@ export interface Controlled {
   readonly params: readonly ParamSpec[];
 }
 
-/** Come si accende il pad di uno slot: spento, del colore della clip, suona, in coda. */
+/** How a slot's pad lights up: off, the clip's colour, playing, queued. */
 export type SlotLight = 'off' | 'playing' | 'queued' | { readonly clip: string };
-/** Il pulsante di una scena: spento (riga vuota), suona, in coda, o del colore della scena (null: non ne ha). */
+/** A scene's button: off (empty row), playing, queued, or the scene's colour (null: it has none). */
 export type SceneLight = 'off' | 'playing' | 'queued' | { readonly color: string | null };
-/** Un pad della mappa dei blocchi: fuori dal progetto, il riquadro, qualcosa suona, ci sono clip, vuoto. */
+/** A block map pad: outside the project, the box, something playing, there are clips, empty. */
 export type BlockLight = 'off' | 'ring' | 'playing' | 'clips' | 'empty';
 
 export const INSTRUMENT_KEY = 'instrument';
-/** Quanti parametri ha un banco del dispositivo (le 8 manopole, gli 8 fader). */
+/** How many parameters a device bank has (the 8 knobs, the 8 faders). */
 export const PARAMS_PER_BANK = 8;
-/** Dopo quanto un fader fermo chiude il suo passo di annullamento. */
+/** After how long a still fader closes its undo step. */
 const MERGE_IDLE_MS = 400;
-/** Dopo l'avvio il controller può mandare la posizione di fader e manopole: non deve cambiare
- *  il mixer del progetto. */
+/** After the startup the controller may send the position of faders and knobs: it mustn't change
+ *  the project's mixer. */
 export const SETTLE_MS = 500;
-/** I colpi di Tap Tempo più distanti di così ricominciano il conto. */
+/** Tap Tempo hits further apart than this restart the count. */
 const TAP_RESET_MS = 2000;
-/** Mentre si muove un controllo non gli si rimanda il valore (arrotondato al passo del
- *  parametro): si contenderebbero la posizione. Fermo da tanto, lo si allinea. */
+/** While a control is moving its value isn't sent back to it (rounded to the parameter's
+ *  step): they'd fight over the position. Still for long, it's aligned. */
 const TOUCH_MS = 300;
 
 export abstract class SessionSurface {
-  /** Ultimo valore mandato a ogni LED (e anello o fader), per mandare solo i cambi. */
+  /** Last value sent to each LED (and ring or fader), to send only the changes. */
   protected readonly sent = new Map<string, number>();
-  /** Fader e manopole arrivati dall'ultimo giro: si applica solo l'ultimo valore di ciascuno. */
+  /** Faders and knobs arrived since the last round: only the last value of each is applied. */
   private readonly pending = new Map<string, () => void>();
   protected shift = false;
   protected masterSelected = false;
   private lastTrack: TrackId | null = null;
-  /** Il dispositivo scelto in ogni catena, e il banco di parametri di ogni dispositivo. */
+  /** The chosen device in each chain, and the parameter bank of each device. */
   protected readonly deviceIndex = new Map<ChainOwner, number>();
   protected readonly banks = new Map<string, number>();
   protected locked: ControlledDevice | null = null;
@@ -118,20 +118,20 @@ export abstract class SessionSurface {
   private lastMove = 0;
   protected settleUntil = 0;
   private taps: number[] = [];
-  /** Quando ogni controllo è stato mosso l'ultima volta. */
+  /** When each control was last moved. */
   protected readonly touched = new Map<string, number>();
   private failed = false;
-  /** Scollegato: non si manda più niente. */
+  /** Disconnected: nothing more is sent. */
   protected stopped = false;
 
-  /** Il nome nella barra di stato ("APC40", "Launchpad X"). */
+  /** The name in the status bar ("APC40", "Launchpad X"). */
   protected abstract readonly label: string;
-  /** Il prefisso delle chiavi con cui si uniscono le modifiche continue. */
+  /** The prefix of the keys continuous changes are merged by. */
   protected abstract readonly mergePrefix: string;
-  /** Tracce e scene del riquadro. */
+  /** Tracks and scenes of the box. */
   protected abstract readonly width: number;
   protected abstract readonly height: number;
-  /** Messaggi al massimo per giro: ciò che avanza parte al giro dopo. */
+  /** At most this many messages per round: what's left goes in the next round. */
   protected abstract readonly maxSend: number;
 
   constructor(
@@ -140,23 +140,23 @@ export abstract class SessionSurface {
     protected readonly now: () => number = () => performance.now(),
   ) {}
 
-  /** Il controller è appena stato collegato: comincia l'avvio. */
+  /** The controller has just been connected: the startup begins. */
   abstract start(): void;
-  /** Il controller se ne va (o l'app si chiude). */
+  /** The controller goes away (or the app closes). */
   abstract stop(): void;
-  /** Vero quando l'avvio è finito e il controller lavora. */
+  /** True when the startup is finished and the controller works. */
   abstract get ready(): boolean;
-  /** Avanza l'avvio con un SysEx arrivato (o null, a ogni giro: per le attese). */
+  /** Advances the startup with an arrived SysEx (or null, every round: for the waits). */
   protected abstract handshake(data: ArrayLike<number> | null): void;
-  /** Un messaggio (non SysEx) dopo l'avvio. Vero se era un controllo continuo: i LED li
-   *  aggiorna il giro, non serve farlo subito. */
+  /** A message (not SysEx) after the startup. True if it was a continuous control: the LEDs are
+   *  updated by the round, no need to do it right away. */
   protected abstract input(kind: number, channel: number, number: number, value: number): boolean;
-  /** Lo stato di ogni LED che il controller mostra adesso, per chiave (vedi noteKey e ccKey). */
+  /** The state of every LED the controller shows now, by key (see noteKey and ccKey). */
   protected abstract leds(): Map<string, number>;
-  /** I messaggi che accendono un LED. */
+  /** The messages that light a LED. */
   protected abstract ledMessages(status: number, number: number, value: number): number[][];
 
-  /** Un giro: applica fader e manopole arrivati, chiude le modifiche continue ferme, aggiorna i LED. */
+  /** A round: applies the faders and knobs that arrived, closes still continuous changes, updates the LEDs. */
   tick(): void {
     if (this.stopped) return;
     if (!this.ready) return this.handshake(null);
@@ -169,7 +169,7 @@ export abstract class SessionSurface {
       this.refresh();
       this.failed = false;
     } catch (e) {
-      // un errore non deve ripetersi a ogni giro nella barra di stato
+      // an error mustn't repeat every round in the status bar
       if (!this.failed) {
         console.error(this.label, e);
         this.fail(e);
@@ -178,11 +178,11 @@ export abstract class SessionSurface {
     }
   }
 
-  /** Un messaggio MIDI dal controller. */
+  /** A MIDI message from the controller. */
   receive(data: ArrayLike<number>): void {
     if (this.stopped) return;
     if (data[0] === 0xf0) return this.handshake(data);
-    if (!this.ready) return; // come Live: i controlli lavorano dopo l'avvio
+    if (!this.ready) return; // like Live: the controls work after the startup
     const [status, number, value = 0] = Array.from(data);
     let continuous = false;
     try {
@@ -197,7 +197,7 @@ export abstract class SessionSurface {
     this.host.say(`${this.label}: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // ---------------------------------------------------------------- riquadro
+  // ---------------------------------------------------------------- box
 
   protected get project(): Project {
     return this.host.store.project;
@@ -207,12 +207,12 @@ export abstract class SessionSurface {
     return this.host.ui.sessionRing ?? { track: 0, scene: 0, width: this.width, height: this.height };
   }
 
-  /** Le colonne sono quelle della session: le tracce che si vedono (un gruppo chiuso è una colonna sola). */
+  /** The columns are the session's: the visible tracks (a closed group is a single column). */
   protected trackAt(col: number): Track | undefined {
     return col >= 0 && col < this.width ? this.project.visibleTracks[this.ring.track + col] : undefined;
   }
 
-  /** Le tracce del riquadro, una per colonna (undefined dove non ce ne sono). */
+  /** The box's tracks, one per column (undefined where there are none). */
   protected ringTracks(): (Track | undefined)[] {
     return Array.from({ length: this.width }, (_, c) => this.trackAt(c));
   }
@@ -221,7 +221,7 @@ export abstract class SessionSurface {
     this.setRing(this.ring.track + dx, this.ring.scene + dy);
   }
 
-  /** Il riquadro resta dentro il progetto (se le tracce sono meno della larghezza, parte dalla prima). */
+  /** The box stays inside the project (if there are fewer tracks than the width, it starts from the first). */
   protected setRing(track: number, scene: number): void {
     const p = this.project;
     this.host.ui.setSessionRing({
@@ -231,7 +231,7 @@ export abstract class SessionSurface {
     });
   }
 
-  /** Il riquadro può andare in quella direzione? */
+  /** Can the box go in that direction? */
   protected canMove(direction: 'up' | 'down' | 'left' | 'right'): boolean {
     const r = this.ring, p = this.project;
     switch (direction) {
@@ -242,7 +242,7 @@ export abstract class SessionSurface {
     }
   }
 
-  /** Il pad di uno slot del riquadro: lancia la clip (uno slot vuoto ferma la traccia, come un clic). */
+  /** The pad of a box slot: launches the clip (an empty slot stops the track, like a click). */
   protected launchPad(col: number, row: number): void {
     const track = this.trackAt(col), scene = this.ring.scene + row;
     if (track && scene < this.project.scenes.length) this.host.engine.launchSlot(track.id, scene);
@@ -253,19 +253,19 @@ export abstract class SessionSurface {
     if (scene < this.project.scenes.length) this.host.engine.launchScene(scene);
   }
 
-  /** La mappa dei blocchi: ogni pad è un blocco grande quanto il riquadro; premerlo ci porta il riquadro. */
+  /** The block map: each pad is a block as big as the box; pressing it brings the box there. */
   protected jumpToBlock(col: number, row: number): void {
     const p = this.project;
     if (col * this.width >= p.visibleTracks.length || row * this.height >= p.scenes.length) return;
     this.setRing(col * this.width, row * this.height);
   }
 
-  /** Lo slot di una traccia: quella che suona, quella in coda, il colore della clip, spento. */
+  /** A track's slot: the playing one, the queued one, the clip's colour, off. */
   protected slotLight(track: Track | undefined, scene: number): SlotLight {
     if (!track || scene >= track.slots.length) return 'off';
     const { engine } = this.host;
     if (track instanceof GroupTrack) {
-      // lo slot di un gruppo: dalle sue tracce, nel colore del gruppo
+      // a group's slot: from its tracks, in the group's colour
       const members = this.project.soundingTracks(track.id).map(t => [t, engine.sessionState(t)] as const);
       const g = groupSlotState(members, scene);
       return g.queued ? 'queued' : g.playing ? 'playing' : g.clips ? { clip: track.color } : 'off';
@@ -277,8 +277,8 @@ export abstract class SessionSurface {
     return clip ? { clip: clip.color } : 'off';
   }
 
-  /** Il pulsante della riga `row` del riquadro: in coda se qualcosa della riga lo è, suona se
-   *  suona una sua clip, del colore della scena se la riga ha clip, spento se è vuota. */
+  /** The button of the box's row `row`: queued if something in the row is, playing if
+   *  one of its clips plays, the scene's colour if the row has clips, off if it's empty. */
   protected sceneLight(row: number): SceneLight {
     const p = this.project, { engine } = this.host;
     const s = this.ring.scene + row;
@@ -289,7 +289,7 @@ export abstract class SessionSurface {
     return scene.clips ? { color: p.scenes[s].color ?? null } : 'off';
   }
 
-  /** Un pad della mappa dei blocchi. */
+  /** A block map pad. */
   protected blockLight(col: number, row: number): BlockLight {
     const p = this.project, ring = this.ring, w = this.width, h = this.height;
     const t0 = col * w, s0 = row * h;
@@ -302,14 +302,14 @@ export abstract class SessionSurface {
     return 'empty';
   }
 
-  /** La traccia ferma, suona, o ha lo stop in coda. */
+  /** The track stopped, playing, or with the stop queued. */
   protected stopLight(track: Track | undefined): 'off' | 'playing' | 'queued' {
     if (!track) return 'off';
     const st = this.host.engine.sessionState(track);
     return st.queued === 'stop' ? 'queued' : st.playing ? 'playing' : 'off';
   }
 
-  // ---------------------------------------------------------------- traccia scelta
+  // ---------------------------------------------------------------- chosen track
 
   protected selectOwner(owner: ChainOwner): void {
     const { ui } = this.host;
@@ -323,7 +323,7 @@ export abstract class SessionSurface {
     return this.masterSelected ? MASTER : this.host.ui.track;
   }
 
-  // ---------------------------------------------------------------- dispositivi
+  // ---------------------------------------------------------------- devices
 
   protected moveDevice(delta: number): void {
     this.locked = null;
@@ -342,15 +342,15 @@ export abstract class SessionSurface {
     this.announce();
   }
 
-  /** Nella barra di stato: quale dispositivo e quali parametri hanno i controlli (il controller non ha un display). */
+  /** In the status bar: which device and which parameters the controls have (the controller has no display). */
   protected announce(): void {
     const c = this.controlled();
     if (!c) return;
     const names = c.params.map(p => p.label).join(', ');
-    this.host.say(`${this.label} · ${c.device.type.label}${c.banks > 1 ? ` · banco ${c.bank + 1}/${c.banks}` : ''}: ${names}`);
+    this.host.say(`${this.label} · ${c.device.type.label}${c.banks > 1 ? ` · bank ${c.bank + 1}/${c.banks}` : ''}: ${names}`);
   }
 
-  /** Il dispositivo che i controlli muovono: quello bloccato, o quello scelto nella traccia scelta. */
+  /** The device the controls move: the locked one, or the chosen one in the chosen track. */
   protected controlled(): Controlled | null {
     const p = this.project;
     const lock = this.locked;
@@ -375,29 +375,29 @@ export abstract class SessionSurface {
     return { owner, chain, index, device, bank, banks, params: all.slice(bank * PARAMS_PER_BANK, (bank + 1) * PARAMS_PER_BANK) };
   }
 
-  /** Lo spostamento che una curva dà adesso al parametro del dispositivo controllato (0: nessuno). */
+  /** The offset a curve gives now to the controlled device's parameter (0: none). */
   private offsetOf(c: Controlled, spec: ParamSpec): number {
     return this.host.engine.modulationAt?.(c.owner, { kind: 'device', device: c.device.key as DeviceId, param: spec.id }) ?? 0;
   }
 
-  /** Dove sta il parametro del dispositivo controllato (0..1), con la curva che suona: anelli e
-   *  fader mostrano il valore che si sente, come le manopole sullo schermo. */
+  /** Where the controlled device's parameter is (0..1), with the playing curve: rings and
+   *  faders show the value that's heard, like the knobs on screen. */
   protected heardUnit(c: Controlled, spec: ParamSpec): number {
     const base = paramToUnit(spec, resolveParams(c.device.type, c.device.settings.params)[spec.id]);
     return clamp(base + this.offsetOf(c, spec), 0, 1);
   }
 
-  /** Il parametro `i` del banco del dispositivo controllato, portato a `unit` (0..1): il valore
-   *  che si sente, quindi con una curva che suona la manopola va dove serve perché si senta
-   *  quello (niente salti). Un parametro mosso da una macro non si tocca: lo si dice. */
+  /** Parameter `i` of the controlled device's bank, brought to `unit` (0..1): the value
+   *  that's heard, so with a playing curve the knob goes where needed for that to be
+   *  heard (no jumps). A parameter moved by a macro isn't touched: it's said. */
   protected turnParam(i: number, unit: number): void {
     const c = this.controlled(), spec = c?.params[i];
     if (!c || !spec) return;
     const v = paramFromUnit(spec, unit - this.offsetOf(c, spec));
     const { rack, key } = c.device;
-    // anche una macro mappata su quella di un rack intorno
+    // also a macro mapped to one of a surrounding rack
     const macro = macroOf(this.project.racksOf(c.owner), key as DeviceKey, spec.id);
-    if (macro) return this.host.say(`${this.label}: ${spec.label} lo muove la macro ${macro.index + 1} di ${rackName(macro.rack)}.`);
+    if (macro) return this.host.say(`${this.label}: ${spec.label} is moved by macro ${macro.index + 1} of ${rackName(macro.rack)}.`);
     const index = rack ? rack.macros.findIndex((_, m) => macroParam(m) === spec.id) : -1;
     const edit = rack
       ? setMacro(c.owner, rack.id, index, v)
@@ -405,15 +405,15 @@ export abstract class SessionSurface {
         ? setInstrumentParam(c.owner as TrackId, spec.id, v)
         : setEffectParam(c.owner, key as DeviceId, spec.id, v);
     const id = `param-${c.owner}-${c.device.key}-${spec.id}`;
-    // una molla torna da sola: tirarla non è un passo di annullamento (la manopola non dice
-    // quando la si lascia: la molla aspetta che stia ferma)
+    // a spring returns by itself: pulling it isn't an undo step (the knob doesn't say
+    // when it's let go: the spring waits for it to be still)
     if (rack && rack.macros[index] && springOf(rack.macros[index])) this.later(id, () => this.host.store.apply(edit, { transient: true }));
     else this.later(id, () => this.move(edit, `${this.mergePrefix}-${id}`));
   }
 
-  // ---------------------------------------------------------------- controlli continui
+  // ---------------------------------------------------------------- continuous controls
 
-  /** Il controllo è già in quella posizione: non serve rimandargliela, e per un po' non lo si corregge. */
+  /** The control is already in that position: no need to send it back, and for a while it isn't corrected. */
   protected touch(key: string, value: number): void {
     this.sent.set(key, value);
     this.touched.set(key, this.now());
@@ -444,7 +444,7 @@ export abstract class SessionSurface {
     this.move(setTempo(Math.round(Math.max(MIN_BPM, Math.min(MAX_BPM, bpm)) * 100) / 100), mergeKey);
   }
 
-  /** Una modifica continua: i movimenti di un fader sono un solo passo di annullamento. */
+  /** A continuous change: a fader's movements are a single undo step. */
   protected move(edit: Edit, mergeKey: string): void {
     this.host.store.apply(edit, { mergeKey });
     this.merging = true;
@@ -457,7 +457,7 @@ export abstract class SessionSurface {
 
   // ---------------------------------------------------------------- LED
 
-  /** Calcola lo stato di ogni LED e manda quelli cambiati. */
+  /** Computes the state of every LED and sends the changed ones. */
   refresh(): void {
     const { ui } = this.host;
     if (ui.track !== this.lastTrack) {
@@ -465,7 +465,7 @@ export abstract class SessionSurface {
       if (ui.track) this.masterSelected = false;
     }
     const r = this.ring;
-    this.setRing(r.track, r.scene); // tracce o scene tolte: il riquadro rientra
+    this.setRing(r.track, r.scene); // tracks or scenes removed: the box comes back in
     const leds = this.leds();
     const now = this.now();
     let budget = this.maxSend;
@@ -477,19 +477,19 @@ export abstract class SessionSurface {
     }
   }
 
-  /** Un LED che per ora non si manda (vedi Apc40.knobFeedback). */
+  /** A LED that isn't sent for now (see Apc40.knobFeedback). */
   protected muted(_key: string): boolean {
     return false;
   }
 
-  /** Un LED: uno o più messaggi (vedi ledMessages). */
+  /** A LED: one or more messages (see ledMessages). */
   protected send(key: string, value: number): void {
     const [kind, channel, number] = key.split(':');
     for (const m of this.ledMessages((kind === 'n' ? 0x90 : 0xb0) | Number(channel), Number(number), value)) this.out(m);
     this.sent.set(key, value);
   }
 
-  /** Spegne tutti i LED accesi e lascia libera la session (allo scollegamento). */
+  /** Turns off all lit LEDs and frees the session (on disconnection). */
   protected darken(): void {
     for (const [key, value] of this.sent) if (value !== 0) this.send(key, 0);
     this.sent.clear();
@@ -498,8 +498,8 @@ export abstract class SessionSurface {
   }
 }
 
-/** I dispositivi di una catena, nell'ordine in cui il suono li attraversa; ogni rack prima dei
- *  suoi (anche dei rack che ha dentro). */
+/** A chain's devices, in the order the sound goes through them; each rack before
+ *  its own (also of the racks it has inside). */
 export function chainOf(p: Project, owner: ChainOwner): ChainDevice[] {
   const devices = new Map<DeviceKey, ChainDevice>();
   if (owner !== MASTER) {
@@ -519,7 +519,7 @@ export function chainOf(p: Project, owner: ChainOwner): ChainDevice[] {
   return chainItems(order, racks).flatMap(flat);
 }
 
-/** Un rack come dispositivo per le manopole: le 8 macro sono i suoi parametri. */
+/** A rack as a device for the knobs: the 8 macros are its parameters. */
 function rackDevice(p: Project, owner: ChainOwner, rack: Rack): ChainDevice {
   const params = rack.macros.map((m, i) => ({
     kind: 'number' as const, id: macroParam(i), min: 0, max: MACRO_MAX, default: 0,
@@ -534,5 +534,5 @@ export const noteKey = (note: number, channel = 0) => `n:${channel}:${note}`;
 export const ccKey = (cc: number, channel = 0) => `c:${channel}:${cc}`;
 export const bankKey = (owner: ChainOwner, device: string) => `${owner}/${device}`;
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-/** I parametri con lo zero nel mezzo (pan, guadagni ±): anello o fader che parte dal centro. */
+/** Parameters with zero in the middle (pan, ± gains): ring or fader starting from the centre. */
 export const bipolar = (p: ParamSpec) => p.kind === 'number' && p.min < 0 && p.max > 0;

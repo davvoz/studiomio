@@ -1,6 +1,6 @@
-/* La cornice comune agli editor delle clip (audio e piano roll): asse dei battiti, righello
- * con loop e bandierine, griglia, e i gesti che li modificano. Ogni editor ci aggiunge il
- * suo contenuto (forma d'onda, note). */
+/* The frame shared by the clip editors (audio and piano roll): beat axis, ruler
+ * with loop and flags, grid, and the gestures changing them. Each editor adds its
+ * content to it (waveform, notes). */
 import type { Beats, TimeSignature } from '../../core/music-time';
 import type { Clip } from '../../model/clip';
 import { dragLoop, LOOP_CURSOR, loopPartAt, type BeatRange, type LoopPart } from '../loop-drag';
@@ -9,23 +9,23 @@ import { snapTo } from '../timeline/geometry';
 import { COLORS } from '../timeline/painters';
 import { withLoopSafe, withRegionSafe, type BeatAxis } from './clip-geometry';
 
-/** Fasce del righello, dall'alto. */
+/** Ruler bands, from the top. */
 export const FRAME = { loopBand: 10, ruler: 28 } as const;
 
-/** Ciò che i gesti della cornice usano dell'editor. */
+/** What the frame's gestures use of the editor. */
 export interface ClipHost<C extends Clip> {
   readonly axis: BeatAxis;
-  /** Passo di aggancio per questo puntatore, o null se l'aggancio è spento. */
+  /** Snap step for this pointer, or null if snapping is off. */
   snapStep(p: Pointer): Beats | null;
-  /** Applica una modifica alla clip (un passo di annullamento). */
+  /** Applies a change to the clip (one undo step). */
   commit(label: string, fn: (c: C) => C): void;
-  /** Sposta il cursore della timeline dove la clip suona il battito `content`. */
+  /** Moves the timeline cursor to where the clip plays beat `content`. */
   seekContent(content: Beats): void;
   setAxis(axis: BeatAxis): void;
   invalidate(): void;
 }
 
-/** Un trascinamento in un editor: `preview` mostra la clip come sarebbe al rilascio. */
+/** A drag in an editor: `preview` shows the clip as it would be on release. */
 export interface ClipGesture<C extends Clip> {
   readonly cursor: string;
   move(p: Pointer): void;
@@ -40,10 +40,10 @@ export type FrameHit =
   | { readonly kind: 'ruler' };
 
 const FLAG_PX = 8, CLICK_PX = 3;
-/** Lunghezza delle tacche del righello per livello (battuta, battito, mezzo, il resto). */
+/** Length of the ruler's ticks per level (bar, beat, half, the rest). */
 const TICK_PX = [18, 8, 5, 3];
 
-/** Cosa c'è sotto il puntatore nel righello, o null se il puntatore è più in basso. */
+/** What's under the pointer in the ruler, or null if the pointer is lower. */
 export function frameHit(axis: BeatAxis, clip: Clip, x: number, y: number): FrameHit | null {
   if (y < FRAME.loopBand) return { kind: 'loop', part: loopPartAt(clip.loop, x, b => axis.beatToX(b)) };
   if (y >= FRAME.ruler) return null;
@@ -60,7 +60,7 @@ export const snappedBeat = <C extends Clip>(host: ClipHost<C>, p: Pointer, b: Be
   return s ? snapTo(b, s) : b;
 };
 
-/** Trascinare la bandierina di inizio o di fine della clip. */
+/** Dragging the clip's start or end flag. */
 export class FlagGesture<C extends Clip> implements ClipGesture<C> {
   readonly cursor = 'ew-resize';
   private beat: Beats | null = null;
@@ -74,7 +74,7 @@ export class FlagGesture<C extends Clip> implements ClipGesture<C> {
 
   end(): void {
     if (this.beat === null) return;
-    this.host.commit(this.edge === 'start' ? 'Inizio della clip' : 'Fine della clip', c => this.apply(c));
+    this.host.commit(this.edge === 'start' ? 'Clip start' : 'Clip end', c => this.apply(c));
   }
 
   cancel(): void {
@@ -92,7 +92,7 @@ export class FlagGesture<C extends Clip> implements ClipGesture<C> {
   }
 }
 
-/** Fascia del loop della clip: bordi, corpo e fuori come sul righello della timeline; un clic lo accende o spegne. */
+/** The clip's loop band: edges, body and outside as on the timeline's ruler; a click turns it on or off. */
 export class LoopBandGesture<C extends Clip> implements ClipGesture<C> {
   readonly cursor: string;
   private dragged = false;
@@ -113,8 +113,8 @@ export class LoopBandGesture<C extends Clip> implements ClipGesture<C> {
 
   end(): void {
     const r = this.range;
-    if (!this.dragged) return this.host.commit('Loop della clip', c => withLoopSafe(c, c.loop.start, c.loop.end, !c.loop.enabled));
-    if (r) this.host.commit('Loop della clip', c => withLoopSafe(c, r.start, r.end));
+    if (!this.dragged) return this.host.commit('Clip loop', c => withLoopSafe(c, c.loop.start, c.loop.end, !c.loop.enabled));
+    if (r) this.host.commit('Clip loop', c => withLoopSafe(c, r.start, r.end));
   }
 
   cancel(): void {
@@ -128,8 +128,8 @@ export class LoopBandGesture<C extends Clip> implements ClipGesture<C> {
   }
 }
 
-/** Trascinare sposta la vista. Sul righello (`seekOnClick`) un clic porta lì il cursore
- *  della timeline; altrove un clic non fa nulla, per non interrompere la riproduzione. */
+/** Dragging moves the view. On the ruler (`seekOnClick`) a click brings the timeline cursor
+ *  there; elsewhere a click does nothing, so as not to interrupt playback. */
 export class PanGesture<C extends Clip> implements ClipGesture<C> {
   readonly cursor = 'grabbing';
   private dragged = false;
@@ -156,7 +156,7 @@ export class PanGesture<C extends Clip> implements ClipGesture<C> {
   }
 }
 
-/** Nessun effetto. */
+/** No effect. */
 export class IdleGesture<C extends Clip> implements ClipGesture<C> {
   readonly cursor = 'default';
   move(): void { /* niente */ }
@@ -167,7 +167,7 @@ export class IdleGesture<C extends Clip> implements ClipGesture<C> {
   }
 }
 
-/** Il gesto che parte premendo su ciascuna parte del righello. */
+/** The gesture starting by pressing on each part of the ruler. */
 export const frameGestureFor: { readonly [K in FrameHit['kind']]: <C extends Clip>(host: ClipHost<C>, clip: C, hit: Extract<FrameHit, { kind: K }>, p: Pointer) => ClipGesture<C> } = {
   loop: (h, c, hit, p) => new LoopBandGesture(h, c.loop, hit.part, p),
   flag: (h, _c, hit) => new FlagGesture(h, hit.edge),
@@ -180,29 +180,29 @@ export const frameCursor: { readonly [K in FrameHit['kind']]: (hit: Extract<Fram
   ruler: () => 'pointer',
 };
 
-// ------------------------------------------------------------------ disegno
+// ------------------------------------------------------------------ drawing
 
-/** Intensità delle linee della griglia, come in Live: battuta, battito (il quarto), mezzo
- *  battito, suddivisioni più fini. */
+/** Intensity of the grid lines, as in Live: bar, beat (the quarter), half
+ *  beat, finer subdivisions. */
 const GRID_LINE = ['rgba(255,255,255,0.24)', 'rgba(255,255,255,0.13)', 'rgba(255,255,255,0.075)', 'rgba(255,255,255,0.04)'];
-/** Le fasce alternate, una sì e una no. */
+/** The alternating bands, every other one. */
 const GRID_BAND = 'rgba(255,255,255,0.045)';
 
-/** Livello del battito `b` nella griglia: 0 battuta, 1 battito, 2 mezzo battito, 3 il resto. */
+/** Level of beat `b` in the grid: 0 bar, 1 beat, 2 half beat, 3 the rest. */
 export function beatLevel(b: Beats, beatsPerBar: number): 0 | 1 | 2 | 3 {
   const on = (step: number) => Math.abs(b / step - Math.round(b / step)) < 1e-6;
   return on(beatsPerBar) ? 0 : on(1) ? 1 : on(0.5) ? 2 : 3;
 }
 
-/** Larghezza delle fasce alternate per una griglia di passo `grid`: il battito finché la
- *  griglia lo divide, poi la battuta, poi gruppi di 4 battute. */
+/** Width of the alternating bands for a grid of step `grid`: the beat as long as the
+ *  grid divides it, then the bar, then groups of 4 bars. */
 export function gridBand(grid: Beats, beatsPerBar: number): Beats {
   const bands = [1, beatsPerBar, 4 * beatsPerBar, 16 * beatsPerBar, 64 * beatsPerBar];
   return bands.find(s => s >= 2 * grid - 1e-9) ?? bands[bands.length - 1];
 }
 
-/** Griglia verticale da `top` in giù, come in Live: fasce alternate (i battiti, o le battute
- *  da lontano) e linee più marcate per battute, battiti e mezzi battiti. */
+/** Vertical grid from `top` down, as in Live: alternating bands (the beats, or the bars
+ *  from afar) and stronger lines for bars, beats and half beats. */
 export function paintBeatGrid(
   g: CanvasRenderingContext2D, axis: BeatAxis, width: number, top: number, height: number, grid: Beats, signature: TimeSignature,
 ): void {
@@ -219,14 +219,14 @@ export function paintBeatGrid(
   }
 }
 
-/** Righello: loop della clip, numeri di battuta, bandierine di inizio e fine. */
+/** Ruler: the clip's loop, bar numbers, start and end flags. */
 export function paintClipRuler(g: CanvasRenderingContext2D, axis: BeatAxis, width: number, clip: Clip, signature: TimeSignature): void {
   g.fillStyle = COLORS.ruler;
   g.fillRect(0, 0, width, FRAME.ruler);
   const lx0 = axis.beatToX(clip.loop.start), lx1 = axis.beatToX(clip.loop.end);
   g.fillStyle = clip.loop.enabled ? COLORS.loop : COLORS.loopOff;
   g.fillRect(lx0, 1, lx1 - lx0, FRAME.loopBand - 2);
-  // tacche sotto i numeri: più lunghe sui battiti che sulle suddivisioni
+  // ticks under the numbers: longer on the beats than on the subdivisions
   const bar = signature.beatsPerBar;
   const tick = [0.25, 0.5, 1, bar].find(s => s * axis.pxPerBeat >= 6) ?? bar;
   g.fillStyle = '#4a4f58';
@@ -234,7 +234,7 @@ export function paintClipRuler(g: CanvasRenderingContext2D, axis: BeatAxis, widt
     const h = TICK_PX[beatLevel(i * tick, bar)];
     g.fillRect(Math.round(axis.beatToX(i * tick)), FRAME.ruler - h, 1, h);
   }
-  // numeri di battuta (o battuta.tempo se lo zoom lo permette)
+  // bar numbers (or bar.beat if the zoom allows it)
   const label = [0.25, 1, bar, 2 * bar, 4 * bar, 8 * bar, 16 * bar, 32 * bar].find(s => s * axis.pxPerBeat >= 44) ?? 32 * bar;
   g.font = '10.5px system-ui, sans-serif';
   for (let b = Math.floor(axis.xToBeat(0) / label) * label; axis.beatToX(b) < width; b += label) {
@@ -249,7 +249,7 @@ export function paintClipRuler(g: CanvasRenderingContext2D, axis: BeatAxis, widt
   flag(g, axis.beatToX(clip.region.end), -1);
 }
 
-/** Triangolo che punta verso l'interno della regione (dir 1 = inizio, −1 = fine). */
+/** Triangle pointing towards the inside of the region (dir 1 = start, −1 = end). */
 function flag(g: CanvasRenderingContext2D, x: number, dir: 1 | -1): void {
   const y0 = FRAME.loopBand, y1 = FRAME.ruler;
   g.fillStyle = '#e8eaee';

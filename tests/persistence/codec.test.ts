@@ -8,7 +8,7 @@ import type { MidiTrack } from '../../src/model/track';
 import { addMidiClip, loadPreset, placeSample, setInstrumentParam, setSlot, setTempo, updateClip } from '../../src/store/edits';
 import { setup } from '../helpers/fixtures';
 
-/** Un progetto con un po' di tutto. */
+/** A project with a bit of everything. */
 function richProject() {
   const { store, track, sampleId } = setup({ audio: 1, midi: 1, sample: true });
   store.apply(setTempo(97.5));
@@ -32,7 +32,7 @@ function richProject() {
 const codec = new ProjectCodec();
 
 describe('ProjectCodec', () => {
-  it('andata e ritorno senza perdite', () => {
+  it('round trip without losses', () => {
     const p = richProject();
     const text = codec.stringify(p);
     const back = codec.parse(text);
@@ -47,7 +47,7 @@ describe('ProjectCodec', () => {
     expect((back.tracks[1].slots[2] as MidiClip).notes).toHaveLength(2);
   });
 
-  it('il file è leggibile e porta formato e versione', () => {
+  it('the file is readable and carries format and version', () => {
     const json = JSON.parse(codec.stringify(richProject()));
     expect(json.format).toBe('studiomio-project');
     expect(json.version).toBe(PROJECT_VERSION);
@@ -63,31 +63,31 @@ describe('ProjectCodec', () => {
       expect(e).toBeInstanceOf(ProjectFormatError);
       return (e as Error).message;
     }
-    throw new Error('il file rotto è stato accettato');
+    throw new Error('the broken file was accepted');
   };
 
-  it('errori chiari, con il percorso del campo', () => {
-    expect(broken(j => { j.format = 'altro'; })).toMatch(/^format: non è un progetto studiomio/);
-    expect(broken(j => { j.version = 99; })).toMatch(/versione più recente/);
-    expect(broken(j => { j.tracks[0].arrangement[0].start = 'x'; })).toMatch(/^tracks\[0\]\.arrangement\[0\]\.start: atteso un numero/);
-    expect(broken(j => { j.tracks[0].arrangement[0].clip.warp.mode = 'magia'; })).toMatch(/warp\.mode: atteso uno tra/);
-    expect(broken(j => { j.tracks[1].slots[2].kind = 'video'; })).toMatch(/tipo di clip sconosciuto: video/);
-    expect(broken(j => { j.tracks[0].slots[0] = j.tracks[1].slots[2]; })).toMatch(/audio non può contenere una clip midi/);
-    expect(broken(j => { j.tracks[1].slots[2].region.end = -1; })).toMatch(/regione della clip vuota/);
-    expect(broken(j => { j.scenes.pop(); })).toMatch(/slot ma le scene sono/);
-    expect(broken(j => { j.samples = []; })).toMatch(/non è nel progetto/);
-    expect(() => codec.parse('{ rotto')).toThrow(/JSON non valido/);
+  it('clear errors, with the field\'s path', () => {
+    expect(broken(j => { j.format = 'other'; })).toMatch(/^format: not a studiomio project/);
+    expect(broken(j => { j.version = 99; })).toMatch(/newer version/);
+    expect(broken(j => { j.tracks[0].arrangement[0].start = 'x'; })).toMatch(/^tracks\[0\]\.arrangement\[0\]\.start: expected a number/);
+    expect(broken(j => { j.tracks[0].arrangement[0].clip.warp.mode = 'magic'; })).toMatch(/warp\.mode: expected one of/);
+    expect(broken(j => { j.tracks[1].slots[2].kind = 'video'; })).toMatch(/unknown clip kind: video/);
+    expect(broken(j => { j.tracks[0].slots[0] = j.tracks[1].slots[2]; })).toMatch(/audio track can't contain a midi clip/);
+    expect(broken(j => { j.tracks[1].slots[2].region.end = -1; })).toMatch(/empty clip region/);
+    expect(broken(j => { j.scenes.pop(); })).toMatch(/slots but there are/);
+    expect(broken(j => { j.samples = []; })).toMatch(/isn't in the project/);
+    expect(() => codec.parse('{ broken')).toThrow(/invalid JSON/);
   });
 
-  it('lo strumento della traccia MIDI si salva, compreso il preset', () => {
+  it('the MIDI track\'s instrument is saved, preset included', () => {
     const { store, track } = setup({ midi: 1 });
-    store.apply(loadPreset(track(0), 'Basso', { cutoff: 420, oscBSemi: -12 }));
+    store.apply(loadPreset(track(0), 'Bass', { cutoff: 420, oscBSemi: -12 }));
     store.apply(setInstrumentParam(track(0), 'resonance', 55));
     const back = codec.parse(codec.stringify(store.project)).tracks[0] as MidiTrack;
-    expect(back.instrument).toEqual({ type: 'analog', preset: 'Basso', params: { cutoff: 420, oscBSemi: -12, resonance: 55 } });
+    expect(back.instrument).toEqual({ type: 'analog', preset: 'Bass', params: { cutoff: 420, oscBSemi: -12, resonance: 55 } });
   });
 
-  it('un file della versione 1 si apre: le tracce MIDI ricevono lo strumento predefinito', () => {
+  it('a version 1 file opens: the MIDI tracks receive the default instrument', () => {
     const json = JSON.parse(codec.stringify(richProject()));
     json.version = 1;
     delete json.tracks[1].instrument;
@@ -96,7 +96,7 @@ describe('ProjectCodec', () => {
     expect(p.tracks[0]).not.toHaveProperty('instrument');
   });
 
-  it('un Sampler della versione 11 si apre con il Tune delle zone nel loro Transpose', () => {
+  it('a version 11 Sampler opens with the zones\' Tune in their Transpose', () => {
     const { store, sampleId } = setup({ midi: 1, sample: true });
     const json = JSON.parse(codec.stringify(store.project));
     json.version = 11;
@@ -106,21 +106,21 @@ describe('ProjectCodec', () => {
     expect(params).not.toHaveProperty('z2tune');
   });
 
-  it('il suono di una clip MIDI si salva, e i suoi sample restano nel progetto', () => {
+  it('a MIDI clip\'s sound is saved, and its samples stay in the project', () => {
     const { store, track, sampleId } = setup({ midi: 1, sample: true });
     store.apply(addMidiClip(track(0), 0, 4));
     const id = store.project.tracks[0].arrangement[0].id;
     const sound = { type: 'sampler', preset: 'Pad', params: { z1lo: 40 }, samples: { sample: sampleId } };
-    store.apply(updateClip<MidiClip>('suono', track(0), id, c => c.withSound(sound)));
+    store.apply(updateClip<MidiClip>('sound', track(0), id, c => c.withSound(sound)));
     const back = codec.parse(codec.stringify(store.project.withoutUnusedSamples()));
     expect((back.tracks[0].arrangement[0].clip as MidiClip).sound).toEqual(sound);
     expect(back.sample(sampleId)).toBeDefined();
-    // senza suono il campo non c'è
+    // without sound the field isn't there
     const plain = JSON.parse(codec.stringify(richProject()));
     expect(plain.tracks[1].arrangement[0].clip).not.toHaveProperty('sound');
   });
 
-  it('le clip salvate prima del reverse si aprono dritte', () => {
+  it('the clips saved before reverse open straight', () => {
     const json = JSON.parse(codec.stringify(richProject()));
     delete json.tracks[0].arrangement[0].clip.reversed;
     expect((codec.decode(json).tracks[0].arrangement[0].clip as AudioClip).reversed).toBe(false);

@@ -7,14 +7,14 @@ export const TRACK_HEIGHT = 72;
 export const MIN_PX_PER_BEAT = 1.5;
 export const MAX_PX_PER_BEAT = 600;
 
-/** Corrispondenza tra posizioni musicali e pixel della timeline (zoom e scorrimento).
- *  Immutabile: zoom e scroll producono una nuova geometria. */
+/** Correspondence between musical positions and timeline pixels (zoom and scrolling).
+ *  Immutable: zoom and scroll produce a new geometry. */
 export class TimelineGeometry {
   constructor(
     readonly pxPerBeat = 24,
-    /** Battito al bordo sinistro. */
+    /** Beat at the left edge. */
     readonly scrollBeat: Beats = 0,
-    /** Pixel nascosti sopra (scorrimento verticale delle tracce). */
+    /** Pixels hidden above (vertical scrolling of the tracks). */
     readonly scrollY = 0,
     readonly trackHeight = TRACK_HEIGHT,
   ) {}
@@ -31,12 +31,12 @@ export class TimelineGeometry {
     return index * this.trackHeight - this.scrollY;
   }
 
-  /** Indice della traccia sotto `y` (può essere fuori dall'elenco). */
+  /** Index of the track under `y` (it can be outside the list). */
   trackIndexAt(y: number): number {
     return Math.floor((y + this.scrollY) / this.trackHeight);
   }
 
-  /** Zoom tenendo fermo il battito sotto `anchorX`. */
+  /** Zoom keeping the beat under `anchorX` still. */
   zoomed(pxPerBeat: number, anchorX: number): TimelineGeometry {
     const px = Math.max(MIN_PX_PER_BEAT, Math.min(MAX_PX_PER_BEAT, pxPerBeat));
     const anchor = this.xToBeat(anchorX);
@@ -48,7 +48,7 @@ export class TimelineGeometry {
   }
 }
 
-/** Passo della griglia per lo zoom attuale: la suddivisione più fine larga almeno `minPx`. */
+/** Grid step for the current zoom: the finest subdivision at least `minPx` wide. */
 export function gridStep(pxPerBeat: number, signature: TimeSignature, minPx = 14): Beats {
   const bar = signature.beatsPerBar;
   const steps = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, bar, 2 * bar, 4 * bar, 8 * bar, 16 * bar, 32 * bar];
@@ -57,27 +57,27 @@ export function gridStep(pxPerBeat: number, signature: TimeSignature, minPx = 14
 
 export const snapTo = (b: Beats, step: Beats): Beats => Math.round(b / step) * step;
 
-/** L'intestazione colorata di una clip (con il nome), in pixel. */
+/** The coloured header of a clip (with the name), in pixels. */
 export const CLIP_HEADER = 14;
 
-/** Le zone di una clip: il corpo la sposta, i bordi la ridimensionano, le maniglie negli angoli
- *  in alto (solo le clip audio) cambiano le dissolvenze. */
+/** A clip's zones: the body moves it, the edges resize it, the handles in the top
+ *  corners (audio clips only) change the fades. */
 export type ClipZone = 'body' | 'start' | 'end' | 'fadeIn' | 'fadeOut';
 
-/** Cosa c'è sotto il puntatore nell'area delle tracce. */
+/** What's under the pointer in the tracks area. */
 export type Hit =
   | { readonly kind: 'clip'; readonly zone: ClipZone; readonly trackIndex: number; readonly track: TrackId; readonly placement: Placement; readonly beat: Beats }
   | { readonly kind: 'lane'; readonly trackIndex: number; readonly track: TrackId; readonly beat: Beats }
   | { readonly kind: 'empty'; readonly beat: Beats };
 
-/** Larghezza della zona dei bordi di una clip, che li ridimensiona. */
+/** Width of a clip's edge zone, which resizes it. */
 const EDGE_PX = 6;
-/** Lato delle maniglie delle dissolvenze; sotto questa larghezza (in pixel) la clip non le ha. */
+/** Side of the fade handles; below this width (in pixels) the clip doesn't have them. */
 export const FADE_HANDLE_PX = 6;
 const FADE_MIN_CLIP_PX = 28;
 
-/** Dove stanno (x) le maniglie delle dissolvenze in entrata e in uscita di una clip: alla fine
- *  della dissolvenza, dentro la clip; null se la clip non ne ha (non è audio o è troppo stretta). */
+/** Where (x) the fade-in and fade-out handles of a clip are: at the end
+ *  of the fade, inside the clip; null if the clip has none (it isn't audio or it's too narrow). */
 export function fadeHandles(geo: TimelineGeometry, pl: Placement): { in: number; out: number } | null {
   const x0 = geo.beatToX(pl.start), x1 = geo.beatToX(placementEnd(pl)), h = FADE_HANDLE_PX / 2;
   if (pl.clip.kind !== 'audio' || x1 - x0 < FADE_MIN_CLIP_PX) return null;
@@ -85,7 +85,7 @@ export function fadeHandles(geo: TimelineGeometry, pl: Placement): { in: number;
   return { in: inside(geo.beatToX(pl.start + (pl.fadeIn ?? 0))), out: inside(geo.beatToX(placementEnd(pl) - (pl.fadeOut ?? 0))) };
 }
 
-/** Le righe della timeline sono le tracce che si vedono (`Project.visibleTracks`). */
+/** The timeline's rows are the visible tracks (`Project.visibleTracks`). */
 export function hitTest(project: Project, geo: TimelineGeometry, x: number, y: number): Hit {
   const beat = geo.xToBeat(x);
   const index = geo.trackIndexAt(y);
@@ -102,7 +102,7 @@ export function hitTest(project: Project, geo: TimelineGeometry, x: number, y: n
   return { kind: 'clip', zone, trackIndex: index, track: track.id, placement, beat };
 }
 
-/** Clip i cui rettangoli toccano il riquadro [b0, b1] × tracce [i0, i1]. */
+/** Clips whose rectangles touch the box [b0, b1] × tracks [i0, i1]. */
 export function placementsInBox(project: Project, b0: Beats, b1: Beats, i0: number, i1: number) {
   const [lo, hi] = [Math.min(b0, b1), Math.max(b0, b1)];
   const [t0, t1] = [Math.max(0, Math.min(i0, i1)), Math.max(i0, i1)];

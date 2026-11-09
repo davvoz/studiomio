@@ -1,6 +1,6 @@
-/* Cosa suona una traccia in una finestra di programmazione, sull'orologio continuo: i tratti
- * della sua timeline dove la segue, quelli delle clip della session lanciate altrove. I
- * player (audio, MIDI) suonano tratti, senza sapere da dove vengono. */
+/* What a track plays in a scheduling window, on the continuous clock: the stretches
+ * of its timeline where it follows it, those of the session clips launched elsewhere. The
+ * players (audio, MIDI) play stretches, without knowing where they come from. */
 import type { Beats } from '../core/music-time';
 import { placementEnd, type Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
@@ -9,19 +9,19 @@ import type { ScheduleWindow } from './scheduler';
 import { clipSegmentsBetween, type Segment } from './segments';
 import { slotClip, type Program } from './session';
 
-/** Un tratto continuo di una clip sull'orologio: da `start` a `end` suona il contenuto della
- *  clip a partire dal battito `contentStart`. */
+/** A continuous stretch of a clip on the clock: from `start` to `end` it plays the clip's
+ *  content starting from beat `contentStart`. */
 export interface Piece<C extends Clip = Clip> {
   readonly clip: C;
   readonly start: number;
   readonly end: number;
   readonly contentStart: Beats;
-  /** Le dissolvenze della clip posata, se ne ha (solo sulla timeline). */
+  /** The placed clip's fades, if it has any (only on the timeline). */
   readonly fades?: PieceFades;
 }
 
-/** Le dissolvenze di una clip posata sull'orologio: la clip va da `start` a `end`, sale per
- *  `fadeIn` battiti e scende negli ultimi `fadeOut`. */
+/** The fades of a placed clip on the clock: the clip goes from `start` to `end`, rises for
+ *  `fadeIn` beats and falls in the last `fadeOut`. */
 export interface PieceFades {
   readonly start: number;
   readonly end: number;
@@ -29,7 +29,7 @@ export interface PieceFades {
   readonly fadeOut: Beats;
 }
 
-/** Il guadagno delle dissolvenze (0..1) al punto `at` dell'orologio. */
+/** The fades' gain (0..1) at point `at` of the clock. */
 export function fadeGainAt(f: PieceFades, at: number): number {
   const up = f.fadeIn > 0 ? (at - f.start) / f.fadeIn : 1, down = f.fadeOut > 0 ? (f.end - at) / f.fadeOut : 1;
   return Math.max(0, Math.min(1, up, down));
@@ -37,10 +37,10 @@ export function fadeGainAt(f: PieceFades, at: number): number {
 
 const EPS = 1e-9;
 
-/** I tratti di `track` che toccano la finestra `w`. `arrangement` dà (e ricorda) i tratti di
- *  una clip posata. Un tratto già in corso parte dove la sua parte comincia: all'inizio della
- *  corsa per la timeline, all'ultima partenza da capo per la session (ai giri di loop della
- *  timeline le clip della session continuano senza ripartire). */
+/** The stretches of `track` touching window `w`. `arrangement` gives (and remembers) the stretches of
+ *  a placed clip. A stretch already running starts where its part begins: at the start of the
+ *  run for the timeline, at the last start from the top for the session (at the timeline's loop rounds
+ *  the session clips continue without restarting). */
 export function piecesInWindow<C extends Clip>(
   track: Track<C>, programs: readonly Program[], w: ScheduleWindow, arrangement: (p: Placement<C>) => readonly Segment[],
 ): Piece<C>[] {

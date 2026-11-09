@@ -1,30 +1,30 @@
-/* Il suono del Riverbero: una rete di ritardi con retroazione (FDN) a 8 linee.
+/* The Reverb's sound: an 8-line feedback delay network (FDN).
  *
- *   ingresso → pre-delay → 4 allpass di diffusione (per canale) → 8 linee di ritardo
- *   ogni linea: smorzamento degli alti, guadagno per il decadimento → matrice di Hadamard →
- *   torna nelle linee; l'uscita somma le linee con segni diversi per i due canali
- *   → taglio dei bassi → larghezza → mix con il dry
+ *   input → pre-delay → 4 diffusion allpasses (per channel) → 8 delay lines
+ *   each line: high damping, gain for the decay → Hadamard matrix →
+ *   back into the lines; the output sums the lines with different signs for the two channels
+ *   → low cut → width → mix with the dry
  *
- * Le lunghezze delle linee sono primi tra loro (niente risonanze comuni) e scalano con la
- * Dimensione; il guadagno di ogni linea dà esattamente il decadimento scelto (−60 dB nel tempo
- * Decadimento). Due linee sono modulate appena, per togliere il suono metallico. Gira
- * nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
+ * The line lengths are coprime (no shared resonances) and scale with the
+ * Size; each line's gain gives exactly the chosen decay (−60 dB in the
+ * Decay time). Two lines are slightly modulated, to remove the metallic sound. Runs
+ * in the AudioWorklet; no Web Audio here, so it's also tested in Node. */
 import type { EffectCore } from '../../dsp/core';
 import { MAX_PREDELAY_MS } from './reverb';
 
 const LINES = 8;
-/** Lunghezze delle linee a 48 kHz con Dimensione al 100 % (circa 30–90 ms). */
+/** Line lengths at 48 kHz with Size at 100 % (about 30–90 ms). */
 const LENGTHS = [1433, 1601, 1867, 2053, 2251, 2399, 2647, 2879];
-/** Lunghezze degli allpass di diffusione (circa 2–12 ms) e loro coefficiente al massimo. */
+/** Lengths of the diffusion allpasses (about 2–12 ms) and their coefficient at maximum. */
 const DIFFUSERS = [[142, 379, 107, 277], [131, 353, 113, 307]];
 const MAX_DIFFUSION = 0.7;
-/** La modulazione: quanti campioni e quanto in fretta. */
+/** The modulation: how many samples and how fast. */
 const MOD_DEPTH = 12, MOD_RATE = 0.7;
 const SMOOTH = 0.03;
 
 const flush = (x: number) => (Math.abs(x) < 1e-20 ? 0 : x);
 
-/** Un allpass di Schroeder: diffonde senza colorare. */
+/** A Schroeder allpass: diffuses without colouring. */
 class Allpass {
   private readonly buf: Float32Array;
   private pos = 0;
@@ -42,11 +42,11 @@ class Allpass {
   }
 }
 
-/** Una linea di ritardo con lettura interpolata (per la modulazione). */
+/** A delay line with interpolated reading (for the modulation). */
 class Line {
   readonly buf: Float32Array;
   private pos = 0;
-  /** Lo smorzamento: passa-basso a un polo nella retroazione. */
+  /** The damping: one-pole low-pass in the feedback. */
   lp = 0;
 
   constructor(maxLength: number) {
@@ -91,7 +91,7 @@ export class ReverbCore implements EffectCore {
   private phase = 0;
   private readonly smoothK: number;
   private readonly fb = new Float64Array(LINES);
-  /** Prima del primo blocco dry e wet non scorrono: partono da quelli giusti. */
+  /** Before the first block dry and wet don't glide: they start from the right ones. */
   private fresh = true;
 
   constructor(private readonly sampleRate: number) {
@@ -108,7 +108,7 @@ export class ReverbCore implements EffectCore {
     const v = (id: string, fallback: number) => p[id] ?? fallback;
     const size = v('size', 60) / 100, decay = v('decay', 2.2);
     this.lengths = LENGTHS.map(l => Math.max(16, l * this.scale * (0.25 + 0.75 * size)));
-    // −60 dB in `decay` secondi: ogni giro di una linea lunga d campioni perde 60·d/(decay·sr) dB
+    // −60 dB in `decay` seconds: each round of a line d samples long loses 60·d/(decay·sr) dB
     this.gains = this.lengths.map(d => Math.pow(10, (-3 * d) / (decay * this.sampleRate)));
     this.dampK = 1 - Math.exp((-2 * Math.PI * v('damping', 7000)) / this.sampleRate);
     this.hpK = Math.exp((-2 * Math.PI * v('lowCut', 150)) / this.sampleRate);
@@ -116,7 +116,7 @@ export class ReverbCore implements EffectCore {
     this.predelay = Math.round((v('predelay', 20) / 1000) * this.sampleRate);
     this.width = v('width', 100) / 100;
     const mix = v('mix', 25) / 100;
-    // potenza costante tra dry e wet
+    // constant power between dry and wet
     this.targetWet = Math.sin((mix * Math.PI) / 2);
     this.targetDry = Math.cos((mix * Math.PI) / 2);
     if (this.fresh) {
@@ -139,10 +139,10 @@ export class ReverbCore implements EffectCore {
       const rp = (this.prePos - this.predelay + preSize) % preSize;
       let a = pre[0][rp], b = pre[1][rp];
       if (++this.prePos >= preSize) this.prePos = 0;
-      // diffusione
+      // diffusion
       for (const ap of dl) a = ap.process(a, diffusion);
       for (const ap of dr) b = ap.process(b, diffusion);
-      // le linee: lettura (due modulate in controfase), smorzamento, decadimento
+      // the lines: read (two modulated in antiphase), damping, decay
       this.phase += phaseStep;
       if (this.phase > 2 * Math.PI) this.phase -= 2 * Math.PI;
       const mod = Math.sin(this.phase) * MOD_DEPTH;
@@ -152,10 +152,10 @@ export class ReverbCore implements EffectCore {
         line.lp += dampK * (line.read(d) - line.lp);
         fb[k] = line.lp * gains[k];
       }
-      // le uscite prima di mescolare: somme con segni diversi per i due canali
+      // the outputs before mixing: sums with different signs for the two channels
       const wl = fb[0] - fb[1] + fb[2] - fb[3] + fb[4] - fb[5] + fb[6] - fb[7];
       const wr = fb[0] + fb[1] - fb[2] - fb[3] + fb[4] + fb[5] - fb[6] - fb[7];
-      // Hadamard 8×8 (veloce, in tre passi), normalizzata: conserva l'energia
+      // Hadamard 8×8 (fast, in three steps), normalized: it preserves energy
       for (let h = 1; h < LINES; h <<= 1) {
         for (let k = 0; k < LINES; k += h << 1) {
           for (let j = k; j < k + h; j++) {
@@ -167,7 +167,7 @@ export class ReverbCore implements EffectCore {
       }
       const norm = 1 / Math.sqrt(LINES);
       for (let k = 0; k < LINES; k++) lines[k].write(fb[k] * norm + (k < 4 ? a : b) * 0.5);
-      // taglio dei bassi sulla coda, larghezza, mix
+      // low cut on the tail, width, mix
       this.hpL = hpK * (this.hpL + wl - this.hpPrevL);
       this.hpR = hpK * (this.hpR + wr - this.hpPrevR);
       this.hpPrevL = wl;

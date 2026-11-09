@@ -1,14 +1,14 @@
-/* I Launchpad sulla session, come in Live: la griglia 8×8 lancia le clip del riquadro (le frecce
- * lo spostano), i pulsanti a destra lanciano le scene, il pulsante Session porta alla mappa dei
- * blocchi. Il resto dipende dal modello, come negli script di Live:
- *  - X: Session passa al mixer, dove i pulsanti a destra scelgono volume e pan (fader disegnati
- *    sulla griglia), stop, mute e solo (sull'ultima riga della griglia);
- *  - Mini MK3: l'ultimo pulsante a destra (Stop Solo Mute) fa girare stop, solo e mute sull'ultima riga;
- *  - Pro MK3: sotto la griglia la riga delle tracce (sceglie, o mute, solo, stop) e i modi;
- *    Volume, Pan e Device mettono i fader sulla griglia, Device con i parametri del dispositivo;
- *  - MK2: Mixer porta il mixer sulla griglia (righe di stop, mute, solo; fader di volume e pan).
- * I LED li decide il programma a ogni giro; le animazioni (pulsa, lampeggia) le fa il controller.
- * Il controller non conosce Web MIDI: riceve i messaggi con `receive` e manda con `out`. */
+/* The Launchpads on the session, as in Live: the 8×8 grid launches the clips of the box (the arrows
+ * move it), the buttons on the right launch the scenes, the Session button brings up the block
+ * map. The rest depends on the model, as in Live's scripts:
+ *  - X: Session switches to the mixer, where the buttons on the right choose volume and pan (faders drawn
+ *    on the grid), stop, mute and solo (on the grid's last row);
+ *  - Mini MK3: the last button on the right (Stop Solo Mute) cycles stop, solo and mute on the last row;
+ *  - Pro MK3: under the grid the track row (selects, or mute, solo, stop) and the modes;
+ *    Volume, Pan and Device put faders on the grid, Device with the device's parameters;
+ *  - MK2: Mixer brings the mixer onto the grid (rows of stop, mute, solo; volume and pan faders).
+ * The LEDs are decided by the program every round; the animations (pulse, blink) are done by the controller.
+ * The controller doesn't know Web MIDI: it receives messages with `receive` and sends with `out`. */
 import type { Track } from '../../model/track';
 import { setMixer } from '../../store/edits';
 import { dbToFader, faderToDb, knobToPan, panToKnob } from '../mixer-scale';
@@ -20,35 +20,35 @@ import {
   sceneAt, sceneButton, sessionColor, SIZE, TRACK_BUTTONS, type Button, type Layout, type Model,
 } from './protocol';
 
-/** Messaggi al massimo per giro (30 ms): i Launchpad reggono bene, ma una griglia intera è
- *  meglio mandarla in due o tre giri che in una raffica sola. */
+/** At most this many messages per round (30 ms): the Launchpads cope well, but a whole grid is
+ *  better sent in two or three rounds than in a single burst. */
 const MAX_SEND = 80;
-/** Quanto si aspetta ogni risposta dell'avvio (identità, challenge) prima di andare avanti lo stesso. */
+/** How long each startup reply (identity, challenge) is awaited before going on anyway. */
 const HANDSHAKE_MS = 1000;
-/** Due pressioni di Session più vicine di così sono un doppio clic (Live: 0,3 s). */
+/** Two Session presses closer than this are a double click (Live: 0.3 s). */
 const DOUBLE_CLICK_MS = 300;
 
 type Phase = 'identity' | 'challenge' | 'ready';
 
-/** Cosa fanno i controlli del mixer: niente (la griglia lancia), una funzione per traccia
- *  (stop, mute, solo), o i fader sulla griglia (volume, pan, parametri del dispositivo). */
+/** What the mixer controls do: nothing (the grid launches), a function per track
+ *  (stop, mute, solo), or the faders on the grid (volume, pan, device parameters). */
 type Mode = 'none' | 'stop' | 'mute' | 'solo' | 'volume' | 'pan' | 'device';
 const FADER_MODES: readonly Mode[] = ['volume', 'pan', 'device'];
 type TrackMode = 'select' | 'stop' | 'mute' | 'solo';
 
-/** I colori delle funzioni, come nello skin di Live (novation/skin.py). */
+/** The functions' colours, as in Live's skin (novation/skin.py). */
 const MODE_COLOR: Readonly<Record<Exclude<Mode, 'none'>, number>> = {
   stop: COLOR.red, mute: COLOR.yellow, solo: COLOR.blue, volume: COLOR.green, pan: COLOR.orange, device: COLOR.darkBlue,
 };
 
-/** I pulsanti dei modi del mixer: X e MK2 nella colonna delle scene, dall'alto. */
+/** The mixer mode buttons: X and MK2 in the scene column, from the top. */
 const MIXER_COLUMN: readonly (Mode | 'sendA' | 'sendB' | 'arm')[] = ['volume', 'pan', 'sendA', 'sendB', 'stop', 'mute', 'solo', 'arm'];
 
 const NOT_YET: Readonly<Partial<Record<Button | 'sendA' | 'sendB', string>>> = {
-  note: 'Il modo Note', custom: 'I modi Custom', captureMidi: 'Capture MIDI', drums: 'Il modo Drums', keys: 'Il modo Keys',
-  user: 'Il modo User', user1: 'Il modo User', user2: 'Il modo User', record: 'La registrazione', arm: 'Record arm',
-  sends: 'Le mandate', sendA: 'Le mandate', sendB: 'Le mandate', clear: 'Clear', duplicate: 'Duplicate',
-  quantize: 'La quantizzazione', fixedLength: 'Fixed length',
+  note: 'The Note mode', custom: 'The Custom modes', captureMidi: 'Capture MIDI', drums: 'The Drums mode', keys: 'The Keys mode',
+  user: 'The User mode', user1: 'The User mode', user2: 'The User mode', record: 'The recording', arm: 'Record arm',
+  sends: 'The sends', sendA: 'The sends', sendB: 'The sends', clear: 'Clear', duplicate: 'Duplicate',
+  quantize: 'The quantization', fixedLength: 'Fixed length',
 };
 
 export class Launchpad extends SessionSurface {
@@ -60,18 +60,18 @@ export class Launchpad extends SessionSurface {
   private phase: Phase = 'identity';
   private phaseAt = 0;
   private challengeSent = false;
-  /** La famiglia dalla risposta d'identità (null se non è arrivata). */
+  /** The family from the identity reply (null if it didn't arrive). */
   identified: readonly [number, number] | null = null;
-  /** Il layout chiesto al controller (null: da mandare). */
+  /** The layout requested from the controller (null: to be sent). */
   private layout: Layout | null = null;
-  /** Il controller mostra un layout suo (note, custom…): la griglia non lancia niente. */
+  /** The controller shows a layout of its own (note, custom…): the grid launches nothing. */
   private foreign = false;
   private overview = false;
-  /** X e MK2: la colonna delle scene sceglie i modi del mixer. */
+  /** X and MK2: the scene column chooses the mixer modes. */
   private mixer = false;
   private mode: Mode = 'none';
   private sessionPressedAt = -Infinity;
-  /** Il numero di ogni pulsante, e il pulsante di ogni numero. */
+  /** The number of each button, and the button of each number. */
   private readonly buttonOf = new Map<number, Button>();
 
   constructor(readonly model: Model, host: SurfaceHost, out: (data: number[]) => void, now?: () => number) {
@@ -80,7 +80,7 @@ export class Launchpad extends SessionSurface {
     for (const [name, n] of Object.entries(model.buttons)) this.buttonOf.set(n, name as Button);
   }
 
-  /** Il controller è appena stato collegato: gli si chiede chi è (vedi `handshake`). */
+  /** The controller has just been connected: it's asked who it is (see `handshake`). */
   start(): void {
     this.stopped = false;
     this.sent.clear();
@@ -97,8 +97,8 @@ export class Launchpad extends SessionSurface {
     return this.phase === 'ready';
   }
 
-  /** L'avvio, come in Live: identità, poi (X, Mini, Pro) la DAW mode e il layout Session, o
-   *  (MK2) la challenge e il layout Session; poi i LED. Se una risposta non arriva si va avanti lo stesso. */
+  /** The startup, as in Live: identity, then (X, Mini, Pro) DAW mode and the Session layout, or
+   *  (MK2) the challenge and the Session layout; then the LEDs. If a reply doesn't arrive it goes on anyway. */
   protected handshake(data: ArrayLike<number> | null): void {
     const now = this.now();
     if (this.phase === 'ready') {
@@ -110,7 +110,7 @@ export class Launchpad extends SessionSurface {
       if (family) this.identified = family;
       if (!family && now - this.phaseAt < HANDSHAKE_MS) return;
       if (family && (family[0] !== this.model.family[0] || family[1] !== this.model.family[1])) {
-        console.warn(`${this.label}: la risposta d'identità è di un'altra famiglia`, family);
+        console.warn(`${this.label}: the identity reply is from another family`, family);
       }
       if (this.model.id !== 'mk2') return this.begin();
       this.phase = 'challenge';
@@ -126,7 +126,7 @@ export class Launchpad extends SessionSurface {
     if ((data && isMk2ChallengeResponse(data)) || now - this.phaseAt >= HANDSHAKE_MS) this.begin();
   }
 
-  /** Dopo l'avvio: DAW mode, layout Session, riquadro e LED. */
+  /** After the startup: DAW mode, Session layout, box and LEDs. */
   private begin(): void {
     if (this.model.id !== 'mk2') this.out(dawMode(this.model, true));
     this.phase = 'ready';
@@ -137,28 +137,28 @@ export class Launchpad extends SessionSurface {
     this.refresh();
   }
 
-  /** Il controller ha cambiato layout da sé (Note, Custom, le impostazioni…) o è tornato alla Session. */
+  /** The controller changed layout by itself (Note, Custom, the settings…) or went back to Session. */
   private layoutReport(data: ArrayLike<number>): void {
     const shown = reportedLayout(this.model, data);
     if (!shown) return;
     this.foreign = shown === 'other';
-    // tornato da sé alla Session (il Session del Pro MK3): i fader non ci sono più
+    // went back to Session by itself (the Pro MK3's Session): the faders are gone
     if (shown === 'session' && this.layout !== 'session') {
       this.mode = 'none';
       this.layout = 'session';
     }
-    // tornando dal layout suo il controller ha la griglia da ridisegnare
+    // coming back from its own layout the controller has the grid to redraw
     this.sent.clear();
   }
 
-  /** Il controller se ne va (o l'app si chiude): LED spenti e di nuovo nel suo modo. */
+  /** The controller goes away (or the app closes): LEDs off and back in its own mode. */
   stop(): void {
     this.stopped = true;
     this.darken();
     this.out(this.model.id === 'mk2' ? [...MK2_QUIT] : dawMode(this.model, false));
   }
 
-  // ---------------------------------------------------------------- messaggi
+  // ---------------------------------------------------------------- messages
 
   protected input(kind: number, channel: number, number: number, value: number): boolean {
     const note = kind === 0x90 || kind === 0x80;
@@ -182,7 +182,7 @@ export class Launchpad extends SessionSurface {
     return true;
   }
 
-  // ---------------------------------------------------------------- griglia e scene
+  // ---------------------------------------------------------------- grid and scenes
 
   private pad(col: number, row: number): void {
     if (this.foreign || this.faders) return;
@@ -192,8 +192,8 @@ export class Launchpad extends SessionSurface {
     this.launchPad(col, row);
   }
 
-  /** La funzione di una riga della griglia, se non lancia clip: l'ultima riga di X e Mini nei
-   *  modi stop, mute, solo; le righe del mixer del MK2. */
+  /** The function of a grid row, if it doesn't launch clips: the last row of X and Mini in
+   *  stop, mute, solo modes; the MK2's mixer rows. */
   private gridFunction(row: number): TrackMode | 'volumeReset' | 'panReset' | 'none' | null {
     const { id } = this.model;
     if (id === 'mk2' && this.mixer) return (['volumeReset', 'panReset', 'none', 'none', 'stop', 'mute', 'solo', 'none'] as const)[row];
@@ -226,8 +226,8 @@ export class Launchpad extends SessionSurface {
     this.launchScene(row);
   }
 
-  /** X e MK2 nel mixer: i pulsanti a destra scelgono il modo (premuto di nuovo, lo lasciano). Sul
-   *  MK2 gli ultimi quattro, fuori dai fader, fermano tutto e tolgono mute e solo a tutti. */
+  /** X and MK2 in the mixer: the buttons on the right choose the mode (pressed again, they leave it). On the
+   *  MK2 the last four, outside the faders, stop everything and remove mute and solo from all. */
   private mixerColumn(row: number): void {
     const p = this.project, choice = MIXER_COLUMN[row];
     if (this.model.id === 'mk2' && row >= 4) {
@@ -239,13 +239,13 @@ export class Launchpad extends SessionSurface {
     this.setMode(this.mode === choice ? 'none' : choice);
   }
 
-  /** Mini MK3: Stop Solo Mute fa girare i modi dell'ultima riga, come in Live. */
+  /** Mini MK3: Stop Solo Mute cycles the last row's modes, as in Live. */
   private cycleMiniMode(): void {
     const order: readonly Mode[] = ['none', 'stop', 'solo', 'mute'];
     this.setMode(order[(order.indexOf(this.mode) + 1) % order.length]);
   }
 
-  // ---------------------------------------------------------------- pulsanti
+  // ---------------------------------------------------------------- buttons
 
   private button(n: number, pressed: boolean): void {
     if (this.model.id === 'pro' && n >= TRACK_BUTTONS && n < TRACK_BUTTONS + SIZE) {
@@ -269,16 +269,16 @@ export class Launchpad extends SessionSurface {
 
   private released(b: Button): void {
     if (b === 'shift') this.shift = false;
-    // Pro MK3 e MK2: la mappa dei blocchi si vede finché si tiene Session
+    // Pro MK3 and MK2: the block map shows while Session is held
     if (b === 'session' && (this.model.id === 'pro' || this.model.id === 'mk2')) this.overview = false;
   }
 
   private notYet(b: Button | 'sendA' | 'sendB', what = NOT_YET[b]): void {
-    if (what) this.host.say(`${this.label}: ${what} non c'è ancora in studiomio.`);
+    if (what) this.host.say(`${this.label}: ${what} isn't in studiomio yet.`);
   }
 
-  /** Le frecce spostano il riquadro di uno (di una pagina con Shift o sulla mappa dei blocchi);
-   *  Pro MK3 con i parametri del dispositivo: ◂ ▸ cambiano dispositivo. */
+  /** The arrows move the box by one (by a page with Shift or on the block map);
+   *  Pro MK3 with the device parameters: ◂ ▸ change device. */
   private arrow(b: 'up' | 'down' | 'left' | 'right'): void {
     if (this.model.id === 'pro' && this.mode === 'device') {
       if (b === 'left' || b === 'right') this.moveDevice(b === 'left' ? -1 : 1);
@@ -291,10 +291,10 @@ export class Launchpad extends SessionSurface {
     else this.moveRing(step, 0);
   }
 
-  /** Session, come in Live. Se il controller mostra un layout suo, prima di tutto si torna alla
-   *  Session. X: passa dal lancio al mixer e viceversa, il doppio clic apre la mappa dei blocchi
-   *  (e una pressione la chiude). Mini MK3: doppio clic per la mappa. Pro MK3 e MK2: la mappa
-   *  finché lo si tiene (MK2: e si torna dal mixer alla Session). */
+  /** Session, as in Live. If the controller shows a layout of its own, first of all it goes back to
+   *  Session. X: switches from launching to the mixer and vice versa, a double click opens the block map
+   *  (and a press closes it). Mini MK3: double click for the map. Pro MK3 and MK2: the map
+   *  while it's held (MK2: and it goes back from the mixer to Session). */
   private sessionButton(): void {
     const now = this.now(), { id } = this.model;
     const double = now - this.sessionPressedAt < DOUBLE_CLICK_MS;
@@ -310,7 +310,7 @@ export class Launchpad extends SessionSurface {
         this.mixer = false;
         this.setMode('none');
       }
-      // la mappa sta sul layout Session: i fader se ne vanno
+      // the map sits on the Session layout: the faders go away
       if (this.faders) this.setMode('none');
       this.overview = true;
       return;
@@ -321,7 +321,7 @@ export class Launchpad extends SessionSurface {
       return;
     }
     if (id === 'x') {
-      // il primo clic del doppio ha già cambiato modo: il secondo lo rimette, come in Live
+      // the first click of the double already changed mode: the second puts it back, as in Live
       this.mixer = !this.mixer;
       if (!this.mixer) this.setMode('none');
     }
@@ -331,15 +331,15 @@ export class Launchpad extends SessionSurface {
     }
   }
 
-  /** MK2: Mixer apre il mixer sulla griglia; premuto di nuovo, torna alla Session. */
+  /** MK2: Mixer opens the mixer on the grid; pressed again, it goes back to Session. */
   private mk2Mixer(): void {
     this.overview = false;
     this.mixer = !this.mixer || FADER_MODES.includes(this.mode);
     this.setMode('none');
   }
 
-  /** Pro MK3: i pulsanti dei modi sotto la griglia (con Shift: annulla, ripeti, metronomo, tap
-   *  tempo, come in Live). Vero se il pulsante l'ha gestito. */
+  /** Pro MK3: the mode buttons under the grid (with Shift: undo, redo, metronome, tap
+   *  tempo, as in Live). True if the button handled it. */
   private proMode(b: Button): boolean {
     if (this.shift) {
       switch (b) {
@@ -358,7 +358,7 @@ export class Launchpad extends SessionSurface {
     return true;
   }
 
-  // ---------------------------------------------------------------- modi e layout
+  // ---------------------------------------------------------------- modes and layout
 
   private get faders(): boolean {
     return FADER_MODES.includes(this.mode);
@@ -370,19 +370,19 @@ export class Launchpad extends SessionSurface {
     this.applyLayout();
   }
 
-  /** Manda al controller il layout che serve (Session o una pagina di fader), se è cambiato. */
+  /** Sends the controller the layout needed (Session or a fader page), if it changed. */
   private applyLayout(): void {
     if (!this.ready) return;
     const want: Layout = this.faders ? (this.mode as Layout) : 'session';
     if (this.layout === want) return;
     this.layout = want;
-    // cambiando layout il controller ridisegna tutto: si rimanda ciò che serve
+    // changing layout the controller redraws everything: what's needed is resent
     this.sent.clear();
     const { model } = this;
     if (want !== 'session' && model.id !== 'mk2') this.out(faderSetup(model, FADER_PAGE[want], this.faderLook(want)));
     this.out(layoutMessage(model, want));
     if (want !== 'session' && model.id === 'mk2') {
-      // il MK2 prende colore e posizione di ogni fader insieme, dopo il layout
+      // the MK2 takes each fader's colour and position together, after the layout
       const look = this.faderLook(want), values = this.faderValues(want);
       for (let i = 0; i < SIZE; i++) {
         this.out(mk2Fader(i, want === 'pan', look.colors[i], values[i] ?? 0));
@@ -391,8 +391,8 @@ export class Launchpad extends SessionSurface {
     }
   }
 
-  /** Come sono i fader: volume verdi e verticali, pan orizzontali dal centro nel colore della
-   *  traccia, parametri blu (come in Live); spenti dove non c'è niente da muovere. */
+  /** What the faders look like: volume green and vertical, pan horizontal from the centre in the
+   *  track's colour, parameters blue (as in Live); off where there's nothing to move. */
   private faderLook(layout: Layout): { horizontal: boolean; bipolar: boolean; colors: number[] } {
     const tracks = this.ringTracks();
     if (layout === 'device') {
@@ -403,7 +403,7 @@ export class Launchpad extends SessionSurface {
     return { horizontal: pan, bipolar: pan, colors: tracks.map(t => (!t ? COLOR.off : pan ? paletteIndex(t.color) : COLOR.green)) };
   }
 
-  /** La posizione di ogni fader (undefined dove non c'è niente da muovere). */
+  /** The position of each fader (undefined where there's nothing to move). */
   private faderValues(layout: Layout): (number | undefined)[] {
     if (layout === 'device') {
       const dev = this.controlled();
@@ -443,7 +443,7 @@ export class Launchpad extends SessionSurface {
     return ledMessages(status, number, value);
   }
 
-  /** Il pulsante Session di X e Mini MK3 ha i suoi due colori, mandati con un SysEx. */
+  /** The Session button of X and Mini MK3 has its two colours, sent with a SysEx. */
   protected override send(key: string, value: number): void {
     if (key !== SESSION_KEY) return super.send(key, value);
     this.out(sessionColor(this.model, value >> 7, value & 0x7f));
@@ -460,7 +460,7 @@ export class Launchpad extends SessionSurface {
     };
     const sceneKey = (row: number) => (model.sceneKind === 'cc' ? ccKey(sceneButton(row)) : noteKey(sceneButton(row)));
 
-    // la griglia: i fader li disegna il controller, il resto lo si accende da qui
+    // the grid: the controller draws the faders, the rest is lit from here
     if (this.faders) {
       const values = this.faderValues(this.mode as Layout), look = this.faderLook(this.mode as Layout);
       const page = model.id === 'pro' ? FADER_PAGE[this.mode as Layout] : 0;
@@ -484,10 +484,10 @@ export class Launchpad extends SessionSurface {
       }
     }
 
-    // la colonna a destra
+    // the right column
     for (let row = 0; row < SIZE; row++) leds.set(sceneKey(row), this.sceneColor(row));
 
-    // navigazione
+    // navigation
     const nav = (b: 'up' | 'down' | 'left' | 'right') => button(b, this.overview || this.canMove(b) ? COLOR.whiteHalf : COLOR.off);
     if (model.id === 'pro' && this.mode === 'device') {
       const dev = this.controlled();
@@ -499,7 +499,7 @@ export class Launchpad extends SessionSurface {
       nav('up'); nav('down'); nav('left'); nav('right');
     }
 
-    // il pulsante Session: X e Mini col SysEx, gli altri con il loro LED
+    // the Session button: X and Mini with the SysEx, the others with their LED
     if (model.id === 'x' || model.id === 'mini') {
       const [active, inactive] = this.overview ? [COLOR.blue, COLOR.whiteHalf] : this.mixer ? [COLOR.cream, COLOR.whiteHalf] : [COLOR.paleGreenHalf, COLOR.whiteHalf];
       leds.set(SESSION_KEY, active * 128 + inactive);
@@ -513,13 +513,13 @@ export class Launchpad extends SessionSurface {
     if (model.id === 'x') button('captureMidi', COLOR.off);
     if (model.id === 'pro') this.proLeds(leds, button, tracks);
 
-    // la mano blu: solo il Pro MK3, con i parametri del dispositivo sui fader
+    // the blue hand: only the Pro MK3, with the device parameters on the faders
     const dev = model.id === 'pro' && this.mode === 'device' ? this.controlled() : null;
     this.host.ui.setControlledDevice(dev ? { owner: dev.owner, device: dev.device.key } : null);
     return leds;
   }
 
-  /** Un pulsante della colonna a destra. */
+  /** A button of the right column. */
   private sceneColor(row: number): number {
     const { id } = this.model;
     if (this.overview) return COLOR.off;
@@ -543,7 +543,7 @@ export class Launchpad extends SessionSurface {
     return s === 'queued' ? blink(COLOR.green) : s === 'playing' ? pulse(COLOR.green) : s === 'off' ? COLOR.off : s.color ? paletteIndex(s.color) : COLOR.green;
   }
 
-  /** Pro MK3: la riga delle tracce, i modi, il trasporto. */
+  /** Pro MK3: the track row, the modes, the transport. */
   private proLeds(leds: Map<string, number>, button: (b: Button, color: number) => void, tracks: (Track | undefined)[]): void {
     const fn: TrackMode = isTrackMode(this.mode) ? this.mode : 'select';
     tracks.forEach((t, c) => leds.set(ccKey(TRACK_BUTTONS + c), functionColor(fn, t, this.host.ui.track, this.stopLight(t))));
@@ -561,9 +561,9 @@ export class Launchpad extends SessionSurface {
     for (const b of ['record', 'clear', 'duplicate', 'quantize', 'fixedLength'] as const) button(b, COLOR.off);
   }
 
-  /** Lo stato dei modi, per i messaggi e il report. */
+  /** The state of the modes, for messages and the report. */
   get state(): string {
-    return [this.overview && 'mappa dei blocchi', this.mixer && 'mixer', this.mode !== 'none' && this.mode, this.foreign && 'layout del controller']
+    return [this.overview && 'block map', this.mixer && 'mixer', this.mode !== 'none' && this.mode, this.foreign && 'controller layout']
       .filter(Boolean).join(', ') || 'session';
   }
 }
@@ -572,16 +572,16 @@ const SESSION_KEY = 's:session';
 
 const isTrackMode = (m: Mode): m is 'stop' | 'mute' | 'solo' => m === 'stop' || m === 'mute' || m === 'solo';
 
-/** Il pad di uno slot, come in Live sui Launchpad: la clip che suona pulsa verde, quella in coda
- *  lampeggia verde, le altre hanno il loro colore, gli slot vuoti sono spenti. */
+/** A slot's pad, as in Live on the Launchpads: the playing clip pulses green, the queued one
+ *  blinks green, the others have their colour, empty slots are off. */
 function padColor(light: SlotLight): number {
   if (light === 'queued') return blink(COLOR.green);
   if (light === 'playing') return pulse(COLOR.green);
   return light === 'off' ? COLOR.off : paletteIndex(light.clip);
 }
 
-/** La mappa dei blocchi, come in Live: bianco il riquadro, verde che pulsa se qualcosa suona,
- *  azzurro se ci sono clip, spento se è vuoto. */
+/** The block map, as in Live: the box white, pulsing green if something plays,
+ *  light blue if there are clips, off if it's empty. */
 function blockColor(light: BlockLight): number {
   switch (light) {
     case 'off': case 'empty': return COLOR.off;
@@ -591,8 +591,8 @@ function blockColor(light: BlockLight): number {
   }
 }
 
-/** Il pulsante di una traccia in una funzione, coi colori di Live: stop rosso (lampeggia se lo stop
- *  è in coda, tenue se è ferma), mute giallo acceso se la traccia suona, solo blu, scelta bianca. */
+/** A track's button in a function, with Live's colours: stop red (blinks if the stop
+ *  is queued, dim if it's stopped), mute yellow lit if the track plays, solo blue, select white. */
 function functionColor(fn: TrackMode | 'volumeReset' | 'panReset' | 'none', t: Track | undefined, selected: string | null, stop: 'off' | 'playing' | 'queued'): number {
   if (!t) return COLOR.off;
   switch (fn) {

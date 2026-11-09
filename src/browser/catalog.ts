@@ -1,5 +1,5 @@
-/* Le fonti del browser, in ordine: quelle fisse (categorie e luoghi dell'app) e le cartelle che
- * l'utente aggiunge, che si ricordano tra un avvio e l'altro. */
+/* The browser's sources, in order: the fixed ones (the app's categories and places) and the folders
+ * the user adds, which are remembered from one start to the next. */
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { DeviceType } from '../devices/device-type';
 import type { RackPreset } from '../model/rack-preset';
@@ -7,7 +7,7 @@ import type { BrowserSource } from './item';
 import { deviceSource, kitSource, userPresetsSource, type UserPresetList, type UserRackList } from './device-sources';
 import { folderSource, projectSamplesSource, type FolderReader, type SampleProvider } from './sample-sources';
 
-/** Chi conserva le cartelle aggiunte (IndexedDB nell'app, una lista nei test). */
+/** Who keeps the added folders (IndexedDB in the app, a list in tests). */
 export interface FolderPlaces<F extends FolderReader> {
   load(): Promise<F[]>;
   save(folders: readonly F[]): Promise<void>;
@@ -18,19 +18,19 @@ export interface StandardSources {
   readonly effects: readonly DeviceType[];
   readonly user: UserPresetList;
   readonly racks?: UserRackList;
-  /** I rack di fabbrica (Tornado…). */
+  /** The factory racks (Tornado…). */
   readonly factoryRacks?: readonly RackPreset[];
   readonly project: SampleProvider;
 }
 
-/** Le fonti dell'app, come in Live ma solo con ciò che c'è: Strumenti, Batterie (i kit della
- *  Drum Machine), Effetti audio; poi i luoghi Progetto corrente e Preset dell'utente. */
+/** The app's sources, as in Live but only with what exists: Instruments, Drums (the Drum
+ *  Machine kits), Audio Effects; then the places Current Project and User Presets. */
 export function standardSources({ instruments, effects, user, racks, factoryRacks, project }: StandardSources): BrowserSource[] {
   const drums = instruments.filter(t => t.kit);
   return [
-    deviceSource({ id: 'instruments', label: 'Strumenti', kind: 'instrument', types: instruments, user, racks, factoryRacks }),
-    ...(drums.length ? [kitSource('drums', 'Batterie', drums, user)] : []),
-    deviceSource({ id: 'effects', label: 'Effetti audio', kind: 'effect', types: effects, user, racks, factoryRacks }),
+    deviceSource({ id: 'instruments', label: 'Instruments', kind: 'instrument', types: instruments, user, racks, factoryRacks }),
+    ...(drums.length ? [kitSource('drums', 'Drums', drums, user)] : []),
+    deviceSource({ id: 'effects', label: 'Audio effects', kind: 'effect', types: effects, user, racks, factoryRacks }),
     projectSamplesSource(project),
     userPresetsSource(instruments, effects, user, racks),
   ];
@@ -41,7 +41,7 @@ interface Place<F> {
   readonly source: BrowserSource;
 }
 
-/** Tutte le fonti del browser; `change` quando si aggiunge o si toglie una cartella. */
+/** All the browser's sources; `change` when a folder is added or removed. */
 export class BrowserCatalog<F extends FolderReader = FolderReader> {
   private places: Place<F>[] = [];
   private next = 1;
@@ -61,14 +61,14 @@ export class BrowserCatalog<F extends FolderReader = FolderReader> {
     return this.events.on('change', fn);
   }
 
-  /** Rilegge le cartelle aggiunte negli avvii precedenti. */
+  /** Rereads the folders added in previous starts. */
   async restore(): Promise<void> {
     if (!this.store) return;
     this.places = (await this.store.load()).map(f => this.place(f));
     this.events.emit('change');
   }
 
-  /** Aggiunge una cartella (se c'è già, la stessa); restituisce la sua fonte. */
+  /** Adds a folder (if it's already there, the same one); returns its source. */
   async addFolder(folder: F, same: (a: F, b: F) => Promise<boolean> = async (a, b) => a === b): Promise<BrowserSource> {
     for (const p of this.places) if (await same(p.folder, folder)) return p.source;
     const place = this.place(folder);
@@ -78,7 +78,7 @@ export class BrowserCatalog<F extends FolderReader = FolderReader> {
     return place.source;
   }
 
-  /** Toglie una cartella dal browser (sul disco non cambia niente). */
+  /** Removes a folder from the browser (nothing changes on disk). */
   async removeFolder(id: string): Promise<void> {
     const places = this.places.filter(p => p.source.id !== id);
     if (places.length === this.places.length) return;

@@ -14,7 +14,7 @@ import { setup } from '../helpers/fixtures';
 const cc = (number: number, channel = 0): MidiControl => ({ type: 'cc', channel, number });
 const note = (number: number, channel = 0): MidiControl => ({ type: 'note', channel, number });
 
-/** Una traccia MIDI con un Delay e un Tape Stop in un rack: [instrument, rack(delay, stop)]. */
+/** A MIDI track with a Delay and a Tape Stop in a rack: [instrument, rack(delay, stop)]. */
 function rig() {
   const s = setup({ midi: 1 });
   const t = s.track(0);
@@ -32,8 +32,8 @@ function rig() {
   return { ...s, t, track, delay, stop, rack, fx, macro, macroAt, paramAt, mixer };
 }
 
-describe('MIDI: le macro e i parametri', () => {
-  it('un CC porta una manopola al punto della sua corsa; una corsa unita è un solo annullamento', () => {
+describe('MIDI: the macros and the parameters', () => {
+  it('a CC takes a knob to the point of its travel; a merged sweep is a single undo', () => {
     const r = rig();
     r.store.apply(mapMacro(r.t, r.rack, 0, r.delay, 'mix'));
     r.store.apply(setMidi(r.macroAt(0), cc(21)));
@@ -44,14 +44,14 @@ describe('MIDI: le macro e i parametri', () => {
     r.store.apply(moveMidi(cc(21), 0), { mergeKey: 'midi' });
     r.store.undo();
     expect(r.macro(0).value).toBe(start);
-    expect(r.store.undoLabel).toBe('Mappa sul MIDI');
-    // un altro canale è un altro controllo
+    expect(r.store.undoLabel).toBe('Map to MIDI');
+    // another channel is another control
     expect(r.store.apply(moveMidi(cc(21, 1), 127))).toBe(r.store.project);
   });
 
-  it('interruttori e pulsanti: un CC li accende da 64 in su; una nota fa come un tasto', () => {
+  it('toggles and buttons: a CC turns them on from 64 up; a note acts like a key', () => {
     const r = rig();
-    r.store.apply(mapMacro(r.t, r.rack, 0, r.stop, 'stop')); // diventa interruttore
+    r.store.apply(mapMacro(r.t, r.rack, 0, r.stop, 'stop')); // it becomes a toggle
     r.store.apply(mapMacro(r.t, r.rack, 1, r.delay, 'mix'));
     r.store.apply(setMacroMode(r.t, r.rack, 1, 'button'));
     r.store.apply(setMidi(r.macroAt(0), note(36)));
@@ -60,7 +60,7 @@ describe('MIDI: le macro e i parametri', () => {
     expect(r.fx(r.stop).params.stop).toBe(1);
     r.store.apply(pressMidi(note(36)));
     expect(r.fx(r.stop).params.stop).toBe(0);
-    // il pulsante lo accende il CC tenuto su, senza entrare nella cronologia
+    // the button is turned on by the CC held up, without entering the history
     const label = r.store.undoLabel;
     expect(r.store.apply(moveMidi(cc(64), 127))).toBe(r.store.project);
     r.store.apply(holdMidi(cc(64), true), { transient: true });
@@ -70,7 +70,7 @@ describe('MIDI: le macro e i parametri', () => {
     expect(r.store.undoLabel).toBe(label);
   });
 
-  it('un parametro segue il CC (un menu sceglie dalla sua posizione); mosso da una macro, il CC non lo muove', () => {
+  it('a parameter follows the CC (a menu chooses from its position); moved by a macro, the CC doesn\'t move it', () => {
     const r = rig();
     r.store.apply(setMidi(r.paramAt(r.delay, 'mix'), cc(1)));
     r.store.apply(setMidi(r.paramAt(r.stop, 'curve'), cc(2)));
@@ -89,7 +89,7 @@ describe('MIDI: le macro e i parametri', () => {
     expect(r.fx(r.delay).params.mix).toBe(mix);
   });
 
-  it('un controllo muove più bersagli; un bersaglio ha un controllo solo; null lo toglie', () => {
+  it('a control moves several targets; a target has a single control; null removes it', () => {
     const r = rig();
     r.store.apply(setMidi(r.macroAt(0), cc(7)));
     r.store.apply(setMidi(r.macroAt(1), cc(7)));
@@ -98,13 +98,13 @@ describe('MIDI: le macro e i parametri', () => {
     r.store.apply(setMidi(r.macroAt(0), note(60)));
     expect(r.store.project.midiMap.map(m => midiLabel(m.control))).toEqual(['CC 7', 'C3']);
     r.store.apply(setMidi(r.macroAt(0), null));
-    expect(r.store.undoLabel).toBe('Togli il MIDI');
+    expect(r.store.undoLabel).toBe('Remove the MIDI');
     expect(r.store.project.midiMap).toEqual([{ control: cc(7), target: r.macroAt(1) }]);
   });
 });
 
-describe('MIDI: il mixer', () => {
-  it('volume come il fader di Live, pan con il centro a 64, mute e solo da 64 in su', () => {
+describe('MIDI: the mixer', () => {
+  it('volume like Live\'s fader, pan with the centre at 64, mute and solo from 64 up', () => {
     const r = rig();
     r.store.apply(setMidi(r.mixer('volume'), cc(7)));
     r.store.apply(setMidi(r.mixer('pan'), cc(10)));
@@ -118,11 +118,11 @@ describe('MIDI: il mixer', () => {
     r.store.apply(moveMidi(cc(10), 64));
     r.store.apply(moveMidi(cc(20), 0));
     expect([r.track().mixer.pan, r.track().mixer.mute]).toEqual([0, false]);
-    // lo stesso valore non è un cambio
+    // the same value isn't a change
     expect(r.store.apply(moveMidi(cc(20), 10))).toBe(r.store.project);
   });
 
-  it('una nota: mute e solo cambiano, il volume va da 0 dB a −∞, il pan torna al centro', () => {
+  it('a note: mute and solo change, the volume goes from 0 dB to −∞, the pan returns to the centre', () => {
     const r = rig();
     r.store.apply(setMidi(r.mixer('mute'), note(40)));
     r.store.apply(setMidi(r.mixer('volume'), note(41)));
@@ -135,15 +135,15 @@ describe('MIDI: il mixer', () => {
     expect(r.track().mixer.volumeDb).toBe(SILENT_DB);
     r.store.apply(pressMidi(note(41)));
     expect(r.track().mixer.volumeDb).toBe(0);
-    r.store.apply(moveMidi(note(42), 0)); // una nota non è un CC
-    expect(r.store.apply(pressMidi(note(42)))).toBe(r.store.project); // già al centro
+    r.store.apply(moveMidi(note(42), 0)); // a note isn't a CC
+    expect(r.store.apply(pressMidi(note(42)))).toBe(r.store.project); // already at the centre
   });
 
-  it('il master ha volume e mute; una mandata va da chiusa a 0 dB', () => {
+  it('the master has volume and mute; a send goes from closed to 0 dB', () => {
     const r = rig();
     r.store.apply(setMidi(r.mixer('volume', MASTER), cc(7, 15)));
     r.store.apply(setMidi(r.mixer('mute', MASTER), note(0, 15)));
-    expect(() => r.store.apply(setMidi(r.mixer('solo', MASTER), cc(8)))).toThrow(/non c'è/);
+    expect(() => r.store.apply(setMidi(r.mixer('solo', MASTER), cc(8)))).toThrow(/doesn't exist/);
     r.store.apply(moveMidi(cc(7, 15), 0));
     r.store.apply(pressMidi(note(0, 15)));
     expect(r.store.project.master).toMatchObject({ volumeDb: SILENT_DB, mute: true });
@@ -151,7 +151,7 @@ describe('MIDI: il mixer', () => {
     const bus = r.store.project.buses[0].id;
     const send: MidiTarget = { kind: 'send', owner: r.t, bus };
     r.store.apply(setMidi(send, cc(30)));
-    expect(() => r.store.apply(setMidi({ kind: 'send', owner: bus, bus }, cc(31)))).toThrow(/non c'è/);
+    expect(() => r.store.apply(setMidi({ kind: 'send', owner: bus, bus }, cc(31)))).toThrow(/doesn't exist/);
     r.store.apply(moveMidi(cc(30), 127));
     expect(r.track().send(bus)).toBe(0);
     r.store.apply(moveMidi(cc(30), 64));
@@ -162,8 +162,8 @@ describe('MIDI: il mixer', () => {
   });
 });
 
-describe('MIDI: nel progetto', () => {
-  it('i controlli di bersagli tolti non valgono, e tornano con "Annulla"', () => {
+describe('MIDI: in the project', () => {
+  it('the controls of removed targets don\'t apply, and they come back with "Undo"', () => {
     const r = rig();
     r.store.apply(setMidi(r.paramAt(r.delay, 'mix'), cc(1)));
     r.store.apply(setMidi(r.mixer('volume'), cc(7)));
@@ -176,7 +176,7 @@ describe('MIDI: nel progetto', () => {
     expect(r.store.project.midiMap.map(m => m.control.number)).toEqual([1, 7]);
   });
 
-  it('un altro strumento toglie i controlli dei parametri dello strumento', () => {
+  it('another instrument removes the controls of the instrument\'s parameters', () => {
     const r = rig();
     r.store.apply(setMidi(r.paramAt(INSTRUMENT_DEVICE, 'cutoff'), cc(74)));
     r.store.apply(setInstrument(r.t, { ...r.track().instrument, preset: null }));
@@ -185,7 +185,7 @@ describe('MIDI: nel progetto', () => {
     expect(r.store.project.midiMap).toEqual([]);
   });
 
-  it('si salvano solo se ci sono, e solo quelli che valgono', () => {
+  it('they\'re saved only if there are any, and only those that apply', () => {
     const r = rig();
     const codec = new ProjectCodec();
     expect('midiMap' in JSON.parse(codec.stringify(r.store.project))).toBe(false);
@@ -205,16 +205,16 @@ describe('MIDI: nel progetto', () => {
     expect(back.midiMap.map(m => midiLabel(m.control))).toEqual(['CC 21', 'C1 · 10', 'CC 10', 'CC 7', 'CC 12']);
   });
 
-  it('un file con un controllo che non va si rifiuta', () => {
+  it('a file with an invalid control is rejected', () => {
     const r = rig();
     const codec = new ProjectCodec();
     r.store.apply(setMidi(r.mixer('volume'), cc(7)));
     const json = JSON.parse(codec.stringify(r.store.project));
     json.midiMap[0].number = 300;
-    expect(() => codec.parse(JSON.stringify(json))).toThrow(/non valido/);
+    expect(() => codec.parse(JSON.stringify(json))).toThrow(/invalid/);
   });
 
-  it('il bersaglio scritto nel DOM torna uguale', () => {
+  it('the target written in the DOM comes back the same', () => {
     const r = rig();
     const targets: MidiTarget[] = [r.macroAt(3), r.paramAt(INSTRUMENT_DEVICE, 'cutoff'), r.mixer('solo'), r.mixer('volume', MASTER), { kind: 'send', owner: r.t, bus: r.t }];
     expect(targets.map(t => decodeMidiTarget(encodeMidiTarget(t)))).toEqual(targets);

@@ -1,4 +1,4 @@
-/** Tempi dell'inviluppo in secondi, sustain 0..1. */
+/** Envelope times in seconds, sustain 0..1. */
 export interface AdsrTimes {
   readonly attack: number;
   readonly decay: number;
@@ -6,14 +6,14 @@ export interface AdsrTimes {
   readonly release: number;
 }
 
-/** Livello sotto cui l'inviluppo si considera finito (−100 dB). */
+/** Level below which the envelope is considered finished (−100 dB). */
 const FLOOR = 1e-5;
-/** Coefficiente per campione di una curva esponenziale che scende di 60 dB in `seconds`. */
+/** Per-sample coefficient of an exponential curve falling 60 dB in `seconds`. */
 export const decayCoef = (seconds: number, sampleRate: number) => Math.exp(Math.log(1e-3) / Math.max(1, seconds * sampleRate));
 
-/** Inviluppo ADSR: attacco lineare, decadimento e rilascio esponenziali. Ogni fase è una
- *  funzione che fa un passo e decide la fase seguente (nessuno switch per campione).
- *  Un nuovo attacco riparte dal livello attuale: rubare una voce non fa click. */
+/** ADSR envelope: linear attack, exponential decay and release. Each stage is a
+ *  function that takes a step and decides the next stage (no per-sample switch).
+ *  A new attack restarts from the current level: stealing a voice doesn't click. */
 export class Adsr {
   value = 0;
   private attackStep = 1;
@@ -50,7 +50,7 @@ export class Adsr {
     if (this.active) this.stage = this.releaseStage;
   }
 
-  /** Rilascio in ~5 ms, per fermare subito senza click. */
+  /** Release in ~5 ms, to stop right away without clicks. */
   kill(): void {
     if (this.active) this.stage = this.killStage;
   }

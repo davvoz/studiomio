@@ -1,6 +1,6 @@
-/* Lo spettro di un effetto che suona: due AnalyserNode (FFT nativa del browser) collegati
- * ai punti d'ascolto dell'effetto, prima e dopo. Se l'effetto viene ricreato (catena
- * ricostruita) il collegamento si rifà da solo alla lettura successiva. */
+/* The spectrum of a playing effect: two AnalyserNodes (the browser's native FFT) connected
+ * to the effect's listening points, before and after. If the effect is recreated (chain
+ * rebuilt) the connection is redone by itself at the next read. */
 import type { EffectMonitor } from '../engine/effect-chain';
 import type { SpectrumTap } from '../ui/device/displays';
 
@@ -36,9 +36,9 @@ export class EffectSpectrum implements SpectrumTap {
   private attach(m: EffectMonitor | null): void {
     const old = this.monitor;
     if (old) {
-      // l'effetto vecchio può essere già stato smontato (e scollegato da tutto)
-      try { (old.pre as AudioNode).disconnect(this.pre); } catch { /* già scollegato */ }
-      try { (old.post as AudioNode).disconnect(this.post); } catch { /* già scollegato */ }
+      // the old effect may already have been torn down (and disconnected from everything)
+      try { (old.pre as AudioNode).disconnect(this.pre); } catch { /* already disconnected */ }
+      try { (old.post as AudioNode).disconnect(this.post); } catch { /* already disconnected */ }
     }
     this.monitor = m;
     if (m) {

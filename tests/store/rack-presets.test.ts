@@ -10,7 +10,7 @@ import { macroParam } from '../../src/model/rack';
 import { groupDevices, mapMacro, renameMacro, setMacro, setMacroMode, setMappingRange, ungroupRack } from '../../src/store/rack-edits';
 import { setup } from '../helpers/fixtures';
 
-/** Una traccia MIDI con Analog e due effetti, tutti in un Instrument Rack con due macro mappate. */
+/** A MIDI track with Analog and two effects, all in an Instrument Rack with two mapped macros. */
 function rig() {
   const s = setup({ midi: 1, audio: 1 });
   const t = s.track(1);
@@ -27,48 +27,48 @@ function rig() {
   s.store.apply(mapMacro(t, rack, 0, INSTRUMENT_DEVICE, 'cutoff'));
   s.store.apply(mapMacro(t, rack, 0, delay, 'mix'));
   s.store.apply(setMappingRange(t, delay, 'mix', { min: 10, max: 90 }));
-  s.store.apply(renameMacro(t, rack, 0, 'Apri'));
+  s.store.apply(renameMacro(t, rack, 0, 'Open'));
   s.store.apply(setMacro(t, rack, 0, 100));
   s.store.apply(mapMacro(t, rack, 1, comp, 'threshold'));
   s.store.apply(setMacroMode(t, rack, 1, 'toggle'));
   return { ...s, t, audio, midi, delay, comp, rack };
 }
 
-/** Come lo rilegge l'app da un file. */
+/** As the app reads it back from a file. */
 const roundTrip = (r: RackPreset) => rackPresetFrom(JSON.parse(JSON.stringify(r)));
 
-describe('rack salvati: cosa si salva', () => {
-  it('dispositivi, parametri e macro; le mappature per posto nel rack; niente sidechain', () => {
+describe('saved racks: what is saved', () => {
+  it('devices, parameters and macros; the mappings by position in the rack; no sidechain', () => {
     const r = rig();
-    const saved = captureRack(r.store.project, r.t, r.rack, 'Basso sporco');
-    expect(saved.name).toBe('Basso sporco');
+    const saved = captureRack(r.store.project, r.t, r.rack, 'Dirty bass');
+    expect(saved.name).toBe('Dirty bass');
     expect(saved.instrument).toMatchObject({ type: 'analog', params: { cutoff: expect.any(Number) } });
     expect(saved.effects.map(e => e.type)).toEqual(['delay', 'compressor']);
     expect(saved.effects[0].params.feedback).toBe(60);
     expect(saved.effects[1]).not.toHaveProperty('sidechain');
     expect(saved.macros).toHaveLength(8);
-    expect(saved.macros[0]).toMatchObject({ name: 'Apri', value: 100 });
+    expect(saved.macros[0]).toMatchObject({ name: 'Open', value: 100 });
     expect(saved.macros[0].mappings.map(m => [m.device, m.param])).toEqual([[0, 'cutoff'], [1, 'mix']]);
     expect(saved.macros[0].mappings[1]).toMatchObject({ min: 10, max: 90 });
     expect(saved.macros[1]).toMatchObject({ mode: 'toggle', mappings: [{ device: 2, param: 'threshold' }] });
-    // da un file si rilegge uguale
+    // from a file it's read back the same
     expect(roundTrip(saved)).toEqual(saved);
   });
 
-  it('Audio Effect Rack: senza strumento', () => {
+  it('Audio Effect Rack: without instrument', () => {
     const r = rig();
     r.store.apply(addEffect(r.audio, 'delay', 'Delay'));
     const fx = (r.store.project.track(r.audio) as AudioTrack).effects[0].id;
     r.store.apply(groupDevices(r.audio, [fx]));
     const id = r.store.project.racksOf(r.audio)[0].id;
-    const saved = captureRack(r.store.project, r.audio, id, 'Eco');
+    const saved = captureRack(r.store.project, r.audio, id, 'Echo');
     expect([saved.instrument, saved.effects.length]).toEqual([null, 1]);
-    expect(() => captureRack(r.store.project, r.t, 'nessuno' as DeviceId, 'x')).toThrow(/non trovato/);
+    expect(() => captureRack(r.store.project, r.t, 'none' as DeviceId, 'x')).toThrow(/not found/);
   });
 
-  it('dati letti da fuori: ciò che non vale si salta', () => {
+  it('data read from outside: what isn\'t valid is skipped', () => {
     expect(rackPresetFrom(null)).toBeNull();
-    expect(rackPresetFrom({ name: 'Vuoto', instrument: null, effects: [] })).toBeNull();
+    expect(rackPresetFrom({ name: 'Empty', instrument: null, effects: [] })).toBeNull();
     expect(rackPresetFrom({ name: '', instrument: null, effects: [{ type: 'delay', params: {} }] })).toBeNull();
     expect(rackPresetFrom({ name: 'X', instrument: { params: {} }, effects: [] })).toBeNull();
     expect(rackPresetFrom({ name: 'X', instrument: null, effects: [{ type: 'delay' }] })).toBeNull();
@@ -77,7 +77,7 @@ describe('rack salvati: cosa si salva', () => {
       macros: [
         { name: 'M', value: 300, mappings: [{ device: 0, param: 'mix', min: 0, max: 100 }, { device: 1, param: 'mix', min: 0, max: 1 }, { device: 0, param: 'x' }] },
         { value: 100, mode: 'toggle', mappings: [] },
-        { value: 50, mode: 'strano' },
+        { value: 50, mode: 'odd' },
       ],
     })!;
     expect(r.instrument).toBeNull();
@@ -90,17 +90,17 @@ describe('rack salvati: cosa si salva', () => {
   });
 });
 
-describe('rack salvati: caricarli', () => {
-  it('Instrument Rack su un\'altra traccia MIDI: strumento, effetti prima degli altri, macro sui dispositivi nuovi', () => {
+describe('saved racks: loading them', () => {
+  it('Instrument Rack on another MIDI track: instrument, effects before the others, macros on the new devices', () => {
     const r = rig();
-    const saved = roundTrip(captureRack(r.store.project, r.t, r.rack, 'Basso sporco'))!;
+    const saved = roundTrip(captureRack(r.store.project, r.t, r.rack, 'Dirty bass'))!;
     r.store.apply(addTrack('midi'));
     const other = r.track(2);
     r.store.apply(addEffect(other, 'reverb', 'Reverb'));
     const reverb = (r.store.project.track(other) as MidiTrack).effects[0].id;
-    r.store.apply(groupDevices(other, [INSTRUMENT_DEVICE, reverb])); // il vecchio Instrument Rack si separa
+    r.store.apply(groupDevices(other, [INSTRUMENT_DEVICE, reverb])); // the old Instrument Rack is ungrouped
     r.store.apply(loadRack(other, saved));
-    expect(r.store.undoLabel).toBe('Carica Basso sporco');
+    expect(r.store.undoLabel).toBe('Load Dirty bass');
     const t = r.store.project.track(other) as MidiTrack;
     expect(t.instrument).toMatchObject({ type: 'analog', params: saved.instrument!.params });
     expect(t.effects.map(e => e.type)).toEqual(['delay', 'compressor', 'reverb']);
@@ -108,32 +108,32 @@ describe('rack salvati: caricarli', () => {
     expect(t.effects[1].sidechain).toBeUndefined();
     expect(t.racks).toHaveLength(1);
     const [rack] = t.racks;
-    expect(rack.name).toBe('Basso sporco');
+    expect(rack.name).toBe('Dirty bass');
     expect(rack.devices).toEqual([INSTRUMENT_DEVICE, t.effects[0].id, t.effects[1].id]);
     expect(rack.macros[0].mappings.map(m => m.device)).toEqual([INSTRUMENT_DEVICE, t.effects[0].id]);
     expect(rack.macros[1].mode).toBe('toggle');
-    // i parametri mappati sono dove la macro li porta, come nel rack di partenza
+    // the mapped parameters are where the macro takes them, as in the starting rack
     expect(t.effects[0].params.mix).toBe(r.midi().effects[0].params.mix);
     expect(t.effects[0].params.mix).toBeCloseTo(10 + (100 / 127) * 80, 0);
     expect(t.instrument.params.cutoff).toBeCloseTo(r.midi().instrument.params.cutoff, 9);
-    // un passo di annullamento
+    // one undo step
     r.store.undo();
     expect((r.store.project.track(other) as MidiTrack).racks[0].devices).toEqual([INSTRUMENT_DEVICE, reverb]);
   });
 
-  it('Instrument Rack: senza traccia MIDI va su una nuova; il master no', () => {
+  it('Instrument Rack: without a MIDI track it goes on a new one; the master no', () => {
     const r = rig();
     const saved = captureRack(r.store.project, r.t, r.rack, 'R');
     r.store.apply(loadRack(r.audio, saved));
     const tracks = r.store.project.tracks;
-    expect(tracks.map(t => t.kind)).toEqual(['audio', 'midi', 'midi']); // subito dopo la traccia audio
+    expect(tracks.map(t => t.kind)).toEqual(['audio', 'midi', 'midi']); // right after the audio track
     expect((tracks[1] as MidiTrack).racks[0].name).toBe('R');
     r.store.apply(loadRack(null, saved));
     expect(r.store.project.tracks).toHaveLength(4);
-    expect(() => r.store.apply(loadRack(MASTER, saved))).toThrow(/strumento/);
+    expect(() => r.store.apply(loadRack(MASTER, saved))).toThrow(/instrument/);
   });
 
-  it('Audio Effect Rack: in fondo alla catena, anche del master; senza traccia su una traccia audio nuova', () => {
+  it('Audio Effect Rack: at the end of the chain, also of the master; without a track on a new audio track', () => {
     const r = rig();
     r.store.apply(addEffect(r.audio, 'delay', 'Delay'));
     r.store.apply(addEffect(r.audio, 'reverb', 'Reverb'));
@@ -141,7 +141,7 @@ describe('rack salvati: caricarli', () => {
     r.store.apply(groupDevices(r.audio, [d, rv]));
     const id = r.store.project.racksOf(r.audio)[0].id;
     r.store.apply(mapMacro(r.audio, id, 0, rv, 'mix'));
-    const saved = captureRack(r.store.project, r.audio, id, 'Spazio');
+    const saved = captureRack(r.store.project, r.audio, id, 'Space');
 
     r.store.apply(loadRack(r.t, saved));
     const t = r.store.project.track(r.t) as MidiTrack;
@@ -155,10 +155,10 @@ describe('rack salvati: caricarli', () => {
     r.store.apply(loadRack(null, saved));
     const last = r.store.project.tracks.at(-1)!;
     expect(last).toBeInstanceOf(AudioTrack);
-    expect(last.racks[0].name).toBe('Spazio');
+    expect(last.racks[0].name).toBe('Space');
   });
 
-  it('sulla stessa traccia: il vecchio Instrument Rack si separa, i suoi effetti restano dopo', () => {
+  it('on the same track: the old Instrument Rack is ungrouped, its effects stay after', () => {
     const r = rig();
     const saved = captureRack(r.store.project, r.t, r.rack, 'R');
     r.store.apply(setInstrument(r.t, { type: 'wavetable', preset: null, params: {} }));
@@ -172,21 +172,21 @@ describe('rack salvati: caricarli', () => {
   });
 });
 
-describe('rack salvati: con i rack dentro', () => {
-  it('si salvano i rack dentro e le mappature sulle loro macro; caricati tornano uguali', () => {
+describe('saved racks: with the racks inside', () => {
+  it('the inner racks and the mappings on their macros are saved; loaded they come back the same', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.delay, r.comp]));
     const inner = r.midi().racks.find(x => x.id !== r.rack)!.id;
     r.store.apply(mapMacro(r.t, inner, 0, r.comp, 'ratio'));
-    r.store.apply(renameMacro(r.t, inner, 0, 'Schiaccia'));
+    r.store.apply(renameMacro(r.t, inner, 0, 'Squash'));
     r.store.apply(mapMacro(r.t, r.rack, 2, inner, macroParam(0)));
     r.store.apply(setMacro(r.t, r.rack, 2, 90));
-    const saved = captureRack(r.store.project, r.t, r.rack, 'Doppio');
+    const saved = captureRack(r.store.project, r.t, r.rack, 'Double');
     expect(saved.racks).toEqual([{ name: null, first: 1, count: 2, macros: expect.any(Array) }]);
     expect(saved.macros[2].mappings).toEqual([{ rack: 0, param: 'macro1', min: 0, max: 127 }]);
-    expect(saved.racks![0].macros[0]).toMatchObject({ name: 'Schiaccia', value: 90, mappings: [{ device: 2, param: 'ratio' }] });
+    expect(saved.racks![0].macros[0]).toMatchObject({ name: 'Squash', value: 90, mappings: [{ device: 2, param: 'ratio' }] });
     expect(roundTrip(saved)).toEqual(saved);
-    // caricato su un'altra traccia: due rack, uno dentro l'altro, con le macro che si muovono come prima
+    // loaded on another track: two racks, one inside the other, with the macros moving as before
     r.store.apply(addTrack('midi'));
     const other = r.store.project.tracks.at(-1)!.id;
     r.store.apply(loadRack(other, saved));
@@ -198,7 +198,7 @@ describe('rack salvati: con i rack dentro', () => {
     expect((r.store.project.track(other) as MidiTrack).racks[1].macros[0].value).toBe(0);
   });
 
-  it('dei rack dentro che non stanno nelle regole si saltano, con le mappature sulle loro macro', () => {
+  it('inner racks not following the rules are skipped, with the mappings on their macros', () => {
     const r = rig();
     const saved = JSON.parse(JSON.stringify(captureRack(r.store.project, r.t, r.rack, 'X')));
     saved.racks = [{ name: 'A', first: 0, count: 2, macros: [] }, { name: 'B', first: 1, count: 2, macros: [] }];
@@ -211,14 +211,14 @@ describe('rack salvati: con i rack dentro', () => {
   });
 });
 
-describe('rack salvati: i modulatori', () => {
-  it('le destinazioni dentro il rack tornano sui dispositivi nuovi; quelle fuori si perdono', () => {
+describe('saved racks: the modulators', () => {
+  it('the targets inside the rack come back on the new devices; those outside are lost', () => {
     const r = rig();
     r.store.apply(addEffect(r.t, 'lfo', 'LFO'));
     const lfo = r.midi().effects.find(e => e.type === 'lfo')!.id;
     r.store.apply(addEffect(r.t, 'delay', 'Delay'));
     const outside = r.midi().effects.at(-1)!.id;
-    // l'LFO entra nel rack: muove lo strumento, una macro del rack, il volume e un delay fuori
+    // the LFO enters the rack: it moves the instrument, a macro of the rack, the volume and a delay outside
     r.store.apply(ungroupRack(r.t, r.rack));
     r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE, r.delay, r.comp, lfo]));
     const rack = r.midi().racks[0].id;
@@ -228,7 +228,7 @@ describe('rack salvati: i modulatori', () => {
     r.store.apply(setModTarget(r.t, lfo, 3, { kind: 'device', device: outside, param: 'mix' }));
     const saved = roundTrip(captureRack(r.store.project, r.t, rack, 'Wobble'))!;
     expect(saved.effects.find(e => e.type === 'lfo')!.targets).toEqual(['d0:cutoff', 'r0:macro2', 'mixer:volume', null]);
-    // di nuovo sulla stessa traccia: al posto dello strumento, con i suoi effetti nuovi davanti
+    // again on the same track: in place of the instrument, with its new effects in front
     const before = new Set(r.midi().effects.map(e => e.id));
     r.store.apply(loadRack(r.t, saved));
     const loaded = r.midi().effects.find(e => e.type === 'lfo' && !before.has(e.id))!;

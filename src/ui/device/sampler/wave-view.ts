@@ -1,10 +1,10 @@
-/* La forma d'onda del Sampler, come in Simpler: la regione che suona (Inizio…Fine) accesa e il
- * resto spento, il loop come una fascia con i suoi due marker in basso e la dissolvenza disegnata,
- * le fette numerate, e un cursore per ogni voce che suona. I marker si trascinano (Maiusc: fine);
- * la fascia del loop si trascina tutta insieme. La rotella fa lo zoom attorno al puntatore,
- * Maiusc+rotella scorre; doppio clic sul vuoto torna a tutto il sample. In Slice un clic su una
- * fetta la suona; con le fette ai transienti il doppio clic ne aggiunge una (o, su un marker, la
- * toglie). Con Reverse il sample si vede rovesciato e le posizioni valgono lì. */
+/* The Sampler's waveform, as in Simpler: the playing region (Start…End) lit and the
+ * rest dark, the loop as a band with its two markers at the bottom and the crossfade drawn,
+ * the slices numbered, and a cursor for each playing voice. The markers are dragged (Shift: fine);
+ * the loop band is dragged all together. The wheel zooms around the pointer,
+ * Shift+wheel scrolls; double click on empty space goes back to the whole sample. In Slice a click on a
+ * slice plays it; with the slices at the transients double click adds one (or, on a marker,
+ * removes it). With Reverse the sample is shown reversed and the positions apply there. */
 import type { SampleData } from '../../../devices/dsp/core';
 import { LOOP, MODE, SLICE, SLICE_COUNT, sliceParam, sliceStarts, sliceValues } from '../../../devices/instruments/sampler/sampler';
 import type { ParamValues } from '../../../model/device';
@@ -16,22 +16,22 @@ const LOOP_COLOR = '#f2d14b';
 const SLICE_COLOR = '#4fd1e0';
 const WAVE_ON = 'rgba(255,190,120,0.9)';
 const WAVE_OFF = 'rgba(255,255,255,0.16)';
-/** La striscia dei marker in alto (Inizio, Fine, fette) e quella del loop in basso. */
+/** The marker strip at the top (Start, End, slices) and the loop's at the bottom. */
 const TOP = 15, BOTTOM = 13;
 const HIT = 6;
-/** Lo zoom più stretto: questa frazione del sample. */
+/** The tightest zoom: this fraction of the sample. */
 const MIN_SPAN = 0.0005;
 
-/** Un marker: una posizione con il suo parametro (le fette: il numero del parametro). */
+/** A marker: a position with its parameter (the slices: the parameter's number). */
 type Marker = { readonly kind: 'start' | 'end' | 'loopStart' | 'loopEnd' } | { readonly kind: 'slice'; readonly param: number };
 
 export interface WaveHost {
   values(): Readonly<Record<string, number>>;
   audio(): SampleData | undefined;
-  /** Il nome del sample, o null se non c'è. */
+  /** The sample's name, or null if there isn't one. */
   name(): string | null;
   set(values: ParamValues, final: boolean): void;
-  /** Suona la fetta `index` (da 0). */
+  /** Plays slice `index` (from 0). */
   playSlice(index: number): void;
   playheads(): readonly number[];
   menu(x: number, y: number): void;
@@ -52,7 +52,7 @@ export class WaveView {
   constructor(private readonly host: WaveHost) {
     const c = this.canvas;
     c.className = 'smp-wave';
-    c.title = 'Trascina i marker (Maiusc: fine) · rotella: zoom · Maiusc+rotella: scorri · doppio clic: tutto il sample';
+    c.title = 'Drag the markers (Shift: fine) · wheel: zoom · Shift+wheel: scroll · double click: the whole sample';
     c.addEventListener('pointerdown', e => this.press(e));
     c.addEventListener('pointermove', e => {
       if (e.buttons) return;
@@ -77,14 +77,14 @@ export class WaveView {
     });
   }
 
-  /** Torna a vedere tutto il sample. */
+  /** Goes back to showing the whole sample. */
   zoomAll(): void {
     this.v0 = 0;
     this.v1 = 1;
     this.paint();
   }
 
-  /** Ridisegna se le voci si sono spostate (a ogni fotogramma). */
+  /** Redraws if the voices moved (at every frame). */
   tick(): void {
     const heads = this.host.playheads();
     if (heads.length || this.heads.length) {
@@ -97,7 +97,7 @@ export class WaveView {
     this.enabled = enabled;
   }
 
-  // ---------------------------------------------------------------- misure
+  // ---------------------------------------------------------------- measures
 
   private get width(): number {
     return this.canvas.clientWidth;
@@ -120,7 +120,7 @@ export class WaveView {
     return v.mode === MODE.classic && v.loop !== LOOP.off;
   }
 
-  /** I marker che si vedono, con la loro posizione (frazione). */
+  /** The visible markers, with their position (fraction). */
   private markers(v: Readonly<Record<string, number>>): [Marker, number][] {
     const out: [Marker, number][] = [[{ kind: 'start' }, v.start / 100], [{ kind: 'end' }, v.end / 100]];
     if (this.looping(v)) out.push([{ kind: 'loopStart' }, v.loopStart / 100], [{ kind: 'loopEnd' }, v.loopEnd / 100]);
@@ -140,7 +140,7 @@ export class WaveView {
     const v = this.host.values();
     let best: Marker | null = null, dist = HIT;
     for (const [m, frac] of this.markers(v)) {
-      // i marker del loop si prendono in basso, gli altri in alto (o lungo la linea, se lontani)
+      // the loop markers are grabbed at the bottom, the others at the top (or along the line, if far)
       const loopMarker = m.kind === 'loopStart' || m.kind === 'loopEnd';
       if (loopMarker ? y < TOP : y > h - BOTTOM) continue;
       const d = Math.abs(this.xOf(frac) - x);
@@ -154,14 +154,14 @@ export class WaveView {
     return null;
   }
 
-  // ---------------------------------------------------------------- gesti
+  // ---------------------------------------------------------------- gestures
 
   private press(e: PointerEvent): void {
     if (e.button !== 0) return;
     const h = this.hit(e);
     const v0 = { ...this.host.values() };
     if (!h) {
-      // in Slice un clic su una fetta la suona
+      // in Slice a click on a slice plays it
       if (this.sliced()) {
         const at = this.fracAt(e.clientX), starts = sliceStarts(v0);
         const i = starts.filter(s => s <= at).length - 1;
@@ -173,7 +173,7 @@ export class WaveView {
     const scale = (this.v1 - this.v0) / Math.max(1, this.width);
     let last: ParamValues | null = null, fine = 0, prevX = e.clientX;
     drag(e, this.canvas, (_dx, _dy, m) => {
-      // con Maiusc il marker va a un quarto della velocità
+      // with Shift the marker goes at a quarter of the speed
       fine += (m.clientX - prevX) * (m.shiftKey ? 0.25 : 1);
       prevX = m.clientX;
       last = this.moved(h, v0, fine * scale);
@@ -181,7 +181,7 @@ export class WaveView {
     }, () => { if (last) this.host.set(last, true); });
   }
 
-  /** I valori dopo aver spostato `h` di `delta` (frazione del sample). */
+  /** The values after moving `h` by `delta` (fraction of the sample). */
   private moved(h: Marker | 'loop', v: Readonly<Record<string, number>>, delta: number): ParamValues | null {
     const pct = (x: number) => round(clamp01(x) * 100), gap = 0.0005;
     if (h === 'loop') {
@@ -234,7 +234,7 @@ export class WaveView {
     this.paint();
   }
 
-  // ---------------------------------------------------------------- disegno
+  // ---------------------------------------------------------------- drawing
 
   private peaksOf(data: SampleData, reverse: boolean): Peaks {
     if (this.peaks?.data !== data) {
@@ -257,7 +257,7 @@ export class WaveView {
     const a = v.start / 100, b = v.end / 100;
     g.globalAlpha = this.enabled ? 1 : 0.5;
 
-    // le strisce dei marker e la linea dello zero
+    // the marker strips and the zero line
     g.fillStyle = 'rgba(255,255,255,0.03)';
     g.fillRect(0, 0, w, top);
     g.fillRect(0, bottom, w, BOTTOM);
@@ -267,7 +267,7 @@ export class WaveView {
     g.lineTo(w, Math.round(mid) + 0.5);
     g.stroke();
 
-    // il loop sotto la forma d'onda
+    // the loop under the waveform
     const looping = this.looping(v);
     if (looping) {
       const la = Math.max(a, v.loopStart / 100), lb = Math.min(b, v.loopEnd / 100);
@@ -278,7 +278,7 @@ export class WaveView {
         g.fillStyle = this.hot === 'loop' ? 'rgba(242,209,75,0.55)' : 'rgba(242,209,75,0.32)';
         g.fillRect(x0, bottom + 2, x1 - x0, BOTTOM - 4);
         if (v.loop === LOOP.forward && v.xfade > 0) {
-          // la dissolvenza: la fine del loop scende mentre il pezzo prima dell'inizio sale
+          // the crossfade: the end of the loop falls while the piece before the start rises
           const span = lb - la, xf = Math.min((v.xfade / 100) * span, la - a);
           if (xf > 0) {
             g.strokeStyle = 'rgba(242,209,75,0.6)';
@@ -295,7 +295,7 @@ export class WaveView {
       }
     }
 
-    // la forma d'onda: accesa nella regione che suona
+    // the waveform: lit in the playing region
     const peaks = this.peaksOf(data, v.reverse === 1), seconds = data.channels[0].length / data.sampleRate;
     const spanX = (this.v1 - this.v0) / Math.max(1, w);
     for (let x = 0; x < w; x++) {
@@ -305,13 +305,13 @@ export class WaveView {
       g.fillStyle = f1 > a && f0 < b ? WAVE_ON : WAVE_OFF;
       g.fillRect(x, y0, 1, Math.max(1, y1 - y0));
     }
-    // fuori dalla regione, un velo
+    // outside the region, a veil
     g.fillStyle = 'rgba(0,0,0,0.25)';
     const xa = this.xOf(a), xb = this.xOf(b);
     if (xa > 0) g.fillRect(0, top, xa, bottom - top);
     if (xb < w) g.fillRect(xb, top, w - xb, bottom - top);
 
-    // le fette
+    // the slices
     if (v.mode === MODE.slice) {
       const starts = sliceStarts(v);
       g.font = '9px system-ui, sans-serif';
@@ -333,7 +333,7 @@ export class WaveView {
       });
     }
 
-    // Inizio e Fine, poi i marker del loop
+    // Start and End, then the loop markers
     this.flag(g, 'start', xa, top, bottom, START_COLOR, 'S', 'top');
     this.flag(g, 'end', xb, top, bottom, START_COLOR, 'E', 'top');
     if (looping) {
@@ -341,7 +341,7 @@ export class WaveView {
       this.flag(g, 'loopEnd', this.xOf(v.loopEnd / 100), top, bottom, LOOP_COLOR, 'L', 'bottom');
     }
 
-    // le voci che suonano
+    // the playing voices
     g.strokeStyle = 'rgba(255,255,255,0.9)';
     for (const p of this.heads) {
       const x = Math.round(this.xOf(p)) + 0.5;
@@ -353,7 +353,7 @@ export class WaveView {
     }
 
     g.globalAlpha = 1;
-    // lo zoom: dove si è nel sample
+    // the zoom: where you are in the sample
     if (this.v1 - this.v0 < 0.999) {
       g.fillStyle = 'rgba(255,255,255,0.25)';
       g.fillRect(this.v0 * w, h - 2, Math.max(2, (this.v1 - this.v0) * w), 2);
@@ -362,7 +362,7 @@ export class WaveView {
       g.font = '11px system-ui, sans-serif';
       g.fillStyle = LABEL;
       g.textAlign = 'center';
-      g.fillText('Nessuna fetta: Rileva le trova ai transienti, o doppio clic per aggiungerne', w / 2, top + 14);
+      g.fillText('No slices: Detect finds them at the transients, or double click to add some', w / 2, top + 14);
       g.textAlign = 'left';
     }
   }
@@ -378,7 +378,7 @@ export class WaveView {
     g.moveTo(px, top);
     g.lineTo(px, bottom);
     g.stroke();
-    // la bandierina sta dentro la regione: a destra della linea per gli inizi, a sinistra per le fini
+    // the flag sits inside the region: right of the line for the starts, left for the ends
     const right = kind === 'start' || kind === 'loopStart';
     const fw = 11, fh = at === 'top' ? TOP - 2 : BOTTOM - 2, fy = at === 'top' ? 1 : bottom + 1;
     const fx = right ? px : px - fw;
@@ -398,11 +398,11 @@ export class WaveView {
     g.fillStyle = 'rgba(255,255,255,0.7)';
     g.font = '13px system-ui, sans-serif';
     const name = this.host.name();
-    g.fillText(name ? `Caricamento di "${name}"…` : 'Trascina qui un file audio o un sample dal browser', w / 2, h / 2 - 2);
+    g.fillText(name ? `Loading "${name}"…` : 'Drag an audio file or a sample from the browser here', w / 2, h / 2 - 2);
     if (!name) {
       g.fillStyle = LABEL;
       g.font = '11px system-ui, sans-serif';
-      g.fillText('oppure Carica… qui sopra', w / 2, h / 2 + 16);
+      g.fillText('or Load… up here', w / 2, h / 2 + 16);
     }
     g.textAlign = 'left';
   }

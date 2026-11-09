@@ -1,16 +1,16 @@
-/* Il suono del Delay: due linee di ritardo (sinistra e destra) con lettura interpolata, un
- * passa-alto e un passa-basso a un polo sulle ripetizioni. Il tempo cambia scorrendo
- * dolcemente (come un nastro), senza click. Gira nell'AudioWorklet; qui niente Web Audio. */
+/* The Delay's sound: two delay lines (left and right) with interpolated reading, a
+ * one-pole high-pass and low-pass on the repeats. The time changes by gliding
+ * smoothly (like a tape), without clicks. Runs in the AudioWorklet; no Web Audio here. */
 import type { EffectCore } from '../../dsp/core';
 import { DIVISIONS, MAX_DELAY_SECONDS, SYNC } from './delay';
 
-/** Coefficiente di un filtro a un polo con taglio `hz`. */
+/** Coefficient of a one-pole filter with cutoff `hz`. */
 const onePole = (hz: number, sampleRate: number) => 1 - Math.exp((-2 * Math.PI * hz) / sampleRate);
 
-/** Valori minuscoli a zero: le code del feedback non devono finire nei numeri denormali. */
+/** Tiny values to zero: the feedback tails mustn't end up in denormal numbers. */
 const flush = (x: number) => (Math.abs(x) < 1e-20 ? 0 : x);
 
-/** Una linea di ritardo con i suoi filtri. */
+/** A delay line with its filters. */
 class Line {
   readonly buffer: Float32Array;
   private lp = 0;
@@ -20,7 +20,7 @@ class Line {
     this.buffer = new Float32Array(size);
   }
 
-  /** Legge `delay` campioni prima della posizione `write`, interpolando. */
+  /** Reads `delay` samples before position `write`, interpolating. */
   read(write: number, delay: number): number {
     const size = this.buffer.length;
     const pos = write - delay + size;
@@ -29,7 +29,7 @@ class Line {
     return a + (b - a) * frac;
   }
 
-  /** Passa-basso (high cut) e passa-alto (low cut) sul segnale ritardato. */
+  /** Low-pass (high cut) and high-pass (low cut) on the delayed signal. */
   filter(x: number, lpK: number, hpK: number): number {
     this.lp += lpK * (x - this.lp);
     this.hpLow += hpK * (this.lp - this.hpLow);
@@ -41,7 +41,7 @@ export class DelayCore implements EffectCore {
   private readonly left: Line;
   private readonly right: Line;
   private write = 0;
-  /** Ritardo attuale e voluto, in campioni. */
+  /** Current and wanted delay, in samples. */
   private delay = -1;
   private target = 0;
   private readonly glide: number;
@@ -58,7 +58,7 @@ export class DelayCore implements EffectCore {
     const size = Math.ceil(MAX_DELAY_SECONDS * sampleRate) + 4;
     this.left = new Line(size);
     this.right = new Line(size);
-    this.glide = onePole(8, sampleRate); // ~20 ms per assestarsi
+    this.glide = onePole(8, sampleRate); // ~20 ms to settle
   }
 
   setParams(p: Readonly<Record<string, number>>): void {
@@ -66,7 +66,7 @@ export class DelayCore implements EffectCore {
     const v = (id: string, fallback: number) => p[id] ?? fallback;
     this.feedback = v('feedback', 35) / 100;
     const mix = v('mix', 30) / 100;
-    // fino a metà il dry resta pieno, poi cala: a 100% solo le ripetizioni
+    // up to halfway the dry stays full, then drops: at 100% only the repeats
     this.dry = Math.min(1, 2 * (1 - mix));
     this.wet = Math.min(1, 2 * mix);
     this.lpK = onePole(v('highCut', 6000), this.sampleRate);
@@ -80,7 +80,7 @@ export class DelayCore implements EffectCore {
     this.updateTarget();
   }
 
-  /** Ritardo in secondi con i parametri e il tempo attuali. */
+  /** Delay in seconds with the current parameters and tempo. */
   get delaySeconds(): number {
     const p = this.params;
     if ((p.sync ?? SYNC.tempo) === SYNC.ms) return (p.time ?? 300) / 1000;
@@ -99,7 +99,7 @@ export class DelayCore implements EffectCore {
       const yR = right.filter(right.read(w, d), lpK, hpK);
       const xL = inL[i], xR = inR[i];
       if (this.pingPong) {
-        // l'ingresso entra a sinistra; ogni ripetizione passa dall'altra parte
+        // the input comes in on the left; each repeat crosses to the other side
         left.buffer[w] = flush((xL + xR) * 0.5 + yR * fb);
         right.buffer[w] = flush(yL * fb);
       } else {

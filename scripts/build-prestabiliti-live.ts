@@ -1,10 +1,10 @@
-/* Costruisce "Prestabiliti" (src/demo/prestabiliti-live.ts) come cartella di progetto studiomio:
- *   node scripts/run.mjs scripts/build-prestabiliti-live.ts <cartella dei suoni> <cartella del progetto>
- * I file sono quelli della libreria dell'utente e del liveset "brehho23", relativi a
- * <cartella dei suoni> (la cartella Music). Il Robotoid del liveset è un mp3: serve la sua
- * copia WAV accanto (ffmpeg -i "Solo Robotoid Low Frequency.mp3" -ar 48000 -c:a pcm_s24le
- * "Solo Robotoid Low Frequency.wav"). Per sentirlo e misurarlo senza browser:
- * scripts/render-project.ts sulla cartella creata. */
+/* Builds "Prestabiliti" (src/demo/prestabiliti-live.ts) as a studiomio project folder:
+ *   node scripts/run.mjs scripts/build-prestabiliti-live.ts <sounds folder> <project folder>
+ * The files are those of the user's library and of the "brehho23" liveset, relative to
+ * <sounds folder> (the Music folder). The liveset's Robotoid is an mp3: it needs its
+ * WAV copy next to it (ffmpeg -i "Solo Robotoid Low Frequency.mp3" -ar 48000 -c:a pcm_s24le
+ * "Solo Robotoid Low Frequency.wav"). To hear and measure it without a browser:
+ * scripts/render-project.ts on the created folder. */
 import { buildPrestabilitiLive, type PrestabilitiLiveSound } from '../src/demo/prestabiliti-live';
 import { buildLiveFolder } from './live-folder';
 
@@ -45,6 +45,6 @@ const FILES: Readonly<Record<PrestabilitiLiveSound, string>> = {
 };
 
 export async function main([soundsDir, projectDir]: string[]): Promise<void> {
-  if (!soundsDir || !projectDir) throw new Error('uso: build-prestabiliti-live.ts <cartella dei suoni> <cartella del progetto>');
+  if (!soundsDir || !projectDir) throw new Error('usage: build-prestabiliti-live.ts <sounds folder> <project folder>');
   await buildLiveFolder(FILES, soundsDir, projectDir, buildPrestabilitiLive);
 }

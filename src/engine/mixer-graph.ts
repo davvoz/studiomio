@@ -9,20 +9,20 @@ import { EffectChain, type Effect, type EffectHost } from './effect-chain';
 import type { Meter, MeterHost, MeterReading } from './meters';
 import { dbToGain, type AudioGraph, type AudioNodeLike, type AudioParamLike, type ConstantSourceNodeLike, type GainNodeLike, type PannerNodeLike } from './audio-graph';
 
-/** Cosa lascia passare ogni canale: il suono verso la sua uscita e quello verso i bus. */
+/** What each channel lets through: the sound towards its output and the one towards the buses. */
 export interface MixerGates {
-  /** I canali che si sentono dalla loro uscita (tracce, gruppi e bus). */
+  /** The channels heard from their output (tracks, groups and buses). */
   readonly audible: Set<TrackId>;
-  /** Le tracce le cui mandate suonano. */
+  /** The tracks whose sends play. */
   readonly sending: Set<TrackId>;
 }
 
-/** I canali aperti: mai quelli in mute; con almeno un solo attivo, come in Live, quelli in solo,
- *  quelli dentro un gruppo in solo e i gruppi che contengono una traccia in solo (il suo suono
- *  passa di lì). Il mute di un gruppo zittisce le sue tracce perché passano dal suo canale.
- *  I bus restano aperti al solo di una traccia (si sente anche il suo riverbero); il solo di un
- *  bus chiude le tracce e gli altri bus, ma le tracce continuano a mandargli il suono. Le mandate
- *  di una traccia tacciono se lei o un suo gruppo sono in mute, o se c'è il solo di un'altra. */
+/** The open channels: never the muted ones; with at least one solo active, as in Live, those soloed,
+ *  those inside a soloed group and the groups containing a soloed track (its sound
+ *  passes through there). A group's mute silences its tracks because they pass through its channel.
+ *  Buses stay open on a track's solo (its reverb is heard too); a bus's solo
+ *  closes the tracks and the other buses, but the tracks keep sending it sound. A track's
+ *  sends are silent if it or one of its groups is muted, or if another is soloed. */
 export function mixerGates(tracks: readonly Track[], buses: readonly Track[] = []): MixerGates {
   const byId = new Map(tracks.map(t => [t.id, t]));
   const groupsOf = (t: Track): Track[] => {
@@ -41,19 +41,19 @@ export function mixerGates(tracks: readonly Track[], buses: readonly Track[] = [
   return { audible, sending };
 }
 
-/** I canali che si sentono dalla loro uscita (vedi `mixerGates`). */
+/** The channels heard from their output (see `mixerGates`). */
 export const audibleTracks = (tracks: readonly Track[], buses: readonly Track[] = []): Set<TrackId> => mixerGates(tracks, buses).audible;
 
-/** Tempo di assestamento dei controlli, per evitare scatti udibili. */
+/** Settling time of the controls, to avoid audible jumps. */
 const SMOOTH = 0.01;
 
-/** Valore di un controllo: subito la prima volta, poi con una transizione morbida. */
+/** A control's value: right away the first time, then with a smooth transition. */
 function setParam(param: AudioParamLike, value: number, time: number, first: boolean): void {
   if (first) param.setValueAtTime(value, time);
   else param.setTargetAtTime(value, time, SMOOTH);
 }
 
-/** Mette il misuratore (se c'è) tra `from` e `to`: misura ciò che arriva a `to`. */
+/** Puts the meter (if any) between `from` and `to`: it measures what reaches `to`. */
 function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): void {
   if (!meter) from.connect(to);
   else {
@@ -62,40 +62,40 @@ function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): v
   }
 }
 
-/** Non toccano il suono: i modulatori (LFO, Inviluppo) li suona il motore, l'Arpeggiatore lo strumento. */
+/** They don't touch the sound: the modulators (LFO, Envelope) are played by the engine, the Arpeggiator by the instrument. */
 const soundless = (e: EffectSettings) => isModulatorType(e.type) || isArpType(e.type);
 
-/** Gli effetti che il suono attraversa. Se sono tutti, la stessa lista (così la catena vede che
- *  non è cambiata). */
+/** The effects the sound goes through. If they're all of them, the same list (so the chain sees it
+ *  hasn't changed). */
 const audioEffects = (effects: readonly EffectSettings[]): readonly EffectSettings[] =>
   (effects.some(soundless) ? effects.filter(e => !soundless(e)) : effects);
 
-/** Le modulazioni del canale: volume (un guadagno dopo il fader) e pan (un valore sommato al pan). */
+/** The channel's modulations: volume (a gain after the fader) and pan (a value added to the pan). */
 export type MixerModulation = 'volume' | 'pan';
 
-/** Stacca `from` da `to`. Un nodo già staccato del tutto (un canale tolto) dà errore: va bene così. */
+/** Disconnects `from` from `to`. An already fully disconnected node (a removed channel) gives an error: that's fine. */
 function unlink(from: AudioNodeLike, to: AudioNodeLike): void {
   try {
     from.disconnect(to);
-  } catch { /* non erano più collegati */ }
+  } catch { /* they were no longer connected */ }
 }
 
-/** Una mandata fatta: il suo guadagno e l'ingresso del bus in cui entra. */
+/** A send made: its gain and the input of the bus it enters. */
 interface SendWire {
   readonly gain: GainNodeLike;
   readonly to: AudioNodeLike;
   db: number;
 }
 
-/** Canale del mixer di una traccia: effetti → `tap` → volume → modulazione del volume → pan →
- *  mute/solo → misuratore → uscita (il master, o il canale del gruppo che contiene la traccia).
- *  Da `tap` si prende il suono per il sidechain degli altri canali. La modulazione del pan è
- *  una sorgente costante sommata al pan. Le mandate partono dopo il pan (dopo il fader, come
- *  in Live) e passano per un loro cancello, che il solo dei bus lascia aperto. */
+/** A track's mixer channel: effects → `tap` → volume → volume modulation → pan →
+ *  mute/solo → meter → output (the master, or the channel of the group containing the track).
+ *  From `tap` the sound is taken for the other channels' sidechain. The pan modulation is
+ *  a constant source added to the pan. The sends start after the pan (post-fader, as
+ *  in Live) and go through their own gate, which the buses' solo leaves open. */
 class ChannelStrip {
   readonly input: GainNodeLike;
   readonly chain: EffectChain;
-  /** Il suono dopo gli effetti e prima del volume: quello che ascolta il sidechain. */
+  /** The sound after the effects and before the volume: what the sidechain listens to. */
   readonly tap: GainNodeLike;
   private readonly fader: GainNodeLike;
   private readonly modGain: GainNodeLike;
@@ -104,8 +104,8 @@ class ChannelStrip {
   private readonly gate: GainNodeLike;
   private readonly sendGate: GainNodeLike;
   private readonly sends = new Map<TrackId, SendWire>();
-  /** Le modulazioni degli LFO e degli inviluppi, una per canale: guadagni in fila tra il fader e
-   *  la modulazione del volume, sorgenti costanti sommate al pan. */
+  /** The modulations of the LFOs and envelopes, one per channel: gains in a row between the fader and
+   *  the volume modulation, constant sources added to the pan. */
   private readonly channels = new Map<string, { readonly volume?: GainNodeLike; readonly pan?: ConstantSourceNodeLike }>();
   private applied: { mixer: MixerSettings; audible: boolean; sending: boolean } | null = null;
   private output: AudioNodeLike;
@@ -123,7 +123,7 @@ class ChannelStrip {
     this.panOffset.start();
     this.gate = graph.createGain();
     this.sendGate = graph.createGain();
-    // gli effetti stanno prima del volume, come in Live; il misuratore dopo: si vede ciò che si sente
+    // the effects sit before the volume, as in Live; the meter after: you see what you hear
     this.chain = new EffectChain(graph, effects, this.input, this.tap);
     this.tap.connect(this.fader);
     this.fader.connect(this.modGain);
@@ -144,7 +144,7 @@ class ChannelStrip {
     this.applied = { mixer, audible, sending };
   }
 
-  /** Le mandate aperte, per bus: livello in dB e ingresso del bus. Le altre si staccano. */
+  /** The open sends, per bus: level in dB and the bus input. The others are disconnected. */
   syncSends(targets: ReadonlyMap<TrackId, { readonly db: number; readonly to: AudioNodeLike }>): void {
     for (const [bus, wire] of this.sends) {
       if (targets.get(bus)?.to === wire.to) continue;
@@ -165,7 +165,7 @@ class ChannelStrip {
     }
   }
 
-  /** Manda il canale altrove (una traccia entrata in un gruppo o uscita). */
+  /** Sends the channel elsewhere (a track that entered or left a group). */
   route(output: AudioNodeLike): void {
     if (output === this.output) return;
     const last = this.meter?.output ?? this.gate;
@@ -174,14 +174,14 @@ class ChannelStrip {
     this.output = output;
   }
 
-  /** Il parametro su cui va la modulazione: guadagno (1 = neutro) o spostamento del pan (0). */
+  /** The parameter the modulation goes to: gain (1 = neutral) or pan offset (0). */
   modulation(param: MixerModulation, channel?: string): AudioParamLike {
     if (!channel) return param === 'volume' ? this.modGain.gain : this.panOffset.offset;
     const key = `${param}|${channel}`;
     let c = this.channels.get(key);
     if (!c) {
       if (param === 'volume') {
-        // subito dopo il fader: fader → nuovo → (quelli di prima) → modulazione del volume
+        // right after the fader: fader → new → (the previous ones) → volume modulation
         const gain = this.graph.createGain();
         const next = [...this.channels.values()].map(x => x.volume).filter(g => !!g).at(-1) ?? this.modGain;
         unlink(this.fader, next);
@@ -209,28 +209,28 @@ class ChannelStrip {
   }
 }
 
-/** Un collegamento del sidechain nel grafo: il `tap` di un canale nel `sidechain` di un effetto. */
+/** A sidechain connection in the graph: a channel's `tap` into an effect's `sidechain`. */
 interface KeyWire {
   readonly from: AudioNodeLike;
   readonly to: AudioNodeLike;
 }
 
-/** Il mixer nel grafo audio: un canale per traccia e il master, allineati al progetto.
- *  Le tracce si sommano nel bus del master, che passa per i suoi effetti e poi per il suo
- *  volume: bus → effetti del master → `master` → misuratore → uscita. Le tracce di un gruppo
- *  si sommano invece nel canale del gruppo, che esce nel master (o nel gruppo che lo contiene).
- *  Le mandate portano il suono delle tracce nei canali dei bus, che escono nel master.
- *  Il sidechain porta il suono di un canale nel rilevatore di un effetto di un altro (vedi
- *  model/sidechain.ts). Con `meters` ogni canale ha il suo misuratore di livello (nell'export
- *  non servono). */
+/** The mixer in the audio graph: one channel per track and the master, aligned with the project.
+ *  The tracks are summed into the master's bus, which goes through its effects and then through its
+ *  volume: bus → master effects → `master` → meter → output. The tracks of a group
+ *  are instead summed into the group's channel, which goes out into the master (or into the group containing it).
+ *  The sends carry the tracks' sound into the buses' channels, which go out into the master.
+ *  The sidechain carries a channel's sound into the detector of another's effect (see
+ *  model/sidechain.ts). With `meters` each channel has its level meter (in the export
+ *  they're not needed). */
 export class MixerGraph {
-  /** Dopo gli effetti del master: il metronomo entra qui, così gli effetti non lo toccano. */
+  /** After the master's effects: the metronome comes in here, so the effects don't touch it. */
   readonly master: GainNodeLike;
   private readonly bus: GainNodeLike;
   private readonly masterChain: EffectChain;
   private readonly masterMeter: Meter | null;
   private readonly strips = new Map<TrackId, ChannelStrip>();
-  /** I collegamenti del sidechain fatti, per effetto ("proprietario/id"). */
+  /** The sidechain connections made, per effect ("owner/id"). */
   private wires = new Map<string, KeyWire>();
   private masterSettings: MixerSettings | null = null;
 
@@ -247,24 +247,24 @@ export class MixerGraph {
     metered(this.master, destination, this.masterMeter);
   }
 
-  /** I livelli di una traccia o del master dall'ultima lettura; null senza misuratori. */
+  /** The levels of a track or the master since the last read; null without meters. */
   levels(owner: ChainOwner): MeterReading | null {
     const meter = owner === MASTER ? this.masterMeter : this.strips.get(owner)?.meter;
     return meter?.read() ?? null;
   }
 
-  /** Un effetto che suona, nella catena di una traccia o del master. */
+  /** A playing effect, in the chain of a track or of the master. */
   effect(owner: ChainOwner, id: DeviceId): Effect | undefined {
     const chain = owner === MASTER ? this.masterChain : this.strips.get(owner)?.chain;
     return chain?.effect(id);
   }
 
-  /** Dove va la modulazione del volume o del pan di una traccia. */
+  /** Where the volume or pan modulation of a track goes. */
   modulation(id: TrackId, param: MixerModulation, channel?: string): AudioParamLike {
     return this.strip(id).modulation(param, channel);
   }
 
-  /** Ingresso del canale della traccia (creato se non c'è). */
+  /** Input of the track's channel (created if it isn't there). */
   input(id: TrackId): AudioNodeLike {
     return this.strip(id).input;
   }
@@ -280,7 +280,7 @@ export class MixerGraph {
     }
     for (const t of project.tracks) {
       const strip = this.strip(t.id);
-      // il gruppo viene prima delle sue tracce: il suo canale c'è già
+      // the group comes before its tracks: its channel is already there
       strip.route(t.group ? this.strip(t.group).input : this.bus);
       strip.apply(t.mixer, audible.has(t.id), sending.has(t.id));
       strip.chain.sync(audioEffects(t.effects), project.tempo.bpm);
@@ -298,7 +298,7 @@ export class MixerGraph {
     }
     this.masterChain.sync(audioEffects(project.masterEffects), project.tempo.bpm);
     if (this.masterSettings !== project.master) {
-      // il master non ha pan né solo: solo volume e mute
+      // the master has no pan or solo: only volume and mute
       const m = project.master;
       setParam(this.master.gain, m.mute ? 0 : dbToGain(m.volumeDb), this.graph.currentTime, this.masterSettings === null);
       this.masterSettings = m;
@@ -306,7 +306,7 @@ export class MixerGraph {
     this.syncSidechains(project);
   }
 
-  /** Collega e stacca solo i sidechain cambiati (anche quando un effetto è stato ricreato). */
+  /** Connects and disconnects only the changed sidechains (also when an effect was recreated). */
   private syncSidechains(project: Project): void {
     const next = new Map<string, KeyWire>();
     for (const link of sidechainLinks(project)) {

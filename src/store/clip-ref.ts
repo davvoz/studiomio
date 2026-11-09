@@ -1,6 +1,6 @@
-/* Dove sta una clip: sulla timeline di una traccia (un posizionamento) o in uno slot della
- * session (per id della clip, che non cambia se le scene si spostano). Gli editor lavorano
- * su un ClipRef e non devono sapere quale dei due. */
+/* Where a clip is: on a track's timeline (a placement) or in a session slot
+ * (by the clip's id, which doesn't change if the scenes move). The editors work
+ * on a ClipRef and don't need to know which of the two. */
 import type { ClipId, PlacementId, TrackId } from '../core/id';
 import type { Placement } from '../model/arrangement';
 import type { Clip, Color } from '../model/clip';
@@ -19,7 +19,7 @@ export type ClipRef =
 export const placementRef = (track: TrackId, placement: PlacementId): ClipRef => ({ kind: 'placement', track, placement });
 export const slotRef = (track: TrackId, clip: ClipId): ClipRef => ({ kind: 'slot', track, clip });
 
-/** Una clip trovata: la sua traccia e, se è sulla timeline, il suo posizionamento. */
+/** A found clip: its track and, if it's on the timeline, its placement. */
 export interface FoundClip {
   readonly track: Track;
   readonly clip: Clip;
@@ -56,21 +56,21 @@ export function findClip(project: Project, ref: ClipRef): FoundClip | null {
   return found ? { track: track!, ...found } : null;
 }
 
-/** Modifica il contenuto della clip, dovunque stia. */
+/** Changes the clip's content, wherever it is. */
 export const updateClipAt = <C extends Clip>(label: string, ref: ClipRef, fn: (c: C) => Clip): Edit => locator(ref).update(label, ref, fn);
 
-/** Il colore di più clip insieme (un solo passo da annullare); senza colore ognuna prende
- *  quello della sua traccia. */
+/** The colour of several clips together (a single step to undo); without colour each takes
+ *  its track's. */
 export const setClipColor = (refs: readonly ClipRef[], color?: Color): Edit =>
-  edit(refs.length === 1 ? 'Colore della clip' : 'Colore delle clip', (p, ctx) => refs.reduce((q, ref) => {
+  edit(refs.length === 1 ? 'Clip colour' : 'Clip colours', (p, ctx) => refs.reduce((q, ref) => {
     const track = q.track(ref.track);
     return track ? updateClipAt('', ref, c => c.withColor(color ?? track.color)).apply(q, ctx) : q;
   }, p));
 
-/** Il colore di una traccia. Le sue clip che avevano il colore della traccia lo seguono; quelle
- *  a cui si è dato un colore proprio lo tengono. */
+/** A track's colour. Its clips that had the track's colour follow it; those
+ *  that were given their own colour keep it. */
 export const setTrackColor = (id: TrackId, color: Color): Edit =>
-  edit('Colore della traccia', (p, ctx) => {
+  edit('Track colour', (p, ctx) => {
     const track = p.track(id);
     if (!track || track.color === color) return p;
     const same = (c: Clip | null): c is Clip => c?.color.toLowerCase() === track.color.toLowerCase();
@@ -82,25 +82,25 @@ export const setTrackColor = (id: TrackId, color: Color): Edit =>
     return refs.length ? setClipColor(refs, color).apply(recolored, ctx) : recolored;
   });
 
-/** Il crop di una clip audio: il file ritagliato entra nel progetto e la clip (già fatta per
- *  suonarlo) prende il posto della vecchia. */
+/** An audio clip's crop: the cropped file enters the project and the clip (already made to
+ *  play it) takes the place of the old one. */
 export function cropClipAt(ref: ClipRef, sample: SampleRef, cropped: Clip): Edit {
   const update = updateClipAt('Crop', ref, () => cropped);
   return edit(update.label, (p, ctx) => update.apply(p.addingSample(sample), ctx));
 }
 
-/** Moltiplica il tempo di una clip MIDI (×2, :2): sulla timeline cambia anche la sua durata,
- *  nella session solo il contenuto. */
+/** Multiplies a MIDI clip's time (×2, :2): on the timeline its length changes too,
+ *  in the session only the content. */
 export const scaleMidiClipAt = (label: string, ref: ClipRef, factor: number): Edit =>
   ref.kind === 'placement'
     ? scaleMidiPlacement(label, ref.track, ref.placement, factor)
     : updateSlotClip<MidiClip>(label, ref.track, ref.clip, c => c.scaledTime(factor));
 
-/** "Dupl. Loop" di una clip MIDI, dovunque stia. */
+/** "Dupl. Loop" of a MIDI clip, wherever it is. */
 export const duplicateLoopAt = (ref: ClipRef): Edit =>
   ref.kind === 'placement'
     ? duplicateLoopPlacement(ref.track, ref.placement)
-    : updateSlotClip<MidiClip>('Duplica loop', ref.track, ref.clip, c => c.duplicatingLoop());
+    : updateSlotClip<MidiClip>('Duplicate loop', ref.track, ref.clip, c => c.duplicatingLoop());
 
 const idOf =(r: ClipRef): string => (r.kind === 'placement' ? r.placement : r.clip);
 

@@ -1,7 +1,7 @@
 import type { Samples } from '../types';
 import type { OnsetEnvelope } from './onset';
 
-/** Porta la posizione del transiente all'inizio reale dell'attacco. */
+/** Brings the transient's position to the real start of the attack. */
 function refineOnset(x: Samples, center: number, hop: number): number {
   const B = 32, len = x.length;
   const lo = Math.max(0, center - 3 * hop), hi = Math.min(len, center + 2 * hop);
@@ -24,8 +24,8 @@ function refineOnset(x: Samples, center: number, hop: number): number {
   return lo + j * B;
 }
 
-/** Picchi della curva di onset sopra una soglia adattiva. `sensitivity` 0..1.
- *  Restituisce posizioni in campioni. */
+/** Peaks of the onset curve above an adaptive threshold. `sensitivity` 0..1.
+ *  Returns positions in samples. */
 export function detectTransients(mono: Samples, envl: OnsetEnvelope, sensitivity: number): number[] {
   const { flux, hop, frameRate } = envl;
   const n = flux.length;

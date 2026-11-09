@@ -1,6 +1,6 @@
-/* Cosa fa un effetto di dinamica che suona, per il suo pannello: il processore lo dice circa 30
- * volte al secondo finché qualcuno guarda. Se l'effetto viene ricreato (catena ricostruita) ci si
- * riattacca da soli alla lettura successiva. */
+/* What a playing dynamics effect is doing, for its panel: the processor reports it about 30
+ * times a second while someone is looking. If the effect is recreated (chain rebuilt) it
+ * reattaches by itself at the next read. */
 import type { EffectMonitor } from '../engine/effect-chain';
 import type { DynamicsReading, DynamicsTap } from '../ui/device/displays';
 

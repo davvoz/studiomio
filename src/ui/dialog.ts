@@ -1,17 +1,17 @@
-/* Finestre modali semplici: titolo, contenuto, pulsanti in basso. Esc le chiude. */
+/* Simple modal dialogs: title, content, buttons at the bottom. Esc closes them. */
 
 export function showDialog(title: string, ...content: Node[]): void {
-  void openDialog(title, content, [{ label: 'Chiudi', value: null }]);
+  void openDialog(title, content, [{ label: 'Close', value: null }]);
 }
 
 export interface DialogButton<T> {
   readonly label: string;
   readonly value: T;
-  /** Il pulsante principale (evidenziato, con il fuoco). */
+  /** The main button (highlighted, with the focus). */
   readonly primary?: boolean;
 }
 
-/** Chiede di scegliere fra dei pulsanti; null se la finestra si chiude in altro modo (Esc, clic fuori). */
+/** Asks to choose among some buttons; null if the dialog is closed another way (Esc, click outside). */
 export function choose<T>(title: string, message: string, buttons: readonly DialogButton<T>[]): Promise<T | null> {
   return openDialog(title, [Object.assign(document.createElement('p'), { textContent: message })], buttons);
 }
@@ -25,14 +25,14 @@ function openDialog<T>(title: string, content: readonly Node[], buttons: readonl
   }));
   footer.append(...elements);
   const focused = elements[buttons.findIndex(b => b.primary)] ?? elements.at(-1)!;
-  // il riquadro dentro la finestra: lo sfondo intorno è la finestra stessa
+  // the box inside the dialog: the background around it is the dialog itself
   const body = Object.assign(document.createElement('div'), { className: 'dialog-body' });
   body.append(Object.assign(document.createElement('h2'), { textContent: title }), ...content, footer);
   dialog.append(body);
-  // i tasti restano nella finestra: Spazio non fa partire la musica sotto
+  // the keys stay in the dialog: Space doesn't start the music underneath
   dialog.addEventListener('keydown', e => e.stopPropagation());
   const closed = new Promise<T | null>(resolve => dialog.addEventListener('close', () => { dialog.remove(); resolve(result); }));
-  // un clic fuori dalla finestra (sullo sfondo) la chiude
+  // a click outside the dialog (on the background) closes it
   dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
   document.body.append(dialog);
   dialog.showModal();
@@ -40,7 +40,7 @@ function openDialog<T>(title: string, content: readonly Node[], buttons: readonl
   return closed;
 }
 
-/** Righe [a sinistra, a destra] divise in sezioni con un titolo, una tabella per sezione. */
+/** Rows [left, right] divided into sections with a title, one table per section. */
 export function definitionTable(sections: readonly { readonly title: string; readonly rows: readonly (readonly [string, string])[] }[]): HTMLElement {
   const box = Object.assign(document.createElement('div'), { className: 'definitions' });
   for (const s of sections) {

@@ -1,8 +1,8 @@
-/* Descrizione dei parametri di un dispositivo (strumento o effetto). Da questa descrizione nascono i controlli
- * dell'interfaccia, i valori predefiniti e la validazione: un dispositivo nuovo dichiara i suoi
- * parametri e non scrive codice d'interfaccia. Dati puri, usati anche nell'AudioWorklet. */
+/* Description of a device's parameters (instrument or effect). From this description come the
+ * interface's controls, the default values and the validation: a new device declares its
+ * parameters and writes no interface code. Pure data, also used in the AudioWorklet. */
 
-/** Il parametro conta solo quando un altro (una scelta) ha un certo valore, o uno di più valori. */
+/** The parameter counts only when another one (a choice) has a certain value, or one of several values. */
 export interface ParamCondition {
   readonly param: string;
   readonly is: number | readonly number[];
@@ -12,8 +12,8 @@ interface ParamBase {
   readonly id: string;
   readonly label: string;
   readonly when?: ParamCondition;
-  /** Un parametro che il dispositivo modifica solo dal suo pannello grafico (es. i punti di un
-   *  LFO disegnato): non va nei menu delle macro e delle modulazioni né sui controller. */
+  /** A parameter the device changes only from its graphic panel (e.g. the points of a
+   *  drawn LFO): it doesn't go in the macro and modulation menus nor on the controllers. */
   readonly hidden?: boolean;
 }
 
@@ -23,18 +23,18 @@ export interface NumberParam extends ParamBase {
   readonly max: number;
   readonly default: number;
   readonly unit?: string;
-  /** 'log' per frequenze e tempi: la manopola si muove in modo uniforme sulle ottave. */
+  /** 'log' for frequencies and times: the knob moves evenly over the octaves. */
   readonly scale?: 'linear' | 'log';
-  /** Passo dei valori (es. 1 per i semitoni). */
+  /** Step of the values (e.g. 1 for semitones). */
   readonly step?: number;
-  /** Al minimo il parametro è spento e si legge −∞ (es. una mandata chiusa). */
+  /** At the minimum the parameter is off and reads −∞ (e.g. a closed send). */
   readonly offAtMin?: boolean;
 }
 
 export interface ChoiceParam extends ParamBase {
   readonly kind: 'choice';
   readonly options: readonly string[];
-  /** Indice dell'opzione predefinita. */
+  /** Index of the default option. */
   readonly default: number;
 }
 
@@ -43,15 +43,15 @@ export type ParamSpec = NumberParam | ChoiceParam;
 export interface ParamSection {
   readonly label: string;
   readonly params: readonly ParamSpec[];
-  /** Solo con questo valore di un altro parametro la sezione c'è (es. lo strumento di un pad
-   *  della Drum Machine): se no i suoi parametri non arrivano al motore e non si scelgono. */
+  /** The section exists only with this value of another parameter (e.g. the instrument of a Drum
+   *  Machine pad): otherwise its parameters don't reach the engine and can't be chosen. */
   readonly when?: ParamCondition;
 }
 
-/** Operazioni che dipendono dal tipo di parametro: una voce per tipo. */
+/** Operations depending on the parameter type: one entry per type. */
 interface ParamKind<P extends ParamSpec> {
   clamp(p: P, v: number): number;
-  /** Valore → posizione del controllo in 0..1. */
+  /** Value → control position in 0..1. */
   toUnit(p: P, v: number): number;
   fromUnit(p: P, u: number): number;
   format(p: P, v: number): string;
@@ -88,7 +88,7 @@ export const paramToUnit = (p: ParamSpec, v: number): number => kindOf(p).toUnit
 export const paramFromUnit = (p: ParamSpec, u: number): number => kindOf(p).fromUnit(p, u);
 export const formatParam = (p: ParamSpec, v: number): string => kindOf(p).format(p, v);
 
-/** Unità che cambiano scala per restare leggibili: 1200 Hz → 1.2 kHz, 0.05 s → 50 ms. */
+/** Units that change scale to stay readable: 1200 Hz → 1.2 kHz, 0.05 s → 50 ms. */
 const UNIT_SCALES: Readonly<Record<string, (v: number) => readonly [number, string]>> = {
   Hz: v => (Math.abs(v) >= 1000 ? [v / 1000, 'kHz'] : [v, 'Hz']),
   s: v => (Math.abs(v) < 1 ? [v * 1000, 'ms'] : [v, 's']),

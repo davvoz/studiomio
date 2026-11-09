@@ -19,14 +19,14 @@ import { JsonReader, type Json, type JsonObject } from './json-reader';
 export const PROJECT_FORMAT = 'studiomio-project';
 export const PROJECT_VERSION = 14;
 
-/** Come scrivere e ricostruire un tipo di traccia. */
+/** How to write and rebuild a track kind. */
 export interface TrackType {
   readonly kind: string;
-  /** Costruisce la traccia dalle proprietà comuni; `r` dà accesso ai campi propri del tipo. */
+  /** Builds the track from the common properties; `r` gives access to the kind's own fields. */
   create(props: TrackProps<Clip>, r: JsonReader): Track;
-  /** Campi propri del tipo, da aggiungere a quelli comuni. */
+  /** The kind's own fields, to add to the common ones. */
   encodeExtra(track: Track): JsonObject;
-  /** Prototipo vuoto, usato per sapere quali clip il tipo accetta. */
+  /** Empty prototype, used to know which clips the kind accepts. */
   readonly accepts: (clip: Clip) => boolean;
 }
 
@@ -59,33 +59,33 @@ export const defaultTrackTypes: readonly TrackType[] = [
   },
 ];
 
-/** Aggiornamenti del formato: la voce N porta un file dalla versione N alla N+1. */
+/** Format upgrades: entry N brings a file from version N to N+1. */
 type Migration = (json: JsonObject) => JsonObject;
 const migrations: Record<number, Migration> = {
-  // 1 → 2: le tracce MIDI hanno uno strumento
+  // 1 → 2: MIDI tracks have an instrument
   1: json => ({
     ...json,
     tracks: (json.tracks as JsonObject[]).map(t => (t.kind === 'midi' ? { ...t, instrument: encodeInstrument(DEFAULT_INSTRUMENT) } : t)),
   }),
-  // 2 → 3: ogni traccia ha una catena di effetti
+  // 2 → 3: every track has an effect chain
   2: json => ({ ...json, tracks: (json.tracks as JsonObject[]).map(t => ({ ...t, effects: [] })) }),
-  // 3 → 4: anche il master ha una catena di effetti
+  // 3 → 4: the master too has an effect chain
   3: json => ({ ...json, masterEffects: [] }),
-  // 4 → 5: la session ha una quantizzazione del lancio
+  // 4 → 5: the session has a launch quantization
   4: json => ({ ...json, launchQuantization: DEFAULT_LAUNCH_QUANTUM }),
-  // 5 → 6: le clip possono avere modulazioni (campo facoltativo: non cambia nulla)
+  // 5 → 6: clips can have modulations (optional field: nothing changes)
   5: json => json,
-  // 6 → 7: i dispositivi possono suonare sample del progetto (campo facoltativo)
+  // 6 → 7: devices can play project samples (optional field)
   6: json => json,
-  // 7 → 8: le catene possono avere dei rack con le macro (campo facoltativo)
+  // 7 → 8: chains can have racks with macros (optional field)
   7: json => json,
-  // 8 → 9: le tracce possono stare in un gruppo (campo facoltativo, e il tipo "group")
+  // 8 → 9: tracks can be in a group (optional field, and the "group" kind)
   8: json => json,
-  // 9 → 10: un effetto può ascoltare un'altra traccia, il sidechain (campo facoltativo)
+  // 9 → 10: an effect can listen to another track, the sidechain (optional field)
   9: json => json,
-  // 10 → 11: i bus (campo facoltativo) e le mandate delle tracce verso i bus (campo facoltativo)
+  // 10 → 11: the buses (optional field) and the tracks' sends to the buses (optional field)
   10: json => json,
-  // 11 → 12: le zone del Sampler non hanno più Tune e Fine: vanno nel Transpose e Detune della zona
+  // 11 → 12: the Sampler's zones no longer have Tune and Fine: they go into the zone's Transpose and Detune
   11: json => ({
     ...json,
     tracks: (json.tracks as JsonObject[]).map(t => {
@@ -95,14 +95,14 @@ const migrations: Record<number, Migration> = {
       return { ...t, instrument: { ...inst, params } };
     }),
   }),
-  // 12 → 13: i modulatori (LFO, Inviluppo) hanno le loro destinazioni (campo facoltativo)
+  // 12 → 13: the modulators (LFO, Envelope) have their targets (optional field)
   12: json => json,
-  // 13 → 14: una clip MIDI può avere il suono che lo strumento prende quando parte (campo facoltativo)
+  // 13 → 14: a MIDI clip can have the sound the instrument takes when it starts (optional field)
   13: json => json,
 };
 
-/** Progetto ⇄ JSON. Tipi di clip e di traccia sono registri estendibili: un tipo nuovo
- *  porta il suo codec senza modificare questa classe. */
+/** Project ⇄ JSON. Clip and track kinds are extensible registries: a new kind
+ *  brings its own codec without changing this class. */
 export class ProjectCodec {
   private readonly clips: Map<string, ClipCodec>;
   private readonly tracks: Map<string, TrackType>;
@@ -137,7 +137,7 @@ export class ProjectCodec {
       scenes: p.scenes.map(s => ({ id: s.id, name: s.name, ...(s.color ? { color: s.color } : {}) })),
       samples: p.samples.map(encodeSample),
       tracks: p.tracks.map(t => this.encodeTrack(t)),
-      // senza bus il file resta come lo scrivevano le versioni di prima
+      // without buses the file stays as the previous versions wrote it
       ...(p.buses.length ? { buses: p.buses.map(b => this.encodeTrack(b)) } : {}),
       ...encodeKeyMap(p.keyMap),
       ...encodeMidiMap(p.midiMap),
@@ -165,7 +165,7 @@ export class ProjectCodec {
   decode(json: unknown): Project {
     const r = new JsonReader(ProjectCodec.migrate(new JsonReader(json)));
     const sig = r.numbers('signature');
-    if (sig.length !== 2) r.get('signature').fail('attesi [numeratore, denominatore]');
+    if (sig.length !== 2) r.get('signature').fail('expected [numerator, denominator]');
     const loop = r.get('loop');
     try {
       return Project.create({
@@ -187,7 +187,7 @@ export class ProjectCodec {
         midiMap: r.has('midiMap') ? decodeMidiMap(r) : undefined,
       });
     } catch (e) {
-      // regole del modello violate (es. slot e scene non corrispondono): errore di formato
+      // model rules violated (e.g. slots and scenes don't match): format error
       if (e instanceof Error && (e instanceof RangeError || e.name === 'Error')) r.fail(e.message);
       throw e;
     }
@@ -195,22 +195,22 @@ export class ProjectCodec {
 
   private encodeClip(c: Clip): JsonObject {
     const codec = this.clips.get(c.kind);
-    if (!codec || !codec.handles(c)) throw new Error(`nessun codec per le clip "${c.kind}"`);
+    if (!codec || !codec.handles(c)) throw new Error(`no codec for "${c.kind}" clips`);
     return codec.encode(c);
   }
 
   private decodeClip(r: JsonReader): Clip {
     const kind = r.str('kind');
-    const codec = this.clips.get(kind) ?? r.get('kind').fail(`tipo di clip sconosciuto: ${kind}`);
+    const codec = this.clips.get(kind) ?? r.get('kind').fail(`unknown clip kind: ${kind}`);
     return codec.decode(r);
   }
 
   private decodeTrack(r: JsonReader): Track {
     const kind = r.str('kind');
-    const type = this.tracks.get(kind) ?? r.get('kind').fail(`tipo di traccia sconosciuto: ${kind}`);
+    const type = this.tracks.get(kind) ?? r.get('kind').fail(`unknown track kind: ${kind}`);
     const clipFor = (cr: JsonReader): Clip => {
       const clip = this.decodeClip(cr);
-      if (!type.accepts(clip)) cr.fail(`una traccia ${kind} non può contenere una clip ${clip.kind}`);
+      if (!type.accepts(clip)) cr.fail(`a ${kind} track can't contain a ${clip.kind} clip`);
       return clip;
     };
     const arrangement: Placement[] = r.array('arrangement').map(p => ({
@@ -232,17 +232,17 @@ export class ProjectCodec {
 
   private trackType(kind: string): TrackType {
     const type = this.tracks.get(kind);
-    if (!type) throw new Error(`nessun codec per le tracce "${kind}"`);
+    if (!type) throw new Error(`no codec for "${kind}" tracks`);
     return type;
   }
 
   private static migrate(r: JsonReader): JsonObject {
-    if (r.str('format') !== PROJECT_FORMAT) r.get('format').fail('non è un progetto studiomio');
+    if (r.str('format') !== PROJECT_FORMAT) r.get('format').fail('not a studiomio project');
     let version = r.int('version');
-    if (version > PROJECT_VERSION) r.get('version').fail(`creato da una versione più recente di studiomio (formato ${version})`);
+    if (version > PROJECT_VERSION) r.get('version').fail(`created by a newer version of studiomio (format ${version})`);
     let json = r.raw as JsonObject;
     for (; version < PROJECT_VERSION; version++) {
-      const step = migrations[version] ?? r.get('version').fail(`formato ${version} non più supportato`);
+      const step = migrations[version] ?? r.get('version').fail(`format ${version} no longer supported`);
       json = { ...step(json), version: version + 1 };
     }
     return json;
@@ -281,7 +281,7 @@ const decodeEffect = (r: JsonReader): EffectSettings => ({
   ...(r.has('targets') ? { targets: r.array('targets').map(t => (t.raw === null ? null : parseTargetKey(t.asString()))) } : {}),
 });
 
-/** I rack si scrivono solo se ci sono. */
+/** The racks are written only if there are any. */
 const encodeRacks = (field: string, racks: RackList): JsonObject => (racks.length ? {
   [field]: racks.map(rk => ({
     id: rk.id, name: rk.name, devices: [...rk.devices],
@@ -303,7 +303,7 @@ const decodeRack = (r: JsonReader): Rack => ({
     name: m.nullable('name', n => n.asString()),
     value: m.num('value'),
     mappings: m.array('mappings').map(x => ({ device: x.str('device') as DeviceKey, param: x.str('param'), min: x.num('min'), max: x.num('max') })),
-    // interruttori, pulsanti e molle (le manopole non scrivono il tipo); un tipo sconosciuto è una manopola
+    // toggles, buttons and springs (the knobs don't write the kind); an unknown kind is a knob
     ...(m.has('mode') && MACRO_MODES.some(([mode]) => mode === m.str('mode')) ? { mode: m.str('mode') as MacroMode } : {}),
     ...(m.has('mode') && m.str('mode') === 'spring' && m.has('spring')
       ? { spring: decodeSpring(m.get('spring')) } : {}),
@@ -312,18 +312,18 @@ const decodeRack = (r: JsonReader): Rack => ({
 
 const decodeSpring = (s: JsonReader): MacroSpring => springFor(s.num('rest'), s.num('time'), s.bool('sync'));
 
-/** La tastiera si scrive solo se è mappata (e solo ciò che vale: rack e dispositivi che ci sono). */
+/** The keyboard is written only if it's mapped (and only what applies: racks and devices that exist). */
 const encodeKeyMap = (map: KeyMap): JsonObject => (map.length ? {
   keyMap: map.map(({ key, target }): JsonObject => ({ key, ...encodeTarget(target) })),
 } : {});
 
 const decodeKeyMapping = (r: JsonReader): { key: string; target: KeyTarget } => {
   const target = decodeTarget(r);
-  if (target.kind !== 'macro' && target.kind !== 'param') return r.get('kind').fail(`mappatura della tastiera sconosciuta: ${target.kind}`);
+  if (target.kind !== 'macro' && target.kind !== 'param') return r.get('kind').fail(`unknown keyboard mapping: ${target.kind}`);
   return { key: r.str('key'), target };
 };
 
-/** Il MIDI come la tastiera: il controllo (tipo, canale, numero) accanto al bersaglio. */
+/** MIDI like the keyboard: the control (type, channel, number) next to the target. */
 const encodeMidiMap = (map: MidiMap): JsonObject => (map.length ? {
   midiMap: map.map(({ control: c, target }): JsonObject => ({ type: c.type, channel: c.channel, number: c.number, ...encodeTarget(target) })),
 } : {});
@@ -331,7 +331,7 @@ const encodeMidiMap = (map: MidiMap): JsonObject => (map.length ? {
 const decodeMidiMap = (r: JsonReader): MidiMap => {
   const map = r.array('midiMap').map((m): MidiMapping => {
     const type = m.str('type');
-    if (type !== 'cc' && type !== 'note') return m.get('type').fail(`controllo MIDI sconosciuto: ${type}`);
+    if (type !== 'cc' && type !== 'note') return m.get('type').fail(`unknown MIDI control: ${type}`);
     return { control: { type, channel: m.int('channel'), number: m.int('number') }, target: decodeTarget(m) };
   });
   checkMidiMap(map);
@@ -354,9 +354,9 @@ const decodeTarget = (r: JsonReader): MidiTarget => {
   if (kind === 'param') return { kind, owner, device: r.str('device') as DeviceKey, param: r.str('param') };
   if (kind === 'mixer') {
     const control = r.str('mixer') as MixerControl;
-    if (!MIXER_CONTROLS.includes(control)) return r.get('mixer').fail(`controllo del mixer sconosciuto: ${control}`);
+    if (!MIXER_CONTROLS.includes(control)) return r.get('mixer').fail(`unknown mixer control: ${control}`);
     return { kind, owner, control };
   }
   if (kind === 'send') return { kind, owner: asId(owner), bus: asId(r.str('bus')) };
-  return r.get('kind').fail(`mappatura sconosciuta: ${kind}`);
+  return r.get('kind').fail(`unknown mapping: ${kind}`);
 };

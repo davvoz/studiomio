@@ -8,12 +8,12 @@ import { addEffect, groupTracks, removeEffect, removeTrack, setEffectParam, setE
 import { FakeEffects, FakeGraph } from '../helpers/fake-audio';
 import { setup } from '../helpers/fixtures';
 
-/** Tre tracce audio (cassa, basso, pad) con un compressore ciascuna. */
+/** Three audio tracks (kick, bass, pad) with a compressor each. */
 function rig() {
   const r = setup({ audio: 3 });
   const [kick, bass, pad] = [0, 1, 2].map(r.track);
   const comp = (owner: ChainOwner): DeviceId => {
-    r.store.apply(addEffect(owner, 'compressor', 'Compressore'));
+    r.store.apply(addEffect(owner, 'compressor', 'Compressor'));
     return r.store.project.effectsOf(owner).at(-1)!.id;
   };
   const c = { kick: comp(kick), bass: comp(bass), pad: comp(pad) };
@@ -22,8 +22,8 @@ function rig() {
   return { ...r, kick, bass, pad, c, comp, key, links };
 }
 
-describe('sidechain nel modello', () => {
-  it('il compressore del basso ascolta la cassa; senza scelta ascolta sé stesso', () => {
+describe('sidechain in the model', () => {
+  it('the bass compressor listens to the kick; without a choice it listens to itself', () => {
     const r = rig();
     expect(r.links()).toEqual([]);
     r.key(r.bass, r.c.bass, r.kick);
@@ -34,23 +34,23 @@ describe('sidechain nel modello', () => {
     expect(r.links()).toEqual([]);
   });
 
-  it('niente anelli: non sé stessa, non a vicenda, non il gruppo che la contiene', () => {
+  it('no loops: not itself, not each other, not the group containing it', () => {
     const r = rig();
-    // A ascolta B e B ascolta A (il menu non lo offre, ma un file può averlo): vince la traccia
-    // che viene prima, l'altra non sente niente
+    // A listens to B and B listens to A (the menu doesn't offer it, but a file can have it): the track
+    // coming first wins, the other hears nothing
     r.key(r.bass, r.c.bass, r.kick);
     r.key(r.kick, r.c.kick, r.bass);
     expect(r.links().map(l => l.owner)).toEqual([r.kick]);
     expect(sidechainSources(r.store.project, r.kick, r.c.kick)).toEqual([r.pad]);
-    // ...passando per un terzo: cassa → basso → pad → cassa
+    // ...going through a third: kick → bass → pad → kick
     r.key(r.kick, r.c.kick, null);
     r.key(r.pad, r.c.pad, r.bass);
     expect(sidechainSources(r.store.project, r.kick, r.c.kick)).toEqual([]);
-    // sé stessa mai; la scelta dell'effetto stesso non conta (si può cambiare)
+    // itself never; the choice of the effect itself doesn't count (it can be changed)
     expect(sidechainSources(r.store.project, r.bass, r.c.bass)).toEqual([r.kick]);
   });
 
-  it('gruppi: il gruppo ascolta una sua traccia, non il contrario', () => {
+  it('groups: the group listens to one of its tracks, not the opposite', () => {
     const r = rig();
     const before = r.store.project;
     r.store.apply(groupTracks([r.kick, r.bass]));
@@ -62,7 +62,7 @@ describe('sidechain nel modello', () => {
     expect(r.links()).toEqual([]);
   });
 
-  it('il master può ascoltare qualunque traccia', () => {
+  it('the master can listen to any track', () => {
     const r = rig();
     const onMaster = r.comp(MASTER);
     expect(sidechainSources(r.store.project, MASTER, onMaster)).toEqual([r.kick, r.bass, r.pad]);
@@ -70,7 +70,7 @@ describe('sidechain nel modello', () => {
     expect(r.links()).toEqual([{ owner: MASTER, device: onMaster, source: r.kick }]);
   });
 
-  it('togliere la traccia ascoltata: chi la ascoltava torna ad ascoltare sé stesso', () => {
+  it('removing the listened track: whoever listened to it goes back to listening to itself', () => {
     const r = rig();
     const onMaster = r.comp(MASTER);
     r.key(r.bass, r.c.bass, r.kick);
@@ -81,16 +81,16 @@ describe('sidechain nel modello', () => {
     expect(p.effectsOf(r.bass)[0]).not.toHaveProperty('sidechain');
     expect(p.masterEffects[0]).not.toHaveProperty('sidechain');
     expect(p.effectsOf(r.pad)[0].sidechain).toBe(r.bass);
-    // e con annulla torna tutto com'era
+    // and with undo everything goes back as it was
     r.store.undo();
     expect(r.store.project.effectsOf(r.bass)[0].sidechain).toBe(r.kick);
   });
 });
 
-describe('sidechain nel file', () => {
+describe('sidechain in the file', () => {
   const codec = new ProjectCodec();
 
-  it('si salva e si riapre; senza sidechain il campo non c\'è', () => {
+  it('it\'s saved and reopened; without sidechain the field isn\'t there', () => {
     const r = rig();
     r.key(r.bass, r.c.bass, r.kick);
     const text = codec.stringify(r.store.project);
@@ -102,7 +102,7 @@ describe('sidechain nel file', () => {
     expect(codec.stringify(back)).toBe(text);
   });
 
-  it('un progetto della versione 9 (prima del sidechain) si apre identico', () => {
+  it('a version 9 project (before the sidechain) opens identical', () => {
     const r = rig();
     r.store.apply(setEffectParam(r.bass, r.c.bass, 'threshold', -30));
     const json = JSON.parse(codec.stringify(r.store.project));
@@ -114,11 +114,11 @@ describe('sidechain nel file', () => {
   });
 });
 
-describe('sidechain nel mixer', () => {
-  /** Il punto di ascolto di un canale: dopo gli effetti, prima del volume. */
+describe('sidechain in the mixer', () => {
+  /** A channel's listening point: after the effects, before the volume. */
   const tapOf = (mixer: MixerGraph, id: TrackId) => (mixer as unknown as { strips: Map<TrackId, { tap: unknown }> }).strips.get(id)!.tap;
 
-  it('collega il suono della cassa (dopo i suoi effetti) al rilevatore del compressore del basso', () => {
+  it('connects the kick\'s sound (after its effects) to the detector of the bass compressor', () => {
     const r = rig();
     const graph = new FakeGraph(), host = new FakeEffects();
     const mixer = new MixerGraph(graph, host);
@@ -126,33 +126,33 @@ describe('sidechain nel mixer', () => {
     const sc = (owner: ChainOwner, id: DeviceId) => host.created.find(e => mixer.effect(owner, id) === e)!.sidechain!;
     const tap = (id: TrackId) => tapOf(mixer, id) as { outputs: unknown[] };
     const kickEffect = mixer.effect(r.kick, r.c.kick)!;
-    // senza sidechain dal punto di ascolto si va solo al volume
+    // without sidechain from the listening point it goes only to the volume
     expect(tap(r.kick).outputs).toHaveLength(1);
 
     r.key(r.bass, r.c.bass, r.kick);
     mixer.sync(r.store.project);
     expect(tap(r.kick).outputs).toContain(sc(r.bass, r.c.bass));
-    // l'uscita degli effetti della cassa arriva al punto di ascolto
+    // the output of the kick's effects reaches the listening point
     expect((kickEffect.output as unknown as { outputs: unknown[] }).outputs).toEqual([tapOf(mixer, r.kick)]);
 
-    // un'altra sorgente: si stacca dalla cassa e si attacca al pad
+    // another source: it detaches from the kick and attaches to the pad
     r.key(r.bass, r.c.bass, r.pad);
     mixer.sync(r.store.project);
     expect(tap(r.kick).outputs).toHaveLength(1);
     expect(tap(r.pad).outputs).toContain(sc(r.bass, r.c.bass));
 
-    // un aggiornamento qualunque non ricollega
+    // any update doesn't reconnect
     r.store.apply(setEffectParam(r.bass, r.c.bass, 'ratio', 8));
     mixer.sync(r.store.project);
     expect(tap(r.pad).outputs.filter(o => o === sc(r.bass, r.c.bass))).toHaveLength(1);
 
-    // la traccia ascoltata se ne va: niente errori, niente collegamenti
+    // the listened track goes away: no errors, no connections
     r.store.apply(removeTrack(r.pad));
     expect(() => mixer.sync(r.store.project)).not.toThrow();
     expect(r.links()).toEqual([]);
   });
 
-  it('il compressore tolto e rimesso: il collegamento va sul nuovo', () => {
+  it('the compressor removed and put back: the connection goes to the new one', () => {
     const r = rig();
     const graph = new FakeGraph(), host = new FakeEffects();
     const mixer = new MixerGraph(graph, host);
@@ -168,7 +168,7 @@ describe('sidechain nel mixer', () => {
     expect(tap.outputs).toHaveLength(1);
   });
 
-  it('un anello non si collega', () => {
+  it('a loop isn\'t connected', () => {
     const r = rig();
     const graph = new FakeGraph(), host = new FakeEffects();
     const mixer = new MixerGraph(graph, host);

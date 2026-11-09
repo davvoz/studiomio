@@ -1,13 +1,13 @@
-/* Il motore del Sampler (vedi sampler.ts). Una nota fa partire una voce per ogni zona che la
- * contiene (tasti e velocity), e ogni voce legge il sample della sua zona a una velocità che dà
- * l'intonazione (interpolazione di Hermite, anche quando il file ha un'altra frequenza di
- * campionamento), dentro la regione Inizio…Fine o la sua fetta; in Classic il loop la tiene
- * finché si tiene la nota, in avanti (con la dissolvenza a potenza costante tra la fine del loop
- * e il pezzo prima dell'inizio) o avanti e indietro. Il suono passa nel filtro di Prisma e
- * nell'inviluppo del volume, campione per campione; pitch, filtro, LFO e guadagni si calcolano
- * ogni CONTROL_RATE campioni. Loop, intonazione, filtro, inviluppi e LFO sono quelli della
- * zona della voce. Una voce che riparte mentre suona (mono, voce rubata) sfuma il suo ultimo
- * valore invece di saltare: niente click. */
+/* The Sampler's engine (see sampler.ts). A note starts a voice for each zone that
+ * contains it (keys and velocity), and each voice reads its zone's sample at a speed giving
+ * the pitch (Hermite interpolation, also when the file has another sample
+ * rate), inside the Start…End region or its slice; in Classic the loop holds it
+ * while the note is held, forward (with the constant-power crossfade between the end of the loop
+ * and the piece before the start) or back and forth. The sound goes through Prisma's filter and
+ * the volume envelope, sample by sample; pitch, filter, LFO and gains are computed
+ * every CONTROL_RATE samples. Loop, pitch, filter, envelopes and LFO are those of the
+ * voice's zone. A voice restarting while it plays (mono, stolen voice) fades its last
+ * value instead of jumping: no clicks. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
 import { VoicePool, type PolyVoice } from '../../dsp/voice-pool';
@@ -22,16 +22,16 @@ import {
 
 const CONTROL_RATE = 32;
 export const SAMPLER_VOICES = 16;
-/** Il loop più corto, in campioni del sample (sotto, il loop non c'è). */
+/** The shortest loop, in samples of the sample (below it, there's no loop). */
 const MIN_LOOP = 16;
-/** Gli ultimi campioni prima della fine della regione sfumano (in campioni del sample). */
+/** The last samples before the end of the region fade (in samples of the sample). */
 const END_FADE = 64;
-/** La velocità di lettura più alta (quattro ottave sopra, a frequenze uguali, e un po' di più). */
+/** The highest reading speed (four octaves up, at equal rates, and a bit more). */
 const MAX_SPEED = 64;
-/** Quanto dura la sfumatura del valore lasciato da una voce che riparte. */
+/** How long the fade of the value left by a restarting voice lasts. */
 const DECLICK_TIME = 0.004;
 
-/** Le forme dell'LFO del Sampler tra quelle di Prisma (le casuali hanno il loro calcolo). */
+/** The Sampler's LFO shapes among Prisma's (the random ones have their own computation). */
 const SHAPES: readonly number[] = [
   PRISMA_SHAPE.sine, PRISMA_SHAPE.triangle, PRISMA_SHAPE.sawUp, PRISMA_SHAPE.sawDown, PRISMA_SHAPE.square,
   PRISMA_SHAPE.sampleHold, PRISMA_SHAPE.smoothRandom,
@@ -44,9 +44,9 @@ const envShape = (v: (id: string) => number, n: number): EnvShape => ({
   attackCurve: v(`e${n}Ac`), decayCurve: v(`e${n}Dc`), releaseCurve: v(`e${n}Rc`),
 });
 
-/** Una zona: il suo sample e i suoi valori, già nelle unità del motore (il suono, se la zona
- *  segue la prima, è quello della prima). Restano gli stessi oggetti (si aggiornano), così una
- *  voce che suona segue i cambi della sua zona. */
+/** A zone: its sample and its values, already in the engine's units (the sound, if the zone
+ *  follows the first, is the first's). They stay the same objects (they're updated), so a
+ *  playing voice follows its zone's changes. */
 class Zone {
   sample: SampleData | null = null;
   lo = 0;
@@ -54,7 +54,7 @@ class Zone {
   vlo = 1;
   vhi = 127;
   root = 60;
-  /** In semitoni, con i cent: il Transpose e il Detune del suono della zona. */
+  /** In semitones, with the cents: the Transpose and the Detune of the zone's sound. */
   tune = 0;
   gain = 1;
   pan = 0;
@@ -77,7 +77,7 @@ class Zone {
   fKey = 0;
   fEnv = 0;
   fVel = 0;
-  /** Gli inviluppi di volume, filtro e pitch. */
+  /** The volume, filter and pitch envelopes. */
   readonly envs: EnvShape[] = [ENV.amp, ENV.filter, ENV.pitch].map(() => envShape(() => 0, 0));
   lfoShape = 0;
   lfoRate = 4;
@@ -87,7 +87,7 @@ class Zone {
   lfoCutoff = 0;
   lfoVolume = 0;
   lfoPan = 0;
-  /** L'LFO libero: il giro comune a tutte le voci della zona. */
+  /** The free LFO: the cycle shared by all the zone's voices. */
   freePhase = 0;
   freeCycle = 0;
   private lfoSync = LFO_SYNC.hz as number;
@@ -145,7 +145,7 @@ class Zone {
     this.lfoRate = this.lfoSync === LFO_SYNC.tempo ? bpm / 60 / beats : this.lfoHz;
   }
 
-  /** Il giro dell'LFO libero, `seconds` più avanti. */
+  /** The free LFO's cycle, `seconds` later. */
   advance(seconds: number): void {
     this.freePhase += this.lfoRate * seconds;
     if (this.freePhase >= 1) {
@@ -155,25 +155,25 @@ class Zone {
     }
   }
 
-  /** Il valore dell'LFO (0…1) al giro `cycle`, a `phase`. */
+  /** The LFO's value (0…1) at cycle `cycle`, at `phase`. */
   lfoAt(cycle: number, phase: number): number {
     const shape = this.lfoShape;
     return shape === PRISMA_SHAPE.sampleHold || shape === PRISMA_SHAPE.smoothRandom ? randomValue(shape, cycle, phase) : shapeValue(shape, phase);
   }
 
-  /** Se la nota la fa suonare. */
+  /** Whether the note makes it play. */
   plays(pitch: number, velocity: number): boolean {
     return !!this.sample && pitch >= this.lo && pitch <= this.hi && velocity >= this.vlo && velocity <= this.vhi;
   }
 }
 
-/** I valori dei parametri di tutto il Sampler, già nelle unità del motore (il suono è delle
- *  zone); li leggono tutte le voci. */
+/** The parameter values of the whole Sampler, already in the engine's units (the sound belongs to the
+ *  zones); all the voices read them. */
 class Settings {
   readonly zones = Array.from({ length: MAX_ZONES }, (_, i) => new Zone(i));
   mode = MODE.classic as number;
   gate = false;
-  /** Gli inizi delle fette (frazioni), più la fine della regione in fondo (della prima zona). */
+  /** The slice starts (fractions), plus the end of the region at the bottom (of the first zone). */
   slices: number[] = [];
   voiceMode = VOICE_MODE.poly as number;
   glide = 0;
@@ -200,14 +200,14 @@ class Settings {
     for (const z of this.zones) z.setTempo(bpm);
   }
 
-  /** La prima zona che suona la nota (in Slice la prima zona, che ha le fette), o null. */
+  /** The first zone playing the note (in Slice the first zone, which has the slices), or null. */
   zoneFor(pitch: number, velocity: number): Zone | null {
     if (this.mode === MODE.slice) return this.zones[0].sample ? this.zones[0] : null;
     for (const z of this.zones) if (z.plays(pitch, velocity)) return z;
     return null;
   }
 
-  /** Tutte le zone che suonano la nota, in `out` (che restituisce). */
+  /** All the zones playing the note, into `out` (which it returns). */
   zonesFor(pitch: number, velocity: number, out: Zone[]): Zone[] {
     out.length = 0;
     if (this.mode === MODE.slice) {
@@ -216,7 +216,7 @@ class Settings {
     return out;
   }
 
-  /** Per la voce sola (MonoPlayer): in Legato le note sovrapposte scivolano. */
+  /** For the single voice (MonoPlayer): in Legato overlapping notes slide. */
   get legato(): boolean {
     return this.voiceMode === VOICE_MODE.legato;
   }
@@ -229,21 +229,21 @@ class SamplerVoice implements PolyVoice, MonoVoice {
   private readonly filter: PrismaFilter;
   private readonly bufL = new Float64Array(CONTROL_RATE);
   private readonly bufR = new Float64Array(CONTROL_RATE);
-  /** La zona che la voce suona, e il suo sample: lo tiene anche se nella zona ne arriva un altro. */
+  /** The zone the voice plays, and its sample: it keeps it even if another one arrives in the zone. */
   private zone: Zone;
   private data: SampleData | null = null;
-  /** La posizione nel sample come lo si vede (con Reverse, nel sample rovesciato), in campioni. */
+  /** The position in the sample as it's seen (with Reverse, in the reversed sample), in samples. */
   pos = 0;
   private dir = 1;
   private speed = 1;
-  /** La fetta della voce (Slice), in campioni; −1: la regione Inizio…Fine. */
+  /** The voice's slice (Slice), in samples; −1: the Start…End region. */
   private sliceA = -1;
   private sliceB = -1;
   private pitch = 60;
   private target = 60;
   private velocity = 1;
   private released = false;
-  /** La regione è finita: la voce tace. */
+  /** The region is over: the voice is silent. */
   private done = false;
   private gainL = 0;
   private gainR = 0;
@@ -254,7 +254,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
   private age = 0;
   private fresh = true;
   private countdown = 0;
-  /** L'ultimo valore mandato in uscita, e quello che sfuma dopo una ripartenza. */
+  /** The last value sent to the output, and the one fading after a restart. */
   private lastL = 0;
   private lastR = 0;
   private tailL = 0;
@@ -283,18 +283,18 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     return this.pitch;
   }
 
-  /** Dove legge la voce, in frazione del sample (−1 se non suona). */
+  /** Where the voice reads, as a fraction of the sample (−1 if it isn't playing). */
   get position(): number {
     const n = this.data?.channels[0].length ?? 0;
     return this.amp.active && !this.done && n > 0 ? this.pos / n : -1;
   }
 
-  /** La zona che suona (da 0). */
+  /** The playing zone (from 0). */
   get zoneIndex(): number {
     return this.zone.index;
   }
 
-  /** Una nota da capo: la zona `zone`, o la prima che la suona. */
+  /** A note from the start: zone `zone`, or the first that plays it. */
   start(pitch: number, velocity: number, from: number | null = null, zone: Zone | null = null): void {
     const { s } = this;
     const z = zone ?? s.zoneFor(pitch, velocity);
@@ -308,7 +308,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       this.sliceB = Math.max(this.sliceA + 2, Math.min(n, Math.round(s.slices[i + 1] * n)));
     } else this.sliceA = this.sliceB = -1;
     if (this.amp.active && !this.done) {
-      // ripartendo a metà, il valore di adesso sfuma da sé invece di saltare
+      // restarting halfway, the current value fades by itself instead of jumping
       this.tailL += this.lastL;
       this.tailR += this.lastR;
     } else {
@@ -339,9 +339,9 @@ class SamplerVoice implements PolyVoice, MonoVoice {
   }
 
   slide(pitch: number, velocity: number): void {
-    // una fetta è un altro pezzo del sample: si riparte da lì
+    // a slice is another piece of the sample: restart from there
     if (this.s.mode === MODE.slice) return this.start(pitch, velocity, null);
-    // un'altra zona è un altro sample: si riparte, scivolando dall'intonazione di adesso
+    // another zone is another sample: restart, sliding from the current pitch
     const zone = this.s.zoneFor(pitch, velocity);
     if (zone && zone !== this.zone) return this.start(pitch, velocity, this.pitch, zone);
     this.target = pitch;
@@ -350,7 +350,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
 
   release(): void {
     const { s } = this;
-    // in Trigger il colpo suona fino in fondo, qualunque sia la durata della nota
+    // in Trigger the hit plays to the end, whatever the note's length
     if (s.mode !== MODE.classic && !s.gate) return;
     this.released = true;
     this.amp.release();
@@ -398,7 +398,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     }
   }
 
-  /** Legge fino a `len` campioni nei buffer; meno se la regione finisce prima (allora la voce tace). */
+  /** Reads up to `len` samples into the buffers; fewer if the region ends earlier (then the voice is silent). */
   private read(len: number): number {
     const { s, bufL, bufR, zone } = this;
     const data = this.data!;
@@ -412,12 +412,12 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       a = Math.floor(zone.start * n);
       b = Math.max(a + 2, Math.min(n, Math.round(zone.end * n)));
     }
-    // il loop (solo Classic): dentro la regione, lungo almeno MIN_LOOP
+    // the loop (Classic only): inside the region, at least MIN_LOOP long
     let la = 0, lb = 0, xf = 0, looping = s.mode === MODE.classic && zone.loop !== LOOP.off && !(this.released && zone.loopExit);
     if (looping) {
       la = Math.max(a, Math.min(b - MIN_LOOP, Math.floor(zone.loopStart * n)));
       lb = Math.max(la + MIN_LOOP, Math.min(b, Math.round(zone.loopEnd * n)));
-      // oltre la fine del loop (l'ha spostata la manopola) si va fino alla fine della regione
+      // past the end of the loop (the knob moved it) it goes to the end of the region
       looping = lb - la >= MIN_LOOP && this.pos <= lb;
       if (looping && zone.loop === LOOP.forward) xf = Math.min(zone.xfade * (lb - la), la - a);
     }
@@ -436,7 +436,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       let k = Math.floor(q), f = q - k;
       let l = hermite(L, k, f), r = stereo ? hermite(R, k, f) : l;
       if (xf > 0 && pos > lb - xf) {
-        // la fine del loop sfuma nel pezzo che sta prima del suo inizio: al giro si arriva lì
+        // the end of the loop fades into the piece before its start: at the wrap it arrives there
         const t = (pos - (lb - xf)) / xf, p2 = pos - span;
         q = reverse ? last - p2 : p2;
         k = Math.floor(q);
@@ -472,14 +472,14 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     return len;
   }
 
-  /** Ogni CONTROL_RATE campioni: glide, inviluppi di filtro e pitch, LFO, velocità di lettura,
-   *  filtro e guadagni. */
+  /** Every CONTROL_RATE samples: glide, filter and pitch envelopes, LFO, reading speed,
+   *  filter and gains. */
   private control(): void {
     const { s, sampleRate, zone } = this;
     this.countdown = CONTROL_RATE;
     const tick = CONTROL_RATE / sampleRate;
     if (this.pitch !== this.target) {
-      // glide esponenziale in semitoni: arriva al 95 % in circa `glide` secondi
+      // exponential glide in semitones: it gets to 95 % in about `glide` seconds
       const k = s.glide > 0 ? 1 - Math.exp((-3 * CONTROL_RATE) / (s.glide * sampleRate)) : 1;
       this.pitch += (this.target - this.pitch) * k;
       if (Math.abs(this.target - this.pitch) < 1e-3) this.pitch = this.target;
@@ -489,7 +489,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
     this.pitchEnv.set(zone.envs[2]);
     const fenv = this.filterEnv.next(), penv = this.pitchEnv.next();
 
-    // l'LFO, bipolare, che entra in `lfoFade` secondi
+    // the LFO, bipolar, coming in over `lfoFade` seconds
     const ramp = zone.lfoFade > 0 ? Math.min(1, this.age / zone.lfoFade) : 1;
     const lfo = (2 * zone.lfoAt(this.lfoCycle, this.lfoPhase) - 1) * ramp;
     this.lfoPhase += zone.lfoRate * tick;
@@ -527,7 +527,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
   }
 }
 
-/** Interpolazione di Hermite a 4 punti tra x[k] e x[k+1] (bordi ripetuti). */
+/** 4-point Hermite interpolation between x[k] and x[k+1] (edges repeated). */
 const hermite = (x: Float32Array, k: number, f: number): number => {
   const n = x.length;
   const xm = x[k > 0 ? k - 1 : 0], x0 = x[k], x1 = x[k + 1 < n ? k + 1 : n - 1], x2 = x[k + 2 < n ? k + 2 : n - 1];
@@ -551,7 +551,7 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
 
   setParams(params: Readonly<Record<string, number>>): void {
     this.settings.read(params);
-    // passando da poli a una voce (o viceversa) si riparte puliti
+    // switching from poly to mono (or vice versa) restarts clean
     const single = this.settings.voiceMode !== VOICE_MODE.poly;
     if (this.single !== null && single !== this.single) this.silence();
     this.single = single;
@@ -561,7 +561,7 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
     if (bpm > 0) this.settings.setTempo(bpm);
   }
 
-  /** Il sample di una zona: le voci che suonano tengono il loro, le note dopo usano questo. */
+  /** A zone's sample: the playing voices keep theirs, the following notes use this one. */
   setSample(slot: string, sample: SampleData | null): void {
     const i = zoneOfSlot(slot);
     if (i < 0) return;
@@ -572,9 +572,9 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
     const s = this.settings;
     const zones = s.zonesFor(pitch, velocity, this.hits);
     if (!zones.length) return;
-    // in Slice suonano solo le note che hanno una fetta
+    // in Slice only the notes that have a slice play
     if (s.mode === MODE.slice && (pitch < FIRST_SLICE_NOTE || pitch >= FIRST_SLICE_NOTE + s.slices.length - 1)) return;
-    // a una voce sola suona la prima zona; in poli una voce per zona
+    // monophonic the first zone plays; in poly one voice per zone
     if (this.single) this.mono.noteOn(id, pitch, velocity);
     else for (const z of zones) this.pool.noteOn(id, pitch, velocity, v => v.start(pitch, velocity, null, z));
   }
@@ -591,13 +591,13 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
 
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     this.pool.render(left, right, from, to);
-    // il giro dell'LFO libero di ogni zona, che le voci prendono quando partono
+    // each zone's free LFO cycle, which the voices take when they start
     const seconds = (to - from) / this.sampleRate;
     for (const z of this.settings.zones) z.advance(seconds);
   }
 
-  /** Dove leggono le voci che suonano: la zona più la frazione del suo sample come lo si vede
-   *  (2.25: un quarto del sample della terza zona). Le scrive in `out` e dice quante sono. */
+  /** Where the playing voices read: the zone plus the fraction of its sample as it's seen
+   *  (2.25: a quarter of the third zone's sample). It writes them into `out` and says how many there are. */
   playheads(out: Float32Array): number {
     let k = 0;
     for (const v of this.pool.voices) {

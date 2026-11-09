@@ -1,6 +1,6 @@
-/* Ciò che il browser carica nel progetto: uno strumento o un effetto (con il suo preset) su una
- * traccia, un rack salvato, o un sample in un Sampler, come in Live. Ognuna è un solo passo di
- * annullamento. */
+/* What the browser loads into the project: an instrument or an effect (with its preset) on a
+ * track, a saved rack, or a sample in a Sampler, as in Live. Each is a single undo
+ * step. */
 import type { TrackId } from '../core/id';
 import type { Preset } from '../devices/device-type';
 import { effectType } from '../devices/registry';
@@ -16,8 +16,8 @@ import { addEffect, addTrack, loadEffectPreset, setInstrument, setInstrumentSamp
 import { edit, type Edit, type EditContext } from './project-store';
 import { reapplyMacros } from './rack-edits';
 
-/** Una traccia nuova di tipo `kind` subito dopo `near` (e nel suo gruppo), o in fondo; restituisce
- *  anche il suo id. */
+/** A new track of kind `kind` right after `near` (and in its group), or at the end; it also returns
+ *  its id. */
 function newTrack(p: Project, ctx: EditContext, kind: TrackKind, near: TrackId | null): [Project, TrackId] {
   const place = near && p.tracks.some(t => t.id === near) ? { after: near } : undefined;
   const before = new Set(p.tracks.map(t => t.id));
@@ -25,39 +25,39 @@ function newTrack(p: Project, ctx: EditContext, kind: TrackKind, near: TrackId |
   return [next, next.tracks.find(t => !before.has(t.id))!.id];
 }
 
-/** Le impostazioni di uno strumento di tipo `type`, con i valori del preset (o i predefiniti). */
+/** The settings of an instrument of type `type`, with the preset's values (or the defaults). */
 export const instrumentSettings = (type: string, preset: Preset | null): InstrumentSettings => {
   const base: InstrumentSettings = { ...DEFAULT_INSTRUMENT, type, preset: null, params: {} };
   return preset ? withPreset(base, preset.name, preset.params) : base;
 };
 
-/** Lo strumento (con il preset) sulla traccia `target` se è MIDI; altrimenti su una traccia MIDI
- *  nuova, subito dopo (o in fondo, senza traccia). */
+/** The instrument (with the preset) on track `target` if it's MIDI; otherwise on a new MIDI
+ *  track, right after (or at the end, without a track). */
 export const loadInstrument = (target: TrackId | null, type: string, label: string, preset: Preset | null): Edit =>
-  edit(`Carica ${preset?.name ?? label}`, (p, ctx) => {
+  edit(`Load ${preset?.name ?? label}`, (p, ctx) => {
     let next = p, track = target;
     if (!track || !(p.track(track) instanceof MidiTrack)) [next, track] = newTrack(p, ctx, 'midi', target);
     next = setInstrument(track, instrumentSettings(type, preset)).apply(next, ctx);
     return preset ? reapplyMacros(next, track) : next;
   });
 
-/** Un sample lasciato sulla catena di una traccia MIDI, come in Live: lo suona un Sampler. Se lo
- *  strumento è già un Sampler cambia solo il sample (le impostazioni restano); altrimenti un
- *  Sampler nuovo prende il posto dello strumento. Un passo solo. */
+/** A sample dropped on a MIDI track's chain, as in Live: a Sampler plays it. If the
+ *  instrument is already a Sampler only the sample changes (the settings stay); otherwise a
+ *  new Sampler takes the instrument's place. A single step. */
 export const loadSampler = (track: TrackId, sample: SampleRef): Edit =>
   edit(`Sampler: ${sample.name}`, (p, ctx) => {
     const t = p.track(track);
-    if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t?.name ?? track} non ha uno strumento`);
+    if (!(t instanceof MidiTrack)) throw new TypeError(`the track ${t?.name ?? track} has no instrument`);
     const next = t.instrument.type === SAMPLER.type ? p : setInstrument(track, instrumentSettings(SAMPLER.type, null)).apply(p, ctx);
     return setInstrumentSamples(track, { [SAMPLE_SLOT]: sample }).apply(next, ctx);
   });
 
-/** Un effetto (con il preset) in fondo alla catena di `owner` (una traccia, un bus o il master);
- *  senza, su una traccia audio nuova, come quando in Live lo si lascia sotto le tracce. */
+/** An effect (with the preset) at the end of `owner`'s chain (a track, a bus or the master);
+ *  without, on a new audio track, as when in Live it's dropped below the tracks. */
 export const loadEffect = (owner: ChainOwner | null, type: string, label: string, preset: Preset | null): Edit =>
-  edit(`Carica ${preset ? `${label}: ${preset.name}` : label}`, (p, ctx) => {
+  edit(`Load ${preset ? `${label}: ${preset.name}` : label}`, (p, ctx) => {
     let next = p, target = owner;
-    // chi lavora sulle note vuole uno strumento: fuori da una traccia MIDI ne nasce una
+    // whoever works on notes wants an instrument: outside a MIDI track one is created
     const notes = !!effectType(type)?.notes;
     if (notes && !(target && p.track(target as TrackId) instanceof MidiTrack)) [next, target] = newTrack(p, ctx, 'midi', null);
     else if (!target || (target !== MASTER && !p.track(target))) [next, target] = newTrack(p, ctx, 'audio', null);
@@ -67,16 +67,16 @@ export const loadEffect = (owner: ChainOwner | null, type: string, label: string
     return preset && added ? loadEffectPreset(target, added.id, preset.name, preset.params).apply(next, ctx) : next;
   });
 
-/** Un rack salvato nella catena di `owner`, come in Live. Un Instrument Rack prende il posto
- *  dello strumento (i rack in cui era si separano) e i suoi effetti vanno prima degli altri; su
- *  una traccia senza strumento va su una traccia MIDI nuova, subito dopo. Un Audio Effect Rack
- *  va in fondo alla catena; senza traccia, su una traccia audio nuova. */
+/** A saved rack in `owner`'s chain, as in Live. An Instrument Rack takes the place
+ *  of the instrument (the racks it was in are ungrouped) and its effects go before the others; on
+ *  a track without instrument it goes on a new MIDI track, right after. An Audio Effect Rack
+ *  goes at the end of the chain; without a track, on a new audio track. */
 export const loadRack = (owner: ChainOwner | null, preset: RackPreset): Edit =>
-  edit(`Carica ${preset.name}`, (p, ctx) => {
+  edit(`Load ${preset.name}`, (p, ctx) => {
     let next = p, target = owner;
     const { instrument } = preset;
     if (instrument) {
-      if (target === MASTER) throw new Error(`«${preset.name}» ha uno strumento: va su una traccia MIDI`);
+      if (target === MASTER) throw new Error(`«${preset.name}» has an instrument: it goes on a MIDI track`);
       if (!target || !(p.track(target) instanceof MidiTrack)) [next, target] = newTrack(p, ctx, 'midi', target);
       for (const old of racksWith(next.racksOf(target), INSTRUMENT_DEVICE)) next = next.updatingRacks(target, racks => ungroup(racks, old.id));
       next = setInstrument(target, { ...DEFAULT_INSTRUMENT, ...instrument, params: { ...instrument.params } }).apply(next, ctx);
@@ -85,7 +85,7 @@ export const loadRack = (owner: ChainOwner | null, preset: RackPreset): Edit =>
       ({ ...newEffect(ctx.ids.next('device'), e.type), enabled: e.enabled, preset: e.preset, params: { ...e.params } }));
     const devices: DeviceKey[] = [...(instrument ? [INSTRUMENT_DEVICE] as const : []), ...fresh.map(e => e.id)];
     const racks = presetRacks(preset, devices, () => ctx.ids.next('device'));
-    // le destinazioni dei modulatori, dentro il rack appena messo
+    // the modulators' targets, inside the rack just placed
     const effects = fresh.map((e, i) => {
       const saved = preset.effects[i].targets;
       return saved ? { ...e, targets: saved.map(t => presetTarget(t, devices, racks)) } : e;
@@ -94,6 +94,6 @@ export const loadRack = (owner: ChainOwner | null, preset: RackPreset): Edit =>
       effects: instrument ? [...effects, ...c.effects] : [...c.effects, ...effects],
       racks: [...c.racks, ...racks],
     }));
-    // i parametri mappati dove le macro li portano
+    // the mapped parameters where the macros take them
     return reapplyMacros(next, target);
   });

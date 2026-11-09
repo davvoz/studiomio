@@ -1,16 +1,16 @@
-/* Il MIDI di un controller qualsiasi sui controlli dell'app, come la MIDI Map di Live: una
- * manopola, un fader (CC) o un pad, un tasto (nota) muove una macro di un rack, un parametro di
- * uno strumento o di un effetto, il volume, il pan, una mandata, il mute o il solo di una traccia,
- * il volume o il mute del master. Un controllo può muoverne più d'uno; ognuno ha al più un
- * controllo. Come per la tastiera (vedi key-map): le mappature sono del progetto, quelle di
- * bersagli che non ci sono più restano scritte ma non valgono e non si salvano. Il controllo si
- * riconosce da canale e numero, da qualunque porta arrivi. */
+/* Any controller's MIDI on the app's controls, like Live's MIDI Map: a
+ * knob, a fader (CC) or a pad, a key (note) moves a rack's macro, a parameter of
+ * an instrument or an effect, the volume, the pan, a send, the mute or the solo of a track,
+ * the master's volume or mute. A control can move more than one; each has at most one
+ * control. As for the keyboard (see key-map): the mappings belong to the project, those of
+ * targets that are gone stay written but don't apply and aren't saved. The control is
+ * recognized by channel and number, from whatever port it arrives. */
 import { asId, type TrackId } from '../core/id';
 import { checkKeyMap, sameTarget, type KeyTarget } from './key-map';
 import type { ChainOwner } from './project';
 import type { DeviceKey } from './rack';
 
-/** Un controllo del controller: un CC (manopola, fader) o una nota (pad, tasto). Canale 0…15. */
+/** A control of the controller: a CC (knob, fader) or a note (pad, key). Channel 0…15. */
 export interface MidiControl {
   readonly type: 'cc' | 'note';
   readonly channel: number;
@@ -21,7 +21,7 @@ export type MixerControl = 'volume' | 'pan' | 'mute' | 'solo';
 
 export type MidiTarget =
   | KeyTarget
-  /** Del master solo volume e mute. */
+  /** Of the master only volume and mute. */
   | { readonly kind: 'mixer'; readonly owner: ChainOwner; readonly control: MixerControl }
   | { readonly kind: 'send'; readonly owner: TrackId; readonly bus: TrackId };
 
@@ -32,7 +32,7 @@ export interface MidiMapping {
 
 export type MidiMap = readonly MidiMapping[];
 
-/** Nessuna mappatura (sempre la stessa lista: le modifiche si riconoscono dal riferimento). */
+/** No mappings (always the same list: changes are recognized by reference). */
 export const NO_MIDI: MidiMap = Object.freeze([]);
 
 export const sameControl = (a: MidiControl, b: MidiControl): boolean =>
@@ -44,15 +44,15 @@ export const sameMidiTarget = (a: MidiTarget, b: MidiTarget): boolean => {
   return (b.kind === 'macro' || b.kind === 'param') && sameTarget(a, b);
 };
 
-/** Il controllo di un bersaglio, o null. */
+/** A target's control, or null. */
 export const controlOf = (map: MidiMap, target: MidiTarget): MidiControl | null =>
   map.find(m => sameMidiTarget(m.target, target))?.control ?? null;
 
-/** I bersagli di un controllo. */
+/** A control's targets. */
 export const midiTargetsOf = (map: MidiMap, control: MidiControl): MidiTarget[] =>
   map.filter(m => sameControl(m.control, control)).map(m => m.target);
 
-/** Dà a un bersaglio un controllo (null: lo toglie); il controllo di prima non lo muove più. */
+/** Gives a target a control (null: removes it); the previous control no longer moves it. */
 export function withControl(map: MidiMap, target: MidiTarget, control: MidiControl | null): MidiMap {
   const kept = map.filter(m => !sameMidiTarget(m.target, target));
   if (control === null) return kept.length === map.length ? map : kept;
@@ -61,7 +61,7 @@ export function withControl(map: MidiMap, target: MidiTarget, control: MidiContr
   return [...kept, { control, target }];
 }
 
-/** Toglie i controlli dei parametri di un dispositivo (es. lo strumento cambiato: i parametri sono altri). */
+/** Removes the controls of a device's parameters (e.g. the instrument changed: the parameters are different). */
 export const withoutParamControlsOf = (map: MidiMap, owner: ChainOwner, device: DeviceKey): MidiMap => {
   const kept = map.filter(m => m.target.kind !== 'param' || m.target.owner !== owner || m.target.device !== device);
   return kept.length === map.length ? map : kept;
@@ -69,28 +69,28 @@ export const withoutParamControlsOf = (map: MidiMap, owner: ChainOwner, device: 
 
 const isKeyTarget = (t: MidiTarget): t is KeyTarget => t.kind === 'macro' || t.kind === 'param';
 
-/** Le regole: controlli MIDI validi, macro che esistono, nessun bersaglio due volte. */
+/** The rules: valid MIDI controls, macros that exist, no target twice. */
 export function checkMidiMap(map: MidiMap): void {
   checkKeyMap(map.filter(m => isKeyTarget(m.target)).map(m => ({ key: midiLabel(m.control), target: m.target as KeyTarget })));
   map.forEach((m, i) => {
     const c = m.control;
     if (!(Number.isInteger(c.channel) && c.channel >= 0 && c.channel < 16 && Number.isInteger(c.number) && c.number >= 0 && c.number < 128)) {
-      throw new RangeError(`controllo MIDI non valido: ${c.type} ${c.number} sul canale ${c.channel + 1}`);
+      throw new RangeError(`invalid MIDI control: ${c.type} ${c.number} on channel ${c.channel + 1}`);
     }
-    if (map.findIndex(x => sameMidiTarget(x.target, m.target)) !== i) throw new Error(`${midiLabel(c)} è su un bersaglio che ha già un controllo`);
+    if (map.findIndex(x => sameMidiTarget(x.target, m.target)) !== i) throw new Error(`${midiLabel(c)} is on a target that already has a control`);
   });
 }
 
 const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 
-/** Il nome di un controllo come si mostra: "CC 7", "C3" (il Do centrale, 60, è C3 come in
- *  Live); con il canale se non è l'1: "CC 7 · 2". */
+/** A control's name as it's shown: "CC 7", "C3" (middle C, 60, is C3 as in
+ *  Live); with the channel if it isn't 1: "CC 7 · 2". */
 export function midiLabel(c: MidiControl): string {
   const name = c.type === 'cc' ? `CC ${c.number}` : `${NOTE_NAMES[c.number % 12]}${Math.floor(c.number / 12) - 2}`;
   return c.channel ? `${name} · ${c.channel + 1}` : name;
 }
 
-/** Il bersaglio scritto in una stringa (per il DOM: `data-midi-target`), e ritorno. */
+/** The target written in a string (for the DOM: `data-midi-target`), and back. */
 export function encodeMidiTarget(t: MidiTarget): string {
   switch (t.kind) {
     case 'macro': return `macro|${t.owner}|${t.rack}|${t.index}`;

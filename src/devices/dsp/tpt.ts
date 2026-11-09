@@ -1,8 +1,8 @@
-/* Un filtro a variabili di stato in topologia TPT (Zavalishin), leggero: passa-basso e
- * passa-alto dello stesso campione insieme. Due in fila con Q di Butterworth fanno un
- * Linkwitz-Riley (crossover: basse + alte = suono intero). Lo usano Drive e Multibanda. */
+/* A state-variable filter in TPT topology (Zavalishin), lightweight: low-pass and
+ * high-pass of the same sample together. Two in a row with Butterworth Q make a
+ * Linkwitz-Riley (crossover: lows + highs = whole sound). Drive and Multiband use it. */
 
-/** Un filtro a variabili di stato (TPT) che dà passa-basso e passa-alto insieme. */
+/** A state-variable filter (TPT) giving low-pass and high-pass together. */
 export class Tpt {
   low = 0;
   high = 0;

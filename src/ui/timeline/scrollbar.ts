@@ -1,20 +1,20 @@
 import type { Beats } from '../../core/music-time';
 
-/** Larghezza minima del cursore, perché resti afferrabile anche con un brano lungo. */
+/** Minimum width of the thumb, so it stays grabbable even with a long piece. */
 const MIN_THUMB_PX = 24;
 
-/** Il tratto di timeline che la barra rappresenta e quello che si vede. */
+/** The stretch of timeline the bar represents and the visible one. */
 export interface ScrollRange {
-  /** Fin dove si può scorrere (inizio: battito 0). */
+  /** How far you can scroll (start: beat 0). */
   readonly total: Beats;
-  /** Battito al bordo sinistro della vista. */
+  /** Beat at the left edge of the view. */
   readonly start: Beats;
-  /** Quanti battiti entrano nella vista. */
+  /** How many beats fit in the view. */
   readonly visible: Beats;
 }
 
-/** Barra orizzontale sotto la timeline: trascinando il cursore la vista scorre; un clic
- *  fuori dal cursore porta lì la vista (centrata) e si può continuare a trascinare. */
+/** Horizontal bar under the timeline: dragging the thumb scrolls the view; a click
+ *  outside the thumb brings the view there (centred) and you can keep dragging. */
 export class TimelineScrollbar {
   readonly element = Object.assign(document.createElement('div'), { className: 'timeline-scroll' });
   private readonly thumb = Object.assign(document.createElement('div'), { className: 'thumb' });
@@ -34,7 +34,7 @@ export class TimelineScrollbar {
 
   private thumbBox(r: ScrollRange, width: number): { x: number; w: number; pxPerBeat: number } {
     const w = Math.min(width, Math.max(MIN_THUMB_PX, (r.visible / r.total) * width));
-    // il cursore si muove in (width - w) pixel per (total - visible) battiti
+    // the thumb moves (width - w) pixels for (total - visible) beats
     const span = Math.max(1e-9, r.total - r.visible);
     const pxPerBeat = (width - w) / span;
     return { x: Math.min(width - w, r.start * pxPerBeat), w, pxPerBeat };
@@ -52,12 +52,12 @@ export class TimelineScrollbar {
       const box = this.thumbBox(range, el.clientWidth);
       let start = range.start;
       if (x < box.x || x > box.x + box.w) {
-        // fuori dal cursore: la vista salta lì, centrata sul punto
+        // outside the thumb: the view jumps there, centred on the point
         start = box.pxPerBeat > 0 ? (x - box.w / 2) / box.pxPerBeat : 0;
         start = Math.max(0, Math.min(range.total - range.visible, start));
         this.scrollTo(start);
       }
-      // la portata resta quella dell'inizio: allungandosi durante il gesto farebbe scappare il cursore
+      // the range stays the one from the start: growing during the gesture it would make the thumb run away
       drag = { x, start, range };
       el.classList.add('dragging');
     });

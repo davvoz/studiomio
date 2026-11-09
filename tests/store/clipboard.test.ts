@@ -4,8 +4,8 @@ import { copyClips, copyNotes, pasteClips, pasteNotes } from '../../src/store/cl
 import { addMidiClip, placeSample, updateClip } from '../../src/store/edits';
 import { setup } from '../helpers/fixtures';
 
-describe('appunti: clip', () => {
-  /** Traccia 0 audio (clip a 2), traccia 1 MIDI (clip a 4), traccia 2 MIDI vuota. */
+describe('clipboard: clips', () => {
+  /** Track 0 audio (clip at 2), track 1 MIDI (clip at 4), track 2 empty MIDI. */
   function rig() {
     const s = setup({ audio: 1, midi: 2, sample: true });
     s.store.apply(placeSample(s.track(0), s.sampleId, 2));
@@ -14,15 +14,15 @@ describe('appunti: clip', () => {
     return { ...s, refs };
   }
 
-  it('copia con posizioni relative: tracce e battiti', () => {
+  it('copies with relative positions: tracks and beats', () => {
     const { store, refs } = rig();
     const c = copyClips(store.project, refs)!;
     expect(c.items.map(i => [i.trackOffset, i.placement.start])).toEqual([[0, 0], [1, 2]]);
-    expect(c.span).toBe(8); // dal battito 2 alla fine della clip audio (4 s a 120 BPM = 8 battiti → 10)
+    expect(c.span).toBe(8); // from beat 2 to the end of the audio clip (4 s at 120 BPM = 8 beats → 10)
     expect(c.sourceTrack).toBe(store.project.tracks[0].id);
   });
 
-  it('incolla al battito dato, con id nuovi, mantenendo la disposizione', () => {
+  it('pastes at the given beat, with new ids, keeping the layout', () => {
     const { store, refs } = rig();
     const c = copyClips(store.project, refs)!;
     store.apply(pasteClips(c, 0, 16));
@@ -33,21 +33,21 @@ describe('appunti: clip', () => {
     expect(audio.arrangement[1].clip.id).not.toBe(audio.arrangement[0].clip.id);
   });
 
-  it('le clip che finirebbero su una traccia di un altro tipo, o che non c\'è, si saltano', () => {
+  it('the clips that would end up on a track of another kind, or that doesn\'t exist, are skipped', () => {
     const { store, refs } = rig();
     const c = copyClips(store.project, refs)!;
-    store.apply(pasteClips(c, 1, 20)); // audio → MIDI (no), MIDI → traccia 2 MIDI (sì)
+    store.apply(pasteClips(c, 1, 20)); // audio → MIDI (no), MIDI → track 2 MIDI (yes)
     expect(store.project.tracks[1].arrangement).toHaveLength(1);
     expect(store.project.tracks[2].arrangement.map(p => p.start)).toEqual([22]);
-    store.apply(pasteClips(c, 2, 30)); // la seconda finirebbe oltre l'ultima traccia
+    store.apply(pasteClips(c, 2, 30)); // the second would end up beyond the last track
     expect(store.project.tracks[2].arrangement).toHaveLength(1);
   });
 });
 
-describe('appunti: note', () => {
+describe('clipboard: notes', () => {
   const n = (pitch: number, start: number, duration = 1): Note => ({ pitch, start, duration, velocity: 100 });
 
-  it('copia relativa e incolla in un altro punto', () => {
+  it('relative copy and paste at another point', () => {
     const notes = [n(60, 2), n(64, 3, 2), n(67, 8)];
     const c = copyNotes(notes, new Set([notes[0], notes[1]]))!;
     expect(c).toMatchObject({ origin: 2, span: 3 });
@@ -57,7 +57,7 @@ describe('appunti: note', () => {
     expect(copyNotes(notes, new Set())).toBeNull();
   });
 
-  it('le note incollate restano selezionabili nella clip', () => {
+  it('the pasted notes stay selectable in the clip', () => {
     const { store, track } = setup({ midi: 1 });
     store.apply(addMidiClip(track(0), 0, 4));
     const id = store.project.tracks[0].arrangement[0].id;

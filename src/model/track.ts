@@ -11,7 +11,7 @@ import { NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
 
 export interface MixerSettings {
   readonly volumeDb: number;
-  /** −1 (sinistra) .. 1 (destra) */
+  /** −1 (left) .. 1 (right) */
   readonly pan: number;
   readonly mute: boolean;
   readonly solo: boolean;
@@ -19,10 +19,10 @@ export interface MixerSettings {
 
 export const DEFAULT_MIXER: MixerSettings = { volumeDb: 0, pan: 0, mute: false, solo: false };
 
-/** Le mandate di una traccia: per bus, il livello in dB del suono che gli arriva. */
+/** A track's sends: per bus, the level in dB of the sound reaching it. */
 export type Sends = Readonly<Partial<Record<TrackId, number>>>;
 
-/** Da qui in giù una mandata è chiusa (−∞): non si salva e non manda niente. */
+/** From here down a send is closed (−∞): it isn't saved and sends nothing. */
 export const SEND_OFF_DB = -40;
 
 const NO_SENDS: Sends = Object.freeze({});
@@ -32,22 +32,22 @@ export interface TrackProps<C extends Clip> {
   readonly name: string;
   readonly color: Color;
   readonly mixer: MixerSettings;
-  /** Clip sulla timeline (arrangement), ordinate per inizio e senza sovrapposizioni. */
+  /** Clips on the timeline (arrangement), sorted by start and without overlaps. */
   readonly arrangement: lane.Lane<C>;
-  /** Slot della session view, uno per scena (null = vuoto). */
+  /** Session view slots, one per scene (null = empty). */
   readonly slots: readonly (C | null)[];
-  /** Catena degli effetti, nell'ordine in cui il suono li attraversa. */
+  /** Effect chain, in the order the sound goes through them. */
   readonly effects: readonly EffectSettings[];
-  /** I rack che raggruppano dispositivi della catena (assenti: nessuno). */
+  /** The racks grouping devices of the chain (absent: none). */
   readonly racks?: RackList;
-  /** Il gruppo che contiene la traccia (assente: nessuno, esce nel master). */
+  /** The group containing the track (absent: none, it goes out into the master). */
   readonly group?: TrackId;
-  /** Le mandate verso i bus (assenti: tutte chiuse). */
+  /** The sends to the buses (absent: all closed). */
   readonly sends?: Sends;
 }
 
-/** Una traccia: mixer, clip sulla timeline e slot della session. Ogni tipo di traccia
- *  accetta un solo tipo di clip. Immutabile come le clip. */
+/** A track: mixer, clips on the timeline and session slots. Each track kind
+ *  accepts only one kind of clip. Immutable like the clips. */
 export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = TrackProps<C>> {
   abstract readonly kind: string;
   protected readonly props: P;
@@ -58,7 +58,7 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
 
   protected abstract create(props: P): this;
 
-  /** Vero se la clip è del tipo che questa traccia suona. */
+  /** True if the clip is of the kind this track plays. */
   abstract accepts(clip: Clip): clip is C;
 
   protected with(patch: Partial<P>): this {
@@ -73,32 +73,32 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
   get slots(): readonly (C | null)[] { return this.props.slots; }
   get effects(): readonly EffectSettings[] { return this.props.effects; }
   get racks(): RackList { return this.props.racks ?? NO_RACKS; }
-  /** Il gruppo che contiene la traccia, o null: il suono esce nel suo canale invece che nel master. */
+  /** The group containing the track, or null: the sound goes out into its channel instead of the master. */
   get group(): TrackId | null { return this.props.group ?? null; }
-  /** Le mandate aperte, per bus (le altre sono chiuse). */
+  /** The open sends, per bus (the others are closed). */
   get sends(): Sends { return this.props.sends ?? NO_SENDS; }
 
-  /** Il livello della mandata verso il bus, in dB (SEND_OFF_DB: chiusa). */
+  /** The level of the send to the bus, in dB (SEND_OFF_DB: closed). */
   send(bus: TrackId): number {
     return this.sends[bus] ?? SEND_OFF_DB;
   }
 
-  /** I dispositivi della catena nell'ordine del suono: lo strumento (se c'è) e gli effetti. */
+  /** The chain's devices in the order of the sound: the instrument (if any) and the effects. */
   get chainKeys(): readonly DeviceKey[] { return this.keysFor(this.effects); }
 
   protected keysFor(effects: EffectList): DeviceKey[] {
     return effects.map(e => e.id);
   }
 
-  /** Tutti i dispositivi della traccia: lo strumento (se c'è) e gli effetti. */
+  /** All the track's devices: the instrument (if any) and the effects. */
   get devices(): readonly DeviceSettings[] { return this.effects; }
 
-  /** Tutte le clip della traccia, timeline e session. */
+  /** All the track's clips, timeline and session. */
   get clips(): C[] {
     return [...this.arrangement.map(p => p.clip), ...this.slots.filter((c): c is C => c !== null)];
   }
 
-  /** Fine dell'ultima clip sulla timeline. */
+  /** End of the last clip on the timeline. */
   get arrangementEnd(): Beats {
     return lane.laneEnd(this.arrangement);
   }
@@ -113,14 +113,14 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.with({ mixer: { ...this.mixer, ...patch } } as Partial<P>);
   }
 
-  /** Mette la traccia in un gruppo (null: fuori). Le regole dei gruppi le controlla il progetto. */
+  /** Puts the track in a group (null: outside). The project checks the group rules. */
   withGroup(group: TrackId | null): this {
     if (group === this.group) return this;
     return this.with({ group: group ?? undefined } as Partial<P>);
   }
 
-  /** Apre, cambia o (fino a SEND_OFF_DB) chiude la mandata verso un bus. Le regole dei bus le
-   *  controlla il progetto. */
+  /** Opens, changes or (down to SEND_OFF_DB) closes the send to a bus. The project checks the
+   *  bus rules. */
   withSend(bus: TrackId, db: number): this {
     const open = db > SEND_OFF_DB;
     if (open ? this.sends[bus] === db : !(bus in this.sends)) return this;
@@ -145,19 +145,19 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.withLane(lane.split(this.arrangement, id, at, ids));
   }
 
-  /** Svuota [from, to) della timeline della traccia. */
+  /** Empties [from, to) of the track's timeline. */
   clearing(from: Beats, to: Beats, ids: IdFactory): this {
     return this.withLane(lane.clear(this.arrangement, from, to, ids));
   }
 
-  /** Sostituisce la catena degli effetti (le operazioni sono in `effect-list`); gli effetti tolti
-   *  escono dai loro rack. */
+  /** Replaces the effect chain (the operations are in `effect-list`); the removed effects
+   *  leave their racks. */
   withEffects(effects: EffectList): this {
     return this.withChain(effects, pruneRacks(this.keysFor(effects), this.racks));
   }
 
-  /** Effetti e rack insieme (es. uno spostamento che cambia ordine e gruppi). Le regole dei rack
-   *  le controlla il progetto. */
+  /** Effects and racks together (e.g. a move changing order and groups). The project checks
+   *  the rack rules. */
   withChain(effects: EffectList, racks: RackList): this {
     if (effects === this.effects && racks === this.racks) return this;
     return this.with({ effects, racks: racks.length ? racks : undefined } as Partial<P>);
@@ -169,7 +169,7 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.withSlots(this.slots.map((c, i) => (i === index ? clip as C | null : c)));
   }
 
-  /** Aggiunge uno slot vuoto (una scena nuova) in posizione `index`. */
+  /** Adds an empty slot (a new scene) at position `index`. */
   insertingSlot(index: number): this {
     const s = [...this.slots];
     s.splice(index, 0, null);
@@ -181,7 +181,7 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
     return this.withSlots(this.slots.filter((_, i) => i !== index));
   }
 
-  /** Lo slot `from` va in posizione `to` (una scena spostata), gli altri scorrono. */
+  /** Slot `from` goes to position `to` (a moved scene), the others shift. */
   movingSlot(from: number, to: number): this {
     this.checkSlot(from);
     this.checkSlot(to);
@@ -204,11 +204,11 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
   }
 
   private checkSlot(index: number): void {
-    if (!Number.isInteger(index) || index < 0 || index >= this.slots.length) throw new RangeError(`slot ${index} inesistente`);
+    if (!Number.isInteger(index) || index < 0 || index >= this.slots.length) throw new RangeError(`slot ${index} doesn't exist`);
   }
 
   private wrongKind(clip: Clip): Error {
-    return new TypeError(`una traccia ${this.kind} non può contenere una clip ${clip.kind}`);
+    return new TypeError(`a ${this.kind} track can't contain a ${clip.kind} clip`);
   }
 }
 
@@ -237,11 +237,11 @@ export class AudioTrack extends Track<AudioClip> {
 }
 
 export interface MidiTrackProps extends TrackProps<MidiClip> {
-  /** Lo strumento che suona le note della traccia. */
+  /** The instrument playing the track's notes. */
   readonly instrument: InstrumentSettings;
 }
 
-/** Traccia di note, suonate dal suo strumento. */
+/** Track of notes, played by its instrument. */
 export class MidiTrack extends Track<MidiClip, MidiTrackProps> {
   readonly kind = 'midi';
 
@@ -275,12 +275,12 @@ export class MidiTrack extends Track<MidiClip, MidiTrackProps> {
 }
 
 export interface GroupTrackProps extends TrackProps<never> {
-  /** Chiuso: le sue tracce non si vedono (timeline e session), ma suonano. */
+  /** Closed: its tracks aren't visible (timeline and session), but they play. */
   readonly folded?: boolean;
 }
 
-/** Traccia di gruppo, come in Live: non ha clip; le tracce del gruppo (che nel progetto la
- *  seguono) escono nel suo canale, con i suoi effetti, il suo volume e il suo mute. */
+/** Group track, as in Live: it has no clips; the group's tracks (which in the project
+ *  follow it) go out into its channel, with its effects, its volume and its mute. */
 export class GroupTrack extends Track<never, GroupTrackProps> {
   readonly kind = 'group';
 
@@ -307,18 +307,18 @@ export class GroupTrack extends Track<never, GroupTrackProps> {
   }
 }
 
-/** La lettera del bus in posizione `index`, come in Live: A, B, C… (dopo la Z, A1, B1…). */
+/** The letter of the bus at position `index`, as in Live: A, B, C… (after Z, A1, B1…). */
 export const busLetter = (index: number): string =>
   `${String.fromCharCode(65 + (index % 26))}${index >= 26 ? Math.floor(index / 26) : ''}`;
 
 export interface BusTrackProps extends TrackProps<never> {
-  /** Compresso: nella session la sua colonna è stretta (solo il livello, mute e solo), ma suona. */
+  /** Collapsed: in the session its column is narrow (only the level, mute and solo), but it plays. */
   readonly folded?: boolean;
 }
 
-/** Bus, come le tracce di ritorno di Live: non ha clip né slot; riceve il suono che le tracce
- *  gli mandano (le loro mandate), lo passa per i suoi effetti ed esce nel master. Nel progetto
- *  i bus stanno in una lista a parte, dopo le tracce. */
+/** Bus, like Live's return tracks: it has no clips or slots; it receives the sound the tracks
+ *  send it (their sends), passes it through its effects and goes out into the master. In the project
+ *  the buses are in a separate list, after the tracks. */
 export class BusTrack extends Track<never, BusTrackProps> {
   readonly kind = 'bus';
 

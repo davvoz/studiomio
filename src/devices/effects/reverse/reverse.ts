@@ -1,18 +1,18 @@
-/* "Reverse": il suono al contrario, a pezzi a tempo. Il tempo è diviso in pezzi lunghi
- * Lunghezza, agganciati alla battuta: mentre passa un pezzo si sente quello prima, letto dalla
- * fine all'inizio (il risucchio prima del drop). "Reverse" lo accende e lo spegne al volo, con
- * una sfumatura; Dry/Wet mescola il suono diritto. Qui c'è solo la descrizione; il suono è in
+/* "Reverse": the sound backwards, in timed pieces. Time is divided into pieces
+ * Length long, locked to the bar: while a piece passes you hear the previous one, read from the
+ * end to the start (the suck-back before the drop). "Reverse" turns it on and off on the fly, with
+ * a fade; Dry/Wet mixes in the straight sound. Here there's only the description; the sound is in
  * reverse-core.ts. */
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam } from '../../params';
 
-/** Quanto è lungo un pezzo: quarti, o battute (che dipendono dal metro). */
+/** How long a piece is: quarters, or bars (which depend on the time signature). */
 export const REVERSE_LENGTHS: readonly (readonly [label: string, beats: number, bars: number])[] = [
-  ['1/16', 1 / 4, 0], ['1/8', 1 / 2, 0], ['1/4', 1, 0], ['1/2', 2, 0], ['1 battuta', 0, 1],
+  ['1/16', 1 / 4, 0], ['1/8', 1 / 2, 0], ['1/4', 1, 0], ['1/2', 2, 0], ['1 bar', 0, 1],
 ];
 
-/** Il pezzo più lungo, in quarti: con metri lunghissimi "1 battuta" si ferma qui (il nastro
- *  deve ricordarne due). */
+/** The longest piece, in quarters: with very long time signatures "1 bar" stops here (the tape
+ *  must remember two). */
 export const MAX_REVERSE_BEATS = 16;
 
 const choice = (id: string, label: string, options: readonly string[], def = 0, extra: Partial<ChoiceParam> = {}): ChoiceParam =>
@@ -30,16 +30,16 @@ export const REVERSE: DeviceType = {
       label: 'Reverse',
       params: [
         choice('reverse', 'Reverse', ['Off', 'On'], 1),
-        choice('length', 'Lunghezza', REVERSE_LENGTHS.map(([l]) => l), length('1/2')),
+        choice('length', 'Length', REVERSE_LENGTHS.map(([l]) => l), length('1/2')),
       ],
     },
-    { label: 'Uscita', params: [num('mix', 'Dry/Wet', 0, 100, 100, '%', { step: 1 })] },
+    { label: 'Output', params: [num('mix', 'Dry/Wet', 0, 100, 100, '%', { step: 1 })] },
   ],
   presets: [
     { name: 'Init', params: {} },
-    { name: 'Quarti al contrario', params: { length: length('1/4') } },
-    { name: 'Risucchio di 1 battuta', params: { length: length('1 battuta') } },
-    { name: 'Glitch in sedicesimi', params: { length: length('1/16') } },
-    { name: 'Metà e metà', params: { length: length('1/8'), mix: 50 } },
+    { name: 'Reversed quarters', params: { length: length('1/4') } },
+    { name: '1-bar suck', params: { length: length('1 bar') } },
+    { name: 'Sixteenth glitch', params: { length: length('1/16') } },
+    { name: 'Half and half', params: { length: length('1/8'), mix: 50 } },
   ],
 };

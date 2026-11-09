@@ -1,14 +1,14 @@
-/* Sovracampionamento per le non linearità (saturazione, distorsione): il suono passa a 2, 4 o 8
- * volte la frequenza di campionamento, si distorce lì, e torna giù filtrato. Le armoniche che la
- * distorsione crea sopra la metà della frequenza originale vengono tolte invece di ripiegarsi
- * (aliasing) in note stonate e sporche.
+/* Oversampling for nonlinearities (saturation, distortion): the sound goes up to 2, 4 or 8
+ * times the sample rate, is distorted there, and comes back down filtered. The harmonics the
+ * distortion creates above half the original rate are removed instead of folding back
+ * (aliasing) into out-of-tune, dirty notes.
  *
- * Ogni raddoppio usa un filtro FIR "a mezza banda" a fase lineare (finestra di Kaiser): metà dei
- * coefficienti sono zero e il ramo dispari è solo il centro, quindi in forma polifase costa
- * metà di un FIR normale. Fase lineare = ritardo costante (`latency`), lo stesso per tutte le
- * frequenze: un segnale che passa su e giù senza modifiche esce identico, solo ritardato. */
+ * Each doubling uses a linear-phase "half-band" FIR filter (Kaiser window): half the
+ * coefficients are zero and the odd branch is only the centre, so in polyphase form it costs
+ * half of a normal FIR. Linear phase = constant delay (`latency`), the same for all
+ * frequencies: a signal going up and down without changes comes out identical, only delayed. */
 
-/** Funzione di Bessel modificata I0 (serie), per la finestra di Kaiser. */
+/** Modified Bessel function I0 (series), for the Kaiser window. */
 function besselI0(x: number): number {
   let sum = 1, term = 1;
   for (let k = 1; k < 40; k++) {
@@ -19,10 +19,10 @@ function besselI0(x: number): number {
   return sum;
 }
 
-/** I coefficienti pari di un filtro a mezza banda lungo `taps` (della forma 4K+3), con guadagno 1
- *  in continua; il centro (dispari) vale 0.5 e gli altri dispari 0. */
+/** The even coefficients of a half-band filter `taps` long (of the form 4K+3), with unity gain
+ *  at DC; the (odd) centre is 0.5 and the other odd ones 0. */
 export function halfbandEvenTaps(taps: number, beta: number): Float64Array {
-  if ((taps - 3) % 4 !== 0) throw new RangeError(`un filtro a mezza banda ha 4K+3 coefficienti, non ${taps}`);
+  if ((taps - 3) % 4 !== 0) throw new RangeError(`a half-band filter has 4K+3 coefficients, not ${taps}`);
   const c = (taps - 1) / 2, even = new Float64Array((taps + 1) / 2), i0 = besselI0(beta);
   let sum = 0;
   for (let k = 0; k < even.length; k++) {
@@ -31,18 +31,18 @@ export function halfbandEvenTaps(taps: number, beta: number): Float64Array {
     even[k] = (Math.sin(Math.PI * t) / (Math.PI * t)) * 0.5 * window;
     sum += even[k];
   }
-  // guadagno 1 in continua: i pari sommano a 0.5 (l'altro 0.5 è il centro)
+  // unity gain at DC: the even ones sum to 0.5 (the other 0.5 is the centre)
   for (let k = 0; k < even.length; k++) even[k] *= 0.5 / sum;
   return even;
 }
 
-/** Un raddoppio: su (inserisce un campione ogni due e filtra) e giù (filtra e ne tiene uno ogni due). */
+/** One doubling: up (inserts a sample every two and filters) and down (filters and keeps one every two). */
 class HalfbandStage {
   private readonly taps: Float64Array;
   private readonly m: number;
-  /** Ritardo del ramo dispari, in campioni della frequenza bassa: (taps − 3) / 4. */
+  /** Delay of the odd branch, in samples of the low rate: (taps − 3) / 4. */
   private readonly k: number;
-  // storie doppie (ogni campione scritto due volte): la finestra si legge senza modulo
+  // doubled histories (each sample written twice): the window is read without modulo
   private readonly upHist: Float64Array;
   private upPos = 0;
   private readonly evenHist: Float64Array;
@@ -58,19 +58,19 @@ class HalfbandStage {
     this.oddHist = new Float64Array(2 * this.m);
   }
 
-  /** Ritardo di un passaggio su e giù, in campioni della frequenza alta. */
+  /** Delay of a pass up and down, in samples of the high rate. */
   get delay(): number {
     return 2 * (2 * this.k + 1);
   }
 
-  /** `n` campioni di `input` → 2n campioni in `out`. */
+  /** `n` samples of `input` → 2n samples in `out`. */
   up(input: Float32Array, out: Float32Array, n: number): void {
     const { taps, m, upHist: h } = this;
     let pos = this.upPos;
     for (let i = 0; i < n; i++) {
       pos = (pos === 0 ? m : pos) - 1;
       h[pos] = h[pos + m] = input[i];
-      // h[pos + j] è x[n − j]
+      // h[pos + j] is x[n − j]
       let acc = 0;
       for (let j = 0; j < m; j++) acc += taps[j] * h[pos + j];
       out[2 * i] = 2 * acc;
@@ -79,7 +79,7 @@ class HalfbandStage {
     this.upPos = pos;
   }
 
-  /** 2n campioni di `input` → `n` campioni in `out`. */
+  /** 2n samples of `input` → `n` samples in `out`. */
   down(input: Float32Array, out: Float32Array, n: number): void {
     const { taps, m, evenHist: e, oddHist: o } = this;
     let pos = this.downPos;
@@ -88,7 +88,7 @@ class HalfbandStage {
       e[pos] = e[pos + m] = input[2 * i];
       let acc = 0;
       for (let j = 0; j < m; j++) acc += taps[j] * e[pos + j];
-      // il centro tocca il campione dispari di K + 1 coppie fa
+      // the centre touches the odd sample of K + 1 pairs ago
       out[i] = acc + 0.5 * o[pos + this.k + 1];
       o[pos] = o[pos + m] = input[2 * i + 1];
     }
@@ -96,15 +96,15 @@ class HalfbandStage {
   }
 }
 
-/** Coefficienti e forma della finestra per ogni stadio: il primo raddoppio (il più vicino alla
- *  frequenza originale) deve tagliare più netto, i seguenti lavorano su un suono già filtrato. */
+/** Coefficients and window shape for each stage: the first doubling (the closest to the
+ *  original rate) must cut sharper, the following ones work on an already filtered sound. */
 const STAGES: readonly (readonly [taps: number, beta: number])[] = [[47, 8], [23, 7], [15, 6]];
 
-/** Sovracampionamento di un canale per un fattore 1, 2, 4 o 8. */
+/** Oversampling of one channel by a factor of 1, 2, 4 or 8. */
 export class Oversampler {
   readonly factor: number;
   private readonly stages: HalfbandStage[];
-  /** I buffer di ogni livello (0 = frequenza originale). */
+  /** The buffers of each level (0 = original rate). */
   private levels: Float32Array[] = [];
 
   constructor(factor: 1 | 2 | 4 | 8, block = 128) {
@@ -113,13 +113,13 @@ export class Oversampler {
     this.ensure(block);
   }
 
-  /** Ritardo di un passaggio su e giù, in campioni della frequenza originale (può essere frazionario). */
+  /** Delay of a pass up and down, in samples of the original rate (can be fractional). */
   get latency(): number {
     return this.stages.reduce((sum, s, i) => sum + s.delay / 2 ** (i + 1), 0);
   }
 
-  /** Porta su `n` campioni: restituisce il buffer alla frequenza alta (n × factor campioni,
-   *  valido fino alla prossima chiamata). */
+  /** Brings `n` samples up: returns the buffer at the high rate (n × factor samples,
+   *  valid until the next call). */
   up(input: Float32Array, n: number): Float32Array {
     this.ensure(n);
     if (!this.stages.length) {
@@ -135,7 +135,7 @@ export class Oversampler {
     return src;
   }
 
-  /** Riporta giù `high` (n × factor campioni) in `out` (n campioni). */
+  /** Brings `high` (n × factor samples) back down into `out` (n samples). */
   down(high: Float32Array, out: Float32Array, n: number): void {
     if (!this.stages.length) {
       out.set(high.subarray(0, n));

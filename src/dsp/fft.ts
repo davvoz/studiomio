@@ -1,9 +1,9 @@
-/** FFT complessa radix-2 in place. Le tabelle (bit reversal, seni e coseni) dipendono
- *  solo dalla dimensione, quindi ogni istanza le calcola una volta e le riusa. */
+/** In-place radix-2 complex FFT. The tables (bit reversal, sines and cosines) depend
+ *  only on the size, so each instance computes them once and reuses them. */
 export class Fft {
   private static readonly cache = new Map<number, Fft>();
 
-  /** Istanza condivisa per una dimensione (potenza di 2). */
+  /** Shared instance for a size (power of 2). */
   static of(size: number): Fft {
     let f = Fft.cache.get(size);
     if (!f) {
@@ -19,7 +19,7 @@ export class Fft {
   private readonly sin: Float64Array;
 
   private constructor(size: number) {
-    if (size < 2 || (size & (size - 1)) !== 0) throw new RangeError(`FFT: ${size} non è una potenza di 2`);
+    if (size < 2 || (size & (size - 1)) !== 0) throw new RangeError(`FFT: ${size} is not a power of 2`);
     this.size = size;
     const bits = Math.round(Math.log2(size));
     this.rev = new Uint32Array(size);
@@ -41,7 +41,7 @@ export class Fft {
     this.transform(re, im, -1);
   }
 
-  /** Inversa, già normalizzata per 1/n. */
+  /** Inverse, already normalized by 1/n. */
   inverse(re: Float64Array, im: Float64Array): void {
     this.transform(re, im, 1);
     const s = 1 / this.size;
@@ -76,7 +76,7 @@ export class Fft {
   }
 }
 
-/** Dopo la FFT di (x + i·y), con x e y reali, separa gli spettri di x e y (bin 0..n/2). */
+/** After the FFT of (x + i·y), with x and y real, separates the spectra of x and y (bins 0..n/2). */
 export function splitPair(
   re: Float64Array, im: Float64Array,
   xr: Float64Array, xi: Float64Array, yr: Float64Array, yi: Float64Array,
@@ -91,8 +91,8 @@ export function splitPair(
   }
 }
 
-/** Inverso di splitPair: impacchetta due spettri hermitiani in uno solo, così una IFFT
- *  restituisce x nella parte reale e y in quella immaginaria (y assente = silenzio). */
+/** Inverse of splitPair: packs two Hermitian spectra into one, so an IFFT
+ *  returns x in the real part and y in the imaginary one (y absent = silence). */
 export function joinPair(
   xr: Float64Array, xi: Float64Array, yr: Float64Array | null, yi: Float64Array | null,
   re: Float64Array, im: Float64Array,

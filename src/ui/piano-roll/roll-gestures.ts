@@ -1,5 +1,5 @@
-/* Gesti del piano roll. Come nel resto dell'app: anteprima mentre si trascina, una sola
- * modifica (un passo di annullamento) al rilascio. */
+/* Piano roll gestures. As in the rest of the app: preview while dragging, a single
+ * change (one undo step) on release. */
 import type { Beats } from '../../core/music-time';
 import type { MidiClip, Note } from '../../model/midi-clip';
 import {
@@ -13,28 +13,28 @@ import { snapTo } from '../timeline/geometry';
 import type { PitchAxis } from './pitch-axis';
 import { notesBottom, paintSelectionBox, ROLL } from './roll-painter';
 
-/** Ciò che i gesti usano del piano roll. */
+/** What the gestures use of the piano roll. */
 export interface RollHost extends ClipHost<MidiClip> {
   readonly pitches: PitchAxis;
   readonly selection: Selection;
-  /** Altezza della vista (per la corsia della velocity). */
+  /** Height of the view (for the velocity lane). */
   readonly height: number;
-  /** Durata delle note nuove: l'ultima usata. */
+  /** Length of the new notes: the last one used. */
   noteLength: Beats;
-  /** Modo disegno: un clic crea una nota, un clic su una nota la toglie. */
+  /** Draw mode: a click creates a note, a click on a note removes it. */
   readonly drawMode: boolean;
-  /** La selezione di tempo (il riquadro tracciato), o null. */
+  /** The time selection (the drawn box), or null. */
   readonly timeSelection: TimeRange | null;
-  /** Sceglie le note; `time` è la selezione di tempo che va con loro (senza, non ce n'è). */
+  /** Chooses the notes; `time` is the time selection going with them (without, there's none). */
   select(notes: Iterable<Note>, time?: TimeRange | null): void;
-  /** Il punto dove incollare (la linea del cursore del piano roll). */
+  /** The point to paste at (the line of the piano roll's cursor). */
   setInsertPoint(beat: Beats): void;
-  /** Applica le note nuove e seleziona quelle indicate (un passo di annullamento). */
+  /** Applies the new notes and selects the indicated ones (one undo step). */
   commitNotes(label: string, change: NoteChange): void;
   audition(pitch: number, velocity: number): void;
 }
 
-/** Un gesto del piano roll; può mostrare una selezione provvisoria e disegnare sopra. */
+/** A piano roll gesture; it can show a provisional selection and draw on top. */
 export interface RollGesture extends ClipGesture<MidiClip> {
   previewSelection?(): Selection | null;
   paint?(g: CanvasRenderingContext2D): void;
@@ -49,14 +49,14 @@ export type RollHit =
 
 const EDGE_PX = 6, VELOCITY_PX = 5;
 
-/** Cosa c'è sotto il puntatore. */
+/** What's under the pointer. */
 export function rollHit(host: RollHost, clip: MidiClip, x: number, y: number): RollHit {
   const frame = frameHit(host.axis, clip, x, y);
   if (frame) return frame;
   const { axis, pitches } = host;
   if (y >= notesBottom(host.height)) return velocityHit(host, clip, x);
   const pitch = pitches.yToPitch(y), beat = axis.xToBeat(x);
-  // l'ultima nota disegnata è quella sopra
+  // the last note drawn is the one on top
   for (let i = clip.notes.length - 1; i >= 0; i--) {
     const n = clip.notes[i];
     if (n.pitch !== pitch) continue;
@@ -69,7 +69,7 @@ export function rollHit(host: RollHost, clip: MidiClip, x: number, y: number): R
   return { kind: 'empty', beat, pitch };
 }
 
-/** Nella corsia della velocity: la barra più vicina, preferendo le note selezionate. */
+/** In the velocity lane: the nearest bar, preferring the selected notes. */
 function velocityHit(host: RollHost, clip: MidiClip, x: number): RollHit {
   let best: Note | null = null, bd = VELOCITY_PX + 1;
   for (const n of clip.notes) {
@@ -80,19 +80,19 @@ function velocityHit(host: RollHost, clip: MidiClip, x: number): RollHit {
 }
 
 const step = (host: RollHost, p: Pointer) => host.snapStep(p);
-/** `b` agganciato alla griglia (o libero con Alt). */
+/** `b` snapped to the grid (or free with Alt). */
 const snap = (host: RollHost, p: Pointer, b: Beats) => {
   const s = step(host, p);
   return s ? snapTo(b, s) : b;
 };
 
-/** Che cosa è diventata `note` (una delle selezionate) dopo `change`. */
+/** What `note` (one of the selected) became after `change`. */
 function counterpart(clip: MidiClip, sel: Selection, note: Note, change: NoteChange): Note | undefined {
   return change.selected[clip.notes.filter(n => sel.has(n)).indexOf(note)];
 }
 
-/** Premere su una nota: con Maiusc si aggiunge o toglie dalla selezione, altrimenti, se non
- *  era selezionata, diventa l'unica selezionata. Restituisce la selezione per il gesto. */
+/** Pressing on a note: with Shift it's added to or removed from the selection, otherwise, if it
+ *  wasn't selected, it becomes the only selected one. Returns the selection for the gesture. */
 function pressNote(host: RollHost, note: Note, p: Pointer): Selection {
   if (p.shift) {
     const s = new Set(host.selection);
@@ -104,7 +104,7 @@ function pressNote(host: RollHost, note: Note, p: Pointer): Selection {
   return host.selection;
 }
 
-/** Trascinare le note: in orizzontale sulla griglia, in verticale per semitoni; con Ctrl le copia. */
+/** Dragging the notes: horizontally on the grid, vertically by semitones; with Ctrl it copies them. */
 export class MoveNotesGesture implements RollGesture {
   readonly cursor = 'grabbing';
   private change: NoteChange | null = null;
@@ -120,9 +120,9 @@ export class MoveNotesGesture implements RollGesture {
   move(p: Pointer): void {
     const { host, note, origin } = this;
     if (!this.change && !moved(p, origin)) return;
-    if (!host.selection.has(note)) return; // tolta con Maiusc: niente da trascinare
+    if (!host.selection.has(note)) return; // removed with Shift: nothing to drag
     const raw = host.axis.xToBeat(p.x) - host.axis.xToBeat(origin.x);
-    // si aggancia l'inizio della nota presa, le altre la seguono
+    // the start of the grabbed note snaps, the others follow it
     const dBeat = snap(host, p, note.start + raw) - note.start;
     const dPitch = host.pitches.yToPitch(p.y) - host.pitches.yToPitch(origin.y);
     this.change = moveNotes(this.clip.notes, host.selection, dBeat, dPitch, origin.ctrl);
@@ -135,8 +135,8 @@ export class MoveNotesGesture implements RollGesture {
   }
 
   end(): void {
-    if (this.change) return this.host.commitNotes(this.origin.ctrl ? 'Copia note' : 'Sposta note', this.change);
-    // un clic senza trascinare su una nota di una selezione multipla: resta selezionata solo lei
+    if (this.change) return this.host.commitNotes(this.origin.ctrl ? 'Copy notes' : 'Move notes', this.change);
+    // a click without dragging on a note of a multiple selection: only it stays selected
     if (this.wasSelected && !this.origin.shift) this.host.select([this.note]);
   }
 
@@ -154,7 +154,7 @@ export class MoveNotesGesture implements RollGesture {
   }
 }
 
-/** Allungare o accorciare le note dal bordo destro o sinistro. */
+/** Lengthening or shortening the notes from the right or left edge. */
 export class ResizeNotesGesture implements RollGesture {
   readonly cursor = 'ew-resize';
   private change: NoteChange | null = null;
@@ -179,7 +179,7 @@ export class ResizeNotesGesture implements RollGesture {
     if (!this.change) return;
     const resized = counterpart(this.clip, this.host.selection, this.note, this.change);
     if (resized) this.host.noteLength = resized.duration;
-    this.host.commitNotes('Durata delle note', this.change);
+    this.host.commitNotes('Note length', this.change);
   }
 
   cancel(): void {
@@ -196,7 +196,7 @@ export class ResizeNotesGesture implements RollGesture {
   }
 }
 
-/** Riquadro di selezione sullo spazio vuoto (con Maiusc si aggiunge alla selezione). */
+/** Selection box on empty space (with Shift it's added to the selection). */
 export class MarqueeGesture implements RollGesture {
   readonly cursor = 'crosshair';
   private current: Pointer;
@@ -219,7 +219,7 @@ export class MarqueeGesture implements RollGesture {
   }
 
   end(): void {
-    // un clic senza riquadro fissa il punto d'inserimento, sulla griglia
+    // a click without a box fixes the insertion point, on the grid
     if (this.boxed) this.host.select(this.boxed, this.timeRange());
     else this.host.setInsertPoint(Math.max(0, snap(this.host, this.origin, this.host.axis.xToBeat(this.origin.x))));
     this.host.invalidate();
@@ -230,8 +230,8 @@ export class MarqueeGesture implements RollGesture {
     this.host.invalidate();
   }
 
-  /** Il tratto di tempo del riquadro, allargato alla griglia (con Maiusc unito a quello che c'era):
-   *  Ctrl+D mette la copia alla sua fine. */
+  /** The box's time range, widened to the grid (with Shift joined to the existing one):
+   *  Ctrl+D puts the copy at its end. */
   private timeRange(): TimeRange {
     const { axis } = this.host;
     const a = axis.xToBeat(this.origin.x), b = axis.xToBeat(this.current.x);
@@ -258,7 +258,7 @@ export class MarqueeGesture implements RollGesture {
   }
 }
 
-/** Modo disegno: premere crea una nota sulla griglia, trascinare a destra la allunga. */
+/** Draw mode: pressing creates a note on the grid, dragging right lengthens it. */
 export class DrawNoteGesture implements RollGesture {
   readonly cursor = 'crosshair';
   private readonly start: Beats;
@@ -281,7 +281,7 @@ export class DrawNoteGesture implements RollGesture {
 
   end(): void {
     this.host.noteLength = this.length;
-    this.host.commitNotes('Aggiungi nota', this.change());
+    this.host.commitNotes('Add note', this.change());
   }
 
   cancel(): void {
@@ -301,7 +301,7 @@ export class DrawNoteGesture implements RollGesture {
   }
 }
 
-/** Trascinare una barra della velocity in verticale (le note selezionate la seguono). */
+/** Dragging a velocity bar vertically (the selected notes follow it). */
 export class VelocityGesture implements RollGesture {
   readonly cursor = 'ns-resize';
   private change: NoteChange | null = null;
@@ -311,7 +311,7 @@ export class VelocityGesture implements RollGesture {
   }
 
   move(p: Pointer): void {
-    // tutta l'altezza utile della corsia = tutta la scala della velocity
+    // the whole useful height of the lane = the whole velocity scale
     const velocity = this.note.velocity + ((this.origin.y - p.y) / (ROLL.velocity - 10)) * 127;
     this.change = setVelocity(this.clip.notes, this.host.selection, this.note, velocity);
     this.host.invalidate();
@@ -335,18 +335,18 @@ export class VelocityGesture implements RollGesture {
   }
 }
 
-/** Con il modo disegno: un clic su una nota la toglie. */
+/** With draw mode: a click on a note removes it. */
 class EraseNoteGesture extends IdleGesture<MidiClip> implements RollGesture {
   constructor(private readonly host: RollHost, private readonly clip: MidiClip, private readonly note: Note) {
     super();
   }
 
   override end(): void {
-    this.host.commitNotes('Elimina nota', { notes: this.clip.notes.filter(n => n !== this.note), selected: [] });
+    this.host.commitNotes('Delete note', { notes: this.clip.notes.filter(n => n !== this.note), selected: [] });
   }
 }
 
-/** Il gesto che parte premendo su ciascuna cosa. */
+/** The gesture starting by pressing on each thing. */
 export const rollGestureFor: { readonly [K in RollHit['kind']]: (host: RollHost, clip: MidiClip, hit: Extract<RollHit, { kind: K }>, p: Pointer) => RollGesture } = {
   ...frameGestureFor,
   note: (h, c, hit, p) => (h.drawMode && hit.zone === 'body' ? new EraseNoteGesture(h, c, hit.note)

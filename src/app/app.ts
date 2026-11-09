@@ -69,15 +69,15 @@ import { ProjectSession } from './project-session';
 import { MacroSprings } from '../store/macro-springs';
 import { SamplePreview } from './sample-preview';
 
-/** L'applicazione: crea le parti, le collega e implementa i comandi. */
+/** The application: creates the parts, connects them and implements the commands. */
 export class App implements Commands, TimelineActions {
-  readonly store = new ProjectStore(starterProject('Nuovo progetto', randomIds), randomIds);
+  readonly store = new ProjectStore(starterProject('New project', randomIds), randomIds);
   readonly audio = new AudioSystem(this.store);
   readonly session = new ProjectSession(this.store, this.audio);
-  /** Le cartelle dei progetti aperti o salvati di recente, per il menu File. */
+  /** The project folders opened or saved recently, for the File menu. */
   readonly recent = new RecentProjects();
   readonly ui = new UiState();
-  /** Le macro molla tornano al riposo da sole, chiunque le muova. */
+  /** Spring macros return to rest by themselves, whoever moves them. */
   readonly springs = new MacroSprings(this.store);
   readonly peaks = new PeakStore(id => this.audio.library.get(id));
   readonly arrangement: ArrangementView;
@@ -85,7 +85,7 @@ export class App implements Commands, TimelineActions {
   readonly pianoRoll: PianoRoll;
   readonly device: DeviceView;
   readonly sessionView: SessionView;
-  /** Il browser a sinistra: le sue fonti, chi carica ciò che si sceglie, la vista. */
+  /** The browser on the left: its sources, who loads what is chosen, the view. */
   readonly catalog = new BrowserCatalog<FsFolder>(standardSources({
     instruments: INSTRUMENT_TYPES, effects: EFFECT_TYPES, user: userPresets, racks: userRacks, factoryRacks: FACTORY_RACKS, project: this.store,
   }), indexedDbPlaces);
@@ -95,18 +95,18 @@ export class App implements Commands, TimelineActions {
   private readonly viewButtons: { arrangement: HTMLButtonElement; session: HTMLButtonElement; back: HTMLButtonElement };
   private readonly browserButton: HTMLButtonElement;
   private readonly bottom = new BottomPanel();
-  /** Appunti condivisi da timeline e piano roll. */
+  /** Clipboard shared by timeline and piano roll. */
   readonly clipboard = new Clipboard();
   private readonly automation: MasterAutomation;
-  /** L'ultima clip aperta di ogni traccia: lì va "Mostra automazione". */
+  /** The last opened clip of each track: that's where "Show automation" goes. */
   private readonly lastClips = new Map<TrackId, ClipRef>();
-  /** Un consolidamento sta renderizzando l'audio: non se ne parte un altro. */
+  /** A consolidation is rendering audio: another one doesn't start. */
   private consolidating = false;
-  /** L'editor di ogni tipo di clip: un tipo nuovo porta il suo editor. */
+  /** The editor of each clip kind: a new kind brings its own editor. */
   private readonly clipEditors: Readonly<Record<string, BottomView & { open(ref: ClipRef): boolean }>>;
   private readonly transport: TransportBar;
   private readonly menuBar: MenuBar;
-  /** I controller MIDI sulla session (APC40 mkII, Launchpad). */
+  /** The MIDI controllers on the session (APC40 mkII, Launchpad). */
   readonly surfaces: ControlSurfaces;
   private readonly status = Object.assign(document.createElement('span'), { className: 'status-text' });
   private readonly statusBar = Object.assign(document.createElement('footer'), { className: 'status' });
@@ -200,13 +200,13 @@ export class App implements Commands, TimelineActions {
     const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
     const main = this.arrangementArea;
     main.append(headers.element, this.arrangement.element, master.header, master.lane, automation.header, automation.lane);
-    // il master della timeline riceve gli effetti dal browser
-    // sul master solo effetti: niente strumenti né Instrument Rack
+    // the timeline master receives effects from the browser
+    // only effects on the master: no instruments or Instrument Racks
     const masterAccepts = (p: BrowserItem['payload']) => p?.kind === 'effect' || (p?.kind === 'rack' && !p.rack.instrument);
     acceptBrowserDrops(master.header, item => dropItem(item, { kind: 'chain', owner: MASTER }), { accept: item => masterAccepts(item.payload) });
     const views = Object.assign(document.createElement('div'), { className: 'views' });
     views.append(main, this.sessionView.element);
-    // il browser a sinistra, accanto a viste e area in basso, come in Live
+    // the browser on the left, next to the views and the bottom area, as in Live
     const work = Object.assign(document.createElement('div'), { className: 'work' });
     work.append(views, this.bottom.element);
     const workspace = Object.assign(document.createElement('div'), { className: 'workspace' });
@@ -216,27 +216,27 @@ export class App implements Commands, TimelineActions {
     const viewButton = (text: string, title: string, run: () => void) => Object.assign(document.createElement('button'), { textContent: text, title, onclick: run });
     this.viewButtons = {
       arrangement: viewButton('☰ Arr.', 'Arrangement: la timeline (Tab)', () => this.showView('arrangement')),
-      session: viewButton('▦ Session', 'Session: le clip da lanciare, scena per scena, e il mixer (Tab)', () => this.showView('session')),
-      back: viewButton('↩', 'Torna all\'arrangement: le tracce prese dalla session tornano a suonare la loro timeline', () => this.audio.engine.backToArrangement()),
+      session: viewButton('▦ Session', 'Session: the clips to launch, scene by scene, and the mixer (Tab)', () => this.showView('session')),
+      back: viewButton('↩', 'Back to arrangement: the tracks taken by the session go back to playing their timeline', () => this.audio.engine.backToArrangement()),
     };
     this.viewButtons.back.className = 'back-to-arrangement';
-    this.browserButton = viewButton('◧ Browser', 'Mostra o nasconde il browser (Ctrl+Alt+B)', () => this.toggleBrowser());
+    this.browserButton = viewButton('◧ Browser', 'Show or hide the browser (Ctrl+Alt+B)', () => this.toggleBrowser());
     transport.addGroup(this.browserButton, this.viewButtons.arrangement, this.viewButtons.session, this.viewButtons.back);
     this.surfaces = this.controlSurfaces();
     this.audio.engine.onSessionChange(() => this.renderViews());
     this.audio.engine.onClipSound((track, sound) => this.store.apply(followClipSound(track, sound), { transient: true }));
-    // il processore ha già azzerato il blocco guasto e riavviato il motore: qui si dice quale
+    // the processor has already zeroed the faulty block and restarted the engine: here we say which
     this.audio.onDeviceFault((type, error) => {
       const label = instrumentType(type)?.label ?? effectType(type)?.label ?? type;
-      this.say(`${label} ha prodotto un suono non valido ed è stato riavviato${error ? ` (${error})` : ''}.`);
+      this.say(`${label} produced an invalid sound and was restarted${error ? ` (${error})` : ''}.`);
     });
     this.renderViews();
 
     this.session.on('message', t => this.say(t));
     this.session.on('change', () => menuBar.render());
     this.session.on('stored', dir => { if (dir instanceof FsAccessDirectory) void this.recent.add(dir.root); });
-    // le clip eliminate escono dalla selezione, la traccia eliminata non è più quella scelta;
-    // una traccia nascosta in un gruppo chiuso passa la scelta al gruppo che si vede
+    // deleted clips leave the selection, the deleted track is no longer the chosen one;
+    // a track hidden in a closed group passes the choice to the visible group
     this.store.onChange(p => {
       const alive = new Set(p.tracks.flatMap(t => t.arrangement.map(x => x.id)));
       if ([...this.ui.selection].some(id => !alive.has(id))) this.ui.select([...this.ui.selection].filter(id => alive.has(id)));
@@ -246,27 +246,27 @@ export class App implements Commands, TimelineActions {
         this.ui.selectTrack(p.groupsOf(this.ui.track).filter(g => g.folded).at(-1)?.id ?? null);
       }
     });
-    // prima dei tasti mappati: con ⌨ acceso i tasti delle note suonano, anche se sono mappati
+    // before mapped keys: with ⌨ on the note keys play, even if they're mapped
     new NoteKeys(this.ui, new NoteKeyboard({
       base: id => keyboardBase(this.store.project, id),
       press: (track, pitch, velocity) => this.audio.pressNote(track, pitch, velocity),
       release: (track, pitch) => this.audio.releaseNote(track, pitch),
       say: t => this.say(t),
     }));
-    // prima delle scorciatoie: i tasti mappati sulle macro e sui parametri
+    // before the shortcuts: the keys mapped to macros and parameters
     new KeyMapper(this.store, this.ui, t => this.say(t), this.springs);
     new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
     new MidiTargets(this.store, this.ui, t => this.say(t));
     bindKeys(document, this, KEYMAP);
-    // chiudere la finestra con modifiche non salvate chiede conferma (in Electron la chiede il processo principale)
+    // closing the window with unsaved changes asks for confirmation (in Electron the main process asks)
     addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });
-    // ogni tanto le modifiche non salvate vanno nella copia di recupero: se l'app si blocca
-    // non si perdono (alla riapertura del progetto si chiede se riprenderle)
-    setInterval(() => this.session.autosave().catch(e => console.warn('copia di recupero:', e)), AUTOSAVE_MS);
-    this.say('Trascina dei file audio sulla timeline o apri File › Carica il progetto demo. Ctrl+rotella per lo zoom, Alt per trascinare senza griglia.');
+    // every so often unsaved changes go into the recovery copy: if the app hangs
+    // they're not lost (when the project is reopened it asks whether to recover them)
+    setInterval(() => this.session.autosave().catch(e => console.warn('recovery copy:', e)), AUTOSAVE_MS);
+    this.say('Drag audio files onto the timeline or open File › Load the demo project. Ctrl+wheel to zoom, Alt to drag without the grid.');
   }
 
-  // ---------------------------------------------------------------- comandi
+  // ---------------------------------------------------------------- commands
 
   togglePlay(): void {
     if (this.audio.engine.playing) this.audio.engine.stop();
@@ -282,13 +282,13 @@ export class App implements Commands, TimelineActions {
   undo(): void { this.store.undo(); }
   redo(): void { this.store.redo(); }
 
-  /** Con un tratto di tempo selezionato si elimina solo quello, come in Live. */
+  /** With a time range selected only that is deleted, as in Live. */
   deleteSelection(): void {
     const refs = this.selection(), range = this.ui.range;
     if (!refs.length) return;
     if (!range) return void this.store.apply(deleteMany(refs));
     const cut = cutOutRange(this.store.project, this.store.ids, refs, range);
-    this.store.apply(edit('Elimina clip', (_p, ctx) => deleteMany(cut.pieces).apply(cut.project, ctx)));
+    this.store.apply(edit('Delete clip', (_p, ctx) => deleteMany(cut.pieces).apply(cut.project, ctx)));
   }
 
   colorSelection(color: Color | undefined): void {
@@ -306,25 +306,25 @@ export class App implements Commands, TimelineActions {
 
   copySelection(): void {
     const copied = copyClips(this.store.project, this.selection());
-    if (!copied) return this.say('Seleziona delle clip da copiare.');
+    if (!copied) return this.say('Select some clips to copy.');
     this.clipboard.content = copied;
     const n = copied.items.length;
-    this.say(`${n === 1 ? 'Copiata 1 clip: Ctrl+V la incolla' : `Copiate ${n} clip: Ctrl+V le incolla`} al cursore.`);
+    this.say(`${n === 1 ? 'Copied 1 clip: Ctrl+V pastes it' : `Copied ${n} clips: Ctrl+V pastes them`} at the cursor.`);
   }
 
   cutSelection(): void {
     const refs = this.selection();
     const copied = copyClips(this.store.project, refs);
-    if (!copied) return this.say('Seleziona delle clip da tagliare.');
+    if (!copied) return this.say('Select some clips to cut.');
     this.clipboard.content = copied;
     this.store.apply(deleteMany(refs));
   }
 
-  /** Incolla al cursore, sulle tracce da cui si è copiato; dei dispositivi, sulla traccia scelta. */
+  /** Pastes at the cursor, on the tracks it was copied from; devices, on the chosen track. */
   paste(): void {
     if (this.clipboard.devices) return this.pasteDevices();
     const copied = this.clipboard.clips;
-    if (!copied) return this.say(this.clipboard.notes ? 'Negli appunti ci sono delle note: incollale nel piano roll.' : 'Gli appunti sono vuoti.');
+    if (!copied) return this.say(this.clipboard.notes ? 'The clipboard holds notes: paste them in the piano roll.' : 'The clipboard is empty.');
     const index = this.store.project.visibleTracks.findIndex(t => t.id === copied.sourceTrack);
     this.pasteAt(Math.max(0, index), this.audio.engine.position);
   }
@@ -333,16 +333,16 @@ export class App implements Commands, TimelineActions {
     return this.clipboard.clips !== null || this.clipboard.devices !== null;
   }
 
-  /** Incolla i dispositivi degli appunti nella catena di `owner` e la mostra: da qualunque parte
-   *  arrivi Ctrl+V, senza `owner` va sulla traccia scelta (o sulla catena aperta). */
+  /** Pastes the clipboard's devices into `owner`'s chain and shows it: wherever
+   *  Ctrl+V comes from, without `owner` it goes to the chosen track (or the open chain). */
   pasteDevices(owner: ChainOwner | null = this.ui.track ?? this.device.openOwner): void {
-    if (!owner) return this.say('Scegli la traccia su cui incollare.');
+    if (!owner) return this.say('Choose the track to paste onto.');
     this.openDevices(owner);
     if (this.device.openOwner === owner) this.device.pasteSelection();
   }
 
   private pasteDeviceItems(owner: ChainOwner): MenuItem[] {
-    return this.clipboard.devices ? [{ label: 'Incolla dispositivi', run: () => this.pasteDevices(owner) }] : [];
+    return this.clipboard.devices ? [{ label: 'Paste devices', run: () => this.pasteDevices(owner) }] : [];
   }
 
   pasteAt(trackIndex: number, at: Beats): void {
@@ -351,20 +351,20 @@ export class App implements Commands, TimelineActions {
     const before = this.store.project;
     this.store.apply(pasteClips(copied, trackIndex, at));
     const added = addedPlacements(before, this.store.project);
-    if (!added.length) return this.say('Nessuna traccia adatta qui: le clip audio vanno su tracce audio, quelle MIDI su tracce MIDI.');
+    if (!added.length) return this.say('No suitable track here: audio clips go on audio tracks, MIDI ones on MIDI tracks.');
     this.ui.select(added.map(r => r.id));
-    // il cursore va alla fine di ciò che si è incollato: Ctrl+V di nuovo continua in fila
+    // the cursor goes to the end of what was pasted: Ctrl+V again continues in a row
     if (!this.audio.engine.playing) this.audio.engine.seek(at + copied.span);
-    if (added.length < copied.items.length) this.say(`Incollate ${added.length} clip su ${copied.items.length}: le altre non hanno una traccia adatta.`);
+    if (added.length < copied.items.length) this.say(`Pasted ${added.length} of ${copied.items.length} clips: the others have no suitable track.`);
   }
 
-  /** Divide nel punto del cursore le clip selezionate (o, senza selezione, tutte); con un tratto
-   *  di tempo selezionato lo divide ai suoi bordi, come in Live, e resta selezionato il pezzo dentro. */
+  /** Splits the selected clips (or, without a selection, all of them) at the cursor; with a time
+   *  range selected it splits at its edges, as in Live, and the piece inside stays selected. */
   splitAtCursor(): void {
     const range = this.ui.range;
     if (!range) return this.splitSelectionAt(this.audio.engine.position);
     const cut = cutOutRange(this.store.project, this.store.ids, this.selection(), range);
-    this.store.apply(edit('Dividi', () => cut.project));
+    this.store.apply(edit('Split', () => cut.project));
     this.ui.select(cut.pieces.map(r => r.id));
   }
 
@@ -374,23 +374,23 @@ export class App implements Commands, TimelineActions {
     this.store.apply(splitMany(refs, beat));
   }
 
-  /** Consolida (Ctrl+J), come in Live: su ogni traccia le clip selezionate, dalla prima
-   *  all'ultima (o il tratto di tempo selezionato), diventano una clip sola che si sente come
-   *  prima. L'audio si renderizza senza gli effetti della traccia in un file nuovo nella
-   *  cartella del progetto. */
+  /** Consolidate (Ctrl+J), as in Live: on each track the selected clips, from the first
+   *  to the last (or the selected time range), become a single clip that sounds as
+   *  before. Audio is rendered without the track's effects into a new file in the
+   *  project folder. */
   consolidateSelection(): void {
     const refs = this.selection(), range = this.ui.range;
-    if (!refs.length) return this.say('Seleziona delle clip da consolidare.');
+    if (!refs.length) return this.say('Select some clips to consolidate.');
     if (this.consolidating) return;
     this.consolidating = true;
     this.run(async () => {
       try {
         const base = this.store.project, ids = this.store.ids;
         const spans = consolidateSpans(base, refs, range);
-        // con un tratto di tempo si consolida solo quello: prima le clip si dividono ai suoi bordi
+        // with a time range only that is consolidated: first the clips are split at its edges
         const source = range ? cutOutRange(base, ids, spans.flatMap(s => placementsIn(base, s).map(pl => ({ track: s.track, id: pl.id }))), range).project : base;
         const audio = spans.some(s => placementsIn(source, s).some(pl => pl.clip instanceof AudioClip));
-        if (audio) this.say('Consolidamento dell\'audio…');
+        if (audio) this.say('Consolidating the audio…');
         const items: Consolidated[] = [];
         for (const span of spans) {
           const pls = placementsIn(source, span);
@@ -404,23 +404,23 @@ export class App implements Commands, TimelineActions {
           const sample = await this.renderClips(source, audioPls, span);
           items.push({ span, placement, sample, clip: consolidatedAudioClip(clipId, audioPls, sample, source.tempo.bpm, span.start, span.end) });
         }
-        if (this.store.project !== base) return this.say('Il progetto è cambiato durante il consolidamento: riprova.');
-        this.store.apply(edit('Consolida', (_p, ctx) => withConsolidated(source, items, ctx.ids)));
+        if (this.store.project !== base) return this.say('The project changed during consolidation: try again.');
+        this.store.apply(edit('Consolidate', (_p, ctx) => withConsolidated(source, items, ctx.ids)));
         this.ui.select(items.map(i => i.placement));
-        this.say(items.length === 1 ? 'Clip consolidata.' : `${items.length} clip consolidate, una per traccia.`);
+        this.say(items.length === 1 ? 'Clip consolidated.' : `${items.length} clips consolidated, one per track.`);
       } finally {
         this.consolidating = false;
       }
     });
   }
 
-  /** Copia nella session, il contrario di "Copia nell'arrangement": le clip selezionate (o il
-   *  tratto di tempo selezionato) in una scena nuova in fondo. Ogni traccia ha una clip che copre
-   *  tutto il tratto, così restano a tempo tra loro; una clip sola che ripete il suo pezzo resta
-   *  com'è, il resto si consolida (l'audio si renderizza in un file nuovo). */
+  /** Copy to session, the opposite of "Copy to arrangement": the selected clips (or the
+   *  selected time range) in a new scene at the bottom. Each track has a clip covering
+   *  the whole range, so they stay in time with each other; a single clip repeating its piece stays
+   *  as it is, the rest is consolidated (audio is rendered into a new file). */
   selectionToSession(): void {
     const refs = this.selection();
-    if (!refs.length) return this.say('Seleziona delle clip da copiare nella session.');
+    if (!refs.length) return this.say('Select some clips to copy to the session.');
     if (this.consolidating) return;
     this.consolidating = true;
     this.run(async () => {
@@ -429,7 +429,7 @@ export class App implements Commands, TimelineActions {
         const own = consolidateSpans(base, refs, this.ui.range);
         const range = { start: Math.min(...own.map(s => s.start)), end: Math.max(...own.map(s => s.end)) };
         const spans = own.map(s => ({ ...s, ...range }));
-        // le clip si dividono ai bordi del tratto: dentro resta solo ciò che suona lì
+        // clips are split at the range's edges: only what plays there stays inside
         const source = cutOutRange(base, ids, spans.flatMap(s => placementsIn(base, s).map(pl => ({ track: s.track, id: pl.id }))), range).project;
         const clips: SceneClip[] = [];
         for (const span of spans) {
@@ -440,29 +440,29 @@ export class App implements Commands, TimelineActions {
             clips.push({ track: span.track, clip });
             continue;
           }
-          this.say('Rendering dell\'audio…');
+          this.say('Rendering the audio…');
           const audioPls = pls as Placement<AudioClip>[];
           const sample = await this.renderClips(source, audioPls, span);
           clips.push({ track: span.track, sample, clip: consolidatedAudioClip(clipId, audioPls, sample, source.tempo.bpm, range.start, range.end) });
         }
-        if (this.store.project !== base) return this.say('Il progetto è cambiato durante il rendering: riprova.');
+        if (this.store.project !== base) return this.say('The project changed during rendering: try again.');
         const from = Math.floor(range.start / bar) + 1, to = Math.max(from, Math.ceil(range.end / bar));
-        const name = from === to ? `Battuta ${from}` : `Battute ${from}-${to}`;
+        const name = from === to ? `Bar ${from}` : `Bars ${from}-${to}`;
         this.store.apply(arrangementToScene(name, clips));
-        this.say(`Scena "${name}" in fondo alla session, con ${clips.length === 1 ? 'una clip' : `${clips.length} clip`}.`);
+        this.say(`Scene "${name}" at the bottom of the session, with ${clips.length === 1 ? 'one clip' : `${clips.length} clips`}.`);
       } finally {
         this.consolidating = false;
       }
     });
   }
 
-  /** L'audio delle clip nel tratto, senza gli effetti della traccia, in un file nuovo nella
-   *  cartella del progetto. */
+  /** The audio of the clips in the range, without the track's effects, in a new file in the
+   *  project folder. */
   private async renderClips(source: Project, pls: readonly Placement<AudioClip>[], span: TimeRange): Promise<SampleRef> {
     const sr = this.audio.context.sampleRate, frames = Math.round(source.tempo.secondsAt(span.end - span.start) * sr);
     const mix = await this.audio.exportMix(span.start, span.end, soloAudioProject(source, pls, this.store.ids), 0);
     const channels = mix.map(c => c.slice(0, frames));
-    return this.session.addAudio(`${pls[0].clip.name} consolidata.wav`, { channels, sampleRate: sr }, new Uint8Array(encodeWav(channels, sr, 24)));
+    return this.session.addAudio(`${pls[0].clip.name} consolidated.wav`, { channels, sampleRate: sr }, new Uint8Array(encodeWav(channels, sr, 24)));
   }
 
   snap(beat: Beats): Beats {
@@ -475,10 +475,10 @@ export class App implements Commands, TimelineActions {
     this.store.apply(addMidiClip(track, Math.floor(beat / bar) * bar, bar));
   }
 
-  /** Un bus nuovo; i bus si vedono nella session, accanto al master. */
+  /** A new bus; buses show in the session, next to the master. */
   addBus(): void {
     this.store.apply(addBus());
-    if (!this.sessionView.isVisible) this.say('Bus aggiunto: lo trovi nella session (Tab), con le manopole delle mandate nel mixer.');
+    if (!this.sessionView.isVisible) this.say('Bus added: you\'ll find it in the session (Tab), with the send knobs in the mixer.');
   }
 
   addTrack(kind: TrackKind): void {
@@ -501,14 +501,14 @@ export class App implements Commands, TimelineActions {
     this.store.apply(setLoopRegion({ enabled: !this.store.project.loop.enabled }));
   }
 
-  /** Copia il tratto del loop subito dopo, ci sposta il loop e seleziona le clip copiate. */
+  /** Copies the loop range right after, moves the loop there and selects the copied clips. */
   duplicateLoop(): void {
     const before = this.store.project;
     this.store.apply(duplicateLoopRegion());
     this.ui.select(addedPlacements(before, this.store.project).map(r => r.id));
     const { start, end } = this.store.project.loop, sig = this.store.project.signature;
     this.arrangement.reveal(start);
-    this.say(`Loop duplicato: ora è da ${sig.format(start)} a ${sig.format(end)}. Ctrl+Maiusc+D di nuovo per un altro giro.`);
+    this.say(`Loop duplicated: it's now from ${sig.format(start)} to ${sig.format(end)}. Ctrl+Shift+D again for another round.`);
   }
 
   toggleMetronome(): void {
@@ -521,14 +521,14 @@ export class App implements Commands, TimelineActions {
   }
 
   groupTracks(): void {
-    if (!groupSelectedTracks(this.store, this.ui)) this.say('Scegli le tracce da raggruppare (Maiusc o Ctrl+clic sulle intestazioni per sceglierne più di una).');
+    if (!groupSelectedTracks(this.store, this.ui)) this.say('Choose the tracks to group (Shift or Ctrl+click on the headers to choose more than one).');
   }
 
   ungroupTracks(): void {
-    if (!ungroupSelectedTrack(this.store, this.ui)) this.say('Scegli un gruppo (o una sua traccia) da separare.');
+    if (!ungroupSelectedTrack(this.store, this.ui)) this.say('Choose a group (or one of its tracks) to ungroup.');
   }
 
-  /** Mostra la timeline o la session (al posto l'una dell'altra, come in Live). */
+  /** Shows the timeline or the session (one in place of the other, as in Live). */
   showView(view: 'arrangement' | 'session'): void {
     this.arrangementArea.hidden = view !== 'arrangement';
     this.sessionView.show(view === 'session');
@@ -548,10 +548,10 @@ export class App implements Commands, TimelineActions {
   toggleKeyMap(): void {
     const on = !this.ui.keyMapping;
     this.ui.setKeyMapping(on);
-    if (on) this.say('KEY: clicca una macro o un parametro di un dispositivo, poi premi il tasto che lo muoverà (Canc lo toglie, Esc per finire).');
+    if (on) this.say('KEY: click a macro or a device parameter, then press the key that will move it (Del removes it, Esc to finish).');
   }
 
-  /** Accendendo MIDI, se il MIDI non è ancora attivo lo si attiva (la prima volta il browser chiede il permesso). */
+  /** Turning MIDI on, if MIDI isn't active yet it is activated (the first time the browser asks for permission). */
   toggleMidiMap(): void {
     const on = !this.ui.midiMapping;
     this.ui.setMidiMapping(on);
@@ -565,20 +565,20 @@ export class App implements Commands, TimelineActions {
       }
       const inputs = this.surfaces.mappingInputs;
       this.say(inputs.length
-        ? `MIDI: clicca una macro, un parametro o un controllo del mixer, poi muovi la manopola, il fader o il pad che lo muoverà (Canc lo toglie, Esc per finire). Ingressi: ${inputs.join(', ')}.`
-        : "MIDI: nessun controller MIDI collegato (oltre all'APC40 e ai Launchpad, che hanno la loro mappa). Collegalo quando vuoi, si ascolta da solo.");
+        ? `MIDI: click a macro, a parameter or a mixer control, then move the knob, fader or pad that will move it (Del removes it, Esc to finish). Inputs: ${inputs.join(', ')}.`
+        : "MIDI: no MIDI controller connected (besides the APC40 and the Launchpads, which have their own map). Connect it whenever you like, it's picked up by itself.");
     });
   }
 
-  /** Carica una voce del browser dove la si lascia o, senza, dove si sta lavorando. */
+  /** Loads a browser item where it's dropped or, without that, where you're working. */
   loadItem(item: BrowserItem, target: LoadTarget = this.browserTarget(item)): void {
     const payload = item.payload;
     if (payload) this.run(() => this.loader.load(payload, target));
   }
 
-  /** Dove va una voce caricata con il doppio clic: un dispositivo nella catena aperta in basso
-   *  (o sulla traccia scelta), un sample nello slot scelto della session o al cursore della
-   *  traccia scelta nella timeline. */
+  /** Where an item loaded with a double click goes: a device in the chain open at the bottom
+   *  (or on the chosen track), a sample in the chosen session slot or at the cursor of the
+   *  chosen track in the timeline. */
   private browserTarget(item: BrowserItem): LoadTarget {
     const audio = item.payload?.kind === 'sample' || item.payload?.kind === 'file';
     const owner = this.device.openOwner;
@@ -590,11 +590,11 @@ export class App implements Commands, TimelineActions {
     return { kind: 'lane', track: this.ui.track, beat: this.audio.engine.position };
   }
 
-  /** Aggiunge ai luoghi del browser una cartella scelta dall'utente (una già aggiunta non si ripete). */
+  /** Adds a folder chosen by the user to the browser's places (one already added isn't repeated). */
   private async addBrowserFolder(): Promise<BrowserSource> {
     const folder = await FsFolder.pick();
     const source = await this.catalog.addFolder(folder, (a, b) => a.same(b));
-    this.say(`Cartella "${folder.name}" nei luoghi del browser.`);
+    this.say(`Folder "${folder.name}" in the browser's places.`);
     return source;
   }
 
@@ -627,13 +627,13 @@ export class App implements Commands, TimelineActions {
   open(): void { this.run(async () => { if (await this.closeProject()) await this.openFolder(); }); }
   save(): void { this.run(() => this.session.save()); }
 
-  /** Apre un progetto recente. Il permesso sulla cartella si chiede subito, finché vale il clic
-   *  sulla voce; se la cartella non c'è più (spostata, cancellata) esce dall'elenco. */
+  /** Opens a recent project. Permission on the folder is asked right away, while the click
+   *  on the item still counts; if the folder is gone (moved, deleted) it leaves the list. */
   openRecent(handle: FileSystemDirectoryHandle): void {
     this.run(async () => {
       const gone = async () => {
         await this.recent.remove(handle);
-        this.say(`"${handle.name}" non c'è più (spostata o cancellata?): tolta dai progetti recenti.`);
+        this.say(`"${handle.name}" is gone (moved or deleted?): removed from recent projects.`);
       };
       let dir: FsAccessDirectory;
       try {
@@ -647,22 +647,22 @@ export class App implements Commands, TimelineActions {
     });
   }
 
-  /** Apre la cartella di un progetto; se ci sono modifiche mai salvate (l'app si è bloccata o
-   *  è stata chiusa senza salvare) chiede se riprenderle. */
+  /** Opens a project folder; if there are changes never saved (the app hung or
+   *  was closed without saving) asks whether to recover them. */
   private async openFolder(dir?: Directory): Promise<void> {
     await this.session.open(dir);
     if (!(await this.session.hasRecovery())) return;
-    const answer = await choose('Riprendere le modifiche non salvate?',
-      `"${this.session.name}" ha delle modifiche che non sono state salvate: l'app si è bloccata o è stata chiusa senza salvare. Vuoi riprenderle?`, [
-        { label: 'Buttale', value: 'discard' },
-        { label: 'Riprendile', value: 'restore', primary: true },
+    const answer = await choose('Recover unsaved changes?',
+      `"${this.session.name}" has changes that weren't saved: the app hung or was closed without saving. Do you want to recover them?`, [
+        { label: 'Discard them', value: 'discard' },
+        { label: 'Restore them', value: 'restore', primary: true },
       ]);
     if (answer === 'restore') await this.session.restoreRecovery();
     else if (answer === 'discard') await this.session.discardRecovery();
   }
   saveAs(): void { this.run(() => this.session.saveAs()); }
 
-  /** Raccogli e salva: il progetto in un file ZIP da passare a un altro utente. */
+  /** Collect and save: the project in a ZIP file to hand to another user. */
   collectAndSave(): void {
     this.run(async () => {
       const file = await this.session.collectAndSave();
@@ -670,7 +670,7 @@ export class App implements Commands, TimelineActions {
     });
   }
 
-  /** Chiede un progetto in un file ZIP e lo apre. */
+  /** Asks for a project in a ZIP file and opens it. */
   chooseArchive(): void {
     const picker = Object.assign(document.createElement('input'), { type: 'file', accept: '.zip,application/zip' });
     picker.onchange = () => { if (picker.files?.[0]) this.openArchive(picker.files[0]); };
@@ -681,22 +681,22 @@ export class App implements Commands, TimelineActions {
     this.run(async () => { if (await this.closeProject()) await this.session.openArchive(file); });
   }
 
-  /** Uno ZIP lasciato nella finestra è un progetto da aprire, gli altri file audio da importare. */
+  /** A ZIP dropped on the window is a project to open, other files are audio to import. */
   private dropFiles(files: File[], importAudio: () => Promise<void>): void {
     const archive = files.find(f => /\.zip$/i.test(f.name));
     if (archive) this.openArchive(archive);
     else this.run(importAudio);
   }
 
-  /** Chiede dei file audio e li importa (come se li si trascinasse). */
+  /** Asks for audio files and imports them (as if they were dragged). */
   chooseAudioFiles(): void {
     const picker = Object.assign(document.createElement('input'), { type: 'file', accept: 'audio/*', multiple: true });
     picker.onchange = () => this.importFiles([...(picker.files ?? [])]);
     picker.click();
   }
 
-  /** Nella session i file vanno nello slot scelto (o in una traccia nuova dalla prima scena),
-   *  nella timeline al cursore. */
+  /** In the session the files go into the chosen slot (or a new track from the first scene),
+   *  in the timeline at the cursor. */
   importFiles(files: File[]): void {
     if (this.sessionView.isVisible) {
       const s = this.sessionView.selection;
@@ -705,69 +705,69 @@ export class App implements Commands, TimelineActions {
     this.run(() => this.session.importFiles(files, null, this.audio.engine.position));
   }
 
-  /** Esporta la regione di loop se è attiva, altrimenti tutta la timeline. */
+  /** Exports the loop region if it's active, otherwise the whole timeline. */
   exportMix(): void {
     this.run(async () => {
       const p = this.store.project;
       const [from, to] = p.loop.enabled ? [p.loop.start, p.loop.end] : [0, p.arrangementEnd];
-      if (to <= from) return this.say('Niente da esportare: la timeline è vuota.');
-      this.say('Esportazione del mix…');
+      if (to <= from) return this.say('Nothing to export: the timeline is empty.');
+      this.say('Exporting the mix…');
       const mix = await this.audio.exportMix(from, to);
       download(new Blob([encodeWav(mix, this.audio.context.sampleRate, 24)], { type: 'audio/wav' }), `${this.session.name}.wav`);
-      this.say(`Mix esportato: ${(mix[0].length / this.audio.context.sampleRate).toFixed(1)} s.`);
+      this.say(`Mix exported: ${(mix[0].length / this.audio.context.sampleRate).toFixed(1)} s.`);
     });
   }
 
-  /** L'audio della scena `index`, lungo quanto serve perché i suoi loop si richiudano. */
+  /** The audio of scene `index`, as long as needed for its loops to come round. */
   exportScene(index: number): void {
     this.run(async () => {
       const p = this.store.project, scene = p.scenes[index];
       const plan = scene && sceneArrangement(p, index, this.store.ids, SCENE_MAX_BARS * p.signature.beatsPerBar);
-      if (!plan) return this.say('Niente da esportare: la scena è vuota.');
-      this.say(`Esportazione della scena "${scene.name}"…`);
+      if (!plan) return this.say('Nothing to export: the scene is empty.');
+      this.say(`Exporting scene "${scene.name}"…`);
       const sr = this.audio.context.sampleRate;
-      // per un loop una coda lunga, che poi torna all'inizio del file
+      // for a loop a long tail, which then wraps to the start of the file
       const mix = await this.audio.exportMix(0, plan.length, plan.project, plan.loops ? SCENE_LOOP_TAIL : undefined);
       const out = plan.loops ? foldTail(mix, Math.round(p.tempo.secondsAt(plan.length) * sr)) : mix;
       download(new Blob([encodeWav(out, sr, 24)], { type: 'audio/wav' }), `${this.session.name} - ${scene.name}.wav`);
       const bars = plan.length / p.signature.beatsPerBar;
-      this.say(`Scena "${scene.name}" esportata: ${Number.isInteger(bars) ? `${bars} battute` : `${plan.length} battiti`}${plan.loops ? ', in loop' : ''}.`);
+      this.say(`Scene "${scene.name}" exported: ${Number.isInteger(bars) ? `${bars} bars` : `${plan.length} beats`}${plan.loops ? ', in loop' : ''}.`);
     });
   }
 
-  /** La scena `index` nell'arrangement al cursore, lunga quanto serve perché i suoi loop si
-   *  richiudano. Il cursore va alla sua fine: la scena dopo si mette in fila. */
+  /** Scene `index` into the arrangement at the cursor, as long as needed for its loops to
+   *  come round. The cursor goes to its end: the next scene lines up after it. */
   sceneToArrangement(index: number): void {
     const p = this.store.project, scene = p.scenes[index];
     const len = scene && sceneLength(sceneClips(p, index), SCENE_MAX_BARS * p.signature.beatsPerBar);
-    if (!len || !(len.length > 0)) return this.say('La scena è vuota: non c\'è niente da copiare.');
+    if (!len || !(len.length > 0)) return this.say('The scene is empty: there\'s nothing to copy.');
     const at = Math.max(0, this.audio.engine.position);
     this.store.apply(sceneToArrangement(index, at, len.length));
     this.ui.select(addedPlacements(p, this.store.project).map(r => r.id));
     if (!this.audio.engine.playing) this.audio.engine.seek(at + len.length);
     const bar = (b: Beats) => +(b / p.signature.beatsPerBar + 1).toFixed(2);
-    this.say(`Scena "${scene.name}" nell'arrangement dalla battuta ${bar(at)} alla ${bar(at + len.length)}.`);
+    this.say(`Scene "${scene.name}" in the arrangement from bar ${bar(at)} to ${bar(at + len.length)}.`);
   }
 
-  /** Il tratto [from, to] di un sample come file nuovo nella cartella del progetto (il crop). */
+  /** The range [from, to] of a sample as a new file in the project folder (the crop). */
   private cropSample(sample: SampleRef, from: Seconds, to: Seconds): Promise<SampleRef> {
     const data = this.audio.library.get(sample.id);
-    if (!data) throw new Error(`l'audio di "${sample.name}" non è caricato`);
+    if (!data) throw new Error(`the audio of "${sample.name}" isn't loaded`);
     const sr = data.sampleRate, a = Math.round(from * sr), b = Math.round(to * sr);
     const channels = data.channels.map(c => c.slice(a, b));
     return this.session.addAudio(`${sample.name} crop.wav`, { channels, sampleRate: sr }, new Uint8Array(encodeWav(channels, sr, 24)));
   }
 
-  /** Prima di lasciare il progetto (nuovo, apri, demo): se ci sono modifiche chiede se salvarle.
-   *  false: si rinuncia (anche se il salvataggio non va a buon fine). */
+  /** Before leaving the project (new, open, demo): if there are changes asks whether to save them.
+   *  false: give up (also if saving doesn't succeed). */
   private async closeProject(): Promise<boolean> {
     if (!this.session.changed) return true;
-    const answer = await choose('Salvare le modifiche?', `Se non le salvi, le modifiche a "${this.session.name}" andranno perse.`, [
-      { label: 'Non salvare', value: 'discard' },
-      { label: 'Annulla', value: 'cancel' },
-      { label: 'Salva', value: 'save', primary: true },
+    const answer = await choose('Save changes?', `If you don't save them, the changes to "${this.session.name}" will be lost.`, [
+      { label: 'Don\'t save', value: 'discard' },
+      { label: 'Undo', value: 'cancel' },
+      { label: 'Save', value: 'save', primary: true },
     ]);
-    if (answer === 'save') await this.session.save(); // se si annulla la scelta della cartella, si ferma qui
+    if (answer === 'save') await this.session.save(); // if choosing the folder is cancelled, it stops here
     if (answer === 'discard') await this.session.discardRecovery();
     return answer === 'save' || answer === 'discard';
   }
@@ -777,15 +777,15 @@ export class App implements Commands, TimelineActions {
       if (!(await this.closeProject())) return;
       await this.session.newProject(true);
       await buildDemoProject(this.store, this.session);
-      this.store.load(this.store.project); // il progetto demo non si annulla
+      this.store.load(this.store.project); // the demo project can't be undone
       this.session.forgetChanges();
-      this.say('Progetto demo caricato: premi Spazio per ascoltarlo.');
+      this.say('Demo project loaded: press Space to listen to it.');
     });
   }
 
-  // ---------------------------------------------------------------- aiuti
+  // ---------------------------------------------------------------- helpers
 
-  /** I controller MIDI: si collegano da soli se il permesso c'è già; Opzioni › Attiva i controller MIDI lo chiede. */
+  /** The MIDI controllers: they connect by themselves if permission is already there; Options › Enable MIDI controllers asks for it. */
   private controlSurfaces(): ControlSurfaces {
     const app = this;
     const surfaces = new ControlSurfaces({
@@ -807,7 +807,7 @@ export class App implements Commands, TimelineActions {
       const name = surfaces.connected;
       led.hidden = name === null;
       led.textContent = `🎛 ${name}`;
-      led.title = `${name}: collegato alla session`;
+      led.title = `${name}: connected to the session`;
     };
     surfaces.onChange(render);
     render();
@@ -817,32 +817,32 @@ export class App implements Commands, TimelineActions {
     return surfaces;
   }
 
-  /** Apre la clip (sulla timeline o in uno slot) nel suo editor. */
+  /** Opens the clip (on the timeline or in a slot) in its editor. */
   openClip(ref: ClipRef): void {
     const clip = findClip(this.store.project, ref)?.clip;
     const editor = clip && this.clipEditors[clip.kind];
-    if (!editor) return this.say(clip ? `Nessun editor per le clip "${clip.kind}".` : '');
+    if (!editor) return this.say(clip ? `No editor for "${clip.kind}" clips.` : '');
     this.ui.selectTrack(ref.track);
     this.lastClips.set(ref.track, ref);
     this.bottom.show(editor, () => editor.open(ref));
   }
 
-  /** Mostra la curva di un parametro. Sul master è sulla timeline; su una traccia è in una clip:
-   *  l'ultima aperta, o quella che suona, o la prima che ha. */
+  /** Shows a parameter's curve. On the master it's on the timeline; on a track it's in a clip:
+   *  the last one opened, or the one playing, or the first it has. */
   showAutomation(owner: ChainOwner, target: ModTarget): void {
     if (owner === MASTER) {
       this.showView('arrangement');
-      if (!this.automation.show(target)) this.say('Questo parametro non si può automatizzare.');
+      if (!this.automation.show(target)) this.say('This parameter can\'t be automated.');
       return;
     }
     const ref = this.clipOf(owner);
-    if (!ref) return this.say('La traccia non ha clip: l\'automazione si disegna in una clip. Creane una e riprova.');
+    if (!ref) return this.say('The track has no clips: automation is drawn in a clip. Create one and try again.');
     this.openClip(ref);
     const clip = findClip(this.store.project, ref)?.clip;
-    if (clip && !(clip.kind === 'audio' ? this.editor : this.pianoRoll).modulation.show(target)) this.say('Questo parametro non si può automatizzare.');
+    if (clip && !(clip.kind === 'audio' ? this.editor : this.pianoRoll).modulation.show(target)) this.say('This parameter can\'t be automated.');
   }
 
-  /** La clip della traccia su cui lavorare. */
+  /** The track's clip to work on. */
   private clipOf(id: TrackId): ClipRef | null {
     const p = this.store.project, track = p.track(id), last = this.lastClips.get(id);
     if (!track) return null;
@@ -855,8 +855,8 @@ export class App implements Commands, TimelineActions {
     return placed ? placementRef(id, placed.id) : null;
   }
 
-  /** Apre strumento ed effetti di una traccia, o gli effetti del master; dal piano roll, con il
-   *  pulsante per tornare alle note. */
+  /** Opens a track's instrument and effects, or the master's effects; from the piano roll, with the
+   *  button to go back to the notes. */
   openDevices(owner: ChainOwner, fromRoll = false): void {
     const clip = fromRoll ? this.pianoRoll.openClip : null;
     const back = clip && owner !== MASTER ? () => this.openClip(clip) : null;
@@ -868,12 +868,12 @@ export class App implements Commands, TimelineActions {
     return resolveSelection(this.store.project, this.ui.selection);
   }
 
-  /** Esegue un'azione mostrando gli errori nella barra di stato (annullare un selettore di file non è un errore). */
+  /** Runs an action showing errors in the status bar (cancelling a file picker isn't an error). */
   run(action: () => unknown): void {
     Promise.resolve().then(action).catch((e: unknown) => {
       if (e instanceof DOMException && e.name === 'AbortError') return;
       console.error(e);
-      this.say(`Errore: ${e instanceof Error ? e.message : String(e)}`);
+      this.say(`Error: ${e instanceof Error ? e.message : String(e)}`);
     });
   }
 
@@ -881,18 +881,18 @@ export class App implements Commands, TimelineActions {
     this.status.textContent = text;
   }
 
-  /** Posizione del cursore (per i test automatici). */
+  /** Cursor position (for automated tests). */
   get cursor(): Beats {
     return this.audio.engine.position;
   }
 }
 
-/** Ogni quanto si scrive la copia di recupero (se ci sono modifiche). */
+/** How often the recovery copy is written (if there are changes). */
 const AUTOSAVE_MS = 30_000;
 
-/** Una scena si esporta al massimo per tante battute (se i loop si richiudono solo dopo, basta il più lungo). */
+/** A scene is exported for at most this many bars (if the loops only come round later, the longest is enough). */
 const SCENE_MAX_BARS = 64;
-/** Secondi di coda calcolati oltre la fine di una scena in loop, poi riportati all'inizio. */
+/** Seconds of tail computed past the end of a looping scene, then wrapped to the start. */
 const SCENE_LOOP_TAIL = 8;
 
 function download(blob: Blob, name: string): void {

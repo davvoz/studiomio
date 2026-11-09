@@ -1,10 +1,10 @@
-/* I controller MIDI collegati al computer: l'Akai APC40 mkII e i Novation Launchpad (X, Mini
- * MK3, Pro MK3, MK2), riconosciuti dal nome delle porte. Basta collegarli (anche ad app aperta):
- * li si mette nel modo per i programmi (Ableton mode, DAW mode) e li si lega alla session, senza
- * mappature da fare. Uno alla volta: se ce ne sono due, vince il primo dell'elenco. Web MIDI con
- * il SysEx c'è in Chrome ed Edge: la prima volta il browser chiede il permesso (pulsante 🎛),
- * poi all'avvio si collega da solo. Le altre porte d'ingresso (un controller qualsiasi, una
- * tastiera) vanno alle mappature MIDI (vedi app/midi-mapper), ma si aprono solo se servono. */
+/* The MIDI controllers connected to the computer: the Akai APC40 mkII and the Novation Launchpads (X, Mini
+ * MK3, Pro MK3, MK2), recognized by their port names. Just connect them (even with the app open):
+ * they're put in the mode for programs (Ableton mode, DAW mode) and bound to the session, with no
+ * mappings to make. One at a time: if there are two, the first in the list wins. Web MIDI with
+ * SysEx is in Chrome and Edge: the first time the browser asks for permission (🎛 button),
+ * then at startup it connects by itself. The other input ports (any controller, a
+ * keyboard) go to the MIDI mappings (see app/midi-mapper), but they open only if needed. */
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import { Apc40 } from './apc40/apc40';
 import { PORT_NAME } from './apc40/protocol';
@@ -13,23 +13,23 @@ import { ANY_LAUNCHPAD, dawPort, modelOfPort, MODELS, portInterface, type Model 
 import { IDENTITY_REQUEST, Liveness } from './liveness';
 import type { SessionSurface, SurfaceHost } from './session-surface';
 
-/** Ogni quanto si aggiornano i LED e si applicano fader e manopole. */
+/** How often the LEDs are updated and faders and knobs applied. */
 const TICK_MS = 30;
-/** Ogni quanto si controlla che il controller parli ancora. */
+/** How often we check that the controller is still talking. */
 const WATCH_MS = 500;
-/** Quante volte si riaprono le porte di un controller muto prima di arrendersi. */
+/** How many times a silent controller's ports are reopened before giving up. */
 const MAX_REVIVALS = 2;
-/** Quanti messaggi MIDI tiene il registro per il report. */
+/** How many MIDI messages the log keeps for the report. */
 const HISTORY = 400;
 
 type SurfaceEvents = { change: []; midi: [data: Uint8Array] };
 
-/** Un tipo di controller: come lo si riconosce, a quali porte si parla, chi lo guida. */
+/** A kind of controller: how it's recognized, which ports to talk to, who drives it. */
 interface Driver {
   readonly name: string;
-  /** Le porte del controller (su Windows lo stesso apparecchio può averne più d'una). */
+  /** The controller's ports (on Windows the same device can have more than one). */
   readonly port: RegExp;
-  /** Fra le porte col suo nome: l'uscita a cui si parla e gli ingressi da cui si ascolta. */
+  /** Among the ports with its name: the output we talk to and the inputs we listen to. */
   pick(inputs: MIDIInput[], outputs: MIDIOutput[]): { output?: MIDIOutput; inputs: MIDIInput[] };
   create(host: SurfaceHost, out: (data: number[]) => void): SessionSurface;
 }
@@ -37,14 +37,14 @@ interface Driver {
 const apcDriver: Driver = {
   name: 'APC40 mkII',
   port: PORT_NAME,
-  // non si sa quale porta d'ingresso parla: si ascoltano tutte
+  // we don't know which input port talks: we listen to all of them
   pick: (inputs, outputs) => ({ output: outputs[0], inputs }),
   create: (host, out) => new Apc40(host, out),
 };
 
-/** Un Launchpad parla ai programmi da una sola delle sue interfacce (la "DAW"): si usa quella,
- *  in uscita e in entrata (dalle altre arrivano le note dei modi Note e Custom, e sul Pro MK3
- *  ciò che entra dalla presa MIDI). `prefer` sceglie l'interfaccia a mano. */
+/** A Launchpad talks to programs from only one of its interfaces (the "DAW" one): that one is used,
+ *  for output and input (from the others come the notes of the Note and Custom modes, and on the Pro MK3
+ *  what comes in from the MIDI socket). `prefer` chooses the interface by hand. */
 const launchpadDriver = (model: Model, prefer: () => number | undefined): Driver => ({
   name: model.name,
   port: model.port,
@@ -60,45 +60,45 @@ const launchpadDriver = (model: Model, prefer: () => number | undefined): Driver
 interface Connection {
   readonly driver: Driver;
   readonly controller: SessionSurface;
-  /** Le porte d'ingresso da cui si ascolta il controller. */
+  /** The input ports the controller is listened to on. */
   readonly inputs: readonly MIDIInput[];
-  /** Le altre porte del controller: si aprono solo per il registro. */
+  /** The controller's other ports: they open only for the log. */
   readonly others: readonly MIDIInput[];
   readonly output: MIDIOutput;
-  /** Gli id delle porte, per capire se sono cambiate. */
+  /** The port ids, to tell whether they changed. */
   readonly ports: string;
   readonly liveness: Liveness;
   readonly stopTimers: () => void;
 }
 
-/** Un messaggio MIDI in esadecimale, per il monitor. */
+/** A MIDI message in hexadecimal, for the monitor. */
 const hex = (data: ArrayLike<number>) => Array.from(data, b => b.toString(16).padStart(2, '0')).join(' ');
 
 export class ControlSurfaces {
   private access: MIDIAccess | null = null;
   private conn: Connection | null = null;
   private connecting = false;
-  /** Porte cambiate mentre ci si collegava: si ricontrolla alla fine. */
+  /** Ports changed while connecting: check again at the end. */
   private rescan = false;
-  /** Monitor MIDI: dalla console, `studiomio.surfaces.log = true` stampa ogni messaggio. */
+  /** MIDI monitor: from the console, `studiomio.surfaces.log = true` prints every message. */
   log = false;
   private feedback = true;
-  /** Dalla console, `studiomio.surfaces.watchdog = true`: dopo un po' di silenzio si chiede al
-   *  controller chi è, per accorgersi se si è bloccato. Spento di serie: Live non lo fa, e un
-   *  APC40 mkII alimentato solo dall'USB si è bloccato anche con queste sole richieste. */
+  /** From the console, `studiomio.surfaces.watchdog = true`: after a while of silence the
+   *  controller is asked who it is, to notice whether it hung. Off by default: Live doesn't do it, and an
+   *  APC40 mkII powered only by USB hung even with these requests alone. */
   watchdog = false;
   private preferred: number | undefined;
-  /** Volte di fila in cui si sono riaperte le porte perché il controller non rispondeva. */
+  /** Times in a row the ports were reopened because the controller didn't respond. */
   private revivals = 0;
   private gaveUp = false;
-  /** Il controller ha già risposto alla richiesta d'identità (vale anche dopo aver riaperto le porte). */
+  /** The controller has already answered the identity request (holds also after reopening the ports). */
   private answersIdentity = false;
-  /** Un Launchpad che studiomio non conosce è già stato segnalato. */
+  /** A Launchpad studiomio doesn't know has already been reported. */
   private unknownSaid = false;
-  /** Gli ultimi messaggi MIDI, per il report. */
+  /** The latest MIDI messages, for the report. */
   private readonly history: string[] = [];
   private readonly startedAt = performance.now();
-  /** Le porte d'ingresso che non sono di un controller della session, ascoltate per le mappature. */
+  /** The input ports that don't belong to a session controller, listened to for the mappings. */
   private readonly free = new Map<string, MIDIInput>();
   private mapping = false;
   private readonly drivers: readonly Driver[];
@@ -108,7 +108,7 @@ export class ControlSurfaces {
     this.drivers = [apcDriver, ...MODELS.map(m => launchpadDriver(m, () => this.preferred))];
   }
 
-  /** Vero se il browser ha Web MIDI. */
+  /** True if the browser has Web MIDI. */
   get supported(): boolean {
     return typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator;
   }
@@ -117,13 +117,13 @@ export class ControlSurfaces {
     return this.access !== null;
   }
 
-  /** Il nome del controller collegato, o null. */
+  /** The name of the connected controller, or null. */
   get connected(): string | null {
     return this.conn?.driver.name ?? null;
   }
 
-  /** Dalla console, `studiomio.surfaces.knobFeedback = false`: alle manopole dell'APC40 non si
-   *  manda più niente (anelli di LED fermi). Per capire se è quel traffico a bloccare il controller. */
+  /** From the console, `studiomio.surfaces.knobFeedback = false`: nothing more is sent to the APC40's
+   *  knobs (LED rings frozen). To find out whether that traffic is what hangs the controller. */
   get knobFeedback(): boolean {
     return this.feedback;
   }
@@ -133,9 +133,9 @@ export class ControlSurfaces {
     if (this.conn?.controller instanceof Apc40) this.conn.controller.knobFeedback = on;
   }
 
-  /** Dalla console, `studiomio.surfaces.launchpadPort = 2`: quale interfaccia del Launchpad usare
-   *  ("LPX MIDI" è la 1, "MIDIIN2 (LPX MIDI)" la 2…), se quella scelta da sola non risponde.
-   *  `undefined` torna alla scelta automatica. Ci si ricollega subito. */
+  /** From the console, `studiomio.surfaces.launchpadPort = 2`: which Launchpad interface to use
+   *  ("LPX MIDI" is 1, "MIDIIN2 (LPX MIDI)" is 2…), if the one chosen automatically doesn't respond.
+   *  `undefined` goes back to the automatic choice. It reconnects right away. */
   get launchpadPort(): number | undefined {
     return this.preferred;
   }
@@ -146,9 +146,9 @@ export class ControlSurfaces {
     void this.scan();
   }
 
-  /** Si ascoltano le porte d'ingresso degli altri controller, per le mappature MIDI? Solo se
-   *  servono (MIDI acceso o mappature nel progetto): su Windows una porta aperta non la può usare
-   *  un altro programma. */
+  /** Are the other controllers' input ports listened to, for the MIDI mappings? Only if
+   *  needed (MIDI on or mappings in the project): on Windows an open port can't be used
+   *  by another program. */
   get listening(): boolean {
     return this.mapping;
   }
@@ -159,49 +159,49 @@ export class ControlSurfaces {
     void this.scan();
   }
 
-  /** I nomi delle porte ascoltate per le mappature. */
+  /** The names of the ports listened to for the mappings. */
   get mappingInputs(): string[] {
     return [...this.free.values()].map(p => p.name ?? p.id);
   }
 
-  /** Un messaggio da una porta ascoltata per le mappature. */
+  /** A message from a port listened to for the mappings. */
   onMidi(fn: (data: Uint8Array) => void): Unsubscribe {
     return this.events.on('midi', fn);
   }
 
-  /** Le porte MIDI che il browser vede (per capire cosa non va dalla console). */
+  /** The MIDI ports the browser sees (to find out what's wrong from the console). */
   ports(): { input: string[]; output: string[] } {
     const list = (ports: Iterable<MIDIPort>) => [...ports].map(p => `${p.name} [${p.id}] ${p.state}/${p.connection}`);
     return { input: list(this.access?.inputs.values() ?? []), output: list(this.access?.outputs.values() ?? []) };
   }
 
-  /** Tutto ciò che serve per capire cosa succede con un controller, da incollare in un messaggio:
-   *  dalla console (F12), `copy(studiomio.surfaces.report())`. */
+  /** Everything needed to understand what's happening with a controller, to paste in a message:
+   *  from the console (F12), `copy(studiomio.surfaces.report())`. */
   report(): string {
     const c = this.conn;
     const lines = [
       `studiomio · controller · ${new Date().toISOString()}`,
-      `Web MIDI: ${this.supported ? (this.enabled ? 'attivo' : 'non ancora attivato (pulsante 🎛)') : 'assente'}`,
-      'Porte d\'ingresso:', ...this.ports().input.map(p => `  ${p}`),
-      'Porte d\'uscita:', ...this.ports().output.map(p => `  ${p}`),
-      c ? `Collegato: ${c.driver.name}` : 'Collegato: nessun controller',
-      `Ingressi per le mappature MIDI: ${this.mapping ? this.mappingInputs.join(', ') || 'nessuno' : 'chiusi (nessuna mappatura)'}`,
+      `Web MIDI: ${this.supported ? (this.enabled ? 'active' : 'not activated yet (🎛 button)') : 'missing'}`,
+      'Input ports:', ...this.ports().input.map(p => `  ${p}`),
+      'Output ports:', ...this.ports().output.map(p => `  ${p}`),
+      c ? `Connected: ${c.driver.name}` : 'Connected: no controller',
+      `Inputs for MIDI mappings: ${this.mapping ? this.mappingInputs.join(', ') || 'none' : 'closed (no mappings)'}`,
     ];
     if (c) {
-      lines.push(`  uscita: ${c.output.name} [${c.output.id}]`);
-      lines.push(`  ingressi ascoltati: ${c.inputs.map(p => `${p.name} [${p.id}]`).join(', ')}`);
-      if (c.others.length) lines.push(`  altri ingressi (solo registro): ${c.others.map(p => `${p.name} [${p.id}]`).join(', ')}`);
-      lines.push(`  avvio finito: ${c.controller.ready ? 'sì' : 'no'}`);
+      lines.push(`  output: ${c.output.name} [${c.output.id}]`);
+      lines.push(`  inputs listened to: ${c.inputs.map(p => `${p.name} [${p.id}]`).join(', ')}`);
+      if (c.others.length) lines.push(`  other inputs (log only): ${c.others.map(p => `${p.name} [${p.id}]`).join(', ')}`);
+      lines.push(`  startup finished: ${c.controller.ready ? 'yes' : 'no'}`);
       if (c.controller instanceof Launchpad) {
         const lp = c.controller;
-        lines.push(`  risposta d'identità: ${lp.identified ? hex(lp.identified) : 'nessuna'} (attesa: ${hex(lp.model.family)})`);
-        lines.push(`  modo: ${lp.state}`);
-        if (this.preferred !== undefined) lines.push(`  interfaccia scelta a mano: ${this.preferred}`);
+        lines.push(`  identity reply: ${lp.identified ? hex(lp.identified) : 'none'} (expected: ${hex(lp.model.family)})`);
+        lines.push(`  mode: ${lp.state}`);
+        if (this.preferred !== undefined) lines.push(`  interface chosen by hand: ${this.preferred}`);
       }
     }
     const ring = this.host.ui.sessionRing;
-    lines.push(`Riquadro: ${ring ? `tracce ${ring.track + 1}–${ring.track + ring.width}, scene ${ring.scene + 1}–${ring.scene + ring.height}` : 'nessuno'}`);
-    lines.push(`Ultimi messaggi MIDI (${this.history.length}, il più vecchio prima):`, ...this.history);
+    lines.push(`Box: ${ring ? `tracks ${ring.track + 1}–${ring.track + ring.width}, scenes ${ring.scene + 1}–${ring.scene + ring.height}` : 'none'}`);
+    lines.push(`Latest MIDI messages (${this.history.length}, oldest first):`, ...this.history);
     return lines.join('\n');
   }
 
@@ -209,34 +209,34 @@ export class ControlSurfaces {
     return this.events.on('change', fn);
   }
 
-  /** All'avvio: se il permesso c'è già, si collega senza chiedere niente. */
+  /** At startup: if permission is already there, it connects without asking anything. */
   async autoStart(): Promise<void> {
     if (!this.supported || !navigator.permissions) return;
     try {
       const status = await navigator.permissions.query({ name: 'midi', sysex: true } as PermissionDescriptor);
       if (status.state === 'granted') await this.enable();
     } catch {
-      // il browser non sa dire se c'è il permesso: si aspetta il pulsante
+      // the browser can't tell whether there's permission: wait for the button
     }
   }
 
-  /** Chiede l'accesso al MIDI (con il SysEx, per i modi dei controller) e cerca i controller. */
+  /** Asks for MIDI access (with SysEx, for the controllers' modes) and looks for the controllers. */
   async enable(): Promise<void> {
-    if (!this.supported) throw new Error('questo browser non ha Web MIDI: per i controller serve Chrome o Edge');
+    if (!this.supported) throw new Error('this browser doesn\'t have Web MIDI: controllers need Chrome or Edge');
     if (!this.access) {
       this.access = await navigator.requestMIDIAccess({ sysex: true });
       this.access.onstatechange = () => void this.scan();
-      // chiudendo la pagina il controller torna al suo modo, con i LED spenti
+      // closing the page the controller goes back to its mode, with the LEDs off
       window.addEventListener('pagehide', () => this.disconnect());
     }
     await this.scan();
     if (!this.conn && !this.unknownSaid && !this.mapping) {
-      this.host.say('Controller: nessun APC40 mkII o Launchpad (X, Mini MK3, Pro MK3, MK2) collegato. Collegalo quando vuoi, si attiva da solo.');
+      this.host.say('Controllers: no APC40 mkII or Launchpad (X, Mini MK3, Pro MK3, MK2) connected. Connect it whenever you like, it activates by itself.');
     }
     this.events.emit('change');
   }
 
-  /** Porte cambiate (un controller collegato o staccato): si collega o si scollega. */
+  /** Ports changed (a controller connected or unplugged): connect or disconnect. */
   private async scan(): Promise<void> {
     const access = this.access;
     if (!access) return;
@@ -261,8 +261,8 @@ export class ControlSurfaces {
     const claimed = new Set(found ? [...found.inputs, ...found.others].map(p => p.id) : []);
     const free = allInputs.filter(p => !claimed.has(p.id));
     if (this.conn && this.conn.ports === ports) return this.listenFree(free);
-    // prima si scollega il controller (che smette di ascoltare le sue porte), poi le porte libere
-    // passano alle mappature, poi un controller nuovo prende le sue
+    // first the controller is disconnected (it stops listening to its ports), then the free ports
+    // go to the mappings, then a new controller takes its own
     if (this.conn) this.disconnect();
     this.listenFree(free);
     if (!found) return;
@@ -273,16 +273,16 @@ export class ControlSurfaces {
       const controller = driver.create(this.host, data => {
         this.record('→', output.name, data);
         if (this.log) console.log(`MIDI → ${hex(data)}`);
-        try { output.send(data); } catch { /* staccato proprio adesso */ }
+        try { output.send(data); } catch { /* unplugged just now */ }
       });
-      // si ascoltano gli ingressi del controller; uno occupato da un altro programma non blocca gli altri
+      // the controller's inputs are listened to; one taken by another program doesn't block the others
       const liveness = new Liveness(performance.now(), this.answersIdentity);
       const listen = async (input: MIDIInput, forward: boolean) => {
         try {
           await input.open();
           input.onmidimessage = e => {
             if (!e.data) return;
-            this.record(forward ? '←' : '← (non ascoltato)', input.name, e.data);
+            this.record(forward ? '←' : '← (not listened)', input.name, e.data);
             if (this.log) console.log(`MIDI ← ${input.name} [${input.id}]: ${hex(e.data)}`);
             if (!forward) return;
             liveness.heard(performance.now(), e.data);
@@ -291,13 +291,13 @@ export class ControlSurfaces {
           };
           return true;
         } catch (e) {
-          console.warn(`Controller: non riesco ad aprire l'ingresso ${input.name} [${input.id}]`, e);
+          console.warn(`Controller: can't open input ${input.name} [${input.id}]`, e);
           return false;
         }
       };
       const opened: MIDIInput[] = [];
       for (const input of found.inputs) if (await listen(input, true)) opened.push(input);
-      if (!opened.length) throw new Error("nessuna porta d'ingresso si apre");
+      if (!opened.length) throw new Error("no input port opens");
       const others: MIDIInput[] = [];
       for (const input of found.others) if (await listen(input, false)) others.push(input);
       if (controller instanceof Apc40) controller.knobFeedback = this.feedback;
@@ -308,11 +308,11 @@ export class ControlSurfaces {
         stopTimers: () => { clearInterval(tick); clearInterval(watch); },
       };
       this.conn = connection;
-      controller.start(); // chiede l'identità: la risposta fa partire l'avvio (e dice che il controller la conosce)
-      console.info('Controller collegato', { driver: driver.name, output: `${output.name} [${output.id}]`, inputs: opened.map(p => `${p.name} [${p.id}]`) });
-      if (!this.revivals) this.host.say(`${driver.name} collegato: la griglia suona il riquadro della session.`);
+      controller.start(); // asks for the identity: the reply starts the startup (and says the controller knows it)
+      console.info('Controller connected', { driver: driver.name, output: `${output.name} [${output.id}]`, inputs: opened.map(p => `${p.name} [${p.id}]`) });
+      if (!this.revivals) this.host.say(`${driver.name} connected: the grid plays the session box.`);
     } catch (e) {
-      this.host.say(`Controller: non riesco ad aprire ${driver.name} (lo sta usando un altro programma?). ${e instanceof Error ? e.message : ''}`);
+      this.host.say(`Controller: can't open ${driver.name} (is another program using it?). ${e instanceof Error ? e.message : ''}`);
     } finally {
       this.connecting = false;
       this.events.emit('change');
@@ -323,21 +323,21 @@ export class ControlSurfaces {
     }
   }
 
-  /** Un Launchpad di un modello che studiomio non guida, o di cui non si trova la porta per i
-   *  programmi: lo si dice una volta. */
+  /** A Launchpad of a model studiomio doesn't drive, or whose port for programs can't be
+   *  found: it's said once. */
   private unknownLaunchpad(ports: readonly MIDIPort[]): void {
     const lp = ports.find(p => ANY_LAUNCHPAD.test(p.name ?? ''));
     if (!lp || this.unknownSaid) return;
     this.unknownSaid = true;
     const model = modelOfPort(lp.name ?? '');
-    console.warn(`Controller: ${model ? `${model.name} senza la porta DAW` : 'Launchpad non riconosciuto'}`, this.ports());
+    console.warn(`Controller: ${model ? `${model.name} without the DAW port` : 'Launchpad not recognized'}`, this.ports());
     this.host.say(model
-      ? `Controller: non trovo la porta DAW del ${model.name} (dalla console: studiomio.surfaces.ports()).`
-      : `Controller: "${lp.name}" non è un Launchpad che studiomio conosce (X, Mini MK3, Pro MK3, MK2).`);
+      ? `Controller: can't find the DAW port of the ${model.name} (from the console: studiomio.surfaces.ports()).`
+      : `Controller: "${lp.name}" isn't a Launchpad studiomio knows (X, Mini MK3, Pro MK3, MK2).`);
   }
 
-  /** Ascolta per le mappature le porte libere (tutte, se servono; nessuna, se no). Una porta che
-   *  passa a un controller della session la ascolta lui; una che non serve più si chiude. */
+  /** Listens to the free ports for the mappings (all, if needed; none, otherwise). A port that
+   *  goes to a session controller is listened to by it; one no longer needed is closed. */
   private listenFree(ports: readonly MIDIInput[]): void {
     const wanted = this.mapping ? ports : [];
     let changed = false;
@@ -354,13 +354,13 @@ export class ControlSurfaces {
       changed = true;
       input.onmidimessage = e => {
         if (!e.data) return;
-        this.record('← (mappature)', input.name, e.data);
-        if (this.log) console.log(`MIDI ← ${input.name} [${input.id}] (mappature): ${hex(e.data)}`);
+        this.record('← (mappings)', input.name, e.data);
+        if (this.log) console.log(`MIDI ← ${input.name} [${input.id}] (mappings): ${hex(e.data)}`);
         this.events.emit('midi', e.data);
       };
       input.open().catch(e => {
-        console.warn(`MIDI: non riesco ad aprire l'ingresso ${input.name} [${input.id}]`, e);
-        this.host.say(`MIDI: non riesco ad aprire ${input.name} (lo sta usando un altro programma?).`);
+        console.warn(`MIDI: can't open input ${input.name} [${input.id}]`, e);
+        this.host.say(`MIDI: can't open ${input.name} (is another program using it?).`);
       });
     }
     if (changed) this.events.emit('change');
@@ -377,11 +377,11 @@ export class ControlSurfaces {
     if (!c) return;
     this.drop(c);
     c.controller.stop();
-    this.host.say(`${c.driver.name} scollegato.`);
+    this.host.say(`${c.driver.name} disconnected.`);
     this.events.emit('change');
   }
 
-  /** Smette di ascoltare e di aggiornare il controller (senza mandargli niente). */
+  /** Stops listening to and updating the controller (without sending it anything). */
   private drop(c: Connection): void {
     if (this.conn === c) this.conn = null;
     this.answersIdentity ||= c.liveness.watching;
@@ -389,25 +389,25 @@ export class ControlSurfaces {
     for (const input of [...c.inputs, ...c.others]) input.onmidimessage = null;
   }
 
-  /** Il controller parla ancora? Se non risponde più, si chiudono e riaprono le porte: se era
-   *  il collegamento MIDI a essersi incantato basta questo; se è il controller, va riacceso. */
+  /** Is the controller still talking? If it no longer responds, the ports are closed and reopened: if it was
+   *  the MIDI connection that got stuck that's enough; if it's the controller, it must be power-cycled. */
   private watch(c: Connection): void {
     if (!this.watchdog) return;
     const action = c.liveness.check(performance.now());
     if (action === 'ping') {
-      if (this.log) console.log(`MIDI → ${hex(IDENTITY_REQUEST)} (richiesta d'identità)`);
+      if (this.log) console.log(`MIDI → ${hex(IDENTITY_REQUEST)} (identity request)`);
       try { c.output.send(IDENTITY_REQUEST); } catch { /* staccato */ }
       return;
     }
     if (action !== 'silent' || this.gaveUp) return;
     if (this.revivals >= MAX_REVIVALS) {
       this.gaveUp = true;
-      console.warn(`Controller: ${c.driver.name} non risponde nemmeno riaprendo le porte`);
-      this.host.say(`${c.driver.name} non risponde più: spegnilo e riaccendilo, si ricollega da solo.`);
+      console.warn(`Controller: ${c.driver.name} doesn't respond even after reopening the ports`);
+      this.host.say(`${c.driver.name} no longer responds: turn it off and on again, it reconnects by itself.`);
       return;
     }
     this.revivals++;
-    console.warn(`Controller: ${c.driver.name} non risponde, riapro le porte (tentativo ${this.revivals})`);
+    console.warn(`Controller: ${c.driver.name} doesn't respond, reopening the ports (attempt ${this.revivals})`);
     void this.reopen(c);
   }
 
@@ -417,10 +417,10 @@ export class ControlSurfaces {
     await this.scan();
   }
 
-  /** È arrivato qualcosa: se il controller era muto, è tornato. */
+  /** Something arrived: if the controller was silent, it's back. */
   private recovered(): void {
     if (!this.revivals && !this.gaveUp) return;
-    console.info(`Controller: risponde di nuovo (dopo ${this.revivals} riaperture delle porte)`);
+    console.info(`Controller: responding again (after ${this.revivals} port reopenings)`);
     this.host.say(`${this.conn?.driver.name ?? 'Il controller'} ripreso.`);
     this.revivals = 0;
     this.gaveUp = false;

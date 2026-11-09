@@ -1,50 +1,50 @@
-/* L'editor delle modulazioni di una clip, come il riquadro "Envelopes" di Live: nel pannello
- * della clip due menu (dispositivo e parametro) e sotto l'editor la corsia con la curva. Lo
- * usano il piano roll, l'editor audio e l'automazione del master sulla timeline. */
+/* A clip's modulation editor, like Live's "Envelopes" box: in the clip's panel
+ * two menus (device and parameter) and below the editor the lane with the curve. The
+ * piano roll, the audio editor and the master automation on the timeline use it. */
 import { sameTarget, targetKey, type ModTarget } from '../../model/envelope';
 import { el } from '../dom';
 import { EnvelopeLane, type LaneHost } from './envelope-lane';
 import { deviceKeyOf, type TargetDevice } from './mod-targets';
 
 export interface ModulationHost extends LaneHost {
-  /** I dispositivi che si possono modulare (null: niente di aperto). */
+  /** The devices that can be modulated (null: nothing open). */
   devices(): TargetDevice[] | null;
-  /** La corsia si è mostrata o nascosta: l'editor fa spazio. */
+  /** The lane was shown or hidden: the editor makes room. */
   layout(laneVisible: boolean): void;
 }
 
-/** Il valore del menu dei dispositivi che nasconde la corsia. */
+/** The value of the devices menu that hides the lane. */
 const NONE = '';
-/** Segno accanto ai dispositivi e ai parametri che hanno una modulazione. */
+/** Mark next to the devices and parameters that have a modulation. */
 const MARK = '● ';
 
 export class ModulationEditor {
   readonly controls = el('div', { className: 'mod-controls' });
   readonly lane: EnvelopeLane;
-  /** Sotto la tastiera del piano roll: il nome del parametro. */
+  /** Under the piano roll's keyboard: the parameter's name. */
   readonly side = el('div', { className: 'mod-side', hidden: true });
-  private readonly device = el<HTMLSelectElement>('select', { title: 'Il dispositivo da modulare' });
-  private readonly param = el<HTMLSelectElement>('select', { title: 'Il parametro da modulare' });
+  private readonly device = el<HTMLSelectElement>('select', { title: 'The device to modulate' });
+  private readonly param = el<HTMLSelectElement>('select', { title: 'The parameter to modulate' });
   private readonly drawButton: HTMLButtonElement;
   private readonly shapesButton: HTMLButtonElement;
   private readonly clearButton: HTMLButtonElement;
   private devices: TargetDevice[] = [];
   private target: ModTarget | null = null;
-  /** Com'erano dispositivi e modulazioni quando i menu sono stati riempiti. */
+  /** What devices and modulations were like when the menus were filled. */
   private builtFor = '';
 
-  constructor(private readonly host: ModulationHost, title = 'Modulazioni') {
+  constructor(private readonly host: ModulationHost, title = 'Modulations') {
     this.lane = new EnvelopeLane(host, on => this.drawButton.classList.toggle('on', on), on => this.shapesButton.classList.toggle('on', on));
     this.drawButton = el<HTMLButtonElement>('button', {
-      className: 'mini', textContent: '✎', title: 'Disegno a scalini sulla griglia (B); con Alt a mano libera', onclick: () => this.lane.setDraw(!this.lane.draw),
+      className: 'mini', textContent: '✎', title: 'Draw in steps on the grid (B); with Alt freehand', onclick: () => this.lane.setDraw(!this.lane.draw),
     });
     this.shapesButton = el<HTMLButtonElement>('button', {
-      className: 'mini', textContent: '∿', title: 'Forme pronte (F): sinusoide, rampe, pompa… nel tratto scelto o su tutto ciò che suona',
+      className: 'mini', textContent: '∿', title: 'Ready-made shapes (F): sine, ramps, pump… in the chosen range or over everything that plays',
       onclick: () => this.lane.setShapes(!this.lane.shapes),
     });
     this.clearButton = el<HTMLButtonElement>('button', {
-      className: 'mini', textContent: '×', title: 'Cancella la modulazione di questo parametro',
-      onclick: () => { const t = this.target; if (t) host.commit('Cancella modulazione', t, []); },
+      className: 'mini', textContent: '×', title: 'Clear this parameter\'s modulation',
+      onclick: () => { const t = this.target; if (t) host.commit('Clear modulation', t, []); },
     });
     this.device.onchange = () => this.chooseDevice(this.device.value);
     this.param.onchange = () => this.choose(this.paramTargets().find(t => targetKey(t) === this.param.value) ?? null);
@@ -53,13 +53,13 @@ export class ModulationEditor {
       this.device, this.param);
   }
 
-  /** Il bersaglio mostrato (per i test automatici). */
+  /** The shown target (for automated tests). */
   get selected(): ModTarget | null {
     return this.target;
   }
 
-  /** Una clip appena aperta: si resta sul parametro di prima se la traccia ce l'ha, altrimenti si
-   *  mostra la prima modulazione della clip, se ne ha. */
+  /** A just-opened clip: it stays on the previous parameter if the track has it, otherwise it
+   *  shows the clip's first modulation, if it has one. */
   opened(): void {
     const curves = this.host.curves(), devices = this.host.devices();
     this.builtFor = '';
@@ -70,7 +70,7 @@ export class ModulationEditor {
     this.choose(keep && (curves.envelope(keep) || !first) ? keep : first);
   }
 
-  /** Porta la corsia sul parametro `target`; false se con questa clip non si può modulare. */
+  /** Brings the lane onto parameter `target`; false if with this clip it can't be modulated. */
   show(target: ModTarget): boolean {
     const devices = this.host.devices();
     if (!devices || !this.targetsOf(devices).some(t => sameTarget(t, target))) return false;
@@ -79,7 +79,7 @@ export class ModulationEditor {
     return true;
   }
 
-  /** Allinea menu e corsia alle curve e ai dispositivi (dopo ogni modifica del progetto). */
+  /** Aligns menus and lane with the curves and the devices (after every project change). */
   sync(): void {
     const curves = this.host.curves(), devices = this.host.devices();
     if (!curves || !devices) return;
@@ -87,7 +87,7 @@ export class ModulationEditor {
     if (shape !== this.builtFor) {
       this.builtFor = shape;
       this.devices = devices;
-      // il dispositivo del parametro non c'è più: la corsia si chiude
+      // the parameter's device is gone: the lane closes
       if (this.target && !this.targetsOf(devices).some(t => sameTarget(t, this.target!))) return this.choose(null);
       this.fill();
     }
@@ -100,7 +100,7 @@ export class ModulationEditor {
     this.lane.frame();
   }
 
-  // ---------------------------------------------------------------- scelta
+  // ---------------------------------------------------------------- selection
 
   private choose(target: ModTarget | null): void {
     this.target = target;
@@ -112,7 +112,7 @@ export class ModulationEditor {
     if (!target) this.fill();
   }
 
-  /** Un dispositivo: il suo primo parametro modulato, o il primo parametro. */
+  /** A device: its first modulated parameter, or the first parameter. */
   private chooseDevice(key: string): void {
     const device = this.devices.find(d => d.key === key);
     if (!device) return this.choose(null);
@@ -130,12 +130,12 @@ export class ModulationEditor {
     return this.targetsOf(this.devices.filter(d => d.key === key));
   }
 
-  /** I due menu, con il segno sui dispositivi e i parametri che hanno una modulazione. */
+  /** The two menus, with the mark on the devices and parameters that have a modulation. */
   private fill(): void {
     const curves = this.host.curves();
     const has = (t: ModTarget) => !!curves?.envelope(t);
     this.device.replaceChildren(
-      el('option', { value: NONE, textContent: '— nessuna —' }),
+      el('option', { value: NONE, textContent: '— none —' }),
       ...this.devices.map(d => el('option', {
         value: d.key, textContent: `${d.sections.some(s => s.params.some(p => has(p.target))) ? MARK : ''}${d.label}`,
       })));
@@ -145,7 +145,7 @@ export class ModulationEditor {
     this.param.hidden = !device;
     this.param.replaceChildren(...(device?.sections ?? []).map(s => {
       const options = s.params.map(p => el('option', { value: targetKey(p.target), textContent: `${has(p.target) ? MARK : ''}${p.label}` }));
-      // una sola sezione (il mixer): niente gruppi
+      // a single section (the mixer): no groups
       return device!.sections.length > 1 ? el('optgroup', { label: s.label }, ...options) : options;
     }).flat());
     if (this.target) this.param.value = targetKey(this.target);

@@ -1,11 +1,11 @@
-/* Il pannello dei modulatori (LFO e Inviluppo), fatto con i pezzi di Prisma: la forma da
- * disegnare o l'inviluppo con le maniglie, le manopole, e le destinazioni. Il pallino in alto
- * ("⊕ Mappa") sceglie una manopola qualsiasi della catena (anche di un altro dispositivo, o una
- * macro di un rack) e la destinazione nasce lì: con un clic si accende e si cliccano le manopole,
- * scorrendo la catena e cambiando scheda con calma, oppure si trascina direttamente sulla
- * manopola, e la catena scorre da sola ai bordi. Il menu di una riga dà anche volume e pan
- * della traccia. Si vedono le destinazioni usate e una libera. Ogni riga ha la quantità (un cursore, che si può mappare su una macro e muovere
- * con le curve, come le manopole) e la × per toglierla. */
+/* The modulators' panel (LFO and Envelope), made with Prisma's pieces: the shape to
+ * draw or the envelope with the handles, the knobs, and the targets. The chip at the top
+ * ("⊕ Map") chooses any knob of the chain (also of another device, or a
+ * rack macro) and the target is born there: with a click it turns on and you click the knobs,
+ * scrolling the chain and changing tab calmly, or you drag directly onto the
+ * knob, and the chain scrolls by itself at the edges. A row's menu also gives the track's volume and pan.
+ * The used targets and one free one are shown. Each row has the amount (a slider, which can be mapped to a macro and moved
+ * with the curves, like the knobs) and the × to remove it. */
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import { linkAmount, MOD_LINKS } from '../../../devices/modulators/modulators';
 import type { NumberParam, ParamSpec } from '../../../devices/params';
@@ -19,9 +19,9 @@ import { EnvView } from '../prisma/env-view';
 import { LfoEditor } from '../prisma/lfo-editor';
 import { Slider } from '../prisma/matrix-view';
 
-/** La quantità di una destinazione appena creata, se la sua era a zero. */
+/** The amount of a just-created target, if its was at zero. */
 const NEW_AMOUNT = 50;
-/** Da quanti pixel il pallino si sta trascinando, e non cliccando. */
+/** After how many pixels the chip is being dragged, not clicked. */
 const DRAG_START = 4;
 
 export class ModulatorDisplay implements DeviceDisplay {
@@ -36,7 +36,7 @@ export class ModulatorDisplay implements DeviceDisplay {
   private targets: readonly (ModTarget | null)[] = [];
   private enabled = true;
   private readonly family: 'env' | 'lfo';
-  /** Il pallino è acceso: i clic sulle manopole della catena sono destinazioni. */
+  /** The chip is on: the clicks on the chain's knobs are targets. */
   private picking = false;
 
   constructor(private readonly ctx: DisplayContext) {
@@ -47,20 +47,20 @@ export class ModulatorDisplay implements DeviceDisplay {
     let shape: HTMLElement;
     if (envelope) {
       this.envView = new EnvView(() => this.values, set, () => '', true);
-      shape = this.card([this.title('Inviluppo')],
+      shape = this.card([this.title('Envelope')],
         this.envView.canvas,
         this.row('e1A', 'e1H', 'e1D', 'e1S', 'e1R', 'e1Ac', 'e1Dc', 'e1Rc'),
         this.row(this.menu('trig'), 'division', 'gate', 'vel', 'depth', 'pol'));
     } else {
       this.lfoEditor = new LfoEditor(() => this.values, set);
-      shape = this.card([this.title('Forma'), this.menu('l1Shape'), el('span', { className: 'prisma-spacer' }), this.lfoEditor.gridSelect, this.lfoEditor.menuButton],
+      shape = this.card([this.title('Shape'), this.menu('l1Shape'), el('span', { className: 'prisma-spacer' }), this.lfoEditor.gridSelect, this.lfoEditor.menuButton],
         this.lfoEditor.canvas,
         this.row('sync', 'division', 'rate', this.menu('trig'), 'phase', 'delay', 'rise', 'depth', 'pol'));
     }
     const list = el('div', { className: 'mod-links' });
     for (let n = 1; n <= MOD_LINKS; n++) list.append(this.linkRow(n));
     this.head = el('div', { className: 'prisma-chips' }, this.chip());
-    this.element.append(el('div', { className: 'prisma-page' }, shape, this.card([this.title('Destinazioni')], list)));
+    this.element.append(el('div', { className: 'prisma-page' }, shape, this.card([this.title('Targets')], list)));
     this.update(ctx.settings, true);
     const resized = new ResizeObserver(() => this.paint());
     for (const c of this.element.querySelectorAll('canvas')) resized.observe(c);
@@ -81,10 +81,10 @@ export class ModulatorDisplay implements DeviceDisplay {
     this.paint();
   }
 
-  /** Nel menu di una quantità: togliere la sua destinazione. */
+  /** In an amount's menu: removing its target. */
   menuFor(param: string): MenuItem[] {
     const slot = this.slotOfAmount(param);
-    return slot !== null && this.targets[slot] ? [{ label: 'Togli la destinazione', run: () => this.host?.set(slot, null) }] : [];
+    return slot !== null && this.targets[slot] ? [{ label: 'Remove the target', run: () => this.host?.set(slot, null) }] : [];
   }
 
   private get host(): ModTargetHost | undefined {
@@ -101,9 +101,9 @@ export class ModulatorDisplay implements DeviceDisplay {
     this.lfoEditor?.paint(this.enabled);
   }
 
-  // ---------------------------------------------------------------- destinazioni
+  // ---------------------------------------------------------------- targets
 
-  /** Le destinazioni usate e la prima libera (le altre libere si nascondono: occupano posto). */
+  /** The used targets and the first free one (the other free ones are hidden: they take room). */
   private showTargets(): void {
     const free = this.rows.findIndex((_, i) => !this.targets[i]);
     this.rows.forEach((row, i) => {
@@ -111,7 +111,7 @@ export class ModulatorDisplay implements DeviceDisplay {
       row.element.classList.toggle('empty', !t);
       row.element.hidden = !t && i !== free;
       row.name.textContent = t ? this.host?.label(t) ?? '?' : '—';
-      row.name.title = t ? row.name.textContent : 'Libera: clicca ⊕ Mappa e poi una manopola, o scegli dal menu ▾';
+      row.name.title = t ? row.name.textContent : 'Free: click ⊕ Map and then a knob, or choose from the ▾ menu';
     });
     const used = this.targets.filter(t => t).length;
     const count = this.head.querySelector('.prisma-chip-count');
@@ -122,12 +122,12 @@ export class ModulatorDisplay implements DeviceDisplay {
   private linkRow(n: number): HTMLElement {
     const slot = n - 1;
     const name = el('span', { className: 'mod-link-name' });
-    const choose = el<HTMLButtonElement>('button', { className: 'mini', textContent: '▾', title: 'Scegli cosa muove (volume, pan, macro)' });
+    const choose = el<HTMLButtonElement>('button', { className: 'mini', textContent: '▾', title: 'Choose what it moves (volume, pan, macro)' });
     choose.onclick = () => {
       const r = choose.getBoundingClientRect();
       showContextMenu(r.left, r.bottom + 2, this.choiceMenu(slot));
     };
-    const clear = el<HTMLButtonElement>('button', { className: 'mini', textContent: '×', title: 'Togli la destinazione', onclick: () => this.host?.set(slot, null) });
+    const clear = el<HTMLButtonElement>('button', { className: 'mini', textContent: '×', title: 'Remove the target', onclick: () => this.host?.set(slot, null) });
     const element = el('div', { className: 'prisma-row mod-link' },
       el('span', { className: 'prisma-row-n', textContent: String(n) }), name, this.slider(linkAmount(n)).element, choose, clear);
     this.rows.push({ element, name });
@@ -144,25 +144,25 @@ export class ModulatorDisplay implements DeviceDisplay {
     return [
       ...items,
       ...(items.length ? [SEPARATOR] : []),
-      { label: 'Per un parametro: clicca ⊕ Mappa, poi la sua manopola', disabled: true, run: () => {} },
-      { label: 'Togli', disabled: !current, run: () => host.set(slot, null) },
+      { label: 'For a parameter: click ⊕ Map, then its knob', disabled: true, run: () => {} },
+      { label: 'Remove', disabled: !current, run: () => host.set(slot, null) },
     ];
   }
 
-  /** `target` in una destinazione: quella data, quella che lo muove già, o la prima libera. Dice
-   *  se è diventata una destinazione nuova. */
+  /** `target` in a target slot: the given one, the one already moving it, or the first free one. It says
+   *  whether it became a new target. */
   private assign(target: ModTarget, slot?: number): boolean {
     const host = this.host;
     if (!host) return false;
     const existing = this.targets.findIndex(t => !!t && sameTarget(t, target));
     if (slot === undefined && existing >= 0) {
-      host.say(`${host.label(target)}: lo muove già la destinazione ${existing + 1}`);
+      host.say(`${host.label(target)}: target ${existing + 1} already moves it`);
       return false;
     }
     let at = slot ?? -1;
     if (at < 0) for (let i = 0; i < MOD_LINKS && at < 0; i++) if (!this.targets[i]) at = i;
     if (at < 0) {
-      host.say('Le 8 destinazioni sono tutte in uso: togline una (×) per aggiungerne un\'altra');
+      host.say('All 8 targets are in use: remove one (×) to add another');
       return false;
     }
     host.set(at, target, this.values[linkAmount(at + 1)] ? undefined : NEW_AMOUNT);
@@ -173,16 +173,16 @@ export class ModulatorDisplay implements DeviceDisplay {
     this.picking = true;
     chip.classList.add('active');
     host.startPicking(target => {
-      if (this.assign(target)) host.say(`${this.ctx.type.label} → ${host.label(target)}. Clicca altre manopole, Esc per finire.`);
+      if (this.assign(target)) host.say(`${this.ctx.type.label} → ${host.label(target)}. Click other knobs, Esc to finish.`);
     }, () => {
       this.picking = false;
       chip.classList.remove('active');
     });
   }
 
-  /** "⊕ Mappa": un clic accende la scelta delle manopole, un trascinamento ne prende una. */
+  /** "⊕ Map": a click turns on the choice of knobs, a drag takes one. */
   private chip(): HTMLElement {
-    const chip = el('div', { className: `prisma-chip src-${this.family}`, textContent: '⊕ Mappa', title: 'Clicca, poi clicca le manopole da modulare (anche su altri dispositivi e altre schede); Esc per finire. Oppure trascina su una manopola' });
+    const chip = el('div', { className: `prisma-chip src-${this.family}`, textContent: '⊕ Map', title: 'Click, then click the knobs to modulate (also on other devices and other tabs); Esc to finish. Or drag onto a knob' });
     chip.append(el('span', { className: 'prisma-chip-count' }));
     chip.addEventListener('pointerdown', e => {
       if (e.button !== 0 || !this.host) return;
@@ -193,7 +193,7 @@ export class ModulatorDisplay implements DeviceDisplay {
       let ghost: HTMLElement | null = null, over: { target: ModTarget; element: HTMLElement } | null = null;
       let x = e.clientX, y = e.clientY, frame = 0;
       const startX = x, startY = y;
-      // a ogni fotogramma: la catena scorre sotto il puntatore fermo, il bersaglio cambia
+      // at every frame: the chain scrolls under the still pointer, the target changes
       const tick = () => {
         host.scrollToward(x);
         hover();
@@ -231,11 +231,11 @@ export class ModulatorDisplay implements DeviceDisplay {
         over?.element.classList.remove('drop-target');
         ghost?.remove();
         if (over) this.assign(over.target);
-        // un trascinamento lascia tutto com'era, un clic accende o spegne
+        // a drag leaves everything as it was, a click turns on or off
         if (ghost ? !wasPicking : wasPicking) return host.stopPicking();
         if (ghost) return;
         this.startPicking(chip, host);
-        host.say('Clicca le manopole da modulare, anche su altri dispositivi e altre schede; la rotella scorre la catena. Esc per finire.');
+        host.say('Click the knobs to modulate, also on other devices and other tabs; the wheel scrolls the chain. Esc to finish.');
       };
       chip.addEventListener('pointermove', move);
       chip.addEventListener('pointerup', up);
@@ -244,7 +244,7 @@ export class ModulatorDisplay implements DeviceDisplay {
     return chip;
   }
 
-  // ---------------------------------------------------------------- mattoni
+  // ---------------------------------------------------------------- building blocks
 
   private card(head: readonly Node[], ...body: Node[]): HTMLElement {
     return el('div', { className: 'prisma-card' }, el('div', { className: 'prisma-card-head' }, ...head), ...body);

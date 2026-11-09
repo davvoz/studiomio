@@ -1,8 +1,8 @@
-/* Il pannello di Wavetable: per ogni oscillatore la sua tabella disegnata come in Live, tutte
- * le forme in fila una dietro l'altra, e quella che suona alla posizione attuale in evidenza.
- * Trascinare la tabella in verticale sposta la posizione (Maiusc per la regolazione fine).
- * Sotto e accanto, le manopole delle altre sezioni, generate dai parametri come nel pannello
- * normale. */
+/* Wavetable's panel: for each oscillator its table drawn as in Live, all
+ * the shapes in a row one behind the other, and the one playing at the current position highlighted.
+ * Dragging the table vertically moves the position (Shift for fine adjustment).
+ * Below and beside it, the knobs of the other sections, generated from the parameters as in the normal
+ * panel. */
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import { FRAMES, LEVELS, STRIDE, TABLE_NAMES, TABLE_SIZE, wavetable } from '../../../devices/instruments/wavetable/tables';
 import type { DeviceSettings, ParamValues } from '../../../model/device';
@@ -11,12 +11,12 @@ import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext } from '../displays';
 
 const ACCENT = '#ff9d2e';
-/** Punti per forma nel disegno. */
+/** Points per shape in the drawing. */
 const POINTS = 96;
-/** Quanta altezza del disegno vale tutta la posizione, trascinando. */
+/** How much of the drawing's height the whole position is worth, when dragging. */
 const DRAG_PIXELS = 150;
 
-/** Un canvas nitido, ridimensionato al suo posto. */
+/** A sharp canvas, resized to its place. */
 function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
   const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
   if (!w || !h) return null;
@@ -26,9 +26,9 @@ function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
   return g;
 }
 
-/** Il disegno di una tabella, con la sua posizione trascinabile. */
+/** A table's drawing, with its draggable position. */
 class TableView {
-  readonly canvas = el<HTMLCanvasElement>('canvas', { className: 'wt-view', title: 'Trascina in verticale per spostare la posizione (Maiusc: fine)' });
+  readonly canvas = el<HTMLCanvasElement>('canvas', { className: 'wt-view', title: 'Drag vertically to move the position (Shift: fine)' });
   private drag: { y: number; pos: number } | null = null;
 
   constructor(private readonly osc: 'A' | 'B', private readonly ctx: DisplayContext, private readonly values: () => Record<string, number>) {
@@ -56,7 +56,7 @@ class TableView {
     const v = this.values(), w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     const table = wavetable(v[`table${this.osc}`]), pos = v[`pos${this.osc}`] / 100;
     const heard = v[`level${this.osc}`] > 0;
-    // le forme in fila: la prima davanti in basso a sinistra, l'ultima dietro in alto a destra
+    // the shapes in a row: the first in front at the bottom left, the last behind at the top right
     const waveW = w * 0.7, amp = h * 0.2, dx = (w - waveW - 16) / (FRAMES - 1), dy = (h * 0.42) / (FRAMES - 1);
     const x0 = 8, y0 = h * 0.7;
     const sample = (frame: number, t: number) => table[frame * LEVELS * STRIDE + Math.min(TABLE_SIZE - 1, Math.floor(t * TABLE_SIZE))];
@@ -77,7 +77,7 @@ class TableView {
       g.strokeStyle = `rgba(255,255,255,${0.07 + 0.08 * (1 - f / (FRAMES - 1))})`;
       g.stroke(path(f, t => sample(f, t)));
     }
-    // la forma che suona: fra le due vicine, come la legge il motore
+    // the playing shape: between the two neighbours, as the engine reads it
     const x = pos * (FRAMES - 1), f = Math.min(FRAMES - 2, Math.floor(x)), mix = x - f;
     g.strokeStyle = heard ? ACCENT : 'rgba(255,157,46,0.45)';
     g.lineWidth = 2;
@@ -105,7 +105,7 @@ export class WavetableDisplay implements DeviceDisplay {
     const sections = ctx.type.sections.map((section, i) => {
       const controls = el('div', { className: 'device-controls' }, ...section.params.map(p => this.control(p.id)));
       const title = el('div', { className: 'device-section-title', textContent: section.label });
-      // i due oscillatori (le prime due sezioni) hanno il disegno della tabella
+      // the two oscillators (the first two sections) have the table drawing
       if (i < 2) {
         const view = new TableView(i ? 'B' : 'A', ctx, () => this.values);
         this.views.push(view);
@@ -115,7 +115,7 @@ export class WavetableDisplay implements DeviceDisplay {
     });
     this.element.append(...sections);
     this.update(ctx.settings, true);
-    // si ridisegna quando il disegno prende le sue misure (pannello aperto, riaperto, allargato)
+    // it's redrawn when the drawing takes its size (panel opened, reopened, widened)
     const resized = new ResizeObserver(() => this.paint());
     for (const v of this.views) resized.observe(v.canvas);
   }

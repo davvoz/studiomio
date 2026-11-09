@@ -16,8 +16,8 @@ const rack = (name: string, mix = 30): RackPreset => ({
   macros: Array.from({ length: MACRO_COUNT }, () => empty),
 });
 
-describe('rack dell\'utente', () => {
-  it('salva, sostituisce con lo stesso nome, elenca in ordine ed elimina; al riavvio si rileggono', async () => {
+describe('user racks', () => {
+  it('saves, replaces with the same name, lists in order and deletes; at restart they\'re reread', async () => {
     const storage = memory();
     const racks = new UserRacks(new StorageRacks(storage));
     let changes = 0;
@@ -37,20 +37,20 @@ describe('rack dell\'utente', () => {
     expect(racks.canReveal).toBe(false);
   });
 
-  it('salta ciò che non è un rack; lo spazio locale rovinato o pieno non rompe niente', async () => {
-    const racks = new UserRacks(new StorageRacks(memory({ 'studiomio.racks': JSON.stringify([rack('Ok'), { name: 'senza effetti' }, 3, null]) })));
+  it('skips what isn\'t a rack; damaged or full local storage breaks nothing', async () => {
+    const racks = new UserRacks(new StorageRacks(memory({ 'studiomio.racks': JSON.stringify([rack('Ok'), { name: 'without effects' }, 3, null]) })));
     await racks.load();
     expect(racks.list().map(r => r.name)).toEqual(['Ok']);
     await expect(new StorageRacks(memory({ 'studiomio.racks': '{rotto' })).load()).resolves.toEqual([]);
     const full: PresetStorage = { getItem: () => null, setItem: () => { throw new Error('quota'); } };
-    await expect(new StorageRacks(full).save(rack('X'))).rejects.toThrow(/pieno o bloccato/);
+    await expect(new StorageRacks(full).save(rack('X'))).rejects.toThrow(/full or blocked/);
   });
 
-  it('se il salvataggio non riesce il rack non compare', async () => {
-    const failing: RackBackend = { load: async () => [], save: () => Promise.reject(new Error('disco pieno')), remove: async () => {} };
+  it('if saving fails the rack doesn\'t appear', async () => {
+    const failing: RackBackend = { load: async () => [], save: () => Promise.reject(new Error('disk full')), remove: async () => {} };
     const racks = new UserRacks(failing);
-    await expect(racks.save(rack('X'))).rejects.toThrow('disco pieno');
+    await expect(racks.save(rack('X'))).rejects.toThrow('disk full');
     expect(racks.list()).toEqual([]);
-    await expect(new UserRacks(null).save(rack('X'))).rejects.toThrow(/non è disponibile/);
+    await expect(new UserRacks(null).save(rack('X'))).rejects.toThrow(/isn't available/);
   });
 });

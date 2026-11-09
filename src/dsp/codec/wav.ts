@@ -2,10 +2,10 @@ import type { Channels } from '../types';
 
 export type WavBitDepth = 16 | 24 | 32;
 
-/** Scrittura di un campione nel formato del file; il numero è anche la sua dimensione in byte. */
+/** Writing a sample in the file's format; the number is also its size in bytes. */
 interface SampleWriter {
   readonly bytes: number;
-  readonly formatTag: 1 | 3; // 1 = PCM intero, 3 = IEEE float
+  readonly formatTag: 1 | 3; // 1 = integer PCM, 3 = IEEE float
   write(v: DataView, offset: number, s: number): void;
 }
 

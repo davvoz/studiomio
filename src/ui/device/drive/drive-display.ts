@@ -1,7 +1,7 @@
-/* Il pannello del Drive: a sinistra la curva (come il suono la piega: drive, bias, compensazione
- * e mix, calcolata con la stessa matematica del motore), accanto lo spettro prima (linea tenue) e
- * dopo (pieno) — si vedono nascere le armoniche —, sotto le forme come pulsanti con la loro
- * piccola curva e le manopole generate dai parametri. */
+/* The Drive's panel: on the left the curve (how the sound bends it: drive, bias, makeup
+ * and mix, computed with the same maths as the engine), next to it the spectrum before (faint line) and
+ * after (filled) — you see the harmonics being born —, below the shapes as buttons with their
+ * little curve and the knobs generated from the parameters. */
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import { autoGain, SHAPES, transfer } from '../../../devices/effects/drive/drive-math';
 import { dbToGain } from '../../../devices/dsp/core';
@@ -11,14 +11,14 @@ import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext, SpectrumTap } from '../displays';
 import { EqScale, FREQ_GRID, spectrumColumns, SPECTRUM_BOTTOM } from '../eq/eq-scale';
 
-/** I controlli sotto il grafico, a gruppi (la forma ha i suoi pulsanti). */
+/** The controls under the graph, in groups (the shape has its buttons). */
 const GROUPS: readonly (readonly string[])[] = [['drive', 'bias', 'color'], ['low', 'split'], ['tone', 'auto', 'output', 'mix'], ['oversampling']];
 
-/** Quanto si vede in verticale nel grafico della curva (oltre ±1 la curva può salire con la compensazione). */
+/** How much is visible vertically in the curve's graph (beyond ±1 the curve can rise with the makeup). */
 const CURVE_RANGE = 1.3;
 const ACCENT = '#ff9d2e';
 
-/** Un canvas nitido, ridimensionato al suo posto. */
+/** A sharp canvas, resized to its place. */
 function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
   const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
   if (!w || !h) return null;
@@ -28,7 +28,7 @@ function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
   return g;
 }
 
-/** La curva y(x) per x in −1…1 in un riquadro w×h (y in ±range). */
+/** The curve y(x) for x in −1…1 in a w×h box (y in ±range). */
 function curvePath(fn: (x: number) => number, w: number, h: number, range: number, steps = 160): Path2D {
   const p = new Path2D();
   for (let i = 0; i <= steps; i++) {
@@ -64,7 +64,7 @@ export class DriveDisplay implements DeviceDisplay {
     this.values = resolveParams(ctx.type, ctx.settings.params);
     this.shapeButtons = SHAPES.map((s, i) => {
       const icon = el<HTMLCanvasElement>('canvas', { className: 'drive-shape-icon' });
-      const b = el<HTMLButtonElement>('button', { className: 'drive-shape', title: `Forma: ${s.label}` }, icon, el('span', { textContent: s.label }));
+      const b = el<HTMLButtonElement>('button', { className: 'drive-shape', title: `Shape: ${s.label}` }, icon, el('span', { textContent: s.label }));
       b.onclick = () => this.ctx.setParams({ shape: i }, true);
       return b;
     });
@@ -77,7 +77,7 @@ export class DriveDisplay implements DeviceDisplay {
       el('div', { className: 'drive-shapes' }, ...this.shapeButtons),
       el('div', { className: 'drive-controls' }, ...groups));
     this.update(ctx.settings, true);
-    // i grafici prendono l'altezza che resta nel pannello: si ridisegnano quando cambia
+    // the graphs take the height left in the panel: they're redrawn when it changes
     const resized = new ResizeObserver(() => { this.dirty = true; });
     resized.observe(this.curve);
     resized.observe(this.spectrum);
@@ -92,7 +92,7 @@ export class DriveDisplay implements DeviceDisplay {
     }
     this.enabled = enabled;
     this.shapeButtons.forEach((b, i) => b.classList.toggle('on', i === this.values.shape));
-    if (this.element.isConnected) this.icons(); // il colore della forma scelta cambia
+    if (this.element.isConnected) this.icons(); // the chosen shape's colour changes
     for (const { control, spec } of this.controls.values()) {
       control.set(this.values[spec.id]);
       setActive(control, paramActive(spec, this.values));
@@ -107,14 +107,14 @@ export class DriveDisplay implements DeviceDisplay {
     return control.element;
   }
 
-  /** La curva come si sente con i valori attuali: drive, bias, compensazione, mix e uscita. */
+  /** The curve as it's heard with the current values: drive, bias, makeup, mix and output. */
   private heard(): (x: number) => number {
     const v = this.values, s = { shape: v.shape, drive: dbToGain(v.drive), bias: v.bias / 100 };
     const t = transfer(s), comp = v.auto ? autoGain(s) : 1, mix = v.mix / 100, out = dbToGain(v.output);
     return x => (x * (1 - mix) + t(x) * comp * mix) * out;
   }
 
-  /** Le piccole curve dei pulsanti delle forme, nel colore del pulsante. */
+  /** The little curves of the shape buttons, in the button's colour. */
   private icons(): void {
     this.shapeButtons.forEach((b, i) => {
       const c = b.querySelector('canvas')!, g = fit(c);
@@ -133,7 +133,7 @@ export class DriveDisplay implements DeviceDisplay {
       return;
     }
     requestAnimationFrame(this.frame);
-    if (this.element.offsetParent === null) return; // pannello nascosto
+    if (this.element.offsetParent === null) return; // hidden panel
     const live = this.tap.read(this.pre, this.post) && this.post.some(v => v > SPECTRUM_BOTTOM - 10);
     if (this.dirty) this.paintCurve();
     if (live || this.spectrumShown || this.dirty) this.paintSpectrum(live);
@@ -156,7 +156,7 @@ export class DriveDisplay implements DeviceDisplay {
     }
     g.strokeStyle = 'rgba(255,255,255,0.2)';
     g.beginPath(); g.moveTo(w / 2 + 0.5, 0); g.lineTo(w / 2 + 0.5, h); g.moveTo(0, h / 2 + 0.5); g.lineTo(w, h / 2 + 0.5); g.stroke();
-    // il suono pulito: la diagonale
+    // the clean sound: the diagonal
     g.setLineDash([3, 3]);
     g.stroke(curvePath(x => x, w, h, CURVE_RANGE, 2));
     g.setLineDash([]);
@@ -194,7 +194,7 @@ export class DriveDisplay implements DeviceDisplay {
     g.textBaseline = 'alphabetic';
     if (!live) {
       g.fillStyle = 'rgba(255,255,255,0.3)';
-      g.fillText('Spettro: prima (linea) e dopo il Drive (pieno), mentre suona', 8, 16);
+      g.fillText('Spectrum: before (line) and after the Drive (filled), while playing', 8, 16);
       return;
     }
     const n = Math.ceil(w / 2) + 1;

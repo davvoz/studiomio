@@ -1,9 +1,9 @@
-/* WarpMio — motore DSP.
+/* WarpMio — DSP engine.
  *
- * Tutto il codice sta dentro WarpDSP() perché la funzione viene usata sia nel thread
- * principale sia, serializzata con toString(), dentro un Web Worker creato da Blob
- * (così l'app funziona anche aprendo index.html direttamente da disco).
- * Non deve quindi fare riferimento a nulla di esterno.
+ * All the code sits inside WarpDSP() because the function is used both in the main
+ * thread and, serialized with toString(), inside a Web Worker created from a Blob
+ * (so the app also works opening index.html directly from disk).
+ * So it mustn't refer to anything external.
  */
 function WarpDSP() {
   'use strict';
@@ -62,7 +62,7 @@ function WarpDSP() {
     }
   }
 
-  // Dopo la FFT di (x + i·y), con x e y reali, separa gli spettri di x e y (bin 0..n/2).
+  // After the FFT of (x + i·y), with x and y real, separates the spectra of x and y (bins 0..n/2).
   function splitPair(re, im, xr, xi, yr, yi) {
     const n = re.length, h = n >> 1;
     for (let k = 0; k <= h; k++) {
@@ -74,8 +74,8 @@ function WarpDSP() {
     }
   }
 
-  // Inverso di splitPair: impacchetta due spettri hermitiani in uno solo, così una
-  // IFFT restituisce x nella parte reale e y in quella immaginaria.
+  // Inverse of splitPair: packs two Hermitian spectra into one, so an
+  // IFFT returns x in the real part and y in the imaginary one.
   function joinPair(xr, xi, yr, yi, re, im) {
     const n = re.length, h = n >> 1;
     for (let k = 0; k <= h; k++) {
@@ -89,7 +89,7 @@ function WarpDSP() {
     }
   }
 
-  // ================================================================= utilità
+  // ================================================================= utilities
 
   function hann(n) {
     const w = new Float64Array(n);
@@ -134,7 +134,7 @@ function WarpDSP() {
     return ((c3 * f + c2) * f + c1) * f + x0;
   }
 
-  // Passa-basso FIR (sinc finestrata Blackman); cutoff in frazione di Nyquist.
+  // FIR low-pass (Blackman-windowed sinc); cutoff as a fraction of Nyquist.
   function lowpass(x, cutoff) {
     const half = 16, taps = 2 * half + 1, h = new Float64Array(taps);
     let sum = 0;
@@ -159,7 +159,7 @@ function WarpDSP() {
     return y;
   }
 
-  // Ricampiona leggendo l'ingresso a velocità `factor` (>1 = più acuto e più corto).
+  // Resamples by reading the input at speed `factor` (>1 = higher and shorter).
   function resample(channels, factor, outLen) {
     return channels.map(x => {
       const src = factor > 1.001 ? lowpass(x, 0.95 / factor) : x;
@@ -171,8 +171,8 @@ function WarpDSP() {
 
   // ========================================================== mappa temporale
 
-  // points: [[campioneUscita, campioneIngresso], ...] crescenti. Lineare a tratti,
-  // estrapolata con la pendenza dei segmenti estremi.
+  // points: [[outputSample, inputSample], ...] increasing. Piecewise linear,
+  // extrapolated with the slope of the outermost segments.
   function makeMap(points) {
     const n = points.length, O = new Float64Array(n), I = new Float64Array(n);
     for (let k = 0; k < n; k++) { O[k] = points[k][0]; I[k] = points[k][1]; }
@@ -196,7 +196,7 @@ function WarpDSP() {
 
   // ============================================================ algoritmi warp
 
-  // Re-Pitch: lettura a velocità variabile, come un giradischi (cambia l'intonazione).
+  // Re-Pitch: variable-speed reading, like a turntable (it changes the pitch).
   function repitchStretch(channels, map, outLen) {
     const pos = new Float64Array(outLen);
     for (let n = 0; n < outLen; n++) pos[n] = map.o2i(n);
@@ -207,7 +207,7 @@ function WarpDSP() {
     });
   }
 
-  // Cerca, attorno a `target`, l'inizio di frame più simile alla continuazione naturale `nat`.
+  // Searches, around `target`, for the frame start most similar to the natural continuation `nat`.
   function bestMatch(x, nat, target, tol, N, stride) {
     const len = x.length;
     const score = (s, st) => {
@@ -236,7 +236,7 @@ function WarpDSP() {
     return refined;
   }
 
-  // Tones (WSOLA) e Texture (granulare con "flux" casuale).
+  // Tones (WSOLA) and Texture (granular with random "flux").
   function wsolaStretch(channels, sr, map, outLen, opts) {
     let N = Math.round((opts.grainMs || 50) / 1000 * sr);
     N = Math.max(256, Math.min(16384, N));
@@ -274,8 +274,8 @@ function WarpDSP() {
     return outs;
   }
 
-  // Complex: phase vocoder con phase locking (Laroche-Dolson), fase stereo coerente
-  // (calcolata sul mid e applicata ai canali) e reset di fase sui transienti.
+  // Complex: phase vocoder with phase locking (Laroche-Dolson), coherent stereo phase
+  // (computed on the mid and applied to the channels) and phase reset on the transients.
   function pvStretch(channels, sr, map, outLen, opts) {
     const N = opts.fftSize || 4096, H = N >> 2, h = N >> 1, nb = h + 1;
     const win = hann(N);
@@ -297,7 +297,7 @@ function WarpDSP() {
       if (os >= outLen) break;
       const ic = map.o2i(oc), a = Math.round(ic) - h;
 
-      // Mid: frame corrente e frame precedente di H campioni, con una sola FFT.
+      // Mid: current frame and previous frame H samples earlier, with a single FFT.
       readFrame(mono, a, win, re);
       readFrame(mono, a - H, win, im);
       fft(re, im, false);
@@ -347,7 +347,7 @@ function WarpDSP() {
         }
       }
 
-      // Sintesi dei canali, due per volta con una sola FFT diretta e una inversa.
+      // Synthesis of the channels, two at a time with a single forward and a single inverse FFT.
       for (let c = 0; c < C; c += 2) {
         const two = c + 1 < C;
         readFrame(channels[c], a, win, re);
@@ -380,8 +380,8 @@ function WarpDSP() {
     return outs;
   }
 
-  // Beats: ogni fetta (tra transienti o sulla griglia) suona a velocità originale a
-  // partire dalla sua nuova posizione; i buchi si riempiono secondo il loop mode.
+  // Beats: each slice (between transients or on the grid) plays at original speed
+  // starting from its new position; the gaps are filled according to the loop mode.
   function beatsStretch(channels, sr, map, outLen, opts) {
     const len = channels[0].length;
     const loopMode = opts.loopMode || 'off';
@@ -477,7 +477,7 @@ function WarpDSP() {
 
   // ================================================================== analisi
 
-  // Spectral flux su magnitudo log-compressa: curva di "novità" per transienti e tempo.
+  // Spectral flux on log-compressed magnitude: "novelty" curve for transients and tempo.
   function onsetEnvelope(mono, sr) {
     const N = sr > 60000 ? 2048 : 1024, hop = N >> 2, nb = (N >> 1) + 1;
     const win = hann(N);
@@ -488,7 +488,7 @@ function WarpDSP() {
     let prev = new Float64Array(nb), cur = new Float64Array(nb);
     const maxBin = Math.min(nb, Math.round(16000 / sr * N));
     const norm = 4 / N;
-    // Bande logaritmiche: una cassa (pochi bin bassi) pesa quanto un piatto (centinaia di bin).
+    // Logarithmic bands: a kick (few low bins) weighs as much as a cymbal (hundreds of bins).
     const nBands = 12, band = new Int32Array(maxBin), bandW = new Float64Array(nBands);
     for (let k = 1; k < maxBin; k++) {
       band[k] = Math.min(nBands - 1, Math.floor(nBands * Math.log(k) / Math.log(maxBin)));
@@ -519,7 +519,7 @@ function WarpDSP() {
     return { flux, hop, frameRate: sr / hop };
   }
 
-  // Porta la posizione del transiente all'inizio reale dell'attacco.
+  // Brings the transient's position to the real start of the attack.
   function refineOnset(x, center, hop) {
     const B = 32, len = x.length;
     const lo = Math.max(0, center - 3 * hop), hi = Math.min(len, center + 2 * hop);
@@ -592,8 +592,8 @@ function WarpDSP() {
     return n > 0 ? s / n : 0;
   }
 
-  // Stima del tempo: autocorrelazione dell'onset con preferenza attorno ai 120 BPM e,
-  // per i loop, aggancio a una durata di battute intere.
+  // Tempo estimate: autocorrelation of the onset with a preference around 120 BPM and,
+  // for loops, snapping to a duration of whole bars.
   function estimateTempo(envl, durationSec) {
     const { flux, frameRate } = envl;
     const n = flux.length;
@@ -646,7 +646,7 @@ function WarpDSP() {
     return Math.round(bpm * 100) / 100;
   }
 
-  // Beat tracking con programmazione dinamica (Ellis 2007). Restituisce campioni.
+  // Beat tracking with dynamic programming (Ellis 2007). Returns samples.
   function trackBeats(envl, bpm) {
     const { flux, hop, frameRate } = envl;
     const n = flux.length;
@@ -712,7 +712,7 @@ function WarpDSP() {
     return buf;
   }
 
-  // ===================================================== ZIP (senza compressione)
+  // ===================================================== ZIP (without compression)
 
   let crcTable = null;
   function crc32(u8) {
@@ -729,7 +729,7 @@ function WarpDSP() {
     return (c ^ 0xffffffff) >>> 0;
   }
 
-  // files: [{name, data: Uint8Array}] → Uint8Array del file .zip
+  // files: [{name, data: Uint8Array}] → Uint8Array of the .zip file
   function makeZip(files) {
     const enc = new TextEncoder();
     const d = new Date();

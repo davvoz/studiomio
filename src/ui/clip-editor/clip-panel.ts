@@ -4,29 +4,29 @@ import { sampleDuration, type SampleRef } from '../../model/sample';
 import { scaleTempo } from '../../model/warp-tools';
 import { el } from '../dom';
 
-/** Un campo delle opzioni di una modalità di warp. */
+/** A field of a warp mode's options. */
 type Field =
   | { readonly kind: 'select'; readonly label: string; readonly options: readonly (readonly [string, string])[]; get(o: WarpOptions): string; set(v: string): object }
   | { readonly kind: 'number'; readonly label: string; readonly min: number; readonly max: number; readonly step: number; get(o: WarpOptions): number; set(v: number): object }
   | { readonly kind: 'check'; readonly label: string; get(o: WarpOptions): boolean; set(v: boolean): object };
 
-/** Opzioni di ogni modalità: aggiungere un'opzione è aggiungere una riga. */
+/** Options of each mode: adding an option is adding a line. */
 const MODE_FIELDS: { readonly [M in WarpMode]: readonly Field[] } = {
   beats: [
     {
-      kind: 'select', label: 'Conserva',
-      options: [['transients', 'Transienti'], ['1', '1/4'], ['0.5', '1/8'], ['0.25', '1/16'], ['0.125', '1/32']],
+      kind: 'select', label: 'Keep',
+      options: [['transients', 'Transients'], ['1', '1/4'], ['0.5', '1/8'], ['0.25', '1/16'], ['0.125', '1/32']],
       get: o => String(o.beats.preserve), set: v => ({ preserve: v === 'transients' ? 'transients' : Number(v) }),
     },
     {
-      kind: 'select', label: 'Loop', options: [['off', 'Off'], ['forward', 'Avanti'], ['pingpong', 'Avanti-indietro']],
+      kind: 'select', label: 'Loop', options: [['off', 'Off'], ['forward', 'Forward'], ['pingpong', 'Back and forth']],
       get: o => o.beats.loop, set: v => ({ loop: v }),
     },
-    { kind: 'number', label: 'Inviluppo %', min: 0, max: 100, step: 1, get: o => o.beats.envelope, set: v => ({ envelope: v }) },
+    { kind: 'number', label: 'Envelope %', min: 0, max: 100, step: 1, get: o => o.beats.envelope, set: v => ({ envelope: v }) },
   ],
-  tones: [{ kind: 'number', label: 'Grana ms', min: 10, max: 200, step: 1, get: o => o.tones.grainMs, set: v => ({ grainMs: v }) }],
+  tones: [{ kind: 'number', label: 'Grain ms', min: 10, max: 200, step: 1, get: o => o.tones.grainMs, set: v => ({ grainMs: v }) }],
   texture: [
-    { kind: 'number', label: 'Grana ms', min: 10, max: 400, step: 1, get: o => o.texture.grainMs, set: v => ({ grainMs: v }) },
+    { kind: 'number', label: 'Grain ms', min: 10, max: 400, step: 1, get: o => o.texture.grainMs, set: v => ({ grainMs: v }) },
     { kind: 'number', label: 'Flux %', min: 0, max: 100, step: 1, get: o => o.texture.flux, set: v => ({ flux: v }) },
   ],
   complex: [
@@ -34,7 +34,7 @@ const MODE_FIELDS: { readonly [M in WarpMode]: readonly Field[] } = {
       kind: 'select', label: 'FFT', options: [['2048', '2048'], ['4096', '4096'], ['8192', '8192']],
       get: o => String(o.complex.fftSize), set: v => ({ fftSize: Number(v) }),
     },
-    { kind: 'check', label: 'Fase azzerata sui transienti', get: o => o.complex.resetOnTransients, set: v => ({ resetOnTransients: v }) },
+    { kind: 'check', label: 'Phase reset on transients', get: o => o.complex.resetOnTransients, set: v => ({ resetOnTransients: v }) },
   ],
   repitch: [],
 };
@@ -44,26 +44,26 @@ const MODE_LABEL: { readonly [M in WarpMode]: string } = {
 };
 
 export interface PanelActions {
-  /** Con `mergeKey` le modifiche continue (es. un cursore trascinato) sono un passo solo. */
+  /** With `mergeKey` the continuous changes (e.g. a dragged slider) are a single step. */
   commit(label: string, fn: (c: AudioClip) => AudioClip, mergeKey?: string): void;
   endMerge(): void;
   autoWarp(): void;
   followTempo(): void;
   quantize(): void;
-  /** Tiene solo il loop (o la regione) in un file nuovo. */
+  /** Keeps only the loop (or the region) in a new file. */
   crop(): void;
   close(): void;
 }
 
 const row = (label: string, ...controls: Node[]) => el('label', { className: 'row' }, el('span', { textContent: label }), ...controls);
 
-/** Pannello a sinistra dell'editor: volume e reverse, warp, modalità e opzioni, tempo e intonazione. */
+/** Panel on the left of the editor: volume and reverse, warp, mode and options, tempo and pitch. */
 export class ClipPanel {
   readonly element = el('div', { className: 'clip-panel' });
   private clip: AudioClip | null = null;
   private selectedMarker = -1;
   private renderedMode: WarpMode | null = null;
-  /** Durata del sample, per "Azzera". */
+  /** Duration of the sample, for "Reset". */
   private duration = 0;
   private readonly name = el<HTMLInputElement>('input', { className: 'clip-name' });
   private readonly info = el('div', { className: 'muted small' });
@@ -75,8 +75,8 @@ export class ClipPanel {
   private readonly transpose = el<HTMLInputElement>('input', { type: 'number', min: '-48', max: '48', step: '1' });
   private readonly detune = el<HTMLInputElement>('input', { type: 'number', min: '-50', max: '50', step: '1' });
   private readonly gain = el<HTMLInputElement>('input', { type: 'number', min: String(GAIN_MIN_DB), max: String(GAIN_MAX_DB), step: '0.5' });
-  private readonly gainSlider = el<HTMLInputElement>('input', { type: 'range', min: String(GAIN_MIN_DB), max: String(GAIN_MAX_DB), step: '0.5', title: 'Volume della clip (doppio clic: 0 dB)' });
-  private readonly reverse = el<HTMLButtonElement>('button', { textContent: 'Reverse', title: 'Suona la clip al contrario' });
+  private readonly gainSlider = el<HTMLInputElement>('input', { type: 'range', min: String(GAIN_MIN_DB), max: String(GAIN_MAX_DB), step: '0.5', title: 'Clip volume (double click: 0 dB)' });
+  private readonly reverse = el<HTMLButtonElement>('button', { textContent: 'Reverse', title: 'Plays the clip backwards' });
   private readonly warpOnly: HTMLElement[] = [];
   private readonly origin: HTMLButtonElement;
 
@@ -84,52 +84,52 @@ export class ClipPanel {
     const { commit } = actions;
     const button = (text: string, title: string, onclick: () => void) => el<HTMLButtonElement>('button', { textContent: text, title, onclick });
     this.mode.append(...(Object.keys(MODE_LABEL) as WarpMode[]).map(m => el('option', { value: m, textContent: MODE_LABEL[m] })));
-    this.name.onchange = () => { if (this.name.value.trim()) commit('Rinomina clip', c => c.withName(this.name.value.trim())); };
-    this.warp.onchange = () => commit(this.warp.checked ? 'Warp attivo' : 'Warp spento', c => c.withWarp({ enabled: this.warp.checked }));
-    this.mode.onchange = () => commit('Modalità di warp', c => c.withWarp({ mode: this.mode.value as WarpMode }));
+    this.name.onchange = () => { if (this.name.value.trim()) commit('Rename clip', c => c.withName(this.name.value.trim())); };
+    this.warp.onchange = () => commit(this.warp.checked ? 'Warp on' : 'Warp off', c => c.withWarp({ enabled: this.warp.checked }));
+    this.mode.onchange = () => commit('Warp mode', c => c.withWarp({ mode: this.mode.value as WarpMode }));
     this.bpm.onchange = () => {
       const v = Number(this.bpm.value), i = this.selectedMarker;
       if (!(v >= 20 && v <= 999)) return this.update(this.clip!, null, i);
-      commit(i >= 0 ? 'Tempo del segmento' : 'Tempo della clip', c => c.withMarkers(i >= 0 ? c.warp.markers.withSegmentBpm(i, v) : c.warp.markers.withGlobalBpm(v)));
+      commit(i >= 0 ? 'Segment tempo' : 'Clip tempo', c => c.withMarkers(i >= 0 ? c.warp.markers.withSegmentBpm(i, v) : c.warp.markers.withGlobalBpm(v)));
     };
     this.transpose.onchange = () => commit('Transpose', c => c.withTranspose(Number(this.transpose.value)));
     this.detune.onchange = () => commit('Detune', c => c.withDetune(Number(this.detune.value)));
-    this.gain.onchange = () => commit('Volume della clip', c => c.withGain(Number(this.gain.value)));
-    this.gainSlider.oninput = () => commit('Volume della clip', c => c.withGain(Number(this.gainSlider.value)), 'clip-gain');
+    this.gain.onchange = () => commit('Clip volume', c => c.withGain(Number(this.gain.value)));
+    this.gainSlider.oninput = () => commit('Clip volume', c => c.withGain(Number(this.gainSlider.value)), 'clip-gain');
     this.gainSlider.onchange = () => actions.endMerge();
-    this.gainSlider.ondblclick = () => commit('Volume della clip', c => c.withGain(0));
+    this.gainSlider.ondblclick = () => commit('Clip volume', c => c.withGain(0));
     this.reverse.onclick = () => {
       const on = !this.clip?.reversed;
-      commit(on ? 'Reverse' : 'Reverse spento', c => c.withReversed(on, this.duration));
+      commit(on ? 'Reverse' : 'Reverse off', c => c.withReversed(on, this.duration));
     };
-    this.origin = button('1.1.1 qui', 'Il marker selezionato diventa l\'inizio della battuta 1', () => {
+    this.origin = button('1.1.1 here', 'The selected marker becomes the start of bar 1', () => {
       const i = this.selectedMarker;
-      if (i >= 0) commit('Imposta 1.1.1', c => c.withMarkers(c.warp.markers.withOrigin(c.warp.markers.markers[i].t)));
+      if (i >= 0) commit('Set 1.1.1', c => c.withMarkers(c.warp.markers.withOrigin(c.warp.markers.markers[i].t)));
     });
     for (const input of [this.name, this.bpm, this.transpose, this.detune, this.gain, this.gainSlider]) {
       input.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') input.blur(); };
     }
 
     const tempoTools = el('div', { className: 'buttons' },
-      button(':2', 'Tempo dimezzato', () => commit('Tempo :2', c => c.withMarkers(scaleTempo(c.warp.markers, 0.5)))),
-      button('×2', 'Tempo doppio', () => commit('Tempo ×2', c => c.withMarkers(scaleTempo(c.warp.markers, 2)))),
+      button(':2', 'Half time', () => commit('Tempo :2', c => c.withMarkers(scaleTempo(c.warp.markers, 0.5)))),
+      button('×2', 'Double time', () => commit('Tempo ×2', c => c.withMarkers(scaleTempo(c.warp.markers, 2)))),
       this.origin);
     const warpTools = el('div', { className: 'buttons' },
-      button('Auto-Warp', 'Tempo costante sul tempo rilevato, 1.1.1 sul primo colpo', () => actions.autoWarp()),
-      button('Segui tempo', 'Un marker per battuta dal beat tracking (registrazioni dal vivo)', () => actions.followTempo()),
-      button('Quantizza', 'Porta i marker sulla griglia', () => actions.quantize()),
-      button('Azzera', 'Torna a un tempo costante', () => commit('Azzera warp marker', c => c.withMarkers(c.warp.markers.cleared(this.duration)))));
-    const modeRow = row('Modalità', this.mode);
+      button('Auto-Warp', 'Constant tempo on the detected tempo, 1.1.1 on the first hit', () => actions.autoWarp()),
+      button('Follow tempo', 'One marker per bar from beat tracking (live recordings)', () => actions.followTempo()),
+      button('Quantize', 'Brings the markers onto the grid', () => actions.quantize()),
+      button('Reset', 'Back to a constant tempo', () => commit('Reset warp markers', c => c.withMarkers(c.warp.markers.cleared(this.duration)))));
+    const modeRow = row('Mode', this.mode);
     const tempoRow = row('', this.bpm);
     tempoRow.firstElementChild!.replaceWith(this.bpmLabel);
     this.warpOnly.push(modeRow, this.options, tempoRow, tempoTools, warpTools);
 
     this.element.append(
-      el('div', { className: 'panel-head' }, this.name, el('button', { className: 'close', textContent: '×', title: 'Chiudi (Esc)', onclick: () => actions.close() })),
+      el('div', { className: 'panel-head' }, this.name, el('button', { className: 'close', textContent: '×', title: 'Close (Esc)', onclick: () => actions.close() })),
       this.info,
       el('div', { className: 'clip-gain' }, el('span', { textContent: 'Volume dB' }), this.gainSlider, this.gain),
       el('div', { className: 'buttons' }, this.reverse,
-        button('Crop', 'Tiene solo il loop (o la regione, se il loop è spento): il resto del sample sparisce in un file nuovo', () => actions.crop())),
+        button('Crop', 'Keeps only the loop (or the region, if the loop is off): the rest of the sample disappears into a new file', () => actions.crop())),
       row('Warp', this.warp),
       modeRow, this.options, tempoRow, tempoTools, warpTools,
       row('Transpose st', this.transpose), row('Detune ct', this.detune),
@@ -141,7 +141,7 @@ export class ClipPanel {
     this.selectedMarker = selectedMarker;
     if (sample) {
       this.duration = sampleDuration(sample);
-      this.info.textContent = `${sample.name} · ${this.duration.toFixed(2)} s · ${sample.analysis ? `${sample.analysis.tempo.toFixed(2)} BPM rilevati` : 'non analizzato'}`;
+      this.info.textContent = `${sample.name} · ${this.duration.toFixed(2)} s · ${sample.analysis ? `${sample.analysis.tempo.toFixed(2)} BPM detected` : 'not analysed'}`;
     }
     const set = (input: HTMLInputElement, v: string) => { if (document.activeElement !== input) input.value = v; };
     set(this.name, clip.name);
@@ -149,7 +149,7 @@ export class ClipPanel {
     this.mode.value = clip.warp.mode;
     const markers = clip.warp.markers;
     const segment = selectedMarker >= 0 && selectedMarker < markers.length;
-    this.bpmLabel.textContent = segment ? 'BPM segmento' : 'BPM clip';
+    this.bpmLabel.textContent = segment ? 'Segment BPM' : 'BPM clip';
     set(this.bpm, (segment ? markers.segmentBpm(selectedMarker) : markers.globalBpm).toFixed(2));
     set(this.transpose, String(clip.transpose));
     set(this.detune, String(clip.detune));
@@ -161,7 +161,7 @@ export class ClipPanel {
     this.renderOptions(clip);
   }
 
-  /** Campi della modalità corrente; ricostruiti solo quando la modalità cambia. */
+  /** Fields of the current mode; rebuilt only when the mode changes. */
   private renderOptions(clip: AudioClip): void {
     const mode = clip.warp.mode;
     if (mode !== this.renderedMode) {
@@ -178,7 +178,7 @@ export class ClipPanel {
   }
 
   private field(mode: WarpMode, f: Field): HTMLElement {
-    const commit = (patch: object) => this.actions.commit(`Opzioni ${MODE_LABEL[mode]}`, c =>
+    const commit = (patch: object) => this.actions.commit(`${MODE_LABEL[mode]} options`, c =>
       c.withWarpOptions(mode as keyof WarpOptions, patch as Partial<WarpOptions[keyof WarpOptions]>));
     const makers: { readonly [K in Field['kind']]: (f: Extract<Field, { kind: K }>) => HTMLElement } = {
       select: f => {

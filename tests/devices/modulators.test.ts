@@ -6,8 +6,8 @@ import { FILTER_TYPE, MultimodeFilter } from '../../src/devices/dsp/multimode-fi
 const SR = 48000;
 const bar = { bpm: 120, beatsPerBar: 4 };
 
-describe('LFO: le onde', () => {
-  it('seno e triangolo partono da 0 e salgono, i denti di sega e la quadra dagli estremi', () => {
+describe('LFO: the waves', () => {
+  it('sine and triangle start from 0 and rise, the saws and the square from the extremes', () => {
     expect(lfoAt(LFO_SHAPE.sine, 0.25)).toBeCloseTo(1, 12);
     expect(lfoAt(LFO_SHAPE.sine, 3.75)).toBeCloseTo(-1, 12);
     expect(lfoAt(LFO_SHAPE.triangle, 0)).toBe(0);
@@ -19,7 +19,7 @@ describe('LFO: le onde', () => {
     expect(lfoAt(LFO_SHAPE.square, 0.6)).toBe(-1);
   });
 
-  it('S&H: un valore per giro, sempre lo stesso per lo stesso giro (anche indietro nel tempo)', () => {
+  it('S&H: one value per cycle, always the same for the same cycle (also backwards in time)', () => {
     const values = Array.from({ length: 64 }, (_, k) => lfoAt(LFO_SHAPE.sampleHold, k + 0.3));
     for (let k = 0; k < 64; k++) {
       expect(lfoAt(LFO_SHAPE.sampleHold, k + 0.9)).toBe(values[k]);
@@ -27,18 +27,18 @@ describe('LFO: le onde', () => {
     }
     expect(new Set(values).size).toBe(64);
     expect(lfoAt(LFO_SHAPE.sampleHold, -2.5)).toBe(cycleRandom(-3));
-    // un altro seme, altri valori
+    // another seed, other values
     expect(lfoAt(LFO_SHAPE.sampleHold, 5.5, 7)).not.toBe(values[5]);
   });
 
-  it('S&H morbido: scivola da un valore al successivo senza salti tra un giro e l\'altro', () => {
+  it('smooth S&H: it glides from one value to the next without jumps between one cycle and the next', () => {
     for (let k = 1; k < 20; k++) {
       expect(lfoAt(LFO_SHAPE.smoothRandom, k - 1e-9)).toBeCloseTo(lfoAt(LFO_SHAPE.smoothRandom, k), 6);
       expect(lfoAt(LFO_SHAPE.smoothRandom, k + 1 - 1e-9)).toBeCloseTo(lfoAt(LFO_SHAPE.sampleHold, k), 6);
     }
   });
 
-  it('i valori casuali stanno in −1..1 e in media fanno zero', () => {
+  it('the random values stay in −1..1 and average zero', () => {
     let sum = 0;
     for (let k = 0; k < 10000; k++) {
       const r = cycleRandom(k);
@@ -50,16 +50,16 @@ describe('LFO: le onde', () => {
   });
 });
 
-describe('LFO: l\'orologio', () => {
-  it('a tempo, col trasporto che va, la posizione viene dalla battuta: un giro di 1/4 parte sul quarto', () => {
+describe('LFO: the clock', () => {
+  it('synced, with the transport running, the position comes from the bar: a 1/4 cycle starts on the quarter', () => {
     const clock = new LfoClock(SR);
     clock.start({ beats: 1, hz: 0 }, { beat: 2.25, ...bar }, 120);
     expect(clock.cycles).toBeCloseTo(2.25, 12);
-    for (let i = 0; i < 6000; i++) clock.next(); // un sedicesimo a 120 BPM
+    for (let i = 0; i < 6000; i++) clock.next(); // a sixteenth at 120 BPM
     expect(clock.cycles).toBeCloseTo(2.5, 9);
   });
 
-  it('dopo un salto torna allo stesso punto del brano, qualunque cosa sia successa prima', () => {
+  it('after a jump it goes back to the same point of the piece, whatever happened before', () => {
     const a = new LfoClock(SR), b = new LfoClock(SR);
     a.start({ beats: 2, hz: 0 }, { beat: 0, ...bar }, 120);
     for (let i = 0; i < 100000; i++) a.next();
@@ -68,16 +68,16 @@ describe('LFO: l\'orologio', () => {
     expect(a.cycles).toBe(b.cycles);
   });
 
-  it('da fermo gira libero al tempo del progetto, senza salti tra un blocco e l\'altro', () => {
+  it('when stopped it runs free at the project\'s tempo, without jumps between one block and the next', () => {
     const clock = new LfoClock(SR);
-    for (let block = 0; block < 375; block++) { // 1 s a blocchi di 128
+    for (let block = 0; block < 375; block++) { // 1 s in blocks of 128
       clock.start({ beats: 1, hz: 0 }, null, 120);
       for (let i = 0; i < 128; i++) clock.next();
     }
-    expect(clock.cycles).toBeCloseTo(2, 9); // 1/4 a 120 BPM: 2 giri al secondo
+    expect(clock.cycles).toBeCloseTo(2, 9); // 1/4 at 120 BPM: 2 cycles per second
   });
 
-  it('in Hz non guarda il trasporto', () => {
+  it('in Hz it doesn\'t look at the transport', () => {
     const clock = new LfoClock(SR);
     clock.start({ beats: null, hz: 3 }, { beat: 17, ...bar }, 120);
     expect(clock.cycles).toBe(0);
@@ -86,7 +86,7 @@ describe('LFO: l\'orologio', () => {
   });
 });
 
-/** Quanto passa (in dB) di un seno alla frequenza data, a regime. */
+/** How much (in dB) of a sine at the given frequency passes, at steady state. */
 function gainDb(filter: MultimodeFilter, hz: number): number {
   let inSum = 0, outSum = 0;
   for (let i = 0; i < SR / 2; i++) {
@@ -105,8 +105,8 @@ const filter = (cutoff: number, type: number, poles: 2 | 4 = 2, resonance = 0) =
   return f;
 };
 
-describe('Filtro multimodo', () => {
-  it('passa-basso: −3 dB al taglio, poi 12 o 24 dB per ottava', () => {
+describe('Multimode filter', () => {
+  it('low-pass: −3 dB at the cutoff, then 12 or 24 dB per octave', () => {
     expect(gainDb(filter(1000, FILTER_TYPE.lowPass), 100)).toBeCloseTo(0, 1);
     expect(gainDb(filter(1000, FILTER_TYPE.lowPass), 1000)).toBeCloseTo(-3, 0);
     expect(gainDb(filter(1000, FILTER_TYPE.lowPass, 4), 1000)).toBeCloseTo(-3, 0);
@@ -114,13 +114,13 @@ describe('Filtro multimodo', () => {
     expect(gainDb(filter(1000, FILTER_TYPE.lowPass, 4), 4000)).toBeLessThan(-45);
   });
 
-  it('passa-alto: lo specchio', () => {
+  it('high-pass: the mirror', () => {
     expect(gainDb(filter(1000, FILTER_TYPE.highPass), 10000)).toBeCloseTo(0, 1);
     expect(gainDb(filter(1000, FILTER_TYPE.highPass), 250)).toBeLessThan(-22);
     expect(gainDb(filter(1000, FILTER_TYPE.highPass, 4), 250)).toBeLessThan(-45);
   });
 
-  it('passa-banda: tutto al centro, poco ai lati; notch: il contrario', () => {
+  it('band-pass: everything at the centre, little at the sides; notch: the opposite', () => {
     expect(gainDb(filter(1000, FILTER_TYPE.bandPass), 1000)).toBeCloseTo(0, 1);
     expect(gainDb(filter(1000, FILTER_TYPE.bandPass, 4), 1000)).toBeCloseTo(0, 1);
     expect(gainDb(filter(1000, FILTER_TYPE.bandPass), 8000)).toBeLessThan(-15);
@@ -128,7 +128,7 @@ describe('Filtro multimodo', () => {
     expect(gainDb(filter(1000, FILTER_TYPE.notch), 8000)).toBeCloseTo(0, 0);
   });
 
-  it('la risonanza alza il picco al taglio', () => {
+  it('the resonance raises the peak at the cutoff', () => {
     const flat = gainDb(filter(1000, FILTER_TYPE.lowPass, 2, 0), 1000);
     const half = gainDb(filter(1000, FILTER_TYPE.lowPass, 2, 0.5), 1000);
     const full = gainDb(filter(1000, FILTER_TYPE.lowPass, 4, 1), 1000);
@@ -136,7 +136,7 @@ describe('Filtro multimodo', () => {
     expect(full).toBeGreaterThan(20);
   });
 
-  it('con il cutoff che salta di continuo resta stabile', () => {
+  it('with the cutoff jumping continuously it stays stable', () => {
     const f = new MultimodeFilter(SR);
     let peak = 0;
     for (let i = 0; i < SR; i++) {
@@ -149,8 +149,8 @@ describe('Filtro multimodo', () => {
   });
 });
 
-describe('Inseguitore d\'inviluppo', () => {
-  it('sale con l\'attacco e scende con il rilascio', () => {
+describe('Envelope follower', () => {
+  it('rises with the attack and falls with the release', () => {
     const env = new EnvelopeFollower(SR);
     env.set(0.01, 0.1);
     for (let i = 0; i < SR / 100; i++) env.process(i % 2 ? -1 : 1);

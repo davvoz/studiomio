@@ -1,6 +1,6 @@
-/* Calcoli dei gesti sulla timeline: dove finiscono le clip trascinate o ridimensionate.
- * Funzioni pure, usate sia per l'anteprima durante il trascinamento sia per la modifica
- * finale al rilascio. */
+/* Calculations of the timeline gestures: where the dragged or resized clips end up.
+ * Pure functions, used both for the preview during the drag and for the final
+ * change on release. */
 import type { PlacementId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import { placementEnd, type Placement } from '../../model/arrangement';
@@ -9,20 +9,20 @@ import type { PlacementRef, Relocation, ResizePlan } from '../../store/selection
 import { findPlacement } from '../../store/selection-edits';
 import { snapTo } from './geometry';
 
-/** Le clip selezionate, con la loro traccia attuale (gli id delle clip sono unici nel progetto). */
+/** The selected clips, with their current track (clip ids are unique in the project). */
 export function resolveSelection(project: Project, ids: ReadonlySet<PlacementId>): PlacementRef[] {
   return project.tracks.flatMap(t => t.arrangement.filter(p => ids.has(p.id)).map(p => ({ track: t.id, id: p.id })));
 }
 
-/** Spostamento in battiti tale che la clip presa (che partiva da `start`) finisca sulla griglia. */
+/** Offset in beats such that the grabbed clip (which started at `start`) ends up on the grid. */
 export function snappedDelta(start: Beats, rawDelta: Beats, step: Beats | null): Beats {
   const target = Math.max(0, start + rawDelta);
   return (step ? snapTo(target, step) : target) - start;
 }
 
-/** Dove vanno le clip selezionate spostandole di `deltaBeats` e `deltaTracks` righe (le tracce
- *  che si vedono). Se una traccia di arrivo non esiste o non accetta la clip (un gruppo non ne
- *  accetta), le clip restano sulle loro tracce. */
+/** Where the selected clips go moving them by `deltaBeats` and `deltaTracks` rows (the visible
+ *  tracks). If a target track doesn't exist or doesn't accept the clip (a group doesn't
+ *  accept any), the clips stay on their tracks. */
 export function planMove(project: Project, refs: readonly PlacementRef[], deltaBeats: Beats, deltaTracks: number, copy: boolean): Relocation[] {
   const rows = project.visibleTracks;
   const index = new Map(rows.map((t, i) => [t.id, i]));
@@ -39,9 +39,9 @@ export function planMove(project: Project, refs: readonly PlacementRef[], deltaB
   }));
 }
 
-/** Nuovi bordi trascinando quello sinistro (`start`) o destro (`end`) fino a `beat`.
- *  A sinistra non si va oltre l'inizio del contenuto; a destra, se la clip non è in loop,
- *  non oltre la fine del contenuto. */
+/** New edges dragging the left (`start`) or right (`end`) one up to `beat`.
+ *  On the left it doesn't go past the start of the content; on the right, if the clip isn't looping,
+ *  not past the end of the content. */
 export function planResize(pl: Placement, edge: 'start' | 'end', beat: Beats, minLength: Beats): { start: Beats; end: Beats } {
   const end = placementEnd(pl);
   if (edge === 'start') {
@@ -52,9 +52,9 @@ export function planResize(pl: Placement, edge: 'start' | 'end', beat: Beats, mi
   return { start: pl.start, end: Math.max(pl.start + minLength, Math.min(beat, latest)) };
 }
 
-/** Come in Live, trascinando il bordo di una clip selezionata si sposta lo stesso bordo di tutta
- *  la selezione, della stessa quantità: `beat` è dove va il bordo della clip presa (`grabbed`),
- *  le altre si fermano ognuna ai propri limiti. */
+/** As in Live, dragging the edge of a selected clip moves the same edge of the whole
+ *  selection, by the same amount: `beat` is where the grabbed clip's edge goes (`grabbed`),
+ *  the others stop each at their own limits. */
 export function planResizeMany(
   project: Project, refs: readonly PlacementRef[], grabbed: Placement, edge: 'start' | 'end', beat: Beats, minLength: Beats,
 ): ResizePlan[] {

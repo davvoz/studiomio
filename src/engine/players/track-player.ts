@@ -6,55 +6,55 @@ import type { NoteActivity } from '../note-activity';
 import type { ScheduledSource } from '../scheduler';
 import type { Program } from '../session';
 
-/** Fa suonare una traccia: riceve le versioni nuove della traccia e programma le sue clip. */
+/** Makes a track play: receives the track's new versions and schedules its clips. */
 export interface TrackPlayer extends ScheduledSource {
   update(track: Track): void;
-  /** Suona subito una nota, per chi ha uno strumento. */
+  /** Plays a note right away, for whoever has an instrument. */
   audition?(pitch: number, velocity: number, seconds: number): void;
-  /** Una nota tenuta a mano, per chi ha uno strumento: suona finché non arriva `release`. */
+  /** A note held by hand, for whoever has an instrument: plays until `release` arrives. */
   press?(pitch: number, velocity: number): void;
   release?(pitch: number): void;
-  /** I parametri modulabili dello strumento, per chi ne ha uno. */
+  /** The instrument's modulatable parameters, for whoever has one. */
   instrumentModulation?(): DeviceModulation | null;
-  /** Dove leggono le voci dello strumento, se suona un sample (frazioni del sample). */
+  /** Where the instrument's voices read, if it plays a sample (fractions of the sample). */
   playheads?(): readonly number[];
-  /** Taglia all'istante `at` tutto ciò che ha già programmato oltre (una clip lanciata
-   *  prende il posto di quella che suonava). */
+  /** Cuts at instant `at` everything it has already scheduled beyond (a launched clip
+   *  takes the place of the one playing). */
   cut(at: number): void;
   dispose(): void;
 }
 
 export interface PlayerContext {
   readonly graph: AudioGraph;
-  /** Ingresso del canale del mixer della traccia. */
+  /** Input of the track's mixer channel. */
   readonly output: AudioNodeLike;
-  /** Da chiamare quando qualcosa non parte perché il suo audio non è ancora pronto. */
+  /** To be called when something doesn't start because its audio isn't ready yet. */
   readonly missing: () => void;
-  /** Cosa suona la traccia e quando (timeline o clip della session), sull'orologio continuo. */
+  /** What the track plays and when (timeline or session clips), on the continuous clock. */
   readonly programs: () => readonly Program[];
-  /** Dove annotare le note programmate, per l'interfaccia. */
+  /** Where to note the scheduled notes, for the interface. */
   readonly notes: NoteActivity;
-  /** Il tempo del progetto (BPM). */
+  /** The project's tempo (BPM). */
   readonly tempo: () => number;
-  /** Lo strumento ha preso il suono di una clip che parte: il progetto deve seguirlo. */
+  /** The instrument took the sound of a starting clip: the project must follow it. */
   readonly sound?: (sound: InstrumentSettings) => void;
 }
 
-/** Come un nodo programmato smette prima del previsto. */
+/** How a scheduled node stops earlier than planned. */
 export interface NodeEnding {
-  /** Finisce all'istante `at` (di norma con una breve dissolvenza). */
+  /** Ends at instant `at` (normally with a short fade). */
   cut(at: number): void;
-  /** Riprogrammazione da `at`: se parte da `at` in poi non suona; se è già in corso lascia il
-   *  posto a quello che lo sostituisce (che riparte da `at`). */
+  /** Rescheduling from `at`: if it starts from `at` on it doesn't play; if it's already running it gives
+   *  way to the one replacing it (which restarts from `at`). */
   retake(at: number): void;
 }
 
-/** Nodi programmati e non ancora finiti, per poterli fermare tutti insieme. */
+/** Scheduled nodes not yet finished, to be able to stop them all together. */
 export class ActiveNodes {
   private readonly nodes = new Map<ScheduledNodeLike, NodeEnding>();
 
-  /** Registra il nodo; alla fine `cleanup` scollega ciò che serve. Senza `ending` il nodo si
-   *  ferma di colpo all'istante del taglio. */
+  /** Registers the node; at the end `cleanup` disconnects what's needed. Without `ending` the node
+   *  stops abruptly at the instant of the cut. */
   add(node: ScheduledNodeLike, cleanup: () => void, ending?: NodeEnding): void {
     const stop = (at: number) => stopQuietly(node, at);
     this.nodes.set(node, ending ?? { cut: stop, retake: stop });
@@ -64,12 +64,12 @@ export class ActiveNodes {
     };
   }
 
-  /** Fa finire all'istante `at` tutti i nodi che suonerebbero oltre. */
+  /** Makes all the nodes that would play beyond end at instant `at`. */
   cutAt(at: number): void {
     for (const e of this.nodes.values()) e.cut(at);
   }
 
-  /** Riprogrammazione da `at` (vedi `NodeEnding.retake`). */
+  /** Rescheduling from `at` (see `NodeEnding.retake`). */
   retakeAt(at: number): void {
     for (const e of this.nodes.values()) e.retake(at);
   }
@@ -83,11 +83,11 @@ export class ActiveNodes {
   }
 }
 
-/** Ferma un nodo (subito, o all'istante `at`); se è già fermo non fa nulla. */
+/** Stops a node (right away, or at instant `at`); if it's already stopped it does nothing. */
 export function stopQuietly(node: ScheduledNodeLike, at?: number): void {
   try {
     node.stop(at);
   } catch {
-    // già fermo
+    // already stopped
   }
 }

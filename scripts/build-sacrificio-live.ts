@@ -1,6 +1,6 @@
-/* Costruisce "Sacrificio" (src/demo/sacrificio-live.ts) come cartella di progetto studiomio:
- *   node scripts/run.mjs scripts/build-sacrificio-live.ts <cartella dei suoni> <cartella del progetto>
- * I file sono quelli della libreria dell'utente, relativi a <cartella dei suoni>. */
+/* Builds "Sacrificio" (src/demo/sacrificio-live.ts) as a studiomio project folder:
+ *   node scripts/run.mjs scripts/build-sacrificio-live.ts <sounds folder> <project folder>
+ * The files are those of the user's library, relative to <sounds folder>. */
 import { buildSacrificioLive, type SacrificioLiveSound } from '../src/demo/sacrificio-live';
 import { buildLiveFolder } from './live-folder';
 
@@ -39,6 +39,6 @@ const FILES: Readonly<Record<SacrificioLiveSound, string>> = {
 };
 
 export async function main([soundsDir, projectDir]: string[]): Promise<void> {
-  if (!soundsDir || !projectDir) throw new Error('uso: build-sacrificio-live.ts <cartella dei suoni> <cartella del progetto>');
+  if (!soundsDir || !projectDir) throw new Error('usage: build-sacrificio-live.ts <sounds folder> <project folder>');
   await buildLiveFolder(FILES, soundsDir, projectDir, buildSacrificioLive);
 }

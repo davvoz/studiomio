@@ -31,12 +31,12 @@ import { targetDevices, trackChain } from '../envelopes/mod-targets';
 export interface PianoRollDeps {
   readonly store: ProjectStore;
   readonly engine: PlaybackEngine;
-  /** Suona subito una nota con lo strumento della traccia. */
+  /** Plays a note right away with the track's instrument. */
   readonly audition: (track: TrackId, pitch: number, velocity: number) => void;
   readonly openInstrument: (track: TrackId) => void;
-  /** Negli appunti ci sono dei dispositivi: Ctrl+V li mette sulla traccia. */
+  /** The clipboard holds devices: Ctrl+V puts them on the track. */
   readonly pasteDevices?: () => void;
-  /** Appunti condivisi con la timeline. */
+  /** Clipboard shared with the timeline. */
   readonly clipboard: Clipboard;
   readonly say: (text: string) => void;
 }
@@ -47,14 +47,14 @@ interface Target {
   readonly found: FoundClip;
 }
 
-/** Altezza delle righe quando le note hanno un nome (i pad): la più alta che fa stare tutti i
- *  pad, tra queste due (sotto la minima i nomi non si leggono). */
+/** Height of the rows when the notes have a name (the pads): the tallest fitting all the
+ *  pads, between these two (below the minimum the names can't be read). */
 const NAMED_ROW = { min: 10, max: 16 } as const;
 
-/** Con il Fold le righe si allargano per riempire la vista, fino a questa altezza. */
+/** With Fold the rows widen to fill the view, up to this height. */
 const FOLD_ROW_MAX = 20;
 
-/** Comandi da tastiera del piano roll: hanno la precedenza su quelli della timeline. */
+/** The piano roll's keyboard commands: they take priority over the timeline's. */
 const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
   { key: 'delete', run: r => r.deleteSelected() },
   { key: 'backspace', run: r => r.deleteSelected() },
@@ -76,9 +76,9 @@ const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
   { key: 'escape', run: r => r.escape() },
 ];
 
-/** Editor delle note di una clip MIDI: tastiera a sinistra, note sulla griglia, velocity in
- *  basso, righello con loop e bandierine come nell'editor audio. Ogni modifica passa dallo
- *  store (si annulla e si sente subito). */
+/** Note editor of a MIDI clip: keyboard on the left, notes on the grid, velocity at the
+ *  bottom, ruler with loop and flags as in the audio editor. Every change goes through the
+ *  store (it can be undone and is heard right away). */
 export class PianoRoll implements RollHost {
   readonly element = Object.assign(document.createElement('section'), { className: 'clip-editor piano-roll', hidden: true, tabIndex: -1 });
   private readonly surface = new Surface('roll-canvas');
@@ -91,21 +91,21 @@ export class PianoRoll implements RollHost {
   private _selection = new Set<Note>();
   private gesture: RollGesture | null = null;
   private insert: Beats | null = null;
-  /** La selezione di tempo: il riquadro con cui si sono scelte le note (Ctrl+D copia dopo la sua fine). */
+  /** The time selection: the box the notes were chosen with (Ctrl+D copies after its end). */
   private time: TimeRange | null = null;
   private dirty = true;
   private fitPending = false;
-  /** I nomi delle note dati dallo strumento (la drum machine), o null. */
+  /** The notes' names given by the instrument (the drum machine), or null. */
   private names: ReadonlyMap<number, string> | null = null;
   noteLength: Beats = 0.25;
   drawMode = false;
-  /** Fold (come in Live): solo le righe delle altezze che hanno note. Resta tra una clip e l'altra. */
+  /** Fold (as in Live): only the rows of the pitches that have notes. It stays from one clip to the next. */
   folded = false;
 
   constructor(private readonly deps: PianoRollDeps) {
     this.keyboard = new RollKeyboard(pitch => this.audition(pitch, 100));
     this.panel = new RollPanel({
-      rename: name => this.commit('Rinomina clip', c => c.withName(name)),
+      rename: name => this.commit('Rename clip', c => c.withName(name)),
       toggleDraw: () => this.toggleDraw(),
       toggleFold: () => this.toggleFold(),
       quantize: () => this.quantize(),
@@ -113,8 +113,8 @@ export class PianoRoll implements RollHost {
       scaleTime: f => this.scaleTime(f),
       duplicateLoop: () => this.duplicateLoop(),
       openInstrument: () => { const t = this.target(); if (t) deps.openInstrument(t.track.id); },
-      takeSound: () => { const t = this.target(); if (t) this.commit('Suono della clip', c => c.withSound(t.track.instrument)); },
-      clearSound: () => this.commit('Togli il suono della clip', c => c.withSound(null)),
+      takeSound: () => { const t = this.target(); if (t) this.commit('Clip sound', c => c.withSound(t.track.instrument)); },
+      clearSound: () => this.commit('Remove the clip sound', c => c.withSound(null)),
       close: () => this.close(),
     });
     const roll = this;
@@ -148,7 +148,7 @@ export class PianoRoll implements RollHost {
     }).observe(wrap);
     this.bind(this.surface.canvas);
     this.keyboard.element.addEventListener('wheel', e => this.wheel(e, 0, true), { passive: false });
-    this.keyboard.element.title = 'Ctrl+rotella: zoom verticale';
+    this.keyboard.element.title = 'Ctrl+wheel: vertical zoom';
     bindKeys(this.element, this, ROLL_KEYS, true);
     deps.store.onChange(() => this.sync());
     requestAnimationFrame(this.frame);
@@ -158,17 +158,17 @@ export class PianoRoll implements RollHost {
     return this.ref !== null;
   }
 
-  /** La clip aperta (sulla timeline o in uno slot), se c'è. */
+  /** The open clip (on the timeline or in a slot), if any. */
   get openClip(): ClipRef | null {
     return this.ref;
   }
 
-  /** L'editor delle modulazioni (per i test automatici). */
+  /** The modulation editor (for automated tests). */
   get modulation(): ModulationEditor {
     return this.mods;
   }
 
-  /** Apre la clip; restituisce false se non è una clip MIDI. */
+  /** Opens the clip; returns false if it isn't a MIDI clip. */
   open(ref: ClipRef): boolean {
     this.ref = ref;
     if (!this.target()) {
@@ -266,15 +266,15 @@ export class PianoRoll implements RollHost {
     this.dirty = true;
   }
 
-  // ---------------------------------------------------------------- comandi
+  // ---------------------------------------------------------------- commands
 
   deleteSelected(): void {
     const c = this.clip();
-    if (c && this._selection.size) this.commitNotes('Elimina note', deleteNotes(c.notes, this._selection));
+    if (c && this._selection.size) this.commitNotes('Delete notes', deleteNotes(c.notes, this._selection));
   }
 
-  /** Tutte le note, con la selezione di tempo sul loop (senza loop, la clip): Ctrl+A e poi Ctrl+D
-   *  ripete la clip intera. */
+  /** All the notes, with the time selection on the loop (without loop, the clip): Ctrl+A and then Ctrl+D
+   *  repeats the whole clip. */
   selectAll(): void {
     const c = this.clip();
     if (!c) return;
@@ -282,42 +282,42 @@ export class PianoRoll implements RollHost {
     this.select(c.notes, { start, end });
   }
 
-  /** Copia le note scelte dopo la fine della selezione di tempo (il riquadro), o dopo le note se
-   *  non c'è; la selezione di tempo passa sulla copia, così Ctrl+D di nuovo continua in fila. */
+  /** Copies the chosen notes after the end of the time selection (the box), or after the notes if
+   *  there isn't one; the time selection moves onto the copy, so Ctrl+D again continues in a row. */
   duplicate(): void {
     const c = this.clip(), time = this.time;
     if (!c || !this._selection.size) return;
     const span = duplicateSpan(c.notes, this._selection, this.grid, time);
-    this.commitNotes('Duplica note', duplicateNotes(c.notes, this._selection, this.grid, time));
+    this.commitNotes('Duplicate notes', duplicateNotes(c.notes, this._selection, this.grid, time));
     if (time) this.select(this._selection, { start: time.end, end: time.end + span });
   }
 
   copy(): void {
     const c = this.clip();
     const copied = c && copyNotes(c.notes, this._selection);
-    if (!copied) return this.deps.say('Seleziona delle note da copiare.');
+    if (!copied) return this.deps.say('Select some notes to copy.');
     this.deps.clipboard.content = copied;
     const n = copied.notes.length;
-    this.deps.say(`${n === 1 ? 'Copiata 1 nota: Ctrl+V la incolla' : `Copiate ${n} note: Ctrl+V le incolla`} al punto d'inserimento (clic nel vuoto per sceglierlo).`);
+    this.deps.say(`${n === 1 ? 'Copied 1 note: Ctrl+V pastes it' : `Copied ${n} notes: Ctrl+V pastes them`} at the insertion point (click in empty space to choose it).`);
   }
 
   cut(): void {
     const c = this.clip();
     const copied = c && copyNotes(c.notes, this._selection);
-    if (!c || !copied) return this.deps.say('Seleziona delle note da tagliare.');
+    if (!c || !copied) return this.deps.say('Select some notes to cut.');
     this.deps.clipboard.content = copied;
-    this.commitNotes('Taglia note', deleteNotes(c.notes, this._selection));
+    this.commitNotes('Cut notes', deleteNotes(c.notes, this._selection));
   }
 
-  /** Incolla al punto `at`, al punto d'inserimento o, se non c'è, subito dopo le note copiate. */
+  /** Pastes at point `at`, at the insertion point or, if there isn't one, right after the copied notes. */
   paste(at?: Beats): void {
     const c = this.clip(), copied = this.deps.clipboard.notes;
     if (!c) return;
     if (this.deps.clipboard.devices && this.deps.pasteDevices) return this.deps.pasteDevices();
-    if (!copied) return this.deps.say(this.deps.clipboard.clips ? 'Negli appunti ci sono delle clip: incollale sulla timeline.' : 'Gli appunti sono vuoti.');
+    if (!copied) return this.deps.say(this.deps.clipboard.clips ? 'The clipboard holds clips: paste them on the timeline.' : 'The clipboard is empty.');
     const start = at ?? this.insert ?? copied.origin + copied.span;
-    this.commitNotes('Incolla note', pasteNotes(c.notes, copied, start));
-    // il punto d'inserimento va alla fine: incollando di nuovo si continua in fila
+    this.commitNotes('Paste notes', pasteNotes(c.notes, copied, start));
+    // the insertion point goes to the end: pasting again continues in a row
     this.setInsertPoint(start + copied.span);
   }
 
@@ -329,21 +329,21 @@ export class PianoRoll implements RollHost {
     return Math.max(0, Math.floor(beat / this.grid + 1e-9) * this.grid);
   }
 
-  /** Traspone le note selezionate (o tutte, se nessuna è selezionata). */
+  /** Transposes the selected notes (or all, if none is selected). */
   transpose(semitones: number): void {
     const c = this.clip();
     if (!c?.notes.length) return;
     const sel = this._selection.size ? this._selection : new Set(c.notes);
     const change = moveNotes(c.notes, sel, 0, semitones);
-    this.commitNotes('Trasponi note', this._selection.size ? change : { ...change, selected: [] });
+    this.commitNotes('Transpose notes', this._selection.size ? change : { ...change, selected: [] });
     if (this._selection.size === 1) this.audition([...this._selection][0].pitch, 100);
   }
 
-  /** :2 o ×2: la clip intera (note, loop, modulazioni) dura la metà o il doppio. */
+  /** :2 or ×2: the whole clip (notes, loop, modulations) lasts half or twice as long. */
   scaleTime(factor: number): void {
     const ref = this.ref;
     if (!ref || !this.target()) return;
-    const label = factor > 1 ? 'Durata ×2' : 'Durata :2';
+    const label = factor > 1 ? 'Length ×2' : 'Length :2';
     try {
       this.deps.store.apply(scaleMidiClipAt(label, ref, factor));
     } catch (e) {
@@ -351,29 +351,29 @@ export class PianoRoll implements RollHost {
     }
   }
 
-  /** "Dupl. Loop" di Live: il loop raddoppia, con la copia delle sue note subito dopo. */
+  /** Live's "Dupl. Loop": the loop doubles, with the copy of its notes right after. */
   duplicateLoop(): void {
     const ref = this.ref;
     if (!ref || !this.target()) return;
     try {
       this.deps.store.apply(duplicateLoopAt(ref));
-      // la clip è lunga il doppio: la si inquadra tutta, copia compresa
+      // the clip is twice as long: it's framed whole, copy included
       this.fit();
       this.invalidate();
     } catch (e) {
-      this.deps.say(`Duplica loop: ${e instanceof Error ? e.message : e}`);
+      this.deps.say(`Duplicate loop: ${e instanceof Error ? e.message : e}`);
     }
   }
 
-  /** Sposta le note selezionate di un passo di griglia. */
+  /** Moves the selected notes by one grid step. */
   nudge(direction: 1 | -1): void {
     const c = this.clip();
-    if (c && this._selection.size) this.commitNotes('Sposta note', moveNotes(c.notes, this._selection, direction * this.grid, 0));
+    if (c && this._selection.size) this.commitNotes('Move notes', moveNotes(c.notes, this._selection, direction * this.grid, 0));
   }
 
   quantize(): void {
     const c = this.clip();
-    if (c?.notes.length) this.commitNotes('Quantizza note', quantizeNotes(c.notes, this._selection, Math.min(this.grid, 1)));
+    if (c?.notes.length) this.commitNotes('Quantize notes', quantizeNotes(c.notes, this._selection, Math.min(this.grid, 1)));
   }
 
   toggleDraw(): void {
@@ -392,7 +392,7 @@ export class PianoRoll implements RollHost {
     else this.close();
   }
 
-  // ---------------------------------------------------------------- stato
+  // ---------------------------------------------------------------- state
 
   private get grid(): Beats {
     return gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 12);
@@ -412,7 +412,7 @@ export class PianoRoll implements RollHost {
     return { track: found.track, clip: found.clip, found };
   }
 
-  /** Allinea selezione, pannello e disegno al progetto; chiude se la clip non esiste più. */
+  /** Aligns selection, panel and drawing with the project; closes if the clip no longer exists. */
   private sync(): void {
     if (!this.isOpen) return;
     const t = this.target();
@@ -435,7 +435,7 @@ export class PianoRoll implements RollHost {
     this.invalidate();
   }
 
-  /** I nomi che lo strumento della traccia dà alle note (i pad della drum machine), o null. */
+  /** The names the track's instrument gives the notes (the drum machine's pads), or null. */
   private noteNames(): ReadonlyMap<number, string> | null {
     const instrument = this.target()?.track.instrument;
     const type = instrument && instrumentType(instrument.type);
@@ -444,7 +444,7 @@ export class PianoRoll implements RollHost {
     return names?.size ? names : null;
   }
 
-  /** Inquadra la clip e le sue note (con i pad, tutti i pad). */
+  /** Frames the clip and its notes (with the pads, all the pads). */
   private fit(): void {
     const c = this.clip();
     if (!c || this.surface.width < 10) return;
@@ -453,7 +453,7 @@ export class PianoRoll implements RollHost {
     this.fitPending = false;
   }
 
-  /** In verticale: con il Fold tutte le righe, alte quanto possono; senza, le note al centro. */
+  /** Vertically: with Fold all the rows, as tall as they can be; without, the notes in the centre. */
   private fitPitches(): void {
     const c = this.clip();
     if (!c) return;
@@ -469,8 +469,8 @@ export class PianoRoll implements RollHost {
     this.setPitches(rows.centeredOn(lo, hi, this.notesHeight));
   }
 
-  /** Con il Fold le righe seguono le note: una nota a un'altezza nuova ne aggiunge una, l'ultima
-   *  nota tolta da un'altezza la toglie. Senza note si vedono tutte le righe. */
+  /** With Fold the rows follow the notes: a note at a new pitch adds one, the last
+   *  note removed from a pitch removes it. Without notes all the rows are shown. */
   private followFold(clip: MidiClip): void {
     const rows = this.folded ? foldRows(clip.notes.map(n => n.pitch)) : null;
     if (sameRows(rows, this._pitches.rows)) return;
@@ -484,7 +484,7 @@ export class PianoRoll implements RollHost {
     this.invalidate();
   }
 
-  // ---------------------------------------------------------------- disegno e input
+  // ---------------------------------------------------------------- drawing and input
 
   private readonly frame = () => {
     const engine = this.deps.engine;
@@ -545,17 +545,17 @@ export class PianoRoll implements RollHost {
       this.invalidate();
     });
     el.addEventListener('pointercancel', () => { this.gesture?.cancel(); this.gesture = null; });
-    // doppio clic: nuova nota sullo spazio vuoto, eliminazione su una nota
+    // double click: new note on empty space, deletion on a note
     el.addEventListener('dblclick', e => {
       if (this.drawMode) return;
       const h = this.hit(this.pointer(e, el));
       if (h?.hit.kind === 'empty') {
         const b = this.cellStart(h.hit.beat);
-        this.commitNotes('Aggiungi nota', addNote(h.clip.notes, { pitch: h.hit.pitch, start: b, duration: this.noteLength, velocity: 100 }));
+        this.commitNotes('Add note', addNote(h.clip.notes, { pitch: h.hit.pitch, start: b, duration: this.noteLength, velocity: 100 }));
         this.audition(h.hit.pitch, 100);
       } else if (h?.hit.kind === 'note') {
         const note = h.hit.note;
-        this.commitNotes('Elimina nota', deleteNotes(h.clip.notes, new Set([note])));
+        this.commitNotes('Delete note', deleteNotes(h.clip.notes, new Set([note])));
       }
     });
     el.addEventListener('wheel', e => this.wheel(e, this.pointer(e, el).x), { passive: false });
@@ -566,22 +566,22 @@ export class PianoRoll implements RollHost {
       if (!h) return;
       this.element.focus();
       const note = h.hit.kind === 'note' || h.hit.kind === 'velocity' ? h.hit.note : null;
-      // tasto destro su una nota non selezionata: diventa la selezione
+      // right click on an unselected note: it becomes the selection
       if (note && !this._selection.has(note)) this.select([note]);
       showContextMenu(e.clientX, e.clientY, rollMenu(this, h.hit));
     });
   }
 
-  /** Rotella: in verticale scorre le note; Maiusc in orizzontale; Ctrl zooma il tempo, Alt le righe. */
-  /** Rotella: scorre in verticale (Maiusc: in orizzontale). Con Ctrl zooma: in orizzontale sulla
-   *  griglia, in verticale sui tasti del piano (`keys`), come sugli assi che si hanno sotto. Con
-   *  Ctrl+Maiusc o Alt zooma in verticale anche dalla griglia. */
+  /** Wheel: vertically scrolls the notes; Shift horizontally; Ctrl zooms the time, Alt the rows. */
+  /** Wheel: scrolls vertically (Shift: horizontally). With Ctrl it zooms: horizontally on the
+   *  grid, vertically on the piano keys (`keys`), as on the axes underneath. With
+   *  Ctrl+Shift or Alt it zooms vertically also from the grid. */
   private wheel(e: WheelEvent, x: number, keys = false): void {
     e.preventDefault();
     const a = this._axis, pa = this._pitches;
     const y = e.clientY - this.surface.canvas.getBoundingClientRect().top;
     const ctrl = e.ctrlKey || e.metaKey;
-    // Maiusc+rotella: Chromium su Windows la consegna già come deltaX (con deltaY a 0)
+    // Shift+wheel: Chromium on Windows already delivers it as deltaX (with deltaY at 0)
     if (e.altKey || (ctrl && (keys || e.shiftKey))) this.setPitches(pa.zoomed(pa.rowHeight * Math.exp(-(e.deltaY || e.deltaX) * 0.002), y, this.notesHeight));
     else if (ctrl) this.setAxis(a.zoomed(a.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x));
     else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) this.setAxis(a.scrolled(a.startBeat + (e.deltaX || e.deltaY) / a.pxPerBeat));

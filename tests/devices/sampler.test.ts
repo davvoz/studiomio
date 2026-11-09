@@ -25,7 +25,7 @@ function run(core: SamplerCore, queue: NoteQueue, frames: number): { left: Float
   return { left, right };
 }
 
-/** Un Sampler con il sample e i parametri (volume a 0 dB, velocity che non conta). */
+/** A Sampler with the sample and the parameters (volume at 0 dB, velocity that doesn't count). */
 const sampler = (sample: SampleData | null, params: Record<string, number> = {}) => {
   const core = new SamplerCore(SR);
   core.setParams(resolveParams(SAMPLER, { volume: 0, velocity: 0, ...params }));
@@ -36,7 +36,7 @@ const sampler = (sample: SampleData | null, params: Record<string, number> = {})
 const sine = (hz: number, seconds: number, sr = SR, amp = 0.5): SampleData =>
   ({ sampleRate: sr, channels: [Float32Array.from({ length: Math.round(seconds * sr) }, (_, i) => amp * Math.sin((2 * Math.PI * hz * i) / sr))] });
 
-/** Un sample a scalini: `levels.length` pezzi uguali, ognuno a un livello costante. */
+/** A stepped sample: `levels.length` equal pieces, each at a constant level. */
 const steps = (levels: readonly number[], seconds: number): SampleData => {
   const n = Math.round(seconds * SR), part = n / levels.length;
   return { sampleRate: SR, channels: [Float32Array.from({ length: n }, (_, i) => levels[Math.min(levels.length - 1, Math.floor(i / part))])] };
@@ -65,27 +65,27 @@ const maxJump = (x: Float32Array, from: number, to: number) => {
   return m;
 };
 
-describe('Sampler: descrizione', () => {
-  it('è tra gli strumenti, e i preset usano solo parametri suoi', () => {
+describe('Sampler: description', () => {
+  it('it\'s among the instruments, and the presets use only its own parameters', () => {
     expect(instrumentType('sampler')).toBe(SAMPLER);
     for (const p of SAMPLER.presets) for (const id of Object.keys(p.params)) expect(paramSpec(SAMPLER, id), `${p.name}: ${id}`).toBeDefined();
   });
 
-  it('le fette in griglia dividono la regione in parti uguali', () => {
+  it('the grid slices divide the region into equal parts', () => {
     const v = resolveParams(SAMPLER, { mode: MODE.slice, sliceBy: SLICE.grid, sliceGrid: 0, start: 20, end: 60 });
     expect(sliceStarts(v).map(x => +x.toFixed(6))).toEqual([0.2, 0.3, 0.4, 0.5]);
   });
 
-  it('le fette ai transienti partono dall\'inizio e tengono solo quelle dentro la regione, in ordine', () => {
+  it('the slices at the transients start from the beginning and keep only those inside the region, in order', () => {
     const v = resolveParams(SAMPLER, { mode: MODE.slice, start: 10, end: 80, ...sliceValues([0.05, 0.6, 0.3, 0.9]) });
     expect(sliceStarts(v)).toEqual([0.1, 0.3, 0.6]);
-    expect(SAMPLER.noteNames!(v).get(FIRST_SLICE_NOTE + 2)).toBe('Fetta 3');
+    expect(SAMPLER.noteNames!(v).get(FIRST_SLICE_NOTE + 2)).toBe('Slice 3');
     expect(SAMPLER.noteNames!(resolveParams(SAMPLER, {})).size).toBe(0);
   });
 });
 
-describe('Sampler: fette ai transienti', () => {
-  /** Colpi secchi (rumore che decade) agli istanti dati, in un sample di `seconds`. */
+describe('Sampler: slices at the transients', () => {
+  /** Dry hits (decaying noise) at the given instants, in a sample of `seconds`. */
   const hits = (times: readonly number[], seconds: number): SampleData => {
     const x = new Float32Array(Math.round(seconds * SR));
     let seed = 7;
@@ -97,7 +97,7 @@ describe('Sampler: fette ai transienti', () => {
     return { sampleRate: SR, channels: [x] };
   };
 
-  it('trova i colpi (non l\'inizio, che è già la prima fetta), dentro la regione', () => {
+  it('finds the hits (not the start, which is already the first slice), inside the region', () => {
     const data = hits([0, 0.5, 1, 1.5], 2);
     const found = findTransients(data, false, 0.5);
     expect(found.map(x => Math.round(x * 4) / 4)).toEqual([0.25, 0.5, 0.75]);
@@ -105,21 +105,21 @@ describe('Sampler: fette ai transienti', () => {
     expect(findTransients(data, false, 0.5, 0.3, 1).map(x => Math.round(x * 4) / 4)).toEqual([0.5, 0.75]);
   });
 
-  it('con Reverse li cerca nel sample rovesciato', () => {
-    // al contrario un colpo finisce di scatto: gli attacchi sono le fini dei colpi originali
+  it('with Reverse it looks for them in the reversed sample', () => {
+    // reversed a hit ends abruptly: the attacks are the ends of the original hits
     const found = findTransients(hits([0.2], 1), true, 0.5);
     expect(found.every(x => x > 0.5)).toBe(true);
   });
 });
 
-describe('Sampler: suono', () => {
-  it('senza sample tace', () => {
+describe('Sampler: sound', () => {
+  it('without sample it\'s silent', () => {
     const { core, queue } = sampler(null);
     queue.add(60, 100, 0, 4800);
     expect(rms(run(core, queue, 4800).left)).toBe(0);
   });
 
-  it('alla nota base suona il sample com\'è; un\'ottava sopra va al doppio', () => {
+  it('at the root note it plays the sample as it is; an octave up goes at double', () => {
     for (const [pitch, hz] of [[60, 440], [72, 880], [48, 220]] as const) {
       const { core, queue } = sampler(sine(440, 1));
       queue.add(pitch, 100, 0, 24000);
@@ -127,19 +127,19 @@ describe('Sampler: suono', () => {
     }
   });
 
-  it('un file a un\'altra frequenza di campionamento resta intonato', () => {
+  it('a file at another sample rate stays in tune', () => {
     const { core, queue } = sampler(sine(440, 1, 22050));
     queue.add(60, 100, 0, 24000);
     expect(zeroCrossHz(run(core, queue, 12000).left, 1000, 12000)).toBeCloseTo(440, -1);
   });
 
-  it('con Key track a zero tutti i tasti suonano alla stessa altezza; Transpose la sposta', () => {
+  it('with Key track at zero all the keys play at the same pitch; Transpose moves it', () => {
     const { core, queue } = sampler(sine(440, 1), { keyTrack: 0, transpose: 12 });
     queue.add(40, 100, 0, 24000);
     expect(zeroCrossHz(run(core, queue, 12000).left, 1000, 12000)).toBeCloseTo(880, -1);
   });
 
-  it('senza loop finisce con la regione anche se la nota è tenuta; Inizio e Fine la scelgono', () => {
+  it('without loop it ends with the region even if the note is held; Start and End choose it', () => {
     const { core, queue } = sampler(sine(440, 1), { start: 25, end: 50 });
     queue.add(60, 100, 0, SR * 2);
     const out = run(core, queue, SR).left;
@@ -148,7 +148,7 @@ describe('Sampler: suono', () => {
     expect(end).toBeLessThan(SR * 0.25 + 10);
   });
 
-  it('il loop tiene la nota oltre la fine del sample, e il rilascio la chiude', () => {
+  it('the loop holds the note past the end of the sample, and the release closes it', () => {
     const { core, queue } = sampler(sine(440, 0.2), { loop: LOOP.forward, loopStart: 20, loopEnd: 80, xfade: 20, e1R: 0.05 });
     queue.add(60, 100, 0, SR);
     const out = run(core, queue, SR * 1.5).left;
@@ -156,8 +156,8 @@ describe('Sampler: suono', () => {
     expect(lastSound(out)).toBeLessThan(SR * 1.2);
   });
 
-  it('il crossfade del loop non fa salti', () => {
-    // il loop contiene 29 periodi e mezzo: senza dissolvenza c'è un gradino
+  it('the loop crossfade doesn\'t jump', () => {
+    // the loop contains 29 and a half periods: without crossfade there's a step
     const loop = { loop: LOOP.forward, loopStart: 10.37, loopEnd: 64 };
     const jumps = (xfade: number) => {
       const { core, queue } = sampler(sine(220, 0.25), { ...loop, xfade });
@@ -169,26 +169,26 @@ describe('Sampler: suono', () => {
     expect(jumps(30)).toBeLessThan(smooth * 1.5);
   });
 
-  it('ping-pong va avanti e indietro e continua a suonare', () => {
+  it('ping-pong goes back and forth and keeps playing', () => {
     const { core, queue } = sampler(sine(440, 0.1), { loop: LOOP.pingPong, loopStart: 0, loopEnd: 100 });
     queue.add(60, 100, 0, SR);
     const out = run(core, queue, SR * 0.9).left;
     expect(rms(out, SR * 0.6, SR * 0.9)).toBeGreaterThan(0.2);
   });
 
-  it('con "Fino alla fine" lasciata la nota esce dal loop e finisce con il sample', () => {
+  it('with "To the end" once the note is released it leaves the loop and ends with the sample', () => {
     const { core, queue } = sampler(sine(440, 0.5), {
       loop: LOOP.forward, loopStart: 0, loopEnd: 20, loopRelease: LOOP_RELEASE.exit, e1R: 10,
     });
     queue.add(60, 100, 0, SR * 0.3);
     const out = run(core, queue, SR * 2).left;
     const end = lastSound(out);
-    // dal punto del loop al rilascio mancano meno di 0.5 s di sample: poi tace, nonostante il rilascio lungo
+    // from the loop point to the release less than 0.5 s of sample is missing: then it's silent, despite the long release
     expect(end).toBeGreaterThan(SR * 0.3);
     expect(end).toBeLessThan(SR * 0.8);
   });
 
-  it('Reverse legge il sample dalla fine', () => {
+  it('Reverse reads the sample from the end', () => {
     const ramp: SampleData = { sampleRate: SR, channels: [Float32Array.from({ length: SR / 10 }, (_, i) => i / (SR / 10))] };
     const { core, queue } = sampler(ramp, { reverse: 1 });
     queue.add(60, 100, 0, SR);
@@ -197,7 +197,7 @@ describe('Sampler: suono', () => {
     expect(out[SR / 10 - 400]).toBeLessThan(0.2);
   });
 
-  it('One-Shot in Trigger suona tutto anche con una nota corta; in Gate si ferma con la nota', () => {
+  it('One-Shot in Trigger plays everything even with a short note; in Gate it stops with the note', () => {
     const play = (trigger: number) => {
       const { core, queue } = sampler(sine(440, 0.5), { mode: MODE.oneShot, trigger, e1R: 0.01 });
       queue.add(60, 100, 0, 480);
@@ -207,7 +207,7 @@ describe('Sampler: suono', () => {
     expect(play(TRIGGER.gate)).toBeLessThan(SR * 0.05);
   });
 
-  it('in Slice ogni nota da C1 suona la sua fetta, le altre tacciono', () => {
+  it('in Slice each note from C1 plays its slice, the others are silent', () => {
     const levels = [0.1, 0.2, 0.3, 0.4];
     const params = { mode: MODE.slice, sliceBy: SLICE.grid, sliceGrid: 0, e1A: 0.001 };
     for (const [k, level] of levels.entries()) {
@@ -215,7 +215,7 @@ describe('Sampler: suono', () => {
       queue.add(FIRST_SLICE_NOTE + k, 100, 0, SR);
       const out = run(core, queue, SR / 2).left;
       expect(out[2000]).toBeCloseTo(level, 2);
-      // la fetta dura un quarto del sample, poi tace
+      // the slice lasts a quarter of the sample, then it's silent
       expect(lastSound(out)).toBeLessThan(SR * 0.1 + 10);
     }
     const { core, queue } = sampler(steps(levels, 0.4), params);
@@ -224,13 +224,13 @@ describe('Sampler: suono', () => {
     expect(rms(run(core, queue, SR / 4).left)).toBe(0);
   });
 
-  it('le fette ai transienti usano i punti salvati', () => {
+  it('the slices at the transients use the saved points', () => {
     const { core, queue } = sampler(steps([0.1, 0.5], 0.4), { mode: MODE.slice, ...sliceValues([0.5]) });
     queue.add(FIRST_SLICE_NOTE + 1, 100, 0, SR);
     expect(run(core, queue, 4000).left[2000]).toBeCloseTo(0.5, 2);
   });
 
-  it('il filtro passa-basso toglie le alte', () => {
+  it('the low-pass filter removes the highs', () => {
     const play = (fOn: number) => {
       const { core, queue } = sampler(sine(6000, 0.5), { fOn, fType: 1, fCutoff: 300 });
       queue.add(60, 100, 0, SR);
@@ -239,7 +239,7 @@ describe('Sampler: suono', () => {
     expect(play(1)).toBeLessThan(play(0) * 0.05);
   });
 
-  it('l\'inviluppo del pitch fa cadere l\'intonazione', () => {
+  it('the pitch envelope makes the pitch fall', () => {
     const { core, queue } = sampler(sine(440, 2), { pitchEnv: 12, e3A: 0.001, e3D: 0.3, e3S: 0 });
     queue.add(60, 100, 0, SR * 2);
     const out = run(core, queue, SR).left;
@@ -247,17 +247,17 @@ describe('Sampler: suono', () => {
     expect(zeroCrossHz(out, SR * 0.7, SR)).toBeCloseTo(440, -1);
   });
 
-  it('una nota che riparte in Mono non fa click', () => {
+  it('a note restarting in Mono doesn\'t click', () => {
     const { core, queue } = sampler(sine(440, 1), { voiceMode: VOICE_MODE.mono });
     queue.add(60, 100, 0, SR);
-    // riparte a metà di un'onda, lontano dallo zero
+    // it restarts halfway through a wave, far from zero
     queue.add(60, 100, 2009, SR);
     const out = run(core, queue, 6000).left;
     const smooth = (2 * Math.PI * 440 * 0.5) / SR;
     expect(maxJump(out, 1900, 2200)).toBeLessThan(smooth * 3);
   });
 
-  it('dice dove leggono le voci che suonano', () => {
+  it('it says where the playing voices read', () => {
     const { core, queue } = sampler(sine(440, 1));
     queue.add(60, 100, 0, SR);
     queue.add(72, 100, 0, SR);
@@ -270,7 +270,7 @@ describe('Sampler: suono', () => {
 });
 
 describe('Sampler: zone', () => {
-  /** Un Sampler con un sample per zona (in ordine) e i parametri. */
+  /** A Sampler with one sample per zone (in order) and the parameters. */
   const zoned = (samples: readonly (SampleData | null)[], params: Record<string, number> = {}) => {
     const core = new SamplerCore(SR);
     core.setParams(resolveParams(SAMPLER, { volume: 0, velocity: 0, ...params }));
@@ -278,14 +278,14 @@ describe('Sampler: zone', () => {
     return { core, queue: new NoteQueue() };
   };
   const level = (x: number) => steps([x], 1);
-  /** Il livello che suona `pitch` (poco dopo l'attacco). */
+  /** The level `pitch` plays (shortly after the attack). */
   const heard = (samples: readonly (SampleData | null)[], params: Record<string, number>, pitch: number, velocity = 100) => {
     const { core, queue } = zoned(samples, params);
     queue.add(pitch, velocity, 0, SR);
     return run(core, queue, 4000).left[2000];
   };
 
-  it('la prima zona usa i parametri e il posto del sample singolo; tutti i parametri esistono', () => {
+  it('the first zone uses the parameters and the slot of the single sample; all the parameters exist', () => {
     expect(zoneSlot(0)).toBe(SAMPLE_SLOT);
     expect(zoneSlot(1)).toBe('z2');
     expect(zoneParam(0, 'root')).toBe('root');
@@ -294,7 +294,7 @@ describe('Sampler: zone', () => {
     expect(zoneParam(2, 'loopEnd')).toBe('z3loopEnd');
     const keys: ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'root', 'gain', 'pan', 'start', 'end', 'loopStart', 'loopEnd'];
     for (let i = 0; i < MAX_ZONES; i++) for (const k of keys) expect(paramSpec(SAMPLER, zoneParam(i, k)), `${i} ${k}`).toBeDefined();
-    // il suono: quello della prima zona sono i parametri del Sampler
+    // the sound: the first zone's is the Sampler's parameters
     expect(zoneParam(0, 'e1R')).toBe('e1R');
     expect(zoneParam(3, 'e1R')).toBe('z4e1R');
     for (let i = 1; i < MAX_ZONES; i++) {
@@ -303,7 +303,7 @@ describe('Sampler: zone', () => {
     }
   });
 
-  it('il suono di una zona è quello della prima finché non diventa suo', () => {
+  it('a zone\'s sound is the first\'s until it becomes its own', () => {
     const v = resolveParams(SAMPLER, { loop: LOOP.forward, e1R: 2, [zoneParam(1, 'e1R')]: 0.1 });
     expect(zoneSource(v, 1, 'e1R')).toBe('e1R');
     expect(zoneSource(v, 1, 'start')).toBe('z2start');
@@ -313,25 +313,25 @@ describe('Sampler: zone', () => {
     expect(zoneSource({ ...v, ...own }, 1, 'e1R')).toBe('z2e1R');
   });
 
-  it('loop, reverse e inviluppo del volume: le zone seguono la prima, o hanno i loro', () => {
+  it('loop, reverse and volume envelope: the zones follow the first, or have their own', () => {
     const loop = { loop: LOOP.forward, loopStart: 20, loopEnd: 80, e1R: 0.01 };
     const tail = (params: Record<string, number>) => {
       const { core, queue } = zoned([null, sine(440, 0.2)], { ...loop, ...params });
       queue.add(60, 100, 0, SR * 0.5);
       return lastSound(run(core, queue, SR).left);
     };
-    // la seconda zona segue la prima: va in loop fino al rilascio
+    // the second zone follows the first: it loops until the release
     expect(tail({})).toBeGreaterThan(SR * 0.5);
-    // con il suo suono (senza loop) finisce con il sample; con il suo rilascio lungo dura di più
+    // with its own sound (without loop) it ends with the sample; with its long release it lasts longer
     const own = { [zoneParam(1, 'own')]: 1, [zoneParam(1, 'loopStart')]: 20, [zoneParam(1, 'loopEnd')]: 80 };
     expect(tail(own)).toBeLessThan(SR * 0.2 + 10);
     expect(tail({ ...own, [zoneParam(1, 'loop')]: LOOP.forward, [zoneParam(1, 'e1R')]: 0.01 })).toBeLessThan(SR * 0.55);
     expect(tail({ ...own, [zoneParam(1, 'loop')]: LOOP.forward, [zoneParam(1, 'e1R')]: 0.3 })).toBeGreaterThan(SR * 0.7);
   });
 
-  it('filtro, intonazione e LFO: ogni zona con il suo suono ha i suoi', () => {
+  it('filter, pitch and LFO: each zone with its own sound has its own', () => {
     const own = { [zoneParam(1, 'own')]: 1 };
-    // il filtro della seconda zona chiude le alte; la prima resta aperta
+    // the second zone's filter closes the highs; the first stays open
     const bright = (params: Record<string, number>) => {
       const { core, queue } = zoned([null, sine(3000, 1)], params);
       queue.add(60, 100, 0, SR);
@@ -339,9 +339,9 @@ describe('Sampler: zone', () => {
     };
     const closed = { fOn: 1, fType: 1, fCutoff: 200 };
     expect(bright(closed)).toBeLessThan(0.05);
-    // con il suo suono il filtro della seconda zona è il suo, spento
+    // with its own sound the second zone's filter is its own, off
     expect(bright({ ...closed, ...own, [zoneParam(1, 'fOn')]: 0 })).toBeGreaterThan(0.2);
-    // il Transpose della seconda zona la sposta di un'ottava, la prima no
+    // the second zone's Transpose moves it an octave, the first's doesn't
     const hz = (params: Record<string, number>, pitch: number) => {
       const { core, queue } = zoned([sine(440, 1), sine(440, 1)], { ...zoneKeys(0, 0, 59, 48), ...zoneKeys(1, 60, 127, 60), ...params });
       queue.add(pitch, 100, 0, SR);
@@ -350,7 +350,7 @@ describe('Sampler: zone', () => {
     const up = { ...own, [zoneParam(1, 'transpose')]: 12 };
     expect(hz(up, 48)).toBeCloseTo(440, -1);
     expect(hz(up, 60)).toBeCloseTo(880, -1);
-    // l'LFO sul volume solo nella seconda zona
+    // the LFO on the volume only in the second zone
     const wobble = (zone: number) => {
       const { core, queue } = zoned(zone === 0 ? [level(0.5)] : [null, level(0.5)], {
         ...own, [zoneParam(1, 'lfoVolume')]: 100, [zoneParam(1, 'lfoRate')]: 8, [zoneParam(1, 'lfoSync')]: 1,
@@ -363,20 +363,20 @@ describe('Sampler: zone', () => {
     expect(wobble(1)).toBeGreaterThan(0.2);
   });
 
-  it('due zone sulla stessa nota con inviluppi diversi', () => {
+  it('two zones on the same note with different envelopes', () => {
     const { core, queue } = zoned([level(0.3), level(0.4)], {
       e1R: 0.01, [zoneParam(1, 'own')]: 1, [zoneParam(1, 'e1A')]: 0.001, [zoneParam(1, 'e1R')]: 0.5, [zoneParam(1, 'e1S')]: 100,
     });
     queue.add(60, 100, 0, SR / 10);
     const out = run(core, queue, SR / 2).left;
     expect(out[2000]).toBeCloseTo(0.7, 2);
-    // dopo il rilascio resta solo la seconda, che sfuma piano
+    // after the release only the second remains, fading slowly
     expect(out[SR / 10 + SR * 0.05]).toBeGreaterThan(0.2);
     expect(out[SR / 10 + SR * 0.05]).toBeLessThan(0.4);
   });
 
-  it('i Tune e Fine delle zone di prima vanno nel Transpose e Detune: ogni zona suona come prima', () => {
-    // prima: la prima zona +2, la seconda +12.3, la terza niente, la quarta senza sample
+  it('the Tune and Fine of the old zones go into Transpose and Detune: each zone sounds as before', () => {
+    // before: the first zone +2, the second +12.3, the third nothing, the fourth without sample
     const old = { transpose: -1, z1tune: 2, z2tune: 12, z2fine: 30, z3lo: 40, z4tune: 7 };
     const samples = { [zoneSlot(0)]: 'a', [zoneSlot(1)]: 'b', [zoneSlot(2)]: 'c' };
     const before = (i: number) => old.transpose + ([2, 12.3, 0, 7][i] ?? 0);
@@ -384,16 +384,16 @@ describe('Sampler: zone', () => {
     expect(Object.keys(upgradeZoneTune(old, samples)).filter(k => /^z\d+(tune|fine)$/.test(k))).toEqual([]);
     for (const i of [0, 1, 2]) {
       const semis = now[zoneSource(now, i, 'transpose')] + now[zoneSource(now, i, 'detune')] / 100;
-      expect(semis, `zona ${i + 1}`).toBeCloseTo(before(i), 6);
+      expect(semis, `zone ${i + 1}`).toBeCloseTo(before(i), 6);
     }
-    // la zona senza sample non diventa sua per niente
+    // the zone without sample doesn't become its own for nothing
     expect(now[zoneParam(3, 'own')]).toBe(0);
-    // senza Tune e Fine non cambia nulla
+    // without Tune and Fine nothing changes
     const fresh = { transpose: 3 };
     expect(upgradeZoneTune(fresh)).toBe(fresh);
   });
 
-  it('legge la nota scritta nel nome di un file', () => {
+  it('reads the note written in a file\'s name', () => {
     expect(noteInName('Piano C3.wav')).toBe(60);
     expect(noteInName('bass_f#1.aif')).toBe(42);
     expect(noteInName('Vox-Eb2')).toBe(51);
@@ -404,20 +404,20 @@ describe('Sampler: zone', () => {
     expect(noteInName('Pad C30')).toBeNull();
   });
 
-  it('divide la tastiera a metà strada tra le note base', () => {
+  it('splits the keyboard halfway between the root notes', () => {
     expect(spreadRanges([60, 48, 72])).toEqual([{ lo: 55, hi: 66 }, { lo: 0, hi: 54 }, { lo: 67, hi: 127 }]);
     expect(spreadRanges([60, 60])).toEqual([{ lo: 0, hi: 127 }, { lo: 0, hi: 127 }]);
   });
 
-  it('più file: sulle note dei nomi se ci sono tutte, se no un tasto ciascuno', () => {
+  it("several files: on the notes in the names if they are all there, otherwise one key each", () => {
     expect(layoutZones(['Kick.wav', 'Snare.wav'], 36)).toEqual([{ lo: 36, hi: 36, root: 36 }, { lo: 37, hi: 37, root: 37 }]);
     expect(layoutZones(['Piano C2.wav', 'Piano C3.wav'], 36)).toEqual([{ lo: 0, hi: 54, root: 48 }, { lo: 55, hi: 127, root: 60 }]);
     expect(layoutZones(['Piano C2.wav', 'Kick.wav'], 40).map(z => z.lo)).toEqual([40, 41]);
-    // un file solo va sul tasto, anche se il nome dice una nota
+    // a single file goes on the key, even if the name says a note
     expect(layoutZones(['Piano C2.wav'], 40)).toEqual([{ lo: 40, hi: 40, root: 40 }]);
   });
 
-  it('ogni tasto suona la zona che lo contiene; fuori dalle zone tace', () => {
+  it('each key plays the zone containing it; outside the zones it\'s silent', () => {
     const params = { ...zoneKeys(0, 36, 36, 36), ...zoneKeys(1, 37, 38, 37) };
     const samples = [level(0.3), level(0.6)];
     expect(heard(samples, params, 36)).toBeCloseTo(0.3, 2);
@@ -425,7 +425,7 @@ describe('Sampler: zone', () => {
     expect(heard(samples, params, 39)).toBe(0);
   });
 
-  it('le zone sovrapposte suonano insieme, e lasciata la nota si chiudono tutte', () => {
+  it('the overlapping zones play together, and once the note is released they all close', () => {
     const { core, queue } = zoned([level(0.3), level(0.4)], { e1R: 0.01 });
     queue.add(60, 100, 0, SR / 10);
     const out = run(core, queue, SR / 2).left;
@@ -433,14 +433,14 @@ describe('Sampler: zone', () => {
     expect(lastSound(out)).toBeLessThan(SR / 10 + SR * 0.05);
   });
 
-  it('le velocity scelgono la zona', () => {
+  it('the velocities choose the zone', () => {
     const params = { [zoneParam(0, 'vhi')]: 63, [zoneParam(1, 'vlo')]: 64 };
     const samples = [level(0.3), level(0.6)];
     expect(heard(samples, params, 60, 40)).toBeCloseTo(0.3, 2);
     expect(heard(samples, params, 60, 100)).toBeCloseTo(0.6, 2);
   });
 
-  it('ogni zona ha la sua nota base, il suo Transpose e il suo volume', () => {
+  it('each zone has its root note, its Transpose and its volume', () => {
     const params = { ...zoneKeys(0, 0, 59, 48), ...zoneKeys(1, 60, 127, 60), [zoneParam(1, 'own')]: 1, [zoneParam(1, 'transpose')]: 12 };
     for (const [pitch, hz] of [[48, 440], [60, 880], [72, 1760]] as const) {
       const { core, queue } = zoned([sine(440, 1), sine(440, 1)], params);
@@ -450,13 +450,13 @@ describe('Sampler: zone', () => {
     expect(heard([null, level(0.8)], { [zoneParam(1, 'gain')]: -6 }, 60)).toBeCloseTo(0.4, 2);
   });
 
-  it('inizio e fine sono di ogni zona', () => {
+  it('start and end belong to each zone', () => {
     const { core, queue } = zoned([null, sine(440, 1)], { [zoneParam(1, 'start')]: 50, [zoneParam(1, 'end')]: 60 });
     queue.add(60, 100, 0, SR * 2);
     expect(lastSound(run(core, queue, SR).left)).toBeLessThan(SR * 0.1 + 10);
   });
 
-  it('a una voce sola suona la prima zona, e passando a un\'altra zona cambia sample', () => {
+  it('monophonic the first zone plays, and switching to another zone changes sample', () => {
     const { core, queue } = zoned([level(0.3), level(0.6)], { voiceMode: VOICE_MODE.legato, ...zoneKeys(0, 0, 59, 60), ...zoneKeys(1, 60, 127, 60) });
     queue.add(50, 100, 0, SR);
     queue.add(70, 100, 4000, SR);
@@ -465,14 +465,14 @@ describe('Sampler: zone', () => {
     expect(out[7000]).toBeCloseTo(0.6, 2);
   });
 
-  it('in Slice suonano solo le fette della prima zona', () => {
+  it('in Slice only the first zone\'s slices play', () => {
     const params = { mode: MODE.slice, sliceBy: SLICE.grid, sliceGrid: 0, ...zoneKeys(1, 0, 127, 60) };
     const { core, queue } = zoned([steps([0.1, 0.2, 0.3, 0.4], 0.4), level(0.6)], params);
     queue.add(FIRST_SLICE_NOTE + 2, 100, 0, SR);
     expect(run(core, queue, 4000).left[2000]).toBeCloseTo(0.3, 2);
   });
 
-  it('i cursori dicono la zona e la frazione del suo sample', () => {
+  it('the cursors say the zone and the fraction of its sample', () => {
     const { core, queue } = zoned([null, null, sine(440, 1)]);
     queue.add(60, 100, 0, SR);
     run(core, queue, SR / 4);
@@ -481,13 +481,13 @@ describe('Sampler: zone', () => {
     expect(out[0]).toBeCloseTo(2.25, 2);
   });
 
-  it('nel piano roll le zone di un tasto solo hanno il nome del loro sample', () => {
+  it('in the piano roll the single-key zones have the name of their sample', () => {
     const v = resolveParams(SAMPLER, { ...zoneKeys(0, 36, 36, 36), ...zoneKeys(1, 38, 38, 38), ...zoneKeys(2, 40, 52, 48) });
-    const names = SAMPLER.noteNames!(v, new Map([[zoneSlot(0), 'Kick'], [zoneSlot(1), 'Snare'], [zoneSlot(2), 'Basso']]));
+    const names = SAMPLER.noteNames!(v, new Map([[zoneSlot(0), 'Kick'], [zoneSlot(1), 'Snare'], [zoneSlot(2), 'Bass']]));
     expect([...names]).toEqual([[36, 'Kick'], [38, 'Snare']]);
   });
 
-  it('i preset non toccano la mappa delle zone, e quelli salvati non la contengono', () => {
+  it('the presets don\'t touch the zone map, and the saved ones don\'t contain it', () => {
     const params = { ...zoneKeys(1, 40, 40, 40), root: 36, fCutoff: 500, start: 10, [zoneParam(1, 'own')]: 1, [zoneParam(1, 'e1R')]: 2 };
     expect(keptOnPreset(SAMPLER, params)).toEqual({ ...zoneKeys(1, 40, 40, 40), root: 36, [zoneParam(1, 'own')]: 1, [zoneParam(1, 'e1R')]: 2 });
     expect(presetParams(SAMPLER, params)).toEqual({ fCutoff: 500, start: 10 });

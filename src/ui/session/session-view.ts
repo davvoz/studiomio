@@ -1,7 +1,7 @@
-/* La session view, come in Live: una colonna per traccia con le clip negli slot (una riga per
- * scena), sotto lo stop della traccia e il mixer; dopo le tracce i bus (senza clip, solo il
- * mixer); a destra il master con il lancio delle scene. Un clic su ▶ lancia una clip (al prossimo confine della quantizzazione), ▶ di una
- * scena lancia la riga. Le clip si trascinano da uno slot all'altro (Ctrl copia). */
+/* The session view, as in Live: a column per track with the clips in the slots (one row per
+ * scene), below the track's stop and the mixer; after the tracks the buses (without clips, only the
+ * mixer); on the right the master with the scene launch. A click on ▶ launches a clip (at the next quantization boundary), ▶ of a
+ * scene launches the row. The clips are dragged from one slot to another (Ctrl copies). */
 import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
@@ -44,28 +44,28 @@ export interface SessionViewDeps {
   readonly clipboard: Clipboard;
   openClip(ref: ClipRef): void;
   openDevices(owner: ChainOwner): void;
-  /** Mette i dispositivi degli appunti sulla traccia scelta. */
+  /** Puts the clipboard's devices on the chosen track. */
   pasteDevices(): void;
-  /** Le voci di menu per incollare dei dispositivi su `owner` (nessuna se gli appunti non ne hanno). */
+  /** The menu items to paste devices onto `owner` (none if the clipboard has none). */
   pasteDeviceItems(owner: ChainOwner): MenuItem[];
-  /** Mostra la curva di un parametro nella clip della traccia. */
+  /** Shows a parameter's curve in the track's clip. */
   showAutomation?(owner: ChainOwner, target: ModTarget): void;
-  /** Una voce del browser lasciata su uno slot, sulla testa di una colonna (o del master) o
-   *  fuori dalle colonne (`track` null: una traccia nuova). */
+  /** A browser item dropped on a slot, on a column's (or the master's) head or
+   *  outside the columns (`track` null: a new track). */
   dropItem?(item: BrowserItem, target: LoadTarget): void;
-  /** Importa dei file audio negli slot da `slot` in giù (su una traccia nuova se `track` è null o non è audio). */
+  /** Imports some audio files into the slots from `slot` down (on a new track if `track` is null or isn't audio). */
   importToSlot(files: File[], track: TrackId | null, slot: number): void;
   addTrack(kind: TrackKind): void;
-  /** Esporta in WAV l'audio della scena di indice `index`. */
+  /** Exports to WAV the audio of the scene at index `index`. */
   exportScene(index: number): void;
-  /** Copia la scena di indice `index` nell'arrangement, al cursore. */
+  /** Copies the scene at index `index` into the arrangement, at the cursor. */
   sceneToArrangement(index: number): void;
   say(text: string): void;
 }
 
-/** Comandi da tastiera della session (sullo slot scelto): hanno la precedenza su quelli generali. */
+/** The session's keyboard commands (on the chosen slot): they take priority over the general ones. */
 const SESSION_KEYS: readonly Binding<SessionView>[] = [
-  // prima delle frecce sole, che valgono anche con Maiusc
+  // before the bare arrows, which also apply with Shift
   { key: 'arrowup', shift: true, run: v => v.extendSelection(0, -1) },
   { key: 'arrowdown', shift: true, run: v => v.extendSelection(0, 1) },
   { key: 'arrowleft', shift: true, run: v => v.extendSelection(-1, 0) },
@@ -85,10 +85,10 @@ const SESSION_KEYS: readonly Binding<SessionView>[] = [
   { key: 'arrowright', run: v => v.moveSelection(1, 0) },
 ];
 
-/** Righe della griglia: intestazioni, una per scena, stop, spazio, mixer. */
+/** Grid rows: headers, one per scene, stop, space, mixer. */
 const row = { head: 1, scene: (s: number) => 2 + s, stop: (scenes: number) => 2 + scenes, mixer: (scenes: number) => 4 + scenes };
 
-/** Quanto della clip è passato (0..1), per la barra di avanzamento. */
+/** How much of the clip has passed (0..1), for the progress bar. */
 function clipProgress(clip: Clip, elapsed: Beats): number {
   const content = clip.contentBeatAt(elapsed);
   if (content === null) return 0;
@@ -105,25 +105,25 @@ const place = <T extends HTMLElement>(e: T, gridRow: number, gridColumn: number)
 
 const slotKey = (track: TrackId, slot: number) => `${track}:${slot}`;
 
-/** Le colonne: le tracce, lo spazio che avanza, i bus, il master. La colonna del bus `i`
- *  (con `T` tracce) viene dopo lo spazio, accanto al master. */
+/** The columns: the tracks, the leftover space, the buses, the master. Bus `i`'s column
+ *  (with `T` tracks) comes after the space, next to the master. */
 const busColumn = (T: number, i: number) => T + 2 + i;
 
-/** La larghezza della colonna di un bus: stretta se è compresso. */
+/** A bus column's width: narrow if it's collapsed. */
 const busWidth = (b: BusTrack) => (b.folded ? 'var(--session-folded)' : 'var(--session-col)');
 
-/** Per ogni bus la distanza dal bordo destro: il master e i bus che vengono dopo di lui. */
+/** For each bus the distance from the right edge: the master and the buses coming after it. */
 const busRights = (buses: readonly BusTrack[]): string[] =>
   buses.map((_, i) => `calc(var(--session-master) + 2px${buses.slice(i + 1).map(b => ` + ${busWidth(b)} + 2px`).join('')})`);
 
-/** Un bus resta fermo accanto al master, come in Live, mentre le tracce scorrono sotto. */
+/** A bus stays still next to the master, as in Live, while the tracks scroll underneath. */
 function pinBus(e: HTMLElement, right: string): HTMLElement {
   e.classList.add('bus-pinned');
   e.style.setProperty('--bus-right', right);
   return e;
 }
 
-/** Preferenze dell'interfaccia di chi usa questo browser (se lo spazio locale manca, pazienza). */
+/** Interface preferences of whoever uses this browser (if local storage is missing, never mind). */
 const MIXER_PREF = 'studiomio.session.mixer';
 const readPref = (key: string): string | null => {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -132,23 +132,23 @@ const writePref = (key: string, value: string): void => {
   try { localStorage.setItem(key, value); } catch { /* niente */ }
 };
 
-/** Una clip presa con il mouse: diventa un trascinamento dopo qualche pixel. */
+/** A clip grabbed with the mouse: it becomes a drag after a few pixels. */
 interface SlotDrag {
   readonly from: SlotRef;
   readonly x: number;
   readonly y: number;
-  /** Con Ctrl un clic senza trascinare aggiunge o toglie la clip dalla scelta. */
+  /** With Ctrl a click without dragging adds the clip to or removes it from the selection. */
   readonly toggle: boolean;
   ghost: HTMLElement | null;
 }
 
-/** Un trascinamento partito da uno slot vuoto: sceglie il rettangolo di slot che copre. */
+/** A drag started from an empty slot: it chooses the rectangle of slots it covers. */
 interface SlotBand {
   readonly from: SlotRef;
   readonly x: number;
   readonly y: number;
   active: boolean;
-  /** Partita con Maiusc: senza trascinare, è un clic che estende la scelta. */
+  /** Started with Shift: without dragging, it's a click extending the selection. */
   readonly extend?: boolean;
 }
 
@@ -156,29 +156,29 @@ export class SessionView {
   readonly element = el('section', { className: 'session-view', hidden: true, tabIndex: -1 });
   private readonly grid = el('div', { className: 'session-grid' });
   private readonly scroll = el('div', { className: 'session-scroll' }, this.grid);
-  /** Il riquadro del controller collegato (il "riquadro rosso" di Live): le clip che la sua griglia suona. */
+  /** The connected controller's box (Live's "red box"): the clips its grid plays. */
   private readonly ring = el('div', { className: 'session-ring', hidden: true });
   private ringAt = '';
-  private readonly mixerToggle = el<HTMLButtonElement>('button', { textContent: '🎚 Mixer', title: 'Mostra o nascondi il mixer in fondo alle tracce' });
-  private readonly quantize = el<HTMLSelectElement>('select', { title: 'Quantizzazione del lancio: le clip partono al prossimo confine' },
+  private readonly mixerToggle = el<HTMLButtonElement>('button', { textContent: '🎚 Mixer', title: 'Show or hide the mixer at the bottom of the tracks' });
+  private readonly quantize = el<HTMLSelectElement>('select', { title: 'Launch quantization: the clips start at the next boundary' },
     ...LAUNCH_QUANTA.map(q => el('option', { value: q.id, textContent: q.label })));
   private readonly strips = new Map<TrackId, TrackStrip>();
   private readonly master: MasterStripView;
-  /** Le celle ricostruite a ogni modifica (le strisce del mixer invece restano). */
+  /** The cells rebuilt at every change (the mixer strips instead stay). */
   private cells: HTMLElement[] = [];
   private readonly slots = new Map<string, HTMLElement>();
   private readonly stops = new Map<TrackId, HTMLElement>();
   private readonly heads = new Map<TrackId, HTMLElement>();
   private scenes: HTMLElement[] = [];
-  /** Lo slot del cursore: quello che la tastiera muove e su cui si incolla. */
+  /** The cursor's slot: the one the keyboard moves and that's pasted onto. */
   private selected: SlotRef | null = null;
-  /** Tutti gli slot scelti (il cursore compreso), per chiave. */
+  /** All the chosen slots (the cursor included), by key. */
   private readonly picked = new Map<string, SlotRef>();
-  /** Lo slot da cui Maiusc estende la scelta. */
+  /** The slot Shift extends the selection from. */
   private anchor: SlotRef | null = null;
   private drag: SlotDrag | null = null;
   private band: SlotBand | null = null;
-  /** Il selettore dei file audio da mettere in uno slot (lo slot è `pickFor`). */
+  /** The picker of the audio files to put in a slot (the slot is `pickFor`). */
   private readonly picker = el<HTMLInputElement>('input', { type: 'file', accept: 'audio/*', multiple: true, hidden: true });
   private pickFor: SlotRef | null = null;
 
@@ -188,13 +188,13 @@ export class SessionView {
     this.quantize.onchange = () => store.apply(setLaunchQuantization(this.quantize.value));
     this.mixerToggle.onclick = () => this.showMixer(this.grid.classList.contains('no-mixer'));
     const toolbar = el('div', { className: 'session-toolbar' },
-      el('label', {}, 'Lancio ', this.quantize),
-      el('button', { textContent: '+ Scena', title: 'Nuova scena in fondo', onclick: () => store.apply(insertScene()) }),
-      el('button', { textContent: '+ Audio', title: 'Nuova traccia audio', onclick: () => deps.addTrack('audio') }),
-      el('button', { textContent: '+ MIDI', title: 'Nuova traccia MIDI', onclick: () => deps.addTrack('midi') }),
-      el('button', { textContent: '+ Bus', title: 'Nuovo bus: le tracce gli mandano il suono con le manopole delle mandate', onclick: () => store.apply(addBus()) }),
+      el('label', {}, 'Launch', this.quantize),
+      el('button', { textContent: '+ Scene', title: 'New scene at the bottom', onclick: () => store.apply(insertScene()) }),
+      el('button', { textContent: '+ Audio', title: 'New audio track', onclick: () => deps.addTrack('audio') }),
+      el('button', { textContent: '+ MIDI', title: 'New MIDI track', onclick: () => deps.addTrack('midi') }),
+      el('button', { textContent: '+ Bus', title: 'New bus: the tracks send it sound with the send knobs', onclick: () => store.apply(addBus()) }),
       this.mixerToggle,
-      el('span', { className: 'muted', textContent: 'Tab: arrangement · doppio clic su uno slot vuoto: clip MIDI nuova o audio · trascina (Ctrl copia) · più clip: Maiusc+trascina, Maiusc+clic o Ctrl+clic' }));
+      el('span', { className: 'muted', textContent: 'Tab: arrangement · double click on an empty slot: new MIDI clip or audio · drag (Ctrl copies) · several clips: Shift+drag, Shift+click or Ctrl+click' }));
     this.picker.onchange = () => {
       const files = [...(this.picker.files ?? [])], ref = this.pickFor;
       this.picker.value = '';
@@ -204,7 +204,7 @@ export class SessionView {
     this.grid.append(this.master.element);
     this.element.append(toolbar, this.scroll, this.picker);
     this.showMixer(readPref(MIXER_PREF) !== 'off');
-    // lo slot portato in vista (frecce) non deve finire sotto le intestazioni o sotto il mixer
+    // the slot brought into view (arrows) mustn't end up under the headers or under the mixer
     new ResizeObserver(() => this.padScroll()).observe(this.master.element);
     this.bindGrid();
     bindKeys(this.element, this, SESSION_KEYS, true);
@@ -218,7 +218,7 @@ export class SessionView {
     requestAnimationFrame(this.frame);
   }
 
-  /** Il mixer in fondo alle colonne: si nasconde per lasciare spazio alle clip. */
+  /** The mixer at the bottom of the columns: it hides to leave room for the clips. */
   showMixer(visible: boolean): void {
     this.grid.classList.toggle('no-mixer', !visible);
     this.mixerToggle.classList.toggle('on', visible);
@@ -244,12 +244,12 @@ export class SessionView {
     }
   }
 
-  /** Lo slot scelto (per le prove e per l'app). */
+  /** The chosen slot (for tests and for the app). */
   get selection(): SlotRef | null {
     return this.selected;
   }
 
-  // ---------------------------------------------------------------- comandi sullo slot scelto
+  // ---------------------------------------------------------------- commands on the chosen slot
 
   launchSelected(): void {
     if (this.picked.size > 1) for (const r of this.pickedClips()) this.deps.engine.launchSlot(r.track, r.slot);
@@ -269,13 +269,13 @@ export class SessionView {
     this.pick(refs.map(r => ({ ...r, slot: r.slot + height })));
   }
 
-  /** Cattura e inserisci scena: sotto `index` (la scena dello slot scelto, se no l'ultima) una
-   *  scena con le clip che suonano, che continuano a suonare da lì. */
+  /** Capture and insert scene: below `index` (the chosen slot's scene, otherwise the last) a
+   *  scene with the playing clips, which keep playing from there. */
   captureAndInsertScene(index = this.selected?.slot ?? this.deps.store.project.scenes.length - 1): void {
     const playing = this.deps.engine.playingClips();
     if (!this.apply(captureScene(index, playing))) return;
     if (this.selected) this.select({ ...this.selected, slot: index + 1 });
-    if (!playing.size) this.deps.say('Nessuna clip suona: inserita una scena vuota.');
+    if (!playing.size) this.deps.say('No clip is playing: an empty scene was inserted.');
   }
 
   copySelected(): boolean {
@@ -283,7 +283,7 @@ export class SessionView {
     if (!copied) return false;
     this.deps.clipboard.content = copied;
     const n = copied.items.length;
-    this.deps.say(`${n > 1 ? `${n} clip copiate` : 'Clip copiata'}: Ctrl+V ${n > 1 ? 'le' : 'la'} incolla da uno slot in poi, o nella timeline al cursore.`);
+    this.deps.say(`${n > 1 ? `${n} clips copied` : 'Clip copied'}: Ctrl+V pastes ${n > 1 ? 'them' : 'it'} from a slot on, or in the timeline at the cursor.`);
     return true;
   }
 
@@ -295,12 +295,12 @@ export class SessionView {
     if (this.deps.clipboard.devices) return this.deps.pasteDevices();
     const s = this.selected, content = this.deps.clipboard.clips;
     if (!s) return;
-    if (!content) return this.deps.say('Negli appunti non ci sono clip.');
+    if (!content) return this.deps.say('The clipboard has no clips.');
     const refs = pasteSlots(this.deps.store.project, content, s.track, s.slot);
     if (this.apply(pasteToSlot(content, s.track, s.slot)) && refs.length > 1) this.pick(refs, s);
   }
 
-  /** Sceglie dei file audio da mettere nello slot `ref` (e in quelli sotto, se sono più d'uno). */
+  /** Chooses some audio files to put in slot `ref` (and in those below, if there's more than one). */
   importAudioTo(ref: SlotRef): void {
     this.pickFor = ref;
     this.picker.click();
@@ -315,7 +315,7 @@ export class SessionView {
     this.select({ track: tracks[c].id, slot });
   }
 
-  /** Maiusc+frecce: il rettangolo dal punto di partenza si allarga con il cursore. */
+  /** Shift+arrows: the rectangle from the starting point widens with the cursor. */
   extendSelection(dx: number, dy: number): void {
     const p = this.deps.store.project, s = this.selected, tracks = p.visibleTracks;
     if (!s) return this.moveSelection(dx, dy);
@@ -323,20 +323,20 @@ export class SessionView {
     this.pickRange(this.anchor ?? s, { track: tracks[c].id, slot: Math.max(0, Math.min(p.scenes.length - 1, s.slot + dy)) });
   }
 
-  /** Ctrl+A: tutte le clip della griglia. */
+  /** Ctrl+A: all the clips of the grid. */
   selectAll(): void {
     const refs = this.deps.store.project.visibleTracks.flatMap(t => t.slots.flatMap((c, slot) => (c ? [{ track: t.id, slot }] : [])));
     if (refs.length) this.pick(refs, this.selected ?? refs[0]);
   }
 
-  // ---------------------------------------------------------------- disegno
+  // ---------------------------------------------------------------- drawing
 
-  /** Le colonne sono le tracce che si vedono (un gruppo chiuso nasconde quelle delle sue
-   *  tracce); i bus stanno a destra, accanto al master. */
+  /** The columns are the visible tracks (a closed group hides those of its
+   *  tracks); the buses sit on the right, next to the master. */
   private render(): void {
     const p = this.deps.store.project, tracks = p.visibleTracks;
     const T = tracks.length, B = p.buses.length, S = p.scenes.length, rights = busRights(p.buses);
-    // lo spazio che avanza sta tra le tracce e i bus: bus e master restano sul bordo destro
+    // the leftover space sits between the tracks and the buses: buses and master stay on the right edge
     const cols = (n: number) => (n ? `repeat(${n}, var(--session-col)) ` : '');
     this.grid.style.gridTemplateColumns = `${cols(T)}minmax(0, 1fr) ${p.buses.map(b => `${busWidth(b)} `).join('')}var(--session-master)`;
     this.grid.style.gridTemplateRows = `auto repeat(${S}, var(--session-row)) auto 1fr auto`;
@@ -357,13 +357,13 @@ export class SessionView {
     p.buses.forEach((b, i) => {
       const col = busColumn(T, i);
       cells.push(pinBus(place(this.busHead(b), row.head, col), rights[i]));
-      // niente slot: la colonna resta vuota fino al mixer (compressa, con il nome in verticale)
+      // no slots: the column stays empty down to the mixer (collapsed, with the vertical name)
       const lane = pinBus(place(el('div', { className: 'bus-lane' }), row.scene(0), col), rights[i]);
       lane.style.gridRowEnd = String(row.stop(S) + 1);
       lane.style.setProperty('--color', b.color);
       if (b.folded) {
         lane.classList.add('folded');
-        lane.title = `${b.name}: un clic espande il bus`;
+        lane.title = `${b.name}: a click expands the bus`;
         lane.append(el('span', { className: 'bus-lane-name', textContent: b.name }));
         lane.onclick = () => this.apply(setBusFolded(b.id, false));
       }
@@ -371,13 +371,13 @@ export class SessionView {
     });
     const masterCol = T + B + 2;
     cells.push(place(el('div', {
-      className: 'session-head master-head', textContent: 'Master', title: 'Master: un clic apre gli effetti',
+      className: 'session-head master-head', textContent: 'Master', title: 'Master: a click opens the effects',
       onclick: () => this.deps.openDevices(MASTER),
     }), row.head, masterCol));
     this.scenes = p.scenes.map((scene, s) => place(this.sceneCell(scene, s), row.scene(s), masterCol));
     cells.push(...this.scenes);
     cells.push(place(el('button', {
-      className: 'stop-all', textContent: '■ Ferma tutte', title: 'Ferma tutte le clip al prossimo confine',
+      className: 'stop-all', textContent: '■ Stop all', title: 'Stop all the clips at the next boundary',
       onclick: () => this.deps.engine.stopAllClips(),
     }), row.stop(S), masterCol));
     this.cells = cells;
@@ -388,7 +388,7 @@ export class SessionView {
     this.refreshState();
   }
 
-  /** Le tracce scelte: intestazione, slot e striscia del mixer delle loro colonne. */
+  /** The chosen tracks: header, slots and mixer strip of their columns. */
   private highlightTrack(): void {
     const chosen = this.deps.ui.selectedTracks;
     for (const [t, head] of this.heads) head.classList.toggle('selected', chosen.has(t));
@@ -399,7 +399,7 @@ export class SessionView {
     }
   }
 
-  /** Il riquadro sopra gli slot che copre; quando si sposta, lo si porta in vista. */
+  /** The box over the slots it covers; when it moves, it's brought into view. */
   private placeRing(): void {
     const r = this.deps.ui.sessionRing, p = this.deps.store.project;
     const T = p.visibleTracks.length, S = p.scenes.length;
@@ -413,7 +413,7 @@ export class SessionView {
     this.ringAt = at;
   }
 
-  /** Le strisce del mixer restano nella griglia: si aggiungono, si tolgono e si spostano. */
+  /** The mixer strips stay in the grid: they're added, removed and moved. */
   private renderStrips(S: number): void {
     const p = this.deps.store.project, T = p.visibleTracks.length, B = p.buses.length, rights = busRights(p.buses);
     const tracks = [...p.visibleTracks, ...p.buses];
@@ -442,9 +442,9 @@ export class SessionView {
     place(this.master.element, row.mixer(S), T + B + 2);
   }
 
-  // ---------------------------------------------------------------- spostare le colonne
+  // ---------------------------------------------------------------- moving the columns
 
-  /** Una testa presa con il mouse e trascinata sposta la sua traccia (o il suo bus, tra i bus). */
+  /** A head grabbed with the mouse and dragged moves its track (or its bus, among the buses). */
   private dragColumn(id: TrackId, head: HTMLElement, e: PointerEvent): void {
     if (!canStartTrackDrag(e)) return;
     const bus = this.deps.store.project.buses.findIndex(b => b.id === id);
@@ -452,15 +452,15 @@ export class SessionView {
     else startTrackDrag(e, { source: head, spotAt: m => this.busSpot(bus, m), drop: to => this.apply(moveBus(id, to)) });
   }
 
-  /** La linea tra le colonne, alta quanto la griglia che si vede. */
+  /** The line between the columns, as tall as the visible grid. */
   private columnLine(x: number): DropSpot<never>['line'] {
     const box = this.scroll.getBoundingClientRect();
     return { x: x - 1, y: box.top, width: 2, height: box.height };
   }
 
-  /** Dove andrebbe la traccia `id` lasciata in `e`: nella metà sinistra di una colonna prima di
-   *  lei, nella destra dopo (in cima alle tracce, se è un gruppo aperto); dopo l'ultima, o sopra
-   *  i bus e il master, in fondo. */
+  /** Where track `id` dropped at `e` would go: in the left half of a column before
+   *  it, in the right half after it (at the top of the tracks, if it's an open group); after the last, or over
+   *  the buses and the master, at the end. */
   private trackSpot(id: TrackId, e: PointerEvent): DropSpot<TrackDrop> | null {
     const p = this.deps.store.project, tracks = p.visibleTracks;
     const heads = tracks.map(t => this.heads.get(t.id)!.getBoundingClientRect());
@@ -473,7 +473,7 @@ export class SessionView {
     return { drop: t instanceof GroupTrack && !t.folded ? { first: t.id } : { after: t.id }, line: this.columnLine(r.right + 1) };
   }
 
-  /** Dove andrebbe il bus di indice `from` lasciato in `e`: il suo indice tra gli altri bus. */
+  /** Where the bus at index `from` dropped at `e` would go: its index among the other buses. */
   private busSpot(from: number, e: PointerEvent): DropSpot<number> | null {
     const heads = this.deps.store.project.buses.map(b => this.heads.get(b.id)!.getBoundingClientRect());
     let at = heads.findIndex(r => e.clientX < r.left + r.width / 2);
@@ -483,14 +483,14 @@ export class SessionView {
     return { drop: at > from ? at - 1 : at, line: this.columnLine(x) };
   }
 
-  /** Una scena presa con il mouse e trascinata va su o giù, con le sue clip. */
+  /** A scene grabbed with the mouse and dragged goes up or down, with its clips. */
   private dragScene(index: number, cell: HTMLElement, e: PointerEvent): void {
     if (!canStartTrackDrag(e)) return;
     const id = this.deps.store.project.scenes[index].id;
     startTrackDrag(e, {
       source: cell, spotAt: m => this.sceneSpot(index, m), drop: to => {
         if (!this.apply(moveScene(id, to))) return;
-        // lo slot scelto resta sulla sua clip
+        // the chosen slot stays on its clip
         const s = this.selected?.slot;
         if (s === undefined) return;
         const slot = s === index ? to : s > index && s <= to ? s - 1 : s < index && s >= to ? s + 1 : s;
@@ -499,8 +499,8 @@ export class SessionView {
     });
   }
 
-  /** Dove andrebbe la scena `from` lasciata in `e`: sopra la scena nella cui metà alta si
-   *  trova, sotto l'ultima se è più in basso; la linea attraversa la griglia. */
+  /** Where scene `from` dropped at `e` would go: above the scene in whose upper half it
+   *  is, below the last if it's lower; the line crosses the grid. */
   private sceneSpot(from: number, e: PointerEvent): DropSpot<number> | null {
     const rows = this.scenes.map(c => c.getBoundingClientRect());
     let at = rows.findIndex(r => e.clientY < r.top + r.height / 2);
@@ -516,16 +516,16 @@ export class SessionView {
     clickTrack(this.deps.ui, id, e, () => [...p.visibleTracks, ...p.buses].map(t => t.id));
   }
 
-  /** L'intestazione di un bus: come quella di una traccia, ma un bus non ha clip né gruppi; ▾
-   *  comprime la sua colonna. */
+  /** A bus's header: like a track's, but a bus has no clips or groups; ▾
+   *  collapses its column. */
   private busHead(b: BusTrack): HTMLElement {
     const name = el('span', { className: 'session-track-name', textContent: b.name });
     const fold = () => this.apply(setBusFolded(b.id, !b.folded));
     const head = el('div', {
       className: `session-head bus${b.folded ? ' folded' : ''}`,
-      title: `${b.name}: un clic apre gli effetti, doppio clic rinomina, trascina per spostarlo`,
+      title: `${b.name}: a click opens the effects, double click renames, drag to move it`,
     }, el('button', {
-      className: 'fold', textContent: b.folded ? '▸' : '▾', title: b.folded ? 'Espandi il bus' : 'Comprimi il bus: la sua colonna si stringe',
+      className: 'fold', textContent: b.folded ? '▸' : '▾', title: b.folded ? 'Expand the bus' : 'Collapse the bus: its column narrows',
       onclick: (e: MouseEvent) => { e.stopPropagation(); fold(); },
     }), name);
     head.style.setProperty('--color', b.color);
@@ -544,16 +544,16 @@ export class SessionView {
     head.oncontextmenu = e => {
       e.preventDefault();
       showContextMenu(e.clientX, e.clientY, [
-        { label: 'Effetti', run: () => this.deps.openDevices(b.id) },
+        { label: 'Effects', run: () => this.deps.openDevices(b.id) },
         ...addEffectItems(this.deps.store, b.id, () => this.deps.openDevices(b.id)),
         ...this.deps.pasteDeviceItems(b.id),
-        { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameTrack(b.id, n))) },
+        { label: 'Rename', shortcut: 'double click', run: () => renameInline(name, n => this.apply(renameTrack(b.id, n))) },
         { colors: PALETTE, current: b.color, required: true, pick: c => c && this.apply(setTrackColor(b.id, c)) },
-        { label: b.folded ? 'Espandi il bus' : 'Comprimi il bus', run: fold },
+        { label: b.folded ? 'Expand the bus' : 'Collapse the bus', run: fold },
         SEPARATOR,
-        { label: 'Elimina il bus', run: () => this.apply(removeTrack(b.id)) },
+        { label: 'Delete the bus', run: () => this.apply(removeTrack(b.id)) },
         SEPARATOR,
-        { label: 'Nuovo bus', run: () => this.apply(addBus()) },
+        { label: 'New bus', run: () => this.apply(addBus()) },
       ]);
     };
     this.heads.set(b.id, head);
@@ -563,13 +563,13 @@ export class SessionView {
   private head(t: Track): HTMLElement {
     const p = this.deps.store.project;
     const name = el('span', { className: 'session-track-name', textContent: t.name });
-    const head = el('div', { className: 'session-head', title: `${t.name}: un clic apre strumento ed effetti, doppio clic rinomina, trascina per spostarla` }, name);
+    const head = el('div', { className: 'session-head', title: `${t.name}: a click opens instrument and effects, double click renames, drag to move it` }, name);
     head.style.setProperty('--color', t.color);
     head.dataset.track = t.id;
     if (t instanceof GroupTrack) {
       head.classList.add('group');
       head.prepend(el('button', {
-        className: 'fold', textContent: t.folded ? '▸' : '▾', title: t.folded ? 'Apri il gruppo' : 'Chiudi il gruppo: nasconde le colonne delle sue tracce',
+        className: 'fold', textContent: t.folded ? '▸' : '▾', title: t.folded ? 'Open the group' : 'Close the group: hides its tracks\' columns',
         onclick: (e: MouseEvent) => { e.stopPropagation(); toggleFold(this.deps.store, t); },
       }));
     }
@@ -592,15 +592,15 @@ export class SessionView {
     head.oncontextmenu = e => {
       e.preventDefault();
       showContextMenu(e.clientX, e.clientY, [
-        { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: () => this.deps.openDevices(t.id) },
+        { label: t.kind === 'midi' ? 'Instrument and effects' : 'Effects', run: () => this.deps.openDevices(t.id) },
         ...addEffectItems(this.deps.store, t.id, () => this.deps.openDevices(t.id)),
         ...this.deps.pasteDeviceItems(t.id),
-        { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameTrack(t.id, n))) },
+        { label: 'Rename', shortcut: 'double click', run: () => renameInline(name, n => this.apply(renameTrack(t.id, n))) },
         { colors: PALETTE, current: t.color, required: true, pick: c => c && this.apply(setTrackColor(t.id, c)) },
         SEPARATOR,
         ...groupMenuItems(this.deps.store, this.deps.ui, t),
         SEPARATOR,
-        { label: t instanceof GroupTrack ? 'Elimina il gruppo e le sue tracce' : 'Elimina traccia', run: () => this.apply(removeTrack(t.id)) },
+        { label: t instanceof GroupTrack ? 'Delete the group and its tracks' : 'Delete track', run: () => this.apply(removeTrack(t.id)) },
         SEPARATOR,
         ...newTrackHereItems(this.deps.store, t),
       ]);
@@ -616,22 +616,22 @@ export class SessionView {
     cell.dataset.slot = String(s);
     if (clip) {
       cell.style.setProperty('--clip', clip.color);
-      cell.title = `${clip.name}: ▶ lancia, un clic apre l'editor, trascina per spostare (Ctrl copia)`;
+      cell.title = `${clip.name}: ▶ launches, a click opens the editor, drag to move (Ctrl copies)`;
       cell.append(
-        el('button', { className: 'launch', textContent: '▶', title: 'Lancia la clip', onclick: () => this.deps.engine.launchSlot(t.id, s) }),
+        el('button', { className: 'launch', textContent: '▶', title: 'Launch the clip', onclick: () => this.deps.engine.launchSlot(t.id, s) }),
         el('span', { className: 'clip-name', textContent: clip.name }),
         el('div', { className: 'progress' }));
     } else {
-      if (t.kind === 'audio') cell.title = 'Doppio clic: importa un file audio in questo slot (o trascinalo qui)';
-      cell.append(el('button', { className: 'slot-stop', textContent: '■', title: 'Ferma la traccia', onclick: () => this.deps.engine.stopTrack(t.id) }));
+      if (t.kind === 'audio') cell.title = 'Double click: import an audio file into this slot (or drag it here)';
+      cell.append(el('button', { className: 'slot-stop', textContent: '■', title: 'Stop the track', onclick: () => this.deps.engine.stopTrack(t.id) }));
     }
     if (this.picked.has(slotKey(t.id, s))) cell.classList.add('selected');
     this.slots.set(slotKey(t.id, s), cell);
     return cell;
   }
 
-  /** Lo slot di un gruppo, come in Live: se almeno una sua traccia ha una clip nella riga, ▶
-   *  lancia la riga delle sue tracce (quelle senza clip lì si fermano); se no ■ le ferma. */
+  /** A group's slot, as in Live: if at least one of its tracks has a clip in the row, ▶
+   *  launches the row of its tracks (those without a clip there stop); otherwise ■ stops them. */
   private groupSlot(t: GroupTrack, s: number): HTMLElement {
     const clips = this.deps.store.project.soundingTracks(t.id).some(m => m.slots[s]);
     const cell = el('div', { className: clips ? 'slot group-slot has-clips' : 'slot group-slot' });
@@ -639,15 +639,15 @@ export class SessionView {
     cell.dataset.track = t.id;
     cell.dataset.slot = String(s);
     cell.append(clips
-      ? el('button', { className: 'launch', textContent: '▶', title: 'Lancia la riga delle tracce del gruppo', onclick: () => this.deps.engine.launchSlot(t.id, s) })
-      : el('button', { className: 'slot-stop', textContent: '■', title: 'Ferma le tracce del gruppo', onclick: () => this.deps.engine.stopTrack(t.id) }));
+      ? el('button', { className: 'launch', textContent: '▶', title: 'Launch the row of the group\'s tracks', onclick: () => this.deps.engine.launchSlot(t.id, s) })
+      : el('button', { className: 'slot-stop', textContent: '■', title: 'Stop the group\'s tracks', onclick: () => this.deps.engine.stopTrack(t.id) }));
     if (this.picked.has(slotKey(t.id, s))) cell.classList.add('selected');
     this.slots.set(slotKey(t.id, s), cell);
     return cell;
   }
 
   private stopButton(t: Track): HTMLElement {
-    const b = el('button', { className: 'track-stop', textContent: '■', title: 'Ferma la clip della traccia', onclick: () => this.deps.engine.stopTrack(t.id) });
+    const b = el('button', { className: 'track-stop', textContent: '■', title: 'Stop the track\'s clip', onclick: () => this.deps.engine.stopTrack(t.id) });
     this.stops.set(t.id, b);
     return b;
   }
@@ -655,7 +655,7 @@ export class SessionView {
   private sceneCell(scene: Scene, index: number): HTMLElement {
     const name = el('span', { className: 'scene-name', textContent: scene.name });
     const cell = el('div', { className: 'scene' },
-      el('button', { className: 'launch', textContent: '▶', title: 'Lancia la scena', onclick: () => this.deps.engine.launchScene(index) }), name);
+      el('button', { className: 'launch', textContent: '▶', title: 'Launch the scene', onclick: () => this.deps.engine.launchScene(index) }), name);
     cell.classList.toggle('colored', !!scene.color);
     if (scene.color) cell.style.setProperty('--scene', scene.color);
     cell.ondblclick = () => renameInline(name, n => this.apply(renameScene(scene.id, n)));
@@ -665,32 +665,32 @@ export class SessionView {
       const only = this.deps.store.project.scenes.length < 2;
       const sceneHasClips = sceneClips(this.deps.store.project, index).length > 0;
       showContextMenu(e.clientX, e.clientY, [
-        { label: 'Lancia la scena', run: () => this.deps.engine.launchScene(index) },
-        { label: 'Rinomina', shortcut: 'doppio clic', run: () => renameInline(name, n => this.apply(renameScene(scene.id, n))) },
+        { label: 'Launch the scene', run: () => this.deps.engine.launchScene(index) },
+        { label: 'Rename', shortcut: 'double click', run: () => renameInline(name, n => this.apply(renameScene(scene.id, n))) },
         { colors: PALETTE, current: scene.color, pick: c => c !== scene.color && this.apply(setSceneColor(scene.id, c)) },
-        { label: 'Duplica', run: () => this.apply(duplicateScene(scene.id)) },
-        { label: 'Cattura e inserisci scena', shortcut: 'Ctrl+Maiusc+I', run: () => this.captureAndInsertScene(index) },
-        { label: 'Copia nell\'arrangement', disabled: !sceneHasClips, run: () => this.deps.sceneToArrangement(index) },
-        { label: 'Esporta audio…', run: () => this.deps.exportScene(index) },
-        { label: 'Inserisci una scena sopra', run: () => this.apply(insertScene(index)) },
-        { label: 'Inserisci una scena sotto', run: () => this.apply(insertScene(index + 1)) },
+        { label: 'Duplicate', run: () => this.apply(duplicateScene(scene.id)) },
+        { label: 'Capture and insert scene', shortcut: 'Ctrl+Shift+I', run: () => this.captureAndInsertScene(index) },
+        { label: 'Copy to the arrangement', disabled: !sceneHasClips, run: () => this.deps.sceneToArrangement(index) },
+        { label: 'Export audio…', run: () => this.deps.exportScene(index) },
+        { label: 'Insert a scene above', run: () => this.apply(insertScene(index)) },
+        { label: 'Insert a scene below', run: () => this.apply(insertScene(index + 1)) },
         SEPARATOR,
-        { label: 'Elimina la scena', disabled: only, run: () => this.apply(deleteScene(scene.id)) },
+        { label: 'Delete the scene', disabled: only, run: () => this.apply(deleteScene(scene.id)) },
       ]);
     };
     return cell;
   }
 
-  // ---------------------------------------------------------------- stato della riproduzione
+  // ---------------------------------------------------------------- playback state
 
-  /** Clip che suonano, in coda e tracce che si fermano: a ogni fotogramma (l'avanzamento
-   *  scorre) e subito dopo un lancio. */
+  /** Playing clips, queued ones and tracks stopping: at every frame (the progress
+   *  flows) and right after a launch. */
   private refreshState(): void {
     if (this.element.hidden) return;
     const { engine, store } = this.deps;
     const p = store.project;
     for (const t of p.visibleTracks) {
-      // di un gruppo: le sue tracce insieme, e riga per riga
+      // of a group: its tracks together, and row by row
       const st = engine.sessionState(t);
       const queued = st.queued && typeof st.queued === 'object' ? st.queued.slot : -1;
       const members = t instanceof GroupTrack ? p.soundingTracks(t.id).map(m => [m, engine.sessionState(m)] as const) : null;
@@ -707,7 +707,7 @@ export class SessionView {
       this.stops.get(t.id)?.classList.toggle('queued', st.queued === 'stop');
       this.heads.get(t.id)?.classList.toggle('taken', !st.followsArrangement);
     }
-    // le scene: suonano se suona una loro clip
+    // the scenes: they play if one of their clips plays
     const sounding = p.tracks.filter(t => !(t instanceof GroupTrack)).map(t => [t, engine.sessionState(t)] as const);
     this.scenes.forEach((cell, s) => {
       const scene = sceneState(sounding, s);
@@ -735,13 +735,13 @@ export class SessionView {
       const ref = this.slotAt(e.target);
       if (!ref) return;
       const multi = e.ctrlKey || e.metaKey;
-      // con Maiusc da qualunque slot, anche pieno: un clic estende la scelta, trascinare la disegna
+      // with Shift from any slot, even full: a click extends the selection, dragging draws it
       if (e.shiftKey) {
         this.band = { from: ref, x: e.clientX, y: e.clientY, active: false, extend: true };
         return;
       }
       const clip = this.deps.store.project.track(ref.track)?.slots[ref.slot];
-      // una clip già tra le scelte resta con le altre: si trascinano insieme
+      // a clip already among the chosen ones stays with the others: they're dragged together
       if (!(clip && this.picked.has(slotKey(ref.track, ref.slot))) && !(clip && multi)) this.select(ref);
       else this.element.focus({ preventScroll: true });
       if (clip) this.drag = { from: ref, x: e.clientX, y: e.clientY, toggle: multi, ghost: null };
@@ -766,7 +766,7 @@ export class SessionView {
       else this.select(ref);
       showContextMenu(e.clientX, e.clientY, this.slotMenu(ref, e.target as HTMLElement));
     });
-    // file audio trascinati da fuori: negli slot (una traccia nuova se non è audio)
+    // audio files dragged from outside: into the slots (a new track if it isn't audio)
     g.addEventListener('dragover', e => {
       if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
     });
@@ -779,7 +779,7 @@ export class SessionView {
     });
     if (this.deps.dropItem) {
       acceptBrowserDrops(g, (item, e) => this.deps.dropItem!(item, this.dropTarget(item, e.target)), {
-        // lo slot (o la testa della colonna) dove andrà, evidenziato
+        // the slot (or the column's head) where it will go, highlighted
         over: e => {
           for (const c of g.querySelectorAll('.drop-target')) c.classList.remove('drop-target');
           const node = (e?.target as HTMLElement | null)?.closest?.('.slot, .session-head');
@@ -789,8 +789,8 @@ export class SessionView {
     }
   }
 
-  /** Dove va una voce del browser lasciata su `target`: lo slot sotto; sulla testa (o sul mixer)
-   *  di una colonna la sua traccia (un sample nel primo slot libero); sul master la sua catena. */
+  /** Where a browser item dropped on `target` goes: the slot underneath; on a column's head (or on the mixer)
+   *  its track (a sample in the first free slot); on the master its chain. */
   private dropTarget(item: BrowserItem, target: EventTarget | null): LoadTarget {
     const ref = this.slotAt(target);
     if (ref) return { kind: 'slot', ...ref };
@@ -830,7 +830,7 @@ export class SessionView {
     if (over) this.slots.get(slotKey(over.track, over.slot))?.classList.add('drop-target');
   }
 
-  /** Le clip che un trascinamento porta con sé: le scelte, se la clip presa è tra loro. */
+  /** The clips a drag carries along: the chosen ones, if the grabbed clip is among them. */
   private moving(d: SlotDrag): SlotRef[] {
     return this.picked.has(slotKey(d.from.track, d.from.slot)) ? this.pickedClips() : [d.from];
   }
@@ -846,7 +846,7 @@ export class SessionView {
     if (!d.ghost) {
       if (d.toggle) return this.toggle(d.from);
       this.select(d.from);
-      return this.openSlot(d.from); // un clic: apre la clip nell'editor
+      return this.openSlot(d.from); // a click: opens the clip in the editor
     }
     d.ghost.remove();
     const to = this.slotAt(document.elementFromPoint(e.clientX, e.clientY));
@@ -862,61 +862,61 @@ export class SessionView {
     const p = this.deps.store.project, track = p.track(ref.track)!, clip = track.slots[ref.slot];
     if (track instanceof GroupTrack) {
       return [
-        { label: 'Lancia la riga del gruppo', shortcut: 'Invio', run: () => this.deps.engine.launchSlot(track.id, ref.slot) },
-        { label: 'Ferma le tracce del gruppo', run: () => this.deps.engine.stopTrack(track.id) },
+        { label: 'Launch the group\'s row', shortcut: 'Enter', run: () => this.deps.engine.launchSlot(track.id, ref.slot) },
+        { label: 'Stop the group\'s tracks', run: () => this.deps.engine.stopTrack(track.id) },
       ];
     }
     if (!clip) {
       return [
         track.kind === 'midi'
-          ? { label: 'Nuova clip MIDI', shortcut: 'doppio clic', run: () => { this.apply(newSlotMidiClip(ref)); this.openSlot(ref); } }
-          : { label: 'Importa audio…', shortcut: 'doppio clic', run: () => this.importAudioTo(ref) },
-        { label: 'Incolla', shortcut: KEY.paste, disabled: !this.deps.clipboard.clips, run: () => this.pasteSelected() },
-        { label: 'Ferma la traccia', run: () => this.deps.engine.stopTrack(ref.track) },
+          ? { label: 'New MIDI clip', shortcut: 'double click', run: () => { this.apply(newSlotMidiClip(ref)); this.openSlot(ref); } }
+          : { label: 'Import audio…', shortcut: 'double click', run: () => this.importAudioTo(ref) },
+        { label: 'Paste', shortcut: KEY.paste, disabled: !this.deps.clipboard.clips, run: () => this.pasteSelected() },
+        { label: 'Stop the track', run: () => this.deps.engine.stopTrack(ref.track) },
       ];
     }
     const refs = this.pickedClips();
     if (refs.length > 1) {
       return [
-        { label: `Lancia ${refs.length} clip`, shortcut: 'Invio', run: () => this.launchSelected() },
+        { label: `Launch ${refs.length} clips`, shortcut: 'Enter', run: () => this.launchSelected() },
         SEPARATOR,
-        { label: 'Taglia', shortcut: KEY.cut, run: () => this.cutSelected() },
-        { label: 'Copia', shortcut: KEY.copy, run: () => this.copySelected() },
-        { label: 'Duplica', shortcut: KEY.duplicate, run: () => this.duplicateSelected() },
+        { label: 'Cut', shortcut: KEY.cut, run: () => this.cutSelected() },
+        { label: 'Copy', shortcut: KEY.copy, run: () => this.copySelected() },
+        { label: 'Duplicate', shortcut: KEY.duplicate, run: () => this.duplicateSelected() },
         SEPARATOR,
-        { colors: PALETTE, current: clip.color, noneTitle: 'Colore della traccia', pick: c => this.apply(setClipColor(refs.flatMap(r => {
+        { colors: PALETTE, current: clip.color, noneTitle: 'Track colour', pick: c => this.apply(setClipColor(refs.flatMap(r => {
           const id = p.track(r.track)?.slots[r.slot]?.id;
           return id ? [slotRef(r.track, id)] : [];
         }), c)) },
         SEPARATOR,
-        { label: `Elimina ${refs.length} clip`, shortcut: KEY.delete, run: () => this.clearSelected() },
+        { label: `Delete ${refs.length} clips`, shortcut: KEY.delete, run: () => this.clearSelected() },
       ];
     }
     const name = target.closest('.slot')?.querySelector<HTMLElement>('.clip-name');
     return [
-      { label: 'Lancia', shortcut: 'Invio', run: () => this.launchSelected() },
-      { label: 'Apri nell\'editor', shortcut: 'clic', run: () => this.openSlot(ref) },
+      { label: 'Launch', shortcut: 'Enter', run: () => this.launchSelected() },
+      { label: 'Open in the editor', shortcut: 'click', run: () => this.openSlot(ref) },
       SEPARATOR,
-      { label: 'Taglia', shortcut: KEY.cut, run: () => this.cutSelected() },
-      { label: 'Copia', shortcut: KEY.copy, run: () => this.copySelected() },
-      { label: 'Duplica', shortcut: KEY.duplicate, run: () => this.duplicateSelected() },
-      { label: 'Rinomina', run: () => name && renameInline(name, n => this.apply(updateSlotClip('Rinomina clip', ref.track, clip.id, c => c.withName(n)))) },
+      { label: 'Cut', shortcut: KEY.cut, run: () => this.cutSelected() },
+      { label: 'Copy', shortcut: KEY.copy, run: () => this.copySelected() },
+      { label: 'Duplicate', shortcut: KEY.duplicate, run: () => this.duplicateSelected() },
+      { label: 'Rename', run: () => name && renameInline(name, n => this.apply(updateSlotClip('Rename clip', ref.track, clip.id, c => c.withName(n)))) },
       SEPARATOR,
-      { colors: PALETTE, current: clip.color, noneTitle: 'Colore della traccia', pick: c => this.apply(setClipColor([slotRef(ref.track, clip.id)], c)) },
+      { colors: PALETTE, current: clip.color, noneTitle: 'Track colour', pick: c => this.apply(setClipColor([slotRef(ref.track, clip.id)], c)) },
       SEPARATOR,
-      { label: 'Elimina', shortcut: KEY.delete, run: () => this.clearSelected() },
+      { label: 'Delete', shortcut: KEY.delete, run: () => this.clearSelected() },
     ];
   }
 
-  // ---------------------------------------------------------------- aiuti
+  // ---------------------------------------------------------------- helpers
 
-  /** Uno slot solo: il cursore, e da lì si estende la scelta. */
+  /** A single slot: the cursor, and from there the selection extends. */
   private select(ref: SlotRef): void {
     this.anchor = ref;
     this.pick([ref]);
   }
 
-  /** Sceglie questi slot; il cursore è `cursor`. Il punto di partenza di Maiusc non cambia. */
+  /** Chooses these slots; the cursor is `cursor`. Shift's starting point doesn't change. */
   private pick(refs: readonly SlotRef[], cursor: SlotRef = refs[0]): void {
     this.selected = cursor;
     this.picked.clear();
@@ -932,7 +932,7 @@ export class SessionView {
     for (const [key, c] of this.slots) c.classList.toggle('selected', this.picked.has(key));
   }
 
-  /** Il rettangolo di slot tra `from` e `to`: il cursore va su `to`. */
+  /** The rectangle of slots between `from` and `to`: the cursor goes on `to`. */
   private pickRange(from: SlotRef, to: SlotRef): void {
     const tracks = this.deps.store.project.visibleTracks;
     const a = tracks.findIndex(t => t.id === from.track), b = tracks.findIndex(t => t.id === to.track);
@@ -943,7 +943,7 @@ export class SessionView {
     this.pick(refs, to);
   }
 
-  /** Ctrl+clic: la clip entra o esce dalla scelta. */
+  /** Ctrl+click: the clip enters or leaves the selection. */
   private toggle(ref: SlotRef): void {
     const key = slotKey(ref.track, ref.slot);
     if (!this.picked.has(key)) {
@@ -954,13 +954,13 @@ export class SessionView {
     if (rest.length) this.pick(rest, rest[rest.length - 1]);
   }
 
-  /** Gli slot scelti che hanno una clip. */
+  /** The chosen slots that have a clip. */
   private pickedClips(): SlotRef[] {
     const p = this.deps.store.project;
     return [...this.picked.values()].filter(r => p.track(r.track)?.slots[r.slot]);
   }
 
-  /** Apre la clip nell'editor in basso; la tastiera resta alla session (Ctrl+C copia la clip). */
+  /** Opens the clip in the editor at the bottom; the keyboard stays with the session (Ctrl+C copies the clip). */
   private openSlot(ref: SlotRef): void {
     const clip = this.deps.store.project.track(ref.track)?.slots[ref.slot];
     if (!clip) return;
@@ -968,13 +968,13 @@ export class SessionView {
     this.element.focus({ preventScroll: true });
   }
 
-  /** Applica una modifica; un errore (es. una clip audio su una traccia MIDI) va nella barra di stato. */
+  /** Applies a change; an error (e.g. an audio clip on a MIDI track) goes in the status bar. */
   private apply(e: Edit): boolean {
     try {
       this.deps.store.apply(e);
       return true;
     } catch (err) {
-      this.deps.say(err instanceof TypeError ? 'Le clip vanno su tracce dello stesso tipo: audio con audio, MIDI con MIDI.' : `${err instanceof Error ? err.message : err}`);
+      this.deps.say(err instanceof TypeError ? 'Clips go on tracks of the same kind: audio with audio, MIDI with MIDI.' : `${err instanceof Error ? err.message : err}`);
       return false;
     }
   }

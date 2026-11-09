@@ -1,11 +1,11 @@
-/* La matematica dell'EQ, condivisa da suono e disegno. Ogni banda è una o più sezioni di un
- * filtro a variabili di stato (TPT, nella forma di Andrew Simper): l'uscita è
- * m0·ingresso + m1·passa-banda + m2·passa-basso, con g e k che fissano frequenza e
- * smorzamento. Questi filtri equivalgono alla trasformata bilineare dei prototipi analogici,
- * quindi la risposta in frequenza si calcola esatta: la curva disegnata è quella che si sente. */
+/* The EQ's maths, shared by sound and drawing. Each band is one or more sections of a
+ * state-variable filter (TPT, in Andrew Simper's form): the output is
+ * m0·input + m1·band-pass + m2·low-pass, with g and k setting frequency and
+ * damping. These filters are equivalent to the bilinear transform of the analogue prototypes,
+ * so the frequency response is computed exactly: the drawn curve is the one you hear. */
 import { BAND, BAND_TYPES, SLOPES, type EqBand } from './eq';
 
-/** Una sezione del filtro: g = tan(π·f/fs) (corretto per gli shelf), k = 1/Q, e il mix delle uscite. */
+/** A filter section: g = tan(π·f/fs) (corrected for the shelves), k = 1/Q, and the output mix. */
 export interface Section {
   readonly g: number;
   readonly k: number;
@@ -14,7 +14,7 @@ export interface Section {
   readonly m2: number;
 }
 
-/** Fattori di qualità di un Butterworth di ordine `2·stages`: tagli piatti fino alla frequenza. */
+/** Quality factors of a Butterworth of order `2·stages`: cuts flat up to the frequency. */
 export function butterworthQs(stages: number): number[] {
   const order = 2 * stages;
   return Array.from({ length: stages }, (_, i) => 1 / (2 * Math.cos(((2 * i + 1) * Math.PI) / (2 * order))));
@@ -23,7 +23,7 @@ export function butterworthQs(stages: number): number[] {
 const SQRT1_2 = Math.SQRT1_2;
 const prewarp = (freq: number, sampleRate: number) => Math.tan((Math.PI * Math.min(freq, sampleRate * 0.49)) / sampleRate);
 
-/** Sezioni di un taglio con `stages` sezioni: Butterworth, con il Q scelto sulla sezione più risonante. */
+/** Sections of a cut with `stages` sections: Butterworth, with the chosen Q on the most resonant section. */
 function cut(band: EqBand, sampleRate: number, mix: (k: number) => readonly [number, number, number]): Section[] {
   const qs = butterworthQs(SLOPES[band.slope]?.stages ?? 1);
   const g = prewarp(band.freq, sampleRate);
@@ -34,7 +34,7 @@ function cut(band: EqBand, sampleRate: number, mix: (k: number) => readonly [num
   });
 }
 
-/** Le sezioni di ogni tipo di banda, nell'ordine di BAND_TYPES. */
+/** The sections of each band type, in the order of BAND_TYPES. */
 const SHAPES: readonly ((band: EqBand, sampleRate: number) => Section[])[] = [
   /* low cut   */ (b, fs) => cut(b, fs, k => [1, -k, -1]),
   /* low shelf */ (b, fs) => {
@@ -58,10 +58,10 @@ const SHAPES: readonly ((band: EqBand, sampleRate: number) => Section[])[] = [
 
 export const sectionsOf = (band: EqBand, sampleRate: number): Section[] => (SHAPES[band.type] ?? SHAPES[BAND.bell])(band, sampleRate);
 
-/** Vero se la banda, così com'è, non cambia il suono (shelf e campane a 0 dB). */
+/** True if the band, as it is, doesn't change the sound (shelves and bells at 0 dB). */
 export const isFlat = (band: EqBand): boolean => !band.on || (!!BAND_TYPES[band.type]?.gain && band.gain === 0);
 
-/** |H| di una sezione alla frequenza `freq`: H(s) = m0 + (m1·s + m2) / (s² + k·s + 1), s = j·tan(π·f/fs)/g. */
+/** |H| of a section at frequency `freq`: H(s) = m0 + (m1·s + m2) / (s² + k·s + 1), s = j·tan(π·f/fs)/g. */
 export function sectionMagnitude(s: Section, freq: number, sampleRate: number): number {
   const w = prewarp(freq, sampleRate) / s.g;
   const dRe = 1 - w * w, dIm = s.k * w;
@@ -71,12 +71,12 @@ export function sectionMagnitude(s: Section, freq: number, sampleRate: number): 
 
 const toDb = (m: number) => 20 * Math.log10(Math.max(m, 1e-12));
 
-/** Risposta di una banda, in dB (0 se spenta). */
+/** Response of one band, in dB (0 if off). */
 export function bandResponseDb(band: EqBand, freq: number, sampleRate: number): number {
   if (!band.on) return 0;
   return sectionsOf(band, sampleRate).reduce((db, s) => db + toDb(sectionMagnitude(s, freq, sampleRate)), 0);
 }
 
-/** Risposta di tutto l'EQ, in dB. */
+/** Response of the whole EQ, in dB. */
 export const responseDb = (bands: readonly EqBand[], outputDb: number, freq: number, sampleRate: number): number =>
   bands.reduce((db, b) => db + bandResponseDb(b, freq, sampleRate), outputDb);

@@ -1,16 +1,16 @@
-/* "Redux": il suono lo-fi dei campionatori vecchi e dei videogiochi. Abbassa la frequenza di
- * campionamento (ogni campione resta fermo finché non arriva il prossimo: la forma d'onda a
- * gradini e le frequenze che si ripiegano) e i bit (il volume a scalini, il fruscio granuloso).
- * Jitter rende irregolare il passo dei campioni; il filtro può togliere le frequenze che si
- * ripiegherebbero (Prima) o smussare i gradini (Dopo). Qui c'è solo la descrizione; il suono è
+/* "Redux": the lo-fi sound of old samplers and video games. It lowers the sample
+ * rate (each sample stays still until the next arrives: the stepped waveform
+ * and the folding frequencies) and the bits (the stepped volume, the grainy hiss).
+ * Jitter makes the sample step irregular; the filter can remove the frequencies that would
+ * fold back (Pre) or smooth the steps (Post). Here there's only the description; the sound is
  * in redux-core.ts. */
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam } from '../../params';
 
-export const REDUX_FILTERS = ['Spento', 'Prima', 'Dopo'] as const;
+export const REDUX_FILTERS = ['Off', 'Before', 'After'] as const;
 export const REDUX_FILTER = { off: 0, pre: 1, post: 2 } as const;
 
-/** La frequenza più alta: da qui in su (oltre la frequenza del progetto) non riduce più nulla. */
+/** The highest frequency: from here up (beyond the project rate) it reduces nothing any more. */
 export const MAX_RATE = 48000;
 export const MAX_BITS = 16;
 
@@ -24,28 +24,28 @@ export const REDUX: DeviceType = {
   label: 'Redux',
   sections: [
     {
-      label: 'Campioni',
+      label: 'Samples',
       params: [
-        num('rate', 'Frequenza', 100, MAX_RATE, 8000, 'Hz', { scale: 'log' }),
+        num('rate', 'Frequency', 100, MAX_RATE, 8000, 'Hz', { scale: 'log' }),
         num('jitter', 'Jitter', 0, 100, 0, '%', { step: 1 }),
-        choice('filter', 'Filtro', REDUX_FILTERS),
+        choice('filter', 'Filter', REDUX_FILTERS),
       ],
     },
     { label: 'Bit', params: [num('bits', 'Bit', 1, MAX_BITS, 8, 'bit', { step: 0.1 })] },
     {
-      label: 'Uscita',
+      label: 'Output',
       params: [
         num('mix', 'Dry/Wet', 0, 100, 100, '%', { step: 1 }),
-        num('output', 'Uscita', -24, 12, 0, 'dB', { step: 0.1 }),
+        num('output', 'Output', -24, 12, 0, 'dB', { step: 0.1 }),
       ],
     },
   ],
   presets: [
     { name: 'Init', params: {} },
-    { name: 'Campionatore 12 bit', params: { rate: 26000, bits: 12, filter: REDUX_FILTER.post } },
-    { name: 'Videogioco', params: { rate: 5500, bits: 4 } },
-    { name: 'Telefono rotto', params: { rate: 3000, bits: 6, jitter: 30, filter: REDUX_FILTER.pre } },
-    { name: 'Polvere', params: { rate: 16000, bits: 10, mix: 40 } },
-    { name: 'Distrutto', params: { rate: 800, bits: 2, jitter: 60, output: -6 } },
+    { name: '12-bit sampler', params: { rate: 26000, bits: 12, filter: REDUX_FILTER.post } },
+    { name: 'Video game', params: { rate: 5500, bits: 4 } },
+    { name: 'Broken telephone', params: { rate: 3000, bits: 6, jitter: 30, filter: REDUX_FILTER.pre } },
+    { name: 'Dust', params: { rate: 16000, bits: 10, mix: 40 } },
+    { name: 'Wrecked', params: { rate: 800, bits: 2, jitter: 60, output: -6 } },
   ],
 };

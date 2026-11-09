@@ -1,18 +1,18 @@
-/* Le fette del Sampler trovate ai transienti, con la stessa analisi che mette i marker di warp
- * sulle clip audio. Si calcolano nell'interfaccia (quando si sceglie Slice, si cambia la
- * sensibilità o si carica un sample) e si salvano nei parametri nascosti dello strumento: così
- * si possono anche spostare a mano, e il motore non deve analizzare nulla. */
+/* The Sampler's slices found at the transients, with the same analysis that puts the warp markers
+ * on the audio clips. They're computed in the interface (when Slice is chosen, the
+ * sensitivity is changed or a sample is loaded) and saved in the instrument's hidden parameters: so
+ * they can also be moved by hand, and the engine doesn't have to analyse anything. */
 import type { SampleData } from '../../../devices/dsp/core';
 import { MAX_SLICES } from '../../../devices/instruments/sampler/sampler';
 import { onsetEnvelope } from '../../../dsp/analysis/onset';
 import { detectTransients } from '../../../dsp/analysis/transients';
 
-/** Un transiente più vicino di così (in secondi) all'inizio o alla fine della regione è il suo bordo. */
+/** A transient closer than this (in seconds) to the start or the end of the region is its edge. */
 const EDGE = 0.03;
 
-/** I transienti del sample tra `from` e `to` (frazioni), come lo si sente: rovesciato con
- *  Reverse. `sensitivity` 0…1: più alta, più fette. L'inizio della regione è già la prima
- *  fetta, e non sta nell'elenco. */
+/** The sample's transients between `from` and `to` (fractions), as it's heard: reversed with
+ *  Reverse. `sensitivity` 0…1: higher, more slices. The start of the region is already the first
+ *  slice, and isn't in the list. */
 export function findTransients(data: SampleData, reverse: boolean, sensitivity: number, from = 0, to = 1): number[] {
   const n = data.channels[0]?.length ?? 0;
   if (n < 2) return [];

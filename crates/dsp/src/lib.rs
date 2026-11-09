@@ -1,5 +1,5 @@
-//! Motore DSP di studiomio compilato in WebAssembly. Le funzioni esportate ricevono i
-//! canali uno dopo l'altro in un unico array ("planari") e restituiscono lo stesso formato.
+//! studiomio's DSP engine compiled to WebAssembly. The exported functions receive the
+//! channels one after the other in a single array ("planar") and return the same format.
 
 mod fft;
 mod phase_vocoder;
@@ -11,8 +11,8 @@ use wasm_bindgen::prelude::*;
 use phase_vocoder::PhaseVocoder;
 use time_map::TimeMap;
 
-/// Modalità Complex. `map_out`/`map_in`: punti della mappa di warp in campioni;
-/// `fft_size`: dimensione già scelta per il sample rate; `transients`: campioni di ingresso.
+/// Complex mode. `map_out`/`map_in`: warp map points in samples;
+/// `fft_size`: size already chosen for the sample rate; `transients`: input samples.
 #[wasm_bindgen]
 pub fn pv_stretch(
     planar: &[f32],

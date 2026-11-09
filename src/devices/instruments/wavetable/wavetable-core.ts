@@ -1,11 +1,11 @@
-/* Il suono di Wavetable: 16 voci (o una, con il glide), ognuna con due oscillatori a tabella,
- * il sub, l'unison, due filtri SVF (uno per canale), l'inviluppo del volume, l'inviluppo di
- * modulazione e due LFO. Un oscillatore legge la sua tabella alla posizione data, sfumando fra
- * le due forme vicine e fra due campioni vicini; la versione della tabella (vedi tables.ts) è
- * quella con le armoniche che stanno sotto Nyquist per la nota più acuta dell'unison. Le
- * modulazioni si calcolano ogni CONTROL_RATE campioni; le posizioni, il livello di B e il
- * volume ci arrivano in rampa, campione per campione, così muoverle in fretta non graffia.
- * Gira nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
+/* Wavetable's sound: 16 voices (or one, with glide), each with two wavetable oscillators,
+ * the sub, the unison, two SVF filters (one per channel), the volume envelope, the modulation
+ * envelope and two LFOs. An oscillator reads its table at the given position, crossfading between
+ * the two neighbouring shapes and between two neighbouring samples; the table version (see tables.ts) is
+ * the one with the harmonics staying below Nyquist for the unison's highest note. The
+ * modulations are computed every CONTROL_RATE samples; the positions, B's level and the
+ * volume get there as ramps, sample by sample, so moving them quickly doesn't scratch.
+ * Runs in the AudioWorklet; no Web Audio here, so it's also tested in Node. */
 import { dbToGain, midiToHz, type InstrumentCore } from '../../dsp/core';
 import { Adsr, type AdsrTimes } from '../../dsp/envelope';
 import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
@@ -17,11 +17,11 @@ import { FRAMES, LEVELS, levelFor, STRIDE, TABLE_SIZE, wavetable, type Wavetable
 import { LFO_SHAPE, LFO_SYNC, MOD_DEST, MOD_DESTINATIONS, VOICE_MODE } from './wavetable';
 
 export const WAVETABLE_VOICES = 16;
-/** Ogni quanti campioni si ricalcolano modulazioni, intonazione e filtro. */
+/** Every how many samples modulations, pitch and filter are recomputed. */
 const CONTROL_RATE = 16;
 const LFOS = 2;
 const LAST_FRAME = FRAMES - 1;
-/** Dalla forma alla stessa forma della tabella dopo (stessa versione). */
+/** From the shape to the same shape of the next table (same version). */
 const FRAME_STRIDE = LEVELS * STRIDE;
 
 const lfoWave = (shape: number, phase: number): number => {
@@ -34,7 +34,7 @@ const lfoWave = (shape: number, phase: number): number => {
   }
 };
 
-/** Un numero a caso in −1…1 fisso per ogni intero (il S&H: lo stesso giro dà lo stesso valore). */
+/** A random number in −1…1 fixed for each integer (the S&H: the same cycle gives the same value). */
 const hash = (n: number): number => {
   let x = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b);
   x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
@@ -42,8 +42,8 @@ const hash = (n: number): number => {
   return (x >>> 0) / 0x7fffffff - 1;
 };
 
-/** Una modulazione: da dove (non serve), verso quale destinazione, di quanto (già nell'unità
- *  della destinazione, vedi MOD_DESTINATIONS). */
+/** A modulation: from where (not needed), towards which target, by how much (already in the
+ *  target's unit, see MOD_DESTINATIONS). */
 interface Route {
   dest: number;
   amount: number;
@@ -63,10 +63,10 @@ class Lfo {
   route: Route = { dest: 0, amount: 0 };
 }
 
-/** I parametri già convertiti in quello che serve alle voci. */
+/** The parameters already converted into what the voices need. */
 class Settings {
   readonly tables: [Wavetable, Wavetable] = [wavetable(0), wavetable(0)];
-  /** Posizioni 0..1, rapporti di frequenza, livelli 0..1 dei due oscillatori. */
+  /** Positions 0..1, frequency ratios, levels 0..1 of the two oscillators. */
   readonly pos = [0, 0];
   readonly ratio = [1, 1];
   readonly level = [1, 0];
@@ -89,7 +89,7 @@ class Settings {
   modEnv: AdsrTimes = { attack: 0.003, decay: 0.6, sustain: 0, release: 0.3 };
   envRoutes: [Route, Route] = [route(0, 0), route(0, 0)];
   readonly lfos = [new Lfo(), new Lfo()];
-  /** Il giro comune degli LFO liberi: fase e giri compiuti (per il S&H). */
+  /** The shared cycle of the free LFOs: phase and completed cycles (for the S&H). */
   readonly freePhase = [0, 0];
   readonly freeCycle = [0, 0];
 
@@ -129,7 +129,7 @@ class Settings {
     });
   }
 
-  /** A una voce, se le note sovrapposte scivolano (per MonoPlayer). */
+  /** Monophonic, whether overlapping notes slide (for MonoPlayer). */
   get legato(): boolean {
     return this.voiceMode === VOICE_MODE.legato;
   }
@@ -139,7 +139,7 @@ class Settings {
     return l.tempo ? this.bpm / 60 / l.beats : l.rate;
   }
 
-  /** Il giro comune degli LFO liberi va avanti di `frames` campioni. */
+  /** The shared cycle of the free LFOs advances by `frames` samples. */
   advance(frames: number, sampleRate: number): void {
     for (let i = 0; i < LFOS; i++) {
       const p = this.freePhase[i] + (this.lfoHz(i) * frames) / sampleRate;
@@ -149,24 +149,24 @@ class Settings {
   }
 }
 
-/** La posizione della copia `k` di `n` nel ventaglio: da −1 a +1 (0 se è sola). */
+/** The position of copy `k` of `n` in the fan: from −1 to +1 (0 if it's alone). */
 const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-/** Le grandezze delle due voci per oscillatore, copia per copia. */
+/** The quantities of the two voices per oscillator, copy by copy. */
 class Osc {
   readonly phases = new Float64Array(MAX_UNISON);
   readonly dts = new Float64Array(MAX_UNISON);
-  /** La posizione nella tabella in forme (0…FRAMES−1) e quanto si muove a ogni campione. */
+  /** The position in the table in shapes (0…FRAMES−1) and how much it moves at each sample. */
   readonly frames = new Float64Array(MAX_UNISON);
   readonly steps = new Float64Array(MAX_UNISON);
-  /** La versione della tabella che si legge (vedi tables.ts). */
+  /** The version of the table being read (see tables.ts). */
   level = 0;
 }
 
 class WavetableVoice implements PolyVoice, MonoVoice {
   private readonly amp: Adsr;
-  /** L'inviluppo di modulazione va alla frequenza di controllo. */
+  /** The modulation envelope runs at the control rate. */
   private readonly menv: Adsr;
   private readonly filterL: Svf;
   private readonly filterR: Svf;
@@ -174,7 +174,7 @@ class WavetableVoice implements PolyVoice, MonoVoice {
   private readonly panL = new Float64Array(MAX_UNISON);
   private readonly panR = new Float64Array(MAX_UNISON);
   private readonly mods = new Float64Array(MOD_DESTINATIONS.length);
-  /** Il pezzo che si sta calcolando, prima di filtri e inviluppo. */
+  /** The piece being computed, before filters and envelope. */
   private readonly bufL = new Float64Array(CONTROL_RATE);
   private readonly bufR = new Float64Array(CONTROL_RATE);
   private readonly lfoPhase = [0, 0];
@@ -184,12 +184,12 @@ class WavetableVoice implements PolyVoice, MonoVoice {
   private pitch = 60;
   private target = 60;
   private level = 1;
-  /** Livello di B e guadagno delle modulazioni del volume, in rampa. */
+  /** B's level and the gain of the volume modulations, as ramps. */
   private levelB = 0;
   private levelBStep = 0;
   private modGain = 1;
   private modGainStep = 0;
-  /** Appena partita da ferma: le rampe saltano subito al valore. */
+  /** Just started from silence: the ramps jump to the value right away. */
   private fresh = true;
   private countdown = 0;
 
@@ -218,7 +218,7 @@ class WavetableVoice implements PolyVoice, MonoVoice {
       this.filterL.reset();
       this.filterR.reset();
       this.subPhase = 0;
-      // le copie partono da fasi diverse (fisse: lo stesso suono ogni volta)
+      // the copies start from different phases (fixed: the same sound every time)
       this.osc.forEach((o, i) => {
         for (let k = 0; k < MAX_UNISON; k++) o.phases[k] = k ? (k * (i ? 0.381966 : 0.618034)) % 1 : 0;
       });
@@ -259,14 +259,14 @@ class WavetableVoice implements PolyVoice, MonoVoice {
     this.menv.kill();
   }
 
-  /** I tempi degli inviluppi cambiano anche per le note che suonano già. */
+  /** The envelope times change also for notes already playing. */
   refresh(): void {
     this.amp.set(this.s.ampEnv);
     this.menv.set(this.s.modEnv);
   }
 
-  /** A pezzi fra un calcolo delle modulazioni e l'altro: prima gli oscillatori, copia per
-   *  copia, nei buffer della voce; poi sub, filtri e inviluppo campione per campione. */
+  /** In pieces between one modulation computation and the next: first the oscillators, copy by
+   *  copy, into the voice's buffers; then sub, filters and envelope sample by sample. */
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const { s, amp, filterL, filterR, bufL, bufR } = this;
     const [a, b] = this.osc, [tableA, tableB] = s.tables;
@@ -300,9 +300,9 @@ class WavetableVoice implements PolyVoice, MonoVoice {
     }
   }
 
-  /** Somma nei buffer `len` campioni dell'oscillatore, tutte le copie, con il livello che parte
-   *  da `level` e si muove di `step` a campione. Ogni campione sfuma fra due forme vicine e fra
-   *  due campioni vicini; posizioni e fasi vanno avanti anche quando non si sente. */
+  /** Adds `len` samples of the oscillator into the buffers, all the copies, with the level starting
+   *  from `level` and moving by `step` per sample. Each sample crossfades between two neighbouring shapes and between
+   *  two neighbouring samples; positions and phases advance even when it isn't heard. */
   private oscillate(table: Wavetable, o: Osc, len: number, level: number, step: number): void {
     const { bufL, bufR } = this, n = this.s.unison;
     if (level <= 0 && step <= 0) {
@@ -334,12 +334,12 @@ class WavetableVoice implements PolyVoice, MonoVoice {
     }
   }
 
-  /** Modulazioni a frequenza ridotta: inviluppo, LFO, glide, intonazione, posizioni, filtro. */
+  /** Modulations at reduced rate: envelope, LFO, glide, pitch, positions, filter. */
   private control(): void {
     const { s, sampleRate, mods } = this;
     this.countdown = CONTROL_RATE;
     if (this.pitch !== this.target) {
-      // glide esponenziale in semitoni: arriva al 95 % in circa `glide` secondi
+      // exponential glide in semitones: it gets to 95 % in about `glide` seconds
       const k = s.glide > 0 ? 1 - Math.exp((-3 * CONTROL_RATE) / (s.glide * sampleRate)) : 1;
       this.pitch += (this.target - this.pitch) * k;
       if (Math.abs(this.target - this.pitch) < 1e-3) this.pitch = this.target;
@@ -367,7 +367,7 @@ class WavetableVoice implements PolyVoice, MonoVoice {
       for (let k = 0; k < n; k++) {
         const f = fan(k, n);
         osc.dts[k] = Math.min(0.49, dt * Math.pow(2, (f * s.detune) / 1200));
-        // con "Posizioni" le copie leggono la tabella a ventaglio attorno alla posizione
+        // with "Positions" the copies read the table fanned around the position
         const target = clamp01(s.pos[o] + moved[o] + f * s.posSpread * 0.5) * LAST_FRAME;
         if (this.fresh) {
           osc.frames[k] = target;
@@ -376,7 +376,7 @@ class WavetableVoice implements PolyVoice, MonoVoice {
       }
     }
     for (let k = 0; k < n; k++) {
-      // pan a potenza costante lungo il ventaglio; il livello scende come la radice delle copie
+      // constant-power pan along the fan; the level drops as the square root of the copies
       const p = fan(k, n) * s.spread;
       this.panL[k] = Math.sqrt(1 - p) * norm;
       this.panR[k] = Math.sqrt(1 + p) * norm;
@@ -408,7 +408,7 @@ export class WavetableCore implements InstrumentCore {
   private scratchR = new Float32Array(128);
   private gain = -1;
   private readonly gainK: number;
-  /** Il seme del S&H delle note (ogni nota il suo giro di valori). */
+  /** The S&H seed of the notes (each note its own cycle of values). */
   private notes = 0;
 
   constructor(private readonly sampleRate: number, voices = WAVETABLE_VOICES) {
@@ -421,7 +421,7 @@ export class WavetableCore implements InstrumentCore {
   setParams(params: Readonly<Record<string, number>>): void {
     this.settings.read(params);
     for (const v of this.pool.voices) v.refresh();
-    // passando da poli a una voce (o viceversa) si riparte puliti
+    // switching from poly to mono (or vice versa) restarts clean
     const single = this.settings.voiceMode !== VOICE_MODE.poly;
     if (this.single !== null && single !== this.single) this.silence();
     this.single = single;

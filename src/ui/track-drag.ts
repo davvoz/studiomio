@@ -1,23 +1,23 @@
-/* Trascinare una traccia per cambiarne il posto, dall'intestazione nell'arrangement o dalla testa
- * della colonna nella session. Il trascinamento comincia dopo qualche pixel, così un clic resta un
- * clic; Esc lo annulla. Una linea mostra dove andrà la traccia. */
+/* Dragging a track to change its place, from the header in the arrangement or from the head
+ * of the column in the session. The drag starts after a few pixels, so a click stays a
+ * click; Esc cancels it. A line shows where the track will go. */
 import { el } from './dom';
 
-/** Un posto dove lasciare la traccia e la linea che lo mostra (in pixel dello schermo). */
+/** A place to drop the track and the line showing it (in screen pixels). */
 export interface DropSpot<T> {
   readonly drop: T;
   readonly line: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 }
 
 export interface TrackDragOptions<T> {
-  /** L'elemento della traccia presa, che si attenua mentre la si porta. */
+  /** The element of the grabbed track, which fades while it's carried. */
   readonly source: HTMLElement;
-  /** Il posto sotto il puntatore (null: lì non si può lasciare). */
+  /** The place under the pointer (null: it can't be dropped there). */
   spotAt(e: PointerEvent): DropSpot<T> | null;
   drop(target: T): void;
 }
 
-/** Da un pointerdown su una traccia: il clic resta un clic, il trascinamento la sposta. */
+/** From a pointerdown on a track: the click stays a click, the drag moves it. */
 export function startTrackDrag<T>(down: PointerEvent, o: TrackDragOptions<T>): void {
   let line: HTMLElement | null = null;
   let spot: DropSpot<T> | null = null;
@@ -44,7 +44,7 @@ export function startTrackDrag<T>(down: PointerEvent, o: TrackDragOptions<T>): v
     line.remove();
     document.body.classList.remove('track-dragging');
     o.source.classList.remove('dragging');
-    // il clic che segue il rilascio non apre niente
+    // the click following the release opens nothing
     const swallow = (e: MouseEvent) => e.stopPropagation();
     window.addEventListener('click', swallow, true);
     setTimeout(() => window.removeEventListener('click', swallow, true));
@@ -62,8 +62,8 @@ export function startTrackDrag<T>(down: PointerEvent, o: TrackDragOptions<T>): v
   window.addEventListener('keydown', key, true);
 }
 
-/** Vero se il pointerdown può cominciare un trascinamento: tasto sinistro, senza Maiusc o Ctrl
- *  (che allargano la scelta), e non su un controllo dell'intestazione. */
+/** True if the pointerdown can start a drag: left button, without Shift or Ctrl
+ *  (which widen the selection), and not on a header control. */
 export const canStartTrackDrag = (e: PointerEvent): boolean =>
   e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey
   && !(e.target as HTMLElement).closest('button, input, select, textarea, .knob, .midi-slot, .level-meter');

@@ -1,14 +1,14 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>studiomio · banco DSP</title>
+  <title>studiomio · DSP bench</title>
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
   <main class="bench">
-    <h1>studiomio <small>banco di prova del motore DSP</small></h1>
+    <h1>studiomio <small>DSP engine test bench</small></h1>
 
     <section>
       <h2>Ambiente</h2>
@@ -19,15 +19,15 @@
       <h2>Sample</h2>
       <div class="row">
         <button id="demo">Loop demo</button>
-        <label class="file">Carica audio… <input id="file" type="file" accept="audio/*"></label>
-        <span id="source" class="muted">nessun sample</span>
+        <label class="file">Load audio… <input id="file" type="file" accept="audio/*"></label>
+        <span id="source" class="muted">no sample</span>
       </div>
     </section>
 
     <section>
       <h2>Warp</h2>
       <div class="row">
-        <label>Modalità
+        <label>Mode
           <select id="mode">
             <option value="complex">Complex</option>
             <option value="beats">Beats</option>
@@ -40,7 +40,7 @@
         <label>Transpose <input id="transpose" type="number" value="0" min="-48" max="48" step="1"></label>
         <button id="render" disabled>Render</button>
         <button id="play" disabled>▶</button>
-        <button id="parallel" disabled>Render × N in parallelo</button>
+        <button id="parallel" disabled>Render × N in parallel</button>
       </div>
       <pre id="log"></pre>
     </section>

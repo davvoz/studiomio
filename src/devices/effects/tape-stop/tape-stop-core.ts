@@ -1,23 +1,23 @@
-/* Il suono del Tape Stop. L'ingresso va sempre sul nastro e una testina lo rilegge: dal vivo
- * legge l'ultimo campione (il suono passa com'è); in frenata va sempre più piano, quindi il
- * suono scende di pitch e resta indietro, e sotto una certa velocità sfuma fino al silenzio;
- * da fermo tace. Alla ripartenza accelera da fermo sul suono di adesso e alla fine torna al vivo
- * con una sfumatura (è rimasta un po' indietro). Gira nell'AudioWorklet; qui niente Web Audio. */
+/* The Tape Stop's sound. The input always goes onto the tape and a head reads it back: live
+ * it reads the last sample (the sound passes as it is); while braking it goes slower and slower, so the
+ * sound drops in pitch and falls behind, and below a certain speed it fades to silence;
+ * when stopped it's silent. On restart it speeds up from standstill on the sound of now and at the end returns to live
+ * with a fade (it has fallen a little behind). Runs in the AudioWorklet; no Web Audio here. */
 import type { EffectCore, TransportFollower, TransportPosition } from '../../dsp/core';
 import { TapeBuffer, TapeReader } from '../../dsp/tape-buffer';
 import { MIN_BPM } from '../../../core/music-time';
 import { BRAKE_CURVE, BRAKE_DIVISIONS, MAX_BRAKE_MS, MAX_SPIN_MS, STARTS, TAPE_SYNC } from './tape-stop';
 
-/** Le sfumature dei salti della testina, in secondi; più lunga quella del ritorno al vivo. */
+/** The fades of the head's jumps, in seconds; longer the one back to live. */
 const FADE = 0.005, BACK_TO_LIVE = 0.02;
-/** Sotto questa velocità il suono sfuma: un nastro quasi fermo non si sente più. */
+/** Below this speed the sound fades: an almost stopped tape can't be heard any more. */
 const SILENT_SPEED = 0.12;
 const EPS = 1e-9;
 
 const STATE = { live: 0, waiting: 1, brake: 2, stopped: 3, spin: 4 } as const;
 type State = (typeof STATE)[keyof typeof STATE];
 
-/** La velocità a `x` (0..1) della frenata partita da `v0`. */
+/** The speed at `x` (0..1) of the braking started from `v0`. */
 const CURVES: readonly ((v0: number, x: number) => number)[] = [
   (v0, x) => v0 * (1 - x),
   (v0, x) => v0 * (0.5 + 0.5 * Math.cos(Math.PI * x)),
@@ -32,13 +32,13 @@ export class TapeStopCore implements EffectCore, TransportFollower {
   private transport: TransportPosition | null = null;
   private bpm = 120;
   private state: State = STATE.live;
-  /** La velocità della testina (1 = dal vivo) e la frenata o ripartenza in corso. */
+  /** The head's speed (1 = live) and the braking or restart in progress. */
   private speed = 1;
   private from = 1;
   private t = 0;
   private length = 1;
   private lastLine = 0;
-  /** Dopo il silenzio il suono torna salendo: quanto è già salito (0..1) e di quanto a campione. */
+  /** After the silence the sound comes back rising: how much it has risen already (0..1) and by how much per sample. */
   private rise = 1;
   private readonly riseStep: number;
 
@@ -78,7 +78,7 @@ export class TapeStopCore implements EffectCore, TransportFollower {
     this.transport = position;
   }
 
-  /** La velocità della testina adesso (1 = dal vivo, 0 = ferma). */
+  /** The head's speed now (1 = live, 0 = stopped). */
   get headSpeed(): number {
     return this.state === STATE.stopped ? 0 : this.speed;
   }
@@ -86,7 +86,7 @@ export class TapeStopCore implements EffectCore, TransportFollower {
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     const { tape, reader, out } = this, pos = this.transport;
     const bps = pos ? pos.bpm / 60 / this.sampleRate : 0;
-    // dal vivo la testina è sull'ultimo campione (anche dopo un bypass, quando il nastro è fermo)
+    // live the head is on the last sample (also after a bypass, when the tape is still)
     if (this.state === STATE.live && !reader.fading) reader.pos = tape.written;
     if (this.stop && (this.state === STATE.live || this.state === STATE.spin)) {
       if (this.startBeats > 0 && pos) {
@@ -116,7 +116,7 @@ export class TapeStopCore implements EffectCore, TransportFollower {
           this.speed = this.from + ((1 - this.from) * this.t) / this.length;
           gain = Math.min(1, this.speed / SILENT_SPEED);
           if (++this.t >= this.length) {
-            // è rimasta indietro: torna al vivo sfumando (dal prossimo campione)
+            // it fell behind: back to live with a fade (from the next sample)
             reader.read(tape, this.speed, out);
             reader.jump(tape.written, 1, this.backToLive);
             this.state = STATE.live;
@@ -145,7 +145,7 @@ export class TapeStopCore implements EffectCore, TransportFollower {
     }
   }
 
-  /** Comincia a frenare da questo campione, dalla velocità che ha. */
+  /** Starts braking from this sample, from the speed it has. */
   private brake(): void {
     this.state = STATE.brake;
     this.from = this.speed;
@@ -153,12 +153,12 @@ export class TapeStopCore implements EffectCore, TransportFollower {
     this.length = Math.max(1, Math.round(this.brakeSeconds() * this.sampleRate));
   }
 
-  /** Stop spento: riparte dal suono di adesso (accelerando, se c'è la ripartenza). */
+  /** Stop off: restarts from the sound of now (speeding up, if there's a restart). */
   private release(): void {
     const spin = Math.round((this.spinMs / 1000) * this.sampleRate);
     const speed = this.state === STATE.stopped ? 0 : this.speed;
-    // il prossimo campione registrato sarà a `written`: è lì il suono di adesso; da fermo
-    // taceva, quindi non c'è niente da sfumare (la testina ferma darebbe un gradino)
+    // the next recorded sample will be at `written`: that's where the sound of now is; when stopped
+    // it was silent, so there's nothing to fade (the still head would give a step)
     if (this.state === STATE.stopped) {
       this.reader.pos = this.tape.written;
       this.rise = 0;
@@ -168,7 +168,7 @@ export class TapeStopCore implements EffectCore, TransportFollower {
       this.speed = 1;
       return;
     }
-    // riaccelera dalla velocità che aveva (da fermo, da zero)
+    // speeds up again from the speed it had (from standstill, from zero)
     this.state = STATE.spin;
     this.from = speed;
     this.speed = speed;
@@ -182,7 +182,7 @@ export class TapeStopCore implements EffectCore, TransportFollower {
     return (this.brakeBeats * 60) / bpm;
   }
 
-  /** Il nastro deve ricordare tutta la frenata più lunga possibile con il tempo di adesso. */
+  /** The tape must remember the whole longest possible braking at the current tempo. */
   private fitTape(): void {
     const brake = this.sync === TAPE_SYNC.ms ? this.brakeMs / 1000 : (this.brakeBeats * 60) / Math.max(MIN_BPM, this.bpm);
     this.tape.ensure((brake + this.spinMs / 1000 + 4 * BACK_TO_LIVE) * this.sampleRate);

@@ -1,24 +1,24 @@
-/* Il sidechain come dati: un effetto (il compressore) che ascolta un'altra traccia. Il suono
- * della traccia sorgente si prende dopo i suoi effetti e prima del suo volume (come "Post FX" in
- * Live): una cassa abbassata o in mute continua a far pompare il basso.
+/* The sidechain as data: an effect (the compressor) listening to another track. The sound
+ * of the source track is taken after its effects and before its volume (like "Post FX" in
+ * Live): a lowered or muted kick keeps making the bass pump.
  *
- * Nel grafo audio un collegamento che torna su sé stesso zittirebbe tutto, quindi qui si
- * scartano quelli che chiudono un anello: una traccia che ascolta sé stessa, due tracce che si
- * ascoltano a vicenda, una traccia che ascolta il gruppo che la contiene o un bus a cui manda
- * (il suono passa anche per le mandate). Il master può ascoltare
- * qualunque traccia (le tracce non dipendono mai da lui). */
+ * In the audio graph a connection looping back on itself would silence everything, so here
+ * those closing a loop are discarded: a track listening to itself, two tracks listening
+ * to each other, a track listening to the group containing it or to a bus it sends to
+ * (the sound also goes through the sends). The master can listen to
+ * any track (the tracks never depend on it). */
 import type { DeviceId, TrackId } from '../core/id';
 import type { EffectList } from './effect-list';
 import { MASTER, type ChainOwner, type Project } from './project';
 
-/** Un collegamento che suona: il rilevatore dell'effetto `device` di `owner` ascolta `source`. */
+/** A playing connection: the detector of effect `device` of `owner` listens to `source`. */
 export interface SidechainLink {
   readonly owner: ChainOwner;
   readonly device: DeviceId;
   readonly source: TrackId;
 }
 
-/** Chi riceve il suono di chi: A → B se il suono di A arriva nel canale di B. */
+/** Who receives whose sound: A → B if A's sound reaches B's channel. */
 class Flow {
   private readonly next = new Map<TrackId, TrackId[]>();
 
@@ -28,7 +28,7 @@ class Flow {
     else this.next.set(from, [to]);
   }
 
-  /** Vero se il suono di `from` arriva (anche passando per altri) in `to`. */
+  /** True if the sound of `from` reaches (also through others) `to`. */
   reaches(from: TrackId, to: TrackId): boolean {
     const seen = new Set<TrackId>([from]), todo = [from];
     for (let t = todo.pop(); t; t = todo.pop()) {
@@ -44,14 +44,14 @@ class Flow {
   }
 }
 
-/** Vero se `owner` può ascoltare `source` senza chiudere un anello. */
+/** True if `owner` can listen to `source` without closing a loop. */
 const allowed = (flow: Flow, owner: ChainOwner, source: TrackId): boolean =>
   owner === MASTER || (owner !== source && !flow.reaches(owner, source));
 
-/** Le catene del progetto nell'ordine in cui si risolvono i collegamenti: tracce, bus, poi master. */
+/** The project's chains in the order the connections are resolved: tracks, buses, then master. */
 const chains = (p: Project): [ChainOwner, EffectList][] => [...p.channels.map((t): [ChainOwner, EffectList] => [t.id, t.effects]), [MASTER, p.masterEffects]];
 
-/** I collegamenti, saltando `skip` (l'effetto di cui si cerca la sorgente). */
+/** The connections, skipping `skip` (the effect whose source is being looked for). */
 function resolve(p: Project, skip?: { owner: ChainOwner; device: DeviceId }): { links: SidechainLink[]; flow: Flow } {
   const flow = new Flow();
   for (const t of p.tracks) {
@@ -63,7 +63,7 @@ function resolve(p: Project, skip?: { owner: ChainOwner; device: DeviceId }): { 
     for (const e of effects) {
       const source = e.sidechain;
       if (!source || !p.track(source) || (skip && skip.owner === owner && skip.device === e.id)) continue;
-      // nell'ordine delle tracce: in un anello si scarta il collegamento della traccia più in basso
+      // in track order: in a loop the connection of the lowest track is discarded
       if (!allowed(flow, owner, source)) continue;
       links.push({ owner, device: e.id, source });
       if (owner !== MASTER) flow.add(source, owner);
@@ -72,11 +72,11 @@ function resolve(p: Project, skip?: { owner: ChainOwner; device: DeviceId }): { 
   return { links, flow };
 }
 
-/** I collegamenti che suonano (quelli verso tracce che non ci sono più, o che chiuderebbero un
- *  anello, no: quel rilevatore non sente niente). */
+/** The playing connections (those towards tracks that are gone, or that would close a
+ *  loop, no: that detector hears nothing). */
 export const sidechainLinks = (p: Project): SidechainLink[] => resolve(p).links;
 
-/** Le tracce che l'effetto `device` di `owner` può ascoltare. */
+/** The tracks effect `device` of `owner` can listen to. */
 export function sidechainSources(p: Project, owner: ChainOwner, device: DeviceId): TrackId[] {
   const { flow } = resolve(p, { owner, device });
   return p.channels.filter(t => allowed(flow, owner, t.id)).map(t => t.id);

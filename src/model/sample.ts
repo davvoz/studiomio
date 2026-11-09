@@ -1,20 +1,20 @@
 import type { SampleId } from '../core/id';
 import type { Seconds } from '../core/music-time';
 
-/** Risultato dell'analisi di un sample, salvato nel progetto per non ripeterla. */
+/** Result of a sample's analysis, saved in the project so as not to repeat it. */
 export interface SampleAnalysis {
   readonly tempo: number;
   readonly transients: readonly Seconds[];
-  /** Sensibilità usata per i transienti, 0..1 */
+  /** Sensitivity used for the transients, 0..1 */
   readonly sensitivity: number;
 }
 
-/** Un file audio del progetto. I campioni non stanno nel modello: li tiene il motore,
- *  il modello conserva solo dove trovarli e cosa se ne sa. */
+/** An audio file of the project. The samples aren't in the model: the engine keeps them,
+ *  the model only keeps where to find them and what's known about them. */
 export interface SampleRef {
   readonly id: SampleId;
   readonly name: string;
-  /** Percorso relativo alla cartella del progetto, es. "audio/kick.wav". */
+  /** Path relative to the project folder, e.g. "audio/kick.wav". */
   readonly file: string;
   readonly sampleRate: number;
   readonly channels: number;

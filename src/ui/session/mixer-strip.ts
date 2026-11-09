@@ -1,7 +1,7 @@
-/* Il mixer in fondo alla session, come in Live: per ogni traccia le mandate verso i bus, FX,
- * pan, volume verticale con il misuratore di livello, mute e solo (i bus non hanno mandate);
- * per il master volume, livello e picco. Ogni striscia si costruisce una volta e poi si
- * aggiorna, così un fader trascinato non si interrompe. */
+/* The mixer at the bottom of the session, as in Live: for each track the sends to the buses, FX,
+ * pan, vertical volume with the level meter, mute and solo (the buses have no sends);
+ * for the master volume, level and peak. Each strip is built once and then
+ * updated, so a dragged fader isn't interrupted. */
 import type { TrackId } from '../../core/id';
 import type { NumberParam } from '../../devices/params';
 import { instrumentType } from '../../devices/registry';
@@ -20,8 +20,8 @@ import type { UiState } from '../ui-state';
 
 const PAN: NumberParam = { kind: 'number', id: 'pan', label: 'Pan', min: -50, max: 50, default: 0, unit: 'pan', step: 1 };
 
-/** La manopola della mandata verso un bus: da chiusa (−∞) a 0 dB, come in Live (senza l'unità,
- *  che nella manopola piccola non ci sta: è nel suggerimento). */
+/** The knob of the send to a bus: from closed (−∞) to 0 dB, as in Live (without the unit,
+ *  which doesn't fit in the small knob: it's in the tooltip). */
 const sendParam = (bus: BusTrack): NumberParam => ({
   kind: 'number', id: `send-${bus.id}`, label: bus.name, min: SEND_OFF_DB, max: 0, default: SEND_OFF_DB, step: 0.5, offAtMin: true,
 });
@@ -31,11 +31,11 @@ const formatDb = (db: number) => (db <= -40 ? '−∞' : `${db > 0 ? '+' : db < 
 export interface StripActions {
   readonly ui: UiState;
   openDevices(owner: ChainOwner): void;
-  /** Mostra la curva di un parametro nella clip della traccia. */
+  /** Shows a parameter's curve in the track's clip. */
   showAutomation?(owner: ChainOwner, target: ModTarget): void;
 }
 
-/** Fader verticale (che si mappa sul MIDI come `target`), il suo misuratore e il valore in dB. */
+/** Vertical fader (mappable to MIDI as `target`), its meter and the value in dB. */
 function faderBlock(volume: HTMLInputElement, target: MidiTarget, meter: LevelMeter, db: HTMLElement): HTMLElement {
   volume.classList.add('vertical');
   return el('div', { className: 'fader-block' }, el('div', { className: 'fader-row' }, midiSlot(volume, target), meter.element), db);
@@ -45,7 +45,7 @@ export class TrackStrip {
   readonly element = el('div', { className: 'strip' });
   private readonly fx: HTMLButtonElement;
   private readonly badge = el('div', { className: 'strip-badge' });
-  /** Le manopole delle mandate, una per bus (i bus non ne hanno). */
+  /** The send knobs, one per bus (the buses don't have them). */
   private readonly sendBox = el('div', { className: 'strip-sends' });
   private sends: { readonly bus: TrackId; readonly control: ParamControl }[] = [];
   private shownBuses: readonly BusTrack[] | null = null;
@@ -54,7 +54,7 @@ export class TrackStrip {
   private readonly db = el('div', { className: 'strip-db' });
   private readonly mute: HTMLButtonElement;
   private readonly solo: HTMLButtonElement;
-  /** Solo le tracce MIDI hanno uno strumento da suonare con la tastiera. */
+  /** Only MIDI tracks have an instrument to play with the keyboard. */
   private readonly keyboard: HTMLButtonElement | null = null;
   private readonly detach: () => void;
   private shown: Track | null = null;
@@ -62,7 +62,7 @@ export class TrackStrip {
   constructor(private readonly id: TrackId, private readonly store: ProjectStore, actions: StripActions, meters: MeterBoard) {
     const mixer = (patch: Parameters<typeof setMixer>[1], mergeKey?: string) => store.apply(setMixer(id, patch), mergeKey ? { mergeKey } : {});
     const current = () => store.project.track(id)!;
-    this.fx = fxButton(0, 'Strumento ed effetti della traccia', () => actions.openDevices(id));
+    this.fx = fxButton(0, 'Track instrument and effects', () => actions.openDevices(id));
     this.pan = controlFor(PAN, 0, (v, final) => {
       mixer({ pan: v / 50 }, `pan-${id}`);
       if (final) store.endMerge();
@@ -88,7 +88,7 @@ export class TrackStrip {
     this.keyboard?.classList.toggle('on', on);
   }
 
-  /** `buses`: i bus del progetto, per le manopole delle mandate. */
+  /** `buses`: the project's buses, for the send knobs. */
   update(t: Track, buses: readonly BusTrack[]): void {
     this.updateSends(t, buses);
     if (t === this.shown) return;
@@ -96,7 +96,7 @@ export class TrackStrip {
     this.element.style.setProperty('--color', t.color);
     this.element.classList.toggle('bus-strip', t instanceof BusTrack);
     this.badge.textContent = t instanceof MidiTrack ? instrumentType(t.instrument.type)?.label ?? t.instrument.type
-      : t instanceof GroupTrack ? 'Gruppo' : t instanceof BusTrack ? 'Bus' : 'Audio';
+      : t instanceof GroupTrack ? 'Group' : t instanceof BusTrack ? 'Bus' : 'Audio';
     for (const s of this.sends) s.control.set(t.send(s.bus));
     setFxCount(this.fx, t.effects.length);
     this.pan.set(Math.round(t.mixer.pan * 50));
@@ -106,7 +106,7 @@ export class TrackStrip {
     this.solo.classList.toggle('on', t.mixer.solo);
   }
 
-  /** Le manopole si rifanno solo se i bus cambiano (aggiunti, tolti, spostati o rinominati). */
+  /** The knobs are redone only if the buses change (added, removed, moved or renamed). */
   private updateSends(t: Track, buses: readonly BusTrack[]): void {
     if (buses === this.shownBuses) return;
     this.shownBuses = buses;
@@ -115,7 +115,7 @@ export class TrackStrip {
         this.store.apply(setSend(this.id, b.id, db), { mergeKey: `send-${this.id}-${b.id}` });
         if (final) this.store.endMerge();
       });
-      control.element.title = `Mandata verso ${b.name}, in dB (doppio clic: chiusa)`;
+      control.element.title = `Send to ${b.name}, in dB (double click: closed)`;
       midiTarget(control.element, { kind: 'send', owner: this.id, bus: b.id });
       return { bus: b.id, control };
     });
@@ -135,9 +135,9 @@ export class MasterStripView {
   private readonly mute: HTMLButtonElement;
 
   constructor(store: ProjectStore, actions: StripActions, meters: MeterBoard) {
-    this.fx = fxButton(0, 'Effetti del master', () => actions.openDevices(MASTER));
+    this.fx = fxButton(0, 'Master effects', () => actions.openDevices(MASTER));
     this.volume = volumeSlider(store, 0, 'vol-master', (volumeDb, mergeKey) => store.apply(setMasterMixer({ volumeDb }), mergeKey ? { mergeKey } : {}));
-    this.mute = midiTarget(el<HTMLButtonElement>('button', { textContent: 'M', title: 'Mute del master', onclick: () => store.apply(setMasterMixer({ mute: !store.project.master.mute })) }),
+    this.mute = midiTarget(el<HTMLButtonElement>('button', { textContent: 'M', title: 'Master mute', onclick: () => store.apply(setMasterMixer({ mute: !store.project.master.mute })) }),
       { kind: 'mixer', owner: MASTER, control: 'mute' });
     const reset = () => meters.resetClip(MASTER);
     const meter = new LevelMeter('strip-meter', reset), peak = new PeakReadout(reset);

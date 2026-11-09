@@ -8,8 +8,8 @@ import { TimelineGeometry } from './timeline/geometry';
 
 type UiEvents = { change: [] };
 
-/** Il riquadro della session che un controller (l'APC40, un Launchpad) suona: prima traccia e prima scena,
- *  larghezza e altezza (il "riquadro rosso" di Live). */
+/** The session box a controller (the APC40, a Launchpad) plays: first track and first scene,
+ *  width and height (Live's "red box"). */
 export interface SessionRing {
   readonly track: number;
   readonly scene: number;
@@ -17,15 +17,15 @@ export interface SessionRing {
   readonly height: number;
 }
 
-/** Il dispositivo che le manopole del controller muovono (la "mano blu" di Live): la catena e
- *  il dispositivo, "instrument" per lo strumento o l'id dell'effetto. */
+/** The device the controller's knobs move (Live's "blue hand"): the chain and
+ *  the device, "instrument" for the instrument or the effect's id. */
 export interface ControlledDevice {
   readonly owner: ChainOwner;
   readonly device: string;
 }
 
-/** Stato dell'interfaccia che non fa parte del progetto (e quindi non si annulla):
- *  zoom, scorrimento, selezione, traccia scelta, aggancio alla griglia, "Segui". */
+/** Interface state that isn't part of the project (and so isn't undone):
+ *  zoom, scrolling, selection, chosen track, grid snapping, "Follow". */
 export class UiState {
   private _geometry = new TimelineGeometry();
   private _selection: ReadonlySet<PlacementId> = new Set();
@@ -46,34 +46,34 @@ export class UiState {
 
   get geometry(): TimelineGeometry { return this._geometry; }
   get selection(): ReadonlySet<PlacementId> { return this._selection; }
-  /** Il tratto di tempo tracciato col riquadro dentro le clip selezionate (la selezione di tempo
-   *  di Live): trascinarlo o eliminarlo agisce solo lì. Null se le clip sono selezionate intere. */
+  /** The time range drawn with the box inside the selected clips (Live's time
+   *  selection): dragging or deleting it acts only there. Null if the clips are selected whole. */
   get range(): TimeRange | null { return this._range; }
-  /** La traccia scelta: evidenziata nell'arrangement e nella session. */
+  /** The chosen track: highlighted in the arrangement and in the session. */
   get track(): TrackId | null { return this._track; }
-  /** Le tracce scelte (Maiusc e Ctrl+clic ne aggiungono, Ctrl+G le raggruppa); c'è sempre `track`. */
+  /** The chosen tracks (Shift and Ctrl+click add some, Ctrl+G groups them); `track` is always there. */
   get selectedTracks(): ReadonlySet<TrackId> { return this._tracks; }
   get snap(): boolean { return this._snap; }
-  /** "Segui": mentre suona, l'arrangement scorre per tenere in vista la testina. */
+  /** "Follow": while playing, the arrangement scrolls to keep the playhead in view. */
   get follow(): boolean { return this._follow; }
-  /** Segui è acceso ma sospeso: l'utente ha spostato la vista o sta modificando (come in Live).
-   *  Riprende al prossimo play, con un clic sul righello o sul pulsante. */
+  /** Follow is on but suspended: the user moved the view or is editing (as in Live).
+   *  It resumes at the next play, with a click on the ruler or on the button. */
   get followPaused(): boolean { return this._follow && this._followPaused; }
   get following(): boolean { return this._follow && !this._followPaused; }
-  /** Il riquadro del controller collegato, o null se non ce n'è. */
+  /** The connected controller's box, or null if there isn't one. */
   get sessionRing(): SessionRing | null { return this._ring; }
   get controlledDevice(): ControlledDevice | null { return this._controlled; }
-  /** "KEY" acceso (Ctrl+K): un clic su una macro o un parametro lo sceglie, il tasto premuto
-   *  dopo lo muove. Intanto i tasti mappati non suonano. */
+  /** "KEY" on (Ctrl+K): a click on a macro or a parameter chooses it, the key pressed
+   *  afterwards moves it. Meanwhile the mapped keys don't play. */
   get keyMapping(): boolean { return this._keyMapping; }
-  /** Il bersaglio scelto con KEY acceso, che aspetta il suo tasto. */
+  /** The target chosen with KEY on, waiting for its key. */
   get keyTarget(): KeyTarget | null { return this._keyTarget; }
-  /** Le tracce MIDI che suonano con la tastiera del computer (vedi app/note-keyboard). */
+  /** The MIDI tracks playing with the computer keyboard (see app/note-keyboard). */
   get keyboardTracks(): ReadonlySet<TrackId> { return this._keyboardTracks; }
-  /** "MIDI" acceso (Ctrl+M): un clic su una macro, un parametro o un controllo del mixer lo
-   *  sceglie, il controllo MIDI mosso dopo lo muove. Intanto i controlli mappati non muovono niente. */
+  /** "MIDI" on (Ctrl+M): a click on a macro, a parameter or a mixer control
+   *  chooses it, the MIDI control moved afterwards moves it. Meanwhile the mapped controls move nothing. */
   get midiMapping(): boolean { return this._midiMapping; }
-  /** Il bersaglio scelto con MIDI acceso, che aspetta il suo controllo. */
+  /** The target chosen with MIDI on, waiting for its control. */
   get midiTarget(): MidiTarget | null { return this._midiTarget; }
 
   onChange(fn: () => void): Unsubscribe {
@@ -104,8 +104,8 @@ export class UiState {
     this.events.emit('change');
   }
 
-  /** Maiusc+clic: le tracce da quella scelta fino a `id`, nell'ordine `order` (quella scelta
-   *  resta il punto fermo). Ctrl+clic: aggiunge o toglie `id`. */
+  /** Shift+click: the tracks from the chosen one up to `id`, in the order `order` (the chosen one
+   *  stays the fixed point). Ctrl+click: adds or removes `id`. */
   extendTrackSelection(id: TrackId, mode: 'range' | 'toggle', order: readonly TrackId[]): void {
     const from = this._track ? order.indexOf(this._track) : -1, to = order.indexOf(id);
     if (mode === 'range' && from >= 0 && to >= 0) {
@@ -158,7 +158,7 @@ export class UiState {
     this.events.emit('change');
   }
 
-  /** Le tracce che non ci sono più smettono di ascoltare la tastiera. */
+  /** The tracks that are gone stop listening to the keyboard. */
   keepKeyboardTracks(alive: (id: TrackId) => boolean): void {
     const next = [...this._keyboardTracks].filter(alive);
     if (next.length === this._keyboardTracks.size) return;
@@ -166,7 +166,7 @@ export class UiState {
     this.events.emit('change');
   }
 
-  /** KEY e MIDI non sono accesi insieme. */
+  /** KEY and MIDI aren't on together. */
   setKeyMapping(on: boolean): void {
     if (on === this._keyMapping) return;
     this._keyMapping = on;
@@ -213,9 +213,9 @@ export class UiState {
   }
 }
 
-/** Un clic su una traccia (intestazione, colonna della session): la sceglie; con Maiusc o Ctrl
- *  allarga la scelta. `order` dà l'ordine delle tracce che si vedono. Il tasto destro su una
- *  traccia già scelta lascia la scelta com'è (il menu vale per tutte). */
+/** A click on a track (header, session column): chooses it; with Shift or Ctrl
+ *  it widens the selection. `order` gives the order of the visible tracks. Right click on an
+ *  already chosen track leaves the selection as it is (the menu applies to all). */
 export function clickTrack(ui: UiState, id: TrackId, e: MouseEvent, order: () => readonly TrackId[]): void {
   if (e.button === 2 && ui.selectedTracks.has(id)) return;
   if (e.shiftKey) ui.extendTrackSelection(id, 'range', order());

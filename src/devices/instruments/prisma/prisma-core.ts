@@ -1,18 +1,18 @@
-/* Il suono di Prisma: 16 voci (o una, con il glide). Ogni voce ha due oscillatori a tabella
- * (fino a 16 copie di unison ciascuno, con i warp), il sub, il rumore, due filtri stereo con i
- * percorsi scelti per ogni sorgente, quattro inviluppi e quattro LFO.
+/* Prisma's sound: 16 voices (or one, with glide). Each voice has two wavetable oscillators
+ * (up to 16 unison copies each, with the warps), the sub, the noise, two stereo filters with the
+ * routings chosen for each source, four envelopes and four LFOs.
  *
- * Le modulazioni si calcolano ogni CONTROL_RATE campioni: le fonti (inviluppi, LFO, velocity…)
- * passano dalla matrice, che sposta le destinazioni in frazioni della corsa delle loro manopole
- * (come in Serum: +50 % su un cutoff lo porta a metà strada verso il massimo, in ottave); il
- * risultato va agli oscillatori, ai filtri e agli inviluppi. Livelli, fase e volume ci arrivano in
- * rampa, così muoverli in fretta non graffia.
+ * The modulations are computed every CONTROL_RATE samples: the sources (envelopes, LFOs, velocity…)
+ * go through the matrix, which moves the targets in fractions of their knobs' travel
+ * (as in Serum: +50 % on a cutoff takes it halfway towards the maximum, in octaves); the
+ * result goes to the oscillators, the filters and the envelopes. Levels, phase and volume get there as
+ * ramps, so moving them quickly doesn't scratch.
  *
- * L'oscillatore legge la tabella alla posizione data sfumando fra due forme vicine e fra due
- * campioni; la versione della tabella è quella con le armoniche sotto Nyquist per la copia più
- * acuta, tenendo conto di quanto il warp accelera la lettura (un sync a 4× legge quattro volte
- * più in fretta: serve la versione di due ottave sopra). Gira nell'AudioWorklet; qui niente Web
- * Audio, così si prova anche in Node. */
+ * The oscillator reads the table at the given position crossfading between two neighbouring shapes and between two
+ * samples; the table version is the one with the harmonics below Nyquist for the highest
+ * copy, taking into account how much the warp speeds up the reading (a 4× sync reads four times
+ * faster: it needs the version two octaves up). Runs in the AudioWorklet; no Web
+ * Audio here, so it's also tested in Node. */
 import { paramSpec } from '../../device-type';
 import { dbToGain, midiToHz, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
@@ -33,25 +33,25 @@ import {
 } from './shapes';
 
 export const PRISMA_VOICES = 16;
-/** Ogni quanti campioni si ricalcolano modulazioni, intonazione e filtri. */
+/** Every how many samples modulations, pitch and filters are recomputed. */
 const CONTROL_RATE = 16;
 const FRAME_STRIDE = LEVELS * STRIDE;
 const DEST_COUNT = DESTINATIONS.length;
 const SOURCE_COUNT = SOURCES.length;
 
-/** L'indice di ogni destinazione, per parametro (es. D.aPos). */
+/** The index of each target, by parameter (e.g. D.aPos). */
 const D = Object.fromEntries(DESTINATIONS.map((d, i) => [d.param, i])) as Readonly<Record<string, number>>;
 const DEST_SPECS = DESTINATIONS.map(d => paramSpec(PRISMA, d.param) as NumberParam);
 const DEST_LOG = DEST_SPECS.map(s => s.scale === 'log');
 
-/** Dalla posizione della manopola (0…1, anche fuori: si ferma ai bordi) al valore, senza
- *  arrotondare al passo: i semitoni modulati scivolano. */
+/** From the knob's position (0…1, also outside: it stops at the edges) to the value, without
+ *  rounding to the step: the modulated semitones glide. */
 function fromUnit(d: number, u: number): number {
   const s = DEST_SPECS[d], x = u < 0 ? 0 : u > 1 ? 1 : u;
   return DEST_LOG[d] ? s.min * Math.pow(s.max / s.min, x) : s.min + x * (s.max - s.min);
 }
 
-/** Le destinazioni di un oscillatore, per indice. */
+/** An oscillator's targets, by index. */
 const oscDest = (o: string) => ({
   pos: D[`${o}Pos`], warp: D[`${o}WarpAmt`], semi: D[`${o}Semi`], fine: D[`${o}Fine`], detune: D[`${o}Detune`], blend: D[`${o}Blend`],
   width: D[`${o}Width`], spread: D[`${o}Spread`], phase: D[`${o}Phase`], level: D[`${o}Level`], pan: D[`${o}Pan`],
@@ -61,7 +61,7 @@ const FILTER_DEST = [1, 2].map(f => ({ cutoff: D[`f${f}Cutoff`], res: D[`f${f}Re
 const ENV_DEST = [1, 2, 3, 4].map(n => ({ attack: D[`e${n}A`], decay: D[`e${n}D`], sustain: D[`e${n}S`], release: D[`e${n}R`] }));
 const LFO_RATE_DEST = [1, 2, 3, 4].map(n => D[`l${n}Rate`]);
 
-/** Una tabella d'onda con il numero delle sue forme. */
+/** A wavetable with the number of its shapes. */
 interface Table {
   readonly data: Float32Array;
   readonly frames: number;
@@ -74,7 +74,7 @@ const builtInTable = (i: number): Table => {
   return t;
 };
 
-/** Il campione della tabella (forma `base` e quella dopo, a `next`; `fx` fra le due) a `p`. */
+/** The table's sample (shape `base` and the next one, at `next`; `fx` between the two) at `p`. */
 function lookup(data: Float32Array, base: number, next: number, fx: number, p: number): number {
   const idx = p * TABLE_SIZE, i = idx | 0, t = idx - i;
   const a = base + i, b = a + next;
@@ -83,7 +83,7 @@ function lookup(data: Float32Array, base: number, next: number, fx: number, p: n
   return av + (bv - av) * fx;
 }
 
-/** La posizione della copia `k` di `n` nel ventaglio: da −1 a +1 (0 se è sola). */
+/** The position of copy `k` of `n` in the fan: from −1 to +1 (0 if it's alone). */
 const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const clamp11 = (x: number) => (x < -1 ? -1 : x > 1 ? 1 : x);
@@ -109,25 +109,25 @@ class LfoSettings {
   smooth = 0;
   phase = 0;
   readonly table = new Float32Array(LFO_TABLE_SIZE);
-  /** Come era fatta la forma l'ultima volta che si è riempita la tabella. */
+  /** What the shape was like the last time the table was filled. */
   signature = '';
 }
 
-/** Un posto della matrice in uso. */
+/** A matrix slot in use. */
 interface Slot {
   readonly src: number;
   readonly dst: number;
-  /** −1…1 della corsa della manopola. */
+  /** −1…1 of the knob's travel. */
   readonly amount: number;
   readonly bipolar: boolean;
-  /** La curva come esponente sulla fonte (1: diritta). */
+  /** The curve as an exponent on the source (1: straight). */
   readonly exponent: number;
   readonly aux: number;
 }
 
-/** I parametri già convertiti in quello che serve alle voci. */
+/** The parameters already converted into what the voices need. */
 class Settings {
-  /** Il valore e la posizione della manopola di ogni destinazione. */
+  /** The value and the knob position of each target. */
   readonly base = new Float64Array(DEST_COUNT);
   readonly unit = new Float64Array(DEST_COUNT);
   readonly osc = [new OscSettings(), new OscSettings()];
@@ -143,20 +143,20 @@ class Settings {
   readonly filterType = [0, 0];
   readonly filterKey = [0, 0];
   filterMode = 0;
-  /** Le curve degli inviluppi (attacco, decadimento, rilascio), per inviluppo. */
+  /** The envelopes' curves (attack, decay, release), per envelope. */
   readonly curves = Array.from({ length: ENVS }, () => [0, 0, 0]);
   readonly holds = new Float64Array(ENVS);
   readonly lfos = Array.from({ length: LFOS }, () => new LfoSettings());
   readonly macros = new Float64Array(MACROS);
   slots: Slot[] = [];
-  /** Le destinazioni toccate da almeno un posto, e le fonti che servono (le altre non si
-   *  calcolano: un LFO che non va da nessuna parte non costa nulla). */
+  /** The targets touched by at least one slot, and the sources needed (the others aren't
+   *  computed: an LFO going nowhere costs nothing). */
   touched: number[] = [];
   readonly used = new Uint8Array(SOURCE_COUNT);
   voiceMode = 0;
   glide = 0;
   bpm = 120;
-  /** Il giro comune degli LFO liberi: fase e giri compiuti (per il S&H). */
+  /** The shared cycle of the free LFOs: phase and completed cycles (for the S&H). */
   readonly freePhase = new Float64Array(LFOS);
   readonly freeCycle = new Float64Array(LFOS);
 
@@ -205,7 +205,7 @@ class Settings {
       const aux = Math.round(v(slotParam(n, 'Aux'), 0));
       slots.push({
         src, dst: dst - 1, amount, bipolar: v(slotParam(n, 'Pol'), 0) === 1,
-        // curva positiva: la fonte sale subito (esponente sotto 1), negativa: tardi
+        // positive curve: the source rises right away (exponent below 1), negative: late
         exponent: Math.pow(2, -v(slotParam(n, 'Curve'), 0) / 33),
         aux: aux > 0 && aux < SOURCE_COUNT ? aux : 0,
       });
@@ -228,8 +228,8 @@ class Settings {
     l.delay = v(`l${n}Delay`, 0.001);
     l.rise = v(`l${n}Rise`, 0.001);
     l.smooth = v(`l${n}Smooth`, 0) / 100;
-    // la tabella si riempie solo se la forma è cambiata (le modulazioni delle clip rimandano
-    // i parametri a ogni blocco)
+    // the table is filled only if the shape changed (the clip modulations resend
+    // the parameters at every block)
     let signature = String(l.shape);
     if (l.shape === LFO_SHAPE.drawn) {
       const count = v(pointCountParam(n), 3);
@@ -242,25 +242,25 @@ class Settings {
     l.signature = signature;
   }
 
-  /** La tabella che legge ogni oscillatore: quella importata se c'è (altrimenti la prima). */
+  /** The table each oscillator reads: the imported one if there is one (otherwise the first). */
   resolveTables(): void {
     this.osc.forEach((s, i) => {
       s.table = s.tableIndex === USER_TABLE ? this.userTables[i] ?? builtInTable(0) : builtInTable(s.tableIndex);
     });
   }
 
-  /** A una voce, se le note sovrapposte scivolano (per MonoPlayer). */
+  /** Monophonic, whether overlapping notes slide (for MonoPlayer). */
   get legato(): boolean {
     return this.voiceMode === VOICE_MODE.legato;
   }
 
-  /** La velocità dell'LFO `i` con la sua manopola (`rate`: il valore, magari modulato). */
+  /** The rate of LFO `i` with its knob (`rate`: the value, possibly modulated). */
   lfoHz(i: number, rate: number): number {
     const l = this.lfos[i];
     return l.tempo ? (this.bpm / 60 / l.beats) * (rate / this.base[LFO_RATE_DEST[i]]) : rate;
   }
 
-  /** Il giro comune degli LFO liberi va avanti di `frames` campioni. */
+  /** The shared cycle of the free LFOs advances by `frames` samples. */
   advance(frames: number, sampleRate: number): void {
     for (let i = 0; i < LFOS; i++) {
       const p = this.freePhase[i] + (this.lfoHz(i, this.base[LFO_RATE_DEST[i]]) * frames) / sampleRate;
@@ -270,37 +270,37 @@ class Settings {
   }
 }
 
-/** Le grandezze di un oscillatore in una voce, copia per copia. */
+/** An oscillator's quantities in a voice, copy by copy. */
 class OscState {
   readonly phases = new Float64Array(MAX_UNISON);
   readonly dts = new Float64Array(MAX_UNISON);
-  /** La posizione nella tabella in forme e quanto si muove a ogni campione. */
+  /** The position in the table in shapes and how much it moves at each sample. */
   readonly frames = new Float64Array(MAX_UNISON);
   readonly steps = new Float64Array(MAX_UNISON);
   readonly panL = new Float64Array(MAX_UNISON);
   readonly panR = new Float64Array(MAX_UNISON);
-  /** Le copie che suonano e quella di mezzo (fa da modulante per l'altro oscillatore). */
+  /** The playing copies and the middle one (it acts as modulator for the other oscillator). */
   copies = 1;
   center = 0;
-  /** La versione della tabella che si legge. */
+  /** The version of the table being read. */
   level = 0;
-  /** Livello e fase in rampa. */
+  /** Level and phase, ramped. */
   gain = 0;
   gainStep = 0;
   phaseOff = 0;
   phaseStep = 0;
-  /** Il warp in uso (senza modulante, quelli incrociati non fanno nulla), quanto, e la sua
-   *  costante (il rapporto del sync, la piega del bend…). */
+  /** The warp in use (without a modulator, the crossed ones do nothing), how much, and its
+   *  constant (the sync ratio, the bend's fold…). */
   warp = 0;
   warpAmt = 0;
   warpK = 1;
 }
 
-/** Pan a potenza costante (−1…1): al centro i due canali a 1. */
+/** Constant-power pan (−1…1): at the centre both channels at 1. */
 const panLeft = (p: number) => Math.sqrt(1 - p);
 const panRight = (p: number) => Math.sqrt(1 + p);
 
-/** Le sorgenti si sommano in tre posti: il primo filtro, il secondo, diretto all'uscita. */
+/** The sources are summed in three places: the first filter, the second, direct to the output. */
 type RouteGains = readonly [number, number, number];
 const TO_F1: RouteGains = [1, 0, 0], TO_F2: RouteGains = [0, 1, 0], TO_BOTH: RouteGains = [1, 1, 0], DIRECT: RouteGains = [0, 0, 1];
 const routeGains = (route: number, parallel: boolean): RouteGains => {
@@ -312,37 +312,37 @@ const routeGains = (route: number, parallel: boolean): RouteGains => {
   }
 };
 
-/** Le copie di mezzo di `n` (una se sono dispari, due se pari) suonano a pieno livello. */
+/** The middle copies of `n` (one if odd, two if even) play at full level. */
 const isMiddle = (k: number, n: number) => (n % 2 ? k === (n - 1) >> 1 : k === n / 2 - 1 || k === n / 2);
 
-/** Un pezzo di buffer stereo della voce. */
+/** A piece of the voice's stereo buffer. */
 const buffer = () => new Float64Array(CONTROL_RATE);
 
-/** Gli inviluppi ricevono la forma da un oggetto riusato (niente allocazioni a ogni controllo). */
+/** The envelopes receive the shape from a reused object (no allocations at each control step). */
 interface MutableShape {
   attack: number; hold: number; decay: number; sustain: number; release: number;
   attackCurve: number; decayCurve: number; releaseCurve: number;
 }
 
 class PrismaVoice implements PolyVoice, MonoVoice {
-  /** Env 1 è il volume, a frequenza piena; gli altri vanno alla frequenza di controllo. */
+  /** Env 1 is the volume, at full rate; the others run at the control rate. */
   private readonly envs: CurvedEnv[];
   private readonly shapes: MutableShape[];
   private readonly filters: [PrismaFilter, PrismaFilter];
   private readonly osc = [new OscState(), new OscState()];
   private readonly noiseL: Noise;
   private readonly noiseR: Noise;
-  /** Le fonti e quanto sono "aperte" (gli LFO con ritardo e salita), per indice di SOURCES. */
+  /** The sources and how "open" they are (the LFOs with delay and rise), by index of SOURCES. */
   private readonly src = new Float64Array(SOURCE_COUNT);
   private readonly fade = new Float64Array(SOURCE_COUNT).fill(1);
   private readonly offsets = new Float64Array(DEST_COUNT);
-  /** I valori delle destinazioni, modulati. */
+  /** The targets' values, modulated. */
   readonly val = new Float64Array(DEST_COUNT);
   private readonly lfoPhase = new Float64Array(LFOS);
   private readonly lfoCycle = new Float64Array(LFOS);
   private readonly lfoSmooth = new Float64Array(LFOS);
   private readonly lfoDone = [false, false, false, false];
-  // i pezzi: le sorgenti, il modulante di ogni oscillatore, poi i due filtri e il diretto
+  // the pieces: the sources, each oscillator's modulator, then the two filters and the direct
   private readonly oscL = [buffer(), buffer()];
   private readonly oscR = [buffer(), buffer()];
   private readonly raw = [buffer(), buffer()];
@@ -361,7 +361,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
   private noiseGainStep = 0;
   private noisePanL = 1;
   private noisePanR = 1;
-  /** Gli stati del rumore colorato (rosa, marrone, tono) e del digitale, per canale. */
+  /** The states of the coloured noise (pink, brown, tone) and of the digital one, per channel. */
   private readonly pink = new Float64Array(6);
   private readonly brown = new Float64Array(2);
   private readonly tone = new Float64Array(2);
@@ -375,9 +375,9 @@ class PrismaVoice implements PolyVoice, MonoVoice {
   private gainStep = 0;
   private pitch = 60;
   private target = 60;
-  /** Secondi dall'inizio della nota (per ritardo e salita degli LFO). */
+  /** Seconds since the start of the note (for the LFOs' delay and rise). */
   private age = 0;
-  /** Appena partita da ferma: le rampe saltano subito al valore. */
+  /** Just started from silence: the ramps jump to the value right away. */
   private fresh = true;
   private countdown = 0;
 
@@ -408,8 +408,8 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     if (!this.envs[0].active) {
       for (const f of this.filters) f.reset();
       this.subPhase = 0;
-      // la fase di partenza delle copie: a caso quanto dice "Fase casuale" (sempre la stessa
-      // sequenza, così un rendering ripetuto suona uguale)
+      // the copies' starting phase: random by as much as "Random phase" says (always the same
+      // sequence, so a repeated render sounds the same)
       this.osc.forEach((o, i) => {
         const rand = s.osc[i].rand;
         for (let k = 0; k < MAX_UNISON; k++) o.phases[k] = rand > 0 ? rand * hash01(note * 31 + k * 7 + i * 131) : 0;
@@ -434,8 +434,8 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     this.src[SRC.random] = hash01(note * 7 + 3);
     this.src[SRC.gate] = 1;
     this.age = 0;
-    // le fonti fanno il primo passo degli inviluppi prima che la matrice li regoli: partono dalle
-    // manopole (una voce mai usata, se no, farebbe tutto l'attacco al primo passo)
+    // the sources take the envelopes' first step before the matrix adjusts them: they start from the
+    // knobs (a never-used voice would otherwise do the whole attack at the first step)
     this.val.set(s.base);
     this.shapeEnvs();
     for (const e of this.envs) e.trigger();
@@ -457,8 +457,8 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     for (const e of this.envs) e.kill();
   }
 
-  /** A pezzi fra un calcolo delle modulazioni e l'altro: le sorgenti nei loro buffer, poi nei
-   *  filtri secondo i percorsi, poi l'inviluppo del volume campione per campione. */
+  /** In pieces between one modulation computation and the next: the sources into their buffers, then into the
+   *  filters according to the routings, then the volume envelope sample by sample. */
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const { s, sumL, sumR } = this;
     const amp = this.envs[0];
@@ -472,7 +472,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
         sumR[b].fill(0, 0, len);
       }
       const sub = s.subOn ? this.renderSub(len) : null;
-      // il modulante prima: se A legge B, B suona per primo (e allora B non può leggere A)
+      // the modulator first: if A reads B, B plays first (and then B can't read A)
       const aReadsB = CROSS_WARPS.includes(this.osc[0].warp);
       for (let step = 0; step < 2; step++) {
         const o = aReadsB ? 1 - step : step, other = 1 - o;
@@ -486,7 +486,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
         this.renderNoise(len);
         this.mix(this.noiseBufL, this.noiseBufR, len, routeGains(s.noiseRoute, parallel));
       }
-      // i filtri: in serie il primo va nel secondo, in parallelo si sommano; spento lascia passare
+      // the filters: in series the first goes into the second, in parallel they're summed; off lets it through
       const [f1, f2] = this.filters;
       if (s.filterOn[0]) f1.process(sumL[0], sumR[0], len);
       if (parallel) {
@@ -529,7 +529,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     }
   }
 
-  /** Il sub con livello e pan (nei buffer del rumore, che si calcola dopo), poi nei percorsi. */
+  /** The sub with level and pan (in the noise's buffers, which is computed after), then into the routings. */
   private mixSub(len: number, gains: RouteGains): void {
     const { subBuf } = this;
     let g = this.subGain;
@@ -543,7 +543,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     this.mix(this.noiseBufL, this.noiseBufR, len, gains);
   }
 
-  /** Il sub nel suo buffer, senza livello (fa anche da modulante per "FM dal Sub"). */
+  /** The sub in its buffer, without level (it also acts as modulator for "FM from Sub"). */
   private renderSub(len: number): Float64Array {
     const { subBuf } = this, dt = this.subDt, shape = this.s.subShape;
     let ph = this.subPhase;
@@ -553,7 +553,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
         case 1: v = 1 - 4 * Math.abs(ph - 0.5); break;
         case 2: v = 2 * ph - 1 - polyBlep(ph, dt); break;
         case 3: v = (ph < 0.5 ? 1 : -1) + polyBlep(ph, dt) - polyBlep((ph + 0.5) % 1, dt); break;
-        // un impulso al 25 %, senza la sua continua
+        // a 25 % pulse, without its DC
         case 4: v = (ph < 0.25 ? 1 : -1) + polyBlep(ph, dt) - polyBlep((ph + 0.75) % 1, dt) + 0.5; break;
         default: v = Math.sin(2 * Math.PI * ph);
       }
@@ -576,7 +576,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
         let v: number;
         switch (type) {
           case NOISE.pink: {
-            // il filtro "economico" di Paul Kellet: −3 dB per ottava
+            // Paul Kellet's "economy" filter: −3 dB per octave
             const b = this.pink, o = c * 3;
             b[o] = 0.99765 * b[o] + w * 0.099046;
             b[o + 1] = 0.963 * b[o + 1] + w * 0.2965164;
@@ -589,7 +589,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
             v = this.brown[c] * 3.5;
             break;
           case NOISE.digital:
-            // tiene un valore a caso per un periodo: un rumore intonato sulla nota
+            // holds a random value for a period: a noise tuned to the note
             if (c === 0) {
               this.digitalPhase += this.digitalDt;
               if (this.digitalPhase >= 1) {
@@ -607,7 +607,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
           default:
             v = w;
         }
-        // il tono: un passa-basso a un polo (il digitale e il crepitio non ne hanno)
+        // the tone: a one-pole low-pass (the digital one and the crackle don't have it)
         if (type <= NOISE.brown && this.toneK < 1) v = this.tone[c] += (v - this.tone[c]) * this.toneK;
         buf[j] = v;
       }
@@ -621,11 +621,11 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     this.noiseGain = g;
   }
 
-  /** Le copie dell'oscillatore `o` nei suoi buffer, con il warp; la copia di mezzo, senza
-   *  livello, anche in `raw[o]` (il modulante dell'altro). Le fasi vanno avanti anche a
-   *  oscillatore spento, così riaccendendolo non salta; le posizioni no: spento, il passo non
-   *  si ricalcola più, e proseguendo con l'ultimo uscirebbero dalla tabella (sotto zero la
-   *  lettura dà NaN, che riaccendendolo avvelena il filtro e tutto ciò che viene dopo). */
+  /** The copies of oscillator `o` in its buffers, with the warp; the middle copy, without
+   *  level, also in `raw[o]` (the other's modulator). The phases advance even with the
+   *  oscillator off, so turning it back on doesn't jump; the positions don't: off, the step isn't
+   *  recomputed any more, and continuing with the last one they'd leave the table (below zero the
+   *  reading gives NaN, which on turning it back on poisons the filter and everything after it). */
   private renderOsc(oi: number, len: number, cross: Float64Array | null): void {
     const o = this.osc[oi], os = this.s.osc[oi];
     const outL = this.oscL[oi], outR = this.oscR[oi], raw = this.raw[oi];
@@ -639,14 +639,14 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     }
     const { data, frames } = os.table;
     const next = frames > 1 ? FRAME_STRIDE : 0, maxFrame = Math.max(0, frames - 2), levelOffset = o.level * STRIDE;
-    // i warp incrociati senza modulante non fanno nulla
+    // the crossed warps without a modulator do nothing
     const warp = (CROSS_WARPS.includes(o.warp) || o.warp === WARP.subFm) && !cross ? WARP.none : o.warp;
     const a = o.warpAmt, k1 = o.warpK, gs = o.gainStep, ps = o.phaseStep, single = frames < 2;
     for (let k = 0; k < n; k++) {
       const dt = o.dts[k], st = o.steps[k], pl = o.panL[k], pr = o.panR[k], center = k === o.center;
       let ph = o.phases[k], x = o.frames[k], g = o.gain, po = o.phaseOff;
       if (warp === WARP.none) {
-        // il caso più comune, senza nulla per campione oltre alla lettura
+        // the most common case, with nothing per sample besides the reading
         for (let j = 0; j < len; j++) {
           x += st;
           g += gs;
@@ -685,8 +685,8 @@ class PrismaVoice implements PolyVoice, MonoVoice {
             let q = p * k1;
             q -= Math.floor(q);
             v = lookup(data, base, next, fx, q);
-            // la ripartenza è uno scalino (da dove era arrivata la lettura a capo): PolyBLEP lo
-            // arrotonda nei campioni attorno, come nel sync dei synth analogici virtuali
+            // the restart is a step (from where the reading had got to back to the start): PolyBLEP
+            // rounds it off in the samples around, as in the sync of virtual analogue synths
             if (p < dt || p > 1 - dt) {
               const end = Math.min(0.99999, k1 - Math.floor(k1));
               v += 0.5 * (lookup(data, base, next, fx, 0) - lookup(data, base, next, fx, end)) * polyBlep(p, dt);
@@ -696,7 +696,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
           case WARP.softSync: {
             let q = p * k1;
             q -= Math.floor(q);
-            // la finestra va a zero alla ripartenza: niente scalino
+            // the window goes to zero at the restart: no step
             v = lookup(data, base, next, fx, q) * 4 * p * (1 - p);
             break;
           }
@@ -755,14 +755,14 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     o.phaseOff += o.phaseStep * len;
   }
 
-  /** Modulazioni a frequenza ridotta: fonti, matrice, poi oscillatori, sub, rumore, filtri,
-   *  inviluppi e volume. */
+  /** Modulations at reduced rate: sources, matrix, then oscillators, sub, noise, filters,
+   *  envelopes and volume. */
   private control(): void {
     const { s, sampleRate, val } = this;
     this.countdown = CONTROL_RATE;
     const tick = CONTROL_RATE / sampleRate;
     if (this.pitch !== this.target) {
-      // glide esponenziale in semitoni: arriva al 95 % in circa `glide` secondi
+      // exponential glide in semitones: it gets to 95 % in about `glide` seconds
       const k = s.glide > 0 ? 1 - Math.exp((-3 * CONTROL_RATE) / (s.glide * sampleRate)) : 1;
       this.pitch += (this.target - this.pitch) * k;
       if (Math.abs(this.target - this.pitch) < 1e-3) this.pitch = this.target;
@@ -811,7 +811,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     this.shapeEnvs();
   }
 
-  /** I tempi e le curve degli inviluppi dai valori (modulati) delle loro manopole. */
+  /** The envelopes' times and curves from the (modulated) values of their knobs. */
   private shapeEnvs(): void {
     const { s, val } = this;
     for (let n = 0; n < ENVS; n++) {
@@ -829,7 +829,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     }
   }
 
-  /** Le fonti all'inizio di questo pezzo. */
+  /** The sources at the start of this piece. */
   private sources(tick: number): void {
     const { s, src, fade, val } = this, used = s.used;
     src[SRC.env1] = this.envs[0].value;
@@ -839,7 +839,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     for (let i = 0; i < LFOS; i++) {
       const l = s.lfos[i], at = SRC.lfo1 + i;
       if (!used[at]) continue;
-      // durante il ritardo l'LFO è fermo e non modula; poi si apre in "salita" secondi
+      // during the delay the LFO is still and doesn't modulate; then it opens in "rise" seconds
       const running = this.age >= l.delay - 1e-9 || l.delay <= 0.0011;
       fade[at] = !running ? 0 : l.rise <= 0.0011 ? 1 : clamp01((this.age - (l.delay <= 0.0011 ? 0 : l.delay)) / l.rise);
       const phase = (this.lfoPhase[i] + l.phase) % 1;
@@ -852,7 +852,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
       }
       if (l.smooth > 0) {
         const sm = this.lfoSmooth[i];
-        // fino a mezzo secondo per arrivare (al massimo)
+        // up to half a second to arrive (at maximum)
         const k = 1 - Math.exp(-tick / (l.smooth * l.smooth * 0.5 + 1e-4));
         value = this.lfoSmooth[i] = Number.isNaN(sm) ? value : sm + (value - sm) * k;
       }
@@ -869,7 +869,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     }
   }
 
-  /** La matrice: le destinazioni toccate partono dalla loro manopola e si spostano. */
+  /** The matrix: the touched targets start from their knob and move. */
   private modulate(): void {
     const { s, src, fade, offsets, val } = this;
     val.set(s.base);
@@ -889,7 +889,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
   private controlOsc(i: number, pitch: number, fresh: boolean): void {
     const { s, val, sampleRate } = this;
     const o = this.osc[i], os = s.osc[i], d = OSC_DEST[i];
-    // spento non serve (nemmeno come modulante: lo è solo se acceso)
+    // off it's not needed (not even as modulator: it is one only if on)
     if (!os.on) return;
     const n = os.unison, last = os.table.frames - 1;
     o.copies = n;
@@ -897,7 +897,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     const hz = midiToHz(pitch + os.octave * 12 + val[d.semi] + val[d.fine] / 100);
     const dt = hz / sampleRate, detune = n > 1 ? val[d.detune] : 0;
     const spread = val[d.spread] / 100, width = val[d.width] / 100, pan = val[d.pan] / 100, blend = val[d.blend] / 100;
-    // quanto più in fretta il warp legge la tabella (per scegliere la versione senza aliasing)
+    // how much faster the warp reads the table (to choose the version without aliasing)
     const a = val[d.warp] / 100;
     o.warp = os.warp;
     o.warpAmt = a;
@@ -918,7 +918,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
       case WARP.am: case WARP.rm: speed = a > 0 ? 2 : 1; break;
     }
     o.level = levelFor(Math.min(0.49, dt * Math.pow(2, detune / 1200) * speed));
-    // le copie di mezzo a pieno livello, le altre quanto dice Blend; tutte insieme come una sola
+    // the middle copies at full level, the others as much as Blend says; all together as one
     let power = 0;
     for (let k = 0; k < n; k++) power += isMiddle(k, n) ? 1 : blend * blend;
     const norm = 1 / Math.sqrt(Math.max(1e-9, power));
@@ -926,7 +926,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     for (let k = 0; k < n; k++) {
       const f = fan(k, n);
       o.dts[k] = Math.min(0.49, dt * Math.pow(2, (f * detune) / 1200));
-      // con "Pos. ±" le copie leggono la tabella a ventaglio attorno alla posizione
+      // with "Pos. ±" the copies read the table fanned around the position
       const target = clamp01(pos + f * spread * 0.5) * last;
       if (fresh) {
         o.frames[k] = target;
@@ -955,7 +955,7 @@ export class PrismaCore implements InstrumentCore, SamplePlayer {
   private single: boolean | null = null;
   private scratchL = new Float32Array(128);
   private scratchR = new Float32Array(128);
-  /** Il seme delle note (fasi, S&H, Casuale: ogni nota i suoi). */
+  /** The notes' seed (phases, S&H, Random: each note its own). */
   private notes = 0;
 
   constructor(private readonly sampleRate: number, voices = PRISMA_VOICES) {
@@ -966,7 +966,7 @@ export class PrismaCore implements InstrumentCore, SamplePlayer {
 
   setParams(params: Readonly<Record<string, number>>): void {
     this.settings.read(params);
-    // passando da poli a una voce (o viceversa) si riparte puliti
+    // switching from poly to mono (or vice versa) restarts clean
     const single = this.settings.voiceMode !== VOICE_MODE.poly;
     if (this.single !== null && single !== this.single) this.silence();
     this.single = single;
@@ -976,7 +976,7 @@ export class PrismaCore implements InstrumentCore, SamplePlayer {
     if (bpm > 0) this.settings.bpm = bpm;
   }
 
-  /** Un file importato come tabella di un oscillatore ("wtA", "wtB"). */
+  /** A file imported as an oscillator's table ("wtA", "wtB"). */
   setSample(slot: string, sample: SampleData | null): void {
     const i = OSCS.findIndex(o => tableSlot(o) === slot);
     if (i < 0) return;

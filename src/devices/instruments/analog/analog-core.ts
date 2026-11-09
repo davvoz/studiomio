@@ -1,10 +1,10 @@
-/* Il suono di Analog: 16 voci, ognuna con due oscillatori PolyBLEP, filtro SVF con il suo
- * inviluppo, inviluppo del volume e LFO. Con l'unison ogni voce suona fino a 7 copie degli
- * oscillatori, scordate a ventaglio e aperte nello stereo (il "supersaw"): allora la voce ha
- * due filtri, uno per canale. A una voce (Mono, Legato) le note passano da una
- * pila come nei synth monofonici, con il glide; l'accento apre il filtro con un suo inviluppo
- * breve che si accumula sugli accenti vicini (il "wow" della 303). Gira nell'AudioWorklet;
- * qui niente Web Audio, così si prova anche in Node. */
+/* Analog's sound: 16 voices, each with two PolyBLEP oscillators, SVF filter with its own
+ * envelope, volume envelope and LFO. With unison each voice plays up to 7 copies of the
+ * oscillators, fanned out in detune and spread in stereo (the "supersaw"): then the voice has
+ * two filters, one per channel. Monophonic (Mono, Legato) the notes go through a
+ * stack as in monophonic synths, with glide; the accent opens the filter with its own short
+ * envelope that accumulates on nearby accents (the 303's "wow"). Runs in the AudioWorklet;
+ * no Web Audio here, so it's also tested in Node. */
 import { dbToGain, midiToHz, type InstrumentCore } from '../../dsp/core';
 import { Adsr } from '../../dsp/envelope';
 import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
@@ -15,27 +15,27 @@ import { TEMPO_RATES } from '../../rates';
 import { ACCENT_VELOCITY, LFO_SYNC, MAX_UNISON, VOICE_MODE } from './analog';
 
 export const ANALOG_VOICES = 16;
-/** Ogni quanti campioni si ricalcolano LFO, intonazione e cutoff. */
+/** Every how many samples LFO, pitch and cutoff are recomputed. */
 const CONTROL_RATE = 16;
-/** Ottave di cutoff con inviluppo e LFO al massimo. */
+/** Cutoff octaves with envelope and LFO at maximum. */
 const ENV_OCTAVES = 6, LFO_OCTAVES = 2;
-/** L'accento al massimo: ottave in più di filtro, volume in più, durata del suo inviluppo. */
+/** The accent at maximum: extra filter octaves, extra volume, length of its envelope. */
 const ACCENT_OCTAVES = 2.5, ACCENT_GAIN = 0.7, ACCENT_TIME = 0.2;
-/** Fin dove si accumulano gli accenti di fila. */
+/** How far accents in a row accumulate. */
 const ACCENT_MAX = 1.6;
 
-/** I parametri già convertiti in quello che serve alle voci. */
+/** The parameters already converted into what the voices need. */
 class Settings {
   waveA: Wave = WAVE_TABLE[0];
   waveB: Wave = WAVE_TABLE[1];
   ratioB = 1;
   mix = 0.5;
   voiceMode = 0;
-  /** Copie per voce, quanto si scostano le estreme (centesimi, ±) e quanto si aprono (0..1). */
+  /** Copies per voice, how far the outermost ones deviate (cents, ±) and how much they spread (0..1). */
   unison = 1;
   detune = 25;
   spread = 0.8;
-  /** Secondi. */
+  /** Seconds. */
   glide = 0;
   accent = 0;
   filterType = 0;
@@ -44,11 +44,11 @@ class Settings {
   envOctaves = 0;
   keyTrack = 0.5;
   lfoWave: Wave = LFO_TABLE[0];
-  /** A tempo (`lfoBeats` battiti per giro) o libero (`lfoRate` Hz). */
+  /** Synced (`lfoBeats` beats per cycle) or free (`lfoRate` Hz). */
   lfoTempo = false;
   lfoBeats = 1;
   lfoRate = 5;
-  /** Il tempo del progetto, per l'LFO a tempo. */
+  /** The project's tempo, for the synced LFO. */
   bpm = 120;
   lfoCents = 0;
   lfoOctaves = 0;
@@ -86,42 +86,42 @@ class Settings {
     this.ampEnv = { attack: v('attack', 0.003), decay: v('decay', 0.4), sustain: v('sustain', 80) / 100, release: v('release', 0.2) };
   }
 
-  /** A una voce, se le note sovrapposte scivolano (per MonoPlayer). */
+  /** Monophonic, whether overlapping notes slide (for MonoPlayer). */
   get legato(): boolean {
     return this.voiceMode === VOICE_MODE.legato;
   }
 
-  /** La velocità dell'LFO in Hz, a tempo o libera. */
+  /** The LFO's rate in Hz, synced or free. */
   get lfoHz(): number {
     return this.lfoTempo ? this.bpm / 60 / this.lfoBeats : this.lfoRate;
   }
 
-  /** Quanto è accentata una nota: 0 fino ad ACCENT_VELOCITY, poi su fino a 127. */
+  /** How accented a note is: 0 up to ACCENT_VELOCITY, then up to 127. */
   accentOf(velocity: number): number {
     return this.accent * Math.max(0, (velocity - ACCENT_VELOCITY) / (127 - ACCENT_VELOCITY));
   }
 }
 
-/** La posizione della copia `k` di `n` nel ventaglio: da −1 a +1 (0 se è sola). */
+/** The position of copy `k` of `n` in the fan: from −1 to +1 (0 if it's alone). */
 const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
 
 class AnalogVoice implements PolyVoice, MonoVoice {
   private readonly amp: Adsr;
   private readonly fenv: Adsr;
   private readonly filter: Svf;
-  /** Il filtro del canale destro, quando l'unison apre lo stereo. */
+  /** The right channel's filter, when unison spreads the stereo. */
   private readonly filterR: Svf;
-  /** Fasi e passi delle copie dell'unison (la copia 0 è quella senza unison). */
+  /** Phases and steps of the unison copies (copy 0 is the one without unison). */
   private readonly phasesA = new Float64Array(MAX_UNISON);
   private readonly phasesB = new Float64Array(MAX_UNISON);
   private readonly dtsA = new Float64Array(MAX_UNISON);
   private readonly dtsB = new Float64Array(MAX_UNISON);
-  /** L'intonazione che suona (in semitoni MIDI, con il glide anche fra due note) e quella
-   *  verso cui va. */
+  /** The pitch playing (in MIDI semitones, with the glide also between two notes) and the one
+   *  it's heading for. */
   private pitch = 60;
   private target = 60;
   private level = 1;
-  /** L'inviluppo dell'accento: salta su a ogni nota accentata e ricade in ACCENT_TIME. */
+  /** The accent's envelope: jumps up at every accented note and falls back in ACCENT_TIME. */
   private accentEnv = 0;
   private readonly accentK: number;
   private phaseA = 0;
@@ -147,12 +147,12 @@ class AnalogVoice implements PolyVoice, MonoVoice {
     return this.amp.releasing;
   }
 
-  /** L'intonazione che suona adesso (anche a metà di un glide). */
+  /** The pitch playing now (also halfway through a glide). */
   get currentPitch(): number {
     return this.pitch;
   }
 
-  /** Una nota da capo; con `from` l'intonazione parte da lì e scivola fino a `pitch`. */
+  /** A note from the start; with `from` the pitch starts there and slides to `pitch`. */
   start(pitch: number, velocity: number, from: number | null = null): void {
     const { s } = this;
     if (!this.amp.active) {
@@ -160,8 +160,8 @@ class AnalogVoice implements PolyVoice, MonoVoice {
       this.filterR.reset();
       this.lfoPhase = 0;
       this.accentEnv = 0;
-      // le copie partono da fasi diverse (fisse: lo stesso suono ogni volta), così non si
-      // sommano tutte nello stesso punto
+      // the copies start from different phases (fixed: the same sound every time), so they don't
+      // all add up at the same point
       for (let k = 1; k < MAX_UNISON; k++) {
         this.phasesA[k] = (k * 0.618034) % 1;
         this.phasesB[k] = (k * 0.381966) % 1;
@@ -179,8 +179,8 @@ class AnalogVoice implements PolyVoice, MonoVoice {
     this.countdown = 0;
   }
 
-  /** Legato: la voce scivola verso `pitch` senza far ripartire gli inviluppi. L'accento della
-   *  nota nuova si somma lo stesso. */
+  /** Legato: the voice slides towards `pitch` without restarting the envelopes. The new note's
+   *  accent is added anyway. */
   slide(pitch: number, velocity: number): void {
     this.target = pitch;
     this.accentEnv = Math.min(ACCENT_MAX, this.accentEnv + this.s.accentOf(velocity));
@@ -196,7 +196,7 @@ class AnalogVoice implements PolyVoice, MonoVoice {
     this.fenv.kill();
   }
 
-  /** I tempi degli inviluppi cambiano anche per le note che suonano già. */
+  /** The envelope times change also for notes already playing. */
   refresh(): void {
     this.amp.set(this.s.ampEnv);
     this.fenv.set(this.s.filterEnv);
@@ -222,8 +222,8 @@ class AnalogVoice implements PolyVoice, MonoVoice {
     }
   }
 
-  /** L'unison: le copie a ventaglio, ognuna con il suo pan; due filtri, uno per canale.
-   *  Il livello scende come la radice delle copie (la potenza resta quella di una). */
+  /** The unison: the fanned copies, each with its pan; two filters, one per channel.
+   *  The level drops as the square root of the copies (the power stays that of one). */
   private renderUnison(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const { s, amp, fenv, filter, filterR, phasesA, phasesB, dtsA, dtsB } = this;
     const { waveA, waveB } = s;
@@ -238,7 +238,7 @@ class AnalogVoice implements PolyVoice, MonoVoice {
         if (phasesA[k] >= 1) phasesA[k] -= 1;
         phasesB[k] += dtsB[k];
         if (phasesB[k] >= 1) phasesB[k] -= 1;
-        // pan a potenza costante lungo il ventaglio
+        // constant-power pan along the fan
         const p = fan(k, n) * s.spread;
         l += v * Math.sqrt(0.5 * (1 - p));
         r += v * Math.sqrt(0.5 * (1 + p));
@@ -251,12 +251,12 @@ class AnalogVoice implements PolyVoice, MonoVoice {
     }
   }
 
-  /** Modulazioni a frequenza ridotta: glide, LFO, intonazione, accento, cutoff. */
+  /** Modulations at reduced rate: glide, LFO, pitch, accent, cutoff. */
   private control(): void {
     const { s, sampleRate } = this;
     this.countdown = CONTROL_RATE;
     if (this.pitch !== this.target) {
-      // glide esponenziale in semitoni: arriva al 95 % in circa `glide` secondi
+      // exponential glide in semitones: it gets to 95 % in about `glide` seconds
       const k = s.glide > 0 ? 1 - Math.exp((-3 * CONTROL_RATE) / (s.glide * sampleRate)) : 1;
       this.pitch += (this.target - this.pitch) * k;
       if (Math.abs(this.target - this.pitch) < 1e-3) this.pitch = this.target;
@@ -285,11 +285,11 @@ export class AnalogCore implements InstrumentCore {
   private readonly settings = new Settings();
   private readonly pool: VoicePool<AnalogVoice>;
   private readonly mono: MonoPlayer;
-  /** A una voce (Mono o Legato)? null prima dei primi parametri. */
+  /** Monophonic (Mono or Legato)? null before the first parameters. */
   private single: boolean | null = null;
   private scratchL = new Float32Array(128);
   private scratchR = new Float32Array(128);
-  /** Guadagno d'uscita attuale: segue `settings.gain` senza scalini. */
+  /** Current output gain: follows `settings.gain` without steps. */
   private gain = -1;
   private readonly gainK: number;
 
@@ -302,7 +302,7 @@ export class AnalogCore implements InstrumentCore {
   setParams(params: Readonly<Record<string, number>>): void {
     this.settings.read(params);
     for (const v of this.pool.voices) v.refresh();
-    // passando da poli a una voce (o viceversa) si riparte puliti
+    // switching from poly to mono (or vice versa) restarts clean
     const single = this.settings.voiceMode !== VOICE_MODE.poly;
     if (this.single !== null && single !== this.single) this.silence();
     this.single = single;

@@ -22,22 +22,22 @@ describe('Sottosuolo', () => {
   };
   const track = (p: Project, name: string) => p.tracks.find(t => t.name === name) as MidiTrack;
 
-  it('intro e groove per chi mixa, tensione, drop, pausa, salita, secondo drop, dopo, outro, fine', () => {
+  it('intro and groove for whoever mixes, tension, drop, pause, rise, second drop, after, outro, end', () => {
     const p = build();
     expect(p.tempo.bpm).toBe(SOTTOSUOLO_LIVE_BPM);
     expect(p.scenes.map(s => s.name)).toEqual(['Intro', 'Groove', 'Tensione', 'Drop', 'Pausa', 'Salita', 'Drop 2', 'Dopo', 'Outro', 'Fine']);
     expect(Math.max(...p.tracks.map(t => t.arrangementEnd))).toBe(184 * 4);
-    // ogni sezione dura un multiplo di otto battute (le frasi su cui mixa un DJ)
+    // each section lasts a multiple of eight bars (the phrases a DJ mixes on)
     const starts = [...new Set(p.tracks.flatMap(t => t.arrangement.map(pl => pl.start)))].sort((a, b) => a - b);
     for (const s of starts) expect(s % 32).toBe(0);
-    // il master: EQ, colla, clipper, bassi mono, limiter
+    // the master: EQ, glue, clipper, mono bass, limiter
     expect(p.masterEffects.map(e => e.type)).toEqual(['eq', 'compressor', 'clipper', 'stereo', 'limiter']);
-    // nella pausa niente cassa né rumble
+    // in the pause no kick or rumble
     expect(track(p, 'Cassa').slots[4]).toBeNull();
     expect(track(p, 'Rumble').slots[4]).toBeNull();
   });
 
-  it('la cassa ha due strati campionati suonati insieme; il rumble suona i suoi colpi nel riverbero tutto bagnato', () => {
+  it('the kick has two sampled layers played together; the rumble plays its hits in the fully wet reverb', () => {
     const p = build();
     const kick = track(p, 'Cassa');
     expect(kick.instrument.params[padParam(0, 'model')]).toBe(MODEL.sample);
@@ -48,12 +48,12 @@ describe('Sottosuolo', () => {
     const reverb = rumble.effects.find(e => e.type === 'reverb')!;
     expect(reverb.params.mix).toBe(100);
     expect(reverb.params.width).toBe(0);
-    // ogni colpo pieno della cassa ha il suo colpo di rumble
+    // each full kick hit has its rumble hit
     const hits = drop.notes.filter(n => n.pitch === padNote(0) && n.velocity >= 100).map(n => n.start);
     expect((rumble.slots[3] as MidiClip).notes.map(n => n.start)).toEqual(hits);
   });
 
-  it('il rumble è zero sul colpo e pieno sul levare; i bassi e la sequenza pompano sulla cassa', () => {
+  it('the rumble is zero on the hit and full on the offbeat; the basses and the sequence pump on the kick', () => {
     const p = build();
     const rumble = (track(p, 'Rumble').slots[3] as MidiClip).envelopes.find(e => e.target.kind === 'mixer')!;
     expect(envelopeValueAt(rumble.points, 4)).toBe(0);
@@ -65,9 +65,9 @@ describe('Sottosuolo', () => {
     }
   });
 
-  it('il basso non suona mai sul battere (lì c\'è la cassa); tutto è in Sol# frigio', () => {
+  it('the bass never plays on the downbeat (the kick is there); everything is in G# phrygian', () => {
     const p = build();
-    const SCALE = new Set([8, 9, 11, 1, 3, 4, 6]); // Sol# La Si Do# Re# Mi Fa#
+    const SCALE = new Set([8, 9, 11, 1, 3, 4, 6]); // G# A B C# D# E F#
     for (const name of ['Basso', 'Sequenza', 'Stab', 'Bordone']) {
       for (const c of track(p, name).clips as MidiClip[]) {
         for (const n of c.notes) expect(SCALE.has(n.pitch % 12), `${name} ${c.name} ${n.pitch}`).toBe(true);
@@ -78,14 +78,14 @@ describe('Sottosuolo', () => {
     }
   });
 
-  it('i bassi restano mono e la cassa è centrata', () => {
+  it('the basses stay mono and the kick is centred', () => {
     const p = build();
     expect(track(p, 'Cassa').effects.find(e => e.type === 'stereo')!.params.width).toBe(0);
     expect(track(p, 'Rumble').effects.find(e => e.type === 'stereo')!.params.width).toBe(0);
     expect(p.masterEffects.find(e => e.type === 'stereo')!.params.monoFreq).toBe(110);
   });
 
-  it('le clip stanno nel giro e gli effetti modulati esistono; si salva e si riapre uguale', () => {
+  it('the clips sit in the loop and the modulated effects exist; it saves and reopens the same', () => {
     const p = build();
     for (const t of p.tracks as MidiTrack[]) {
       const effects = new Set(t.effects.map(e => e.id));

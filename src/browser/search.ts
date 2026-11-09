@@ -1,21 +1,21 @@
 import { childrenOf, searchKey, type BrowserItem, type BrowserPayload, type BrowserSource } from './item';
 
-/** Una voce trovata, con le cartelle che la contengono (per mostrare da dove viene). */
+/** A found item, with the folders containing it (to show where it comes from). */
 export interface SearchHit {
   readonly item: BrowserItem;
   readonly path: readonly string[];
 }
 
 export interface SearchOptions {
-  /** Al massimo tanti risultati (una cartella grande del disco non blocca il browser). */
+  /** At most this many results (a big disk folder doesn't block the browser). */
   readonly limit?: number;
-  /** Fin dove scendere nelle cartelle. */
+  /** How deep to go into folders. */
   readonly depth?: number;
 }
 
-/** Le voci (anche dentro le cartelle) il cui nome contiene tutte le parole di `query`, in
- *  qualsiasi ordine, senza badare a maiuscole e accenti. Una cartella che corrisponde vale
- *  come risultato se si può caricare (un dispositivo); le sue voci si cercano comunque. */
+/** The items (also inside folders) whose name contains all the words of `query`, in
+ *  any order, ignoring case and accents. A matching folder counts
+ *  as a result if it can be loaded (a device); its items are searched anyway. */
 export async function search(roots: readonly BrowserItem[], query: string, { limit = 200, depth = 6 }: SearchOptions = {}): Promise<SearchHit[]> {
   const words = searchKey(query).split(/\s+/).filter(Boolean);
   if (!words.length) return [];
@@ -35,9 +35,9 @@ export async function search(roots: readonly BrowserItem[], query: string, { lim
   return hits;
 }
 
-/** Ciò che una voce carica, come chiave: la stessa cosa in due fonti (un kit in Strumenti e in
- *  Batterie, un preset o un rack dell'utente nella sua categoria e tra i Preset dell'utente) è
- *  una sola. */
+/** What an item loads, as a key: the same thing in two sources (a kit in Instruments and in
+ *  Drums, a user preset or rack in its category and among the User Presets) is
+ *  only one. */
 function payloadKey(item: BrowserItem): string {
   const p: BrowserPayload | undefined = item.payload;
   if (!p) return `item:${item.id}`;
@@ -50,9 +50,9 @@ function payloadKey(item: BrowserItem): string {
   }
 }
 
-/** Cerca in più fonti, nell'ordine dato (prima quella scelta): ogni risultato ha come prima
- *  cartella il nome della sua fonte; ciò che si ripete in due fonti compare una volta sola, e le
- *  fonti che chiedono un permesso si saltano. */
+/** Searches several sources, in the given order (the chosen one first): each result has as first
+ *  folder the name of its source; what repeats in two sources appears only once, and the
+ *  sources asking for a permission are skipped. */
 export async function searchSources(sources: readonly BrowserSource[], query: string, { limit = 200, depth = 6 }: SearchOptions = {}): Promise<SearchHit[]> {
   const hits: SearchHit[] = [];
   const seen = new Set<string>();

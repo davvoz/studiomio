@@ -19,30 +19,30 @@ export interface Pointer {
   readonly x: number;
   readonly y: number;
   readonly shift: boolean;
-  /** Alt: niente aggancio alla griglia. */
+  /** Alt: no snapping to the grid. */
   readonly alt: boolean;
-  /** Ctrl/Cmd: copia invece di spostare. */
+  /** Ctrl/Cmd: copy instead of move. */
   readonly ctrl: boolean;
 }
 
-/** Ciò che un gesto può usare della vista. */
+/** What a gesture can use of the view. */
 export interface GestureHost {
   readonly store: ProjectStore;
   readonly ui: UiState;
   readonly geo: TimelineGeometry;
-  /** Passo di aggancio per questo puntatore, o null se l'aggancio è spento. */
+  /** Snap step for this pointer, or null if snapping is off. */
   snapStep(p: Pointer): Beats | null;
   seek(beat: Beats): void;
   invalidate(): void;
 }
 
-/** Un trascinamento in corso. L'anteprima si disegna sopra la timeline; il progetto cambia
- *  solo al rilascio, con un'unica modifica (un solo passo di annullamento). */
+/** A drag in progress. The preview is drawn over the timeline; the project changes
+ *  only on release, with a single change (a single undo step). */
 export interface Gesture {
   readonly cursor: string;
-  /** Clip da non disegnare al loro posto durante l'anteprima. */
+  /** Clips not to draw in their place during the preview. */
   readonly hidden: ReadonlySet<PlacementId>;
-  /** Il progetto da disegnare al posto di quello vero durante l'anteprima (es. clip divise). */
+  /** The project to draw in place of the real one during the preview (e.g. split clips). */
   readonly preview?: Project | null;
   move(p: Pointer): void;
   end(p: Pointer): void;
@@ -58,9 +58,9 @@ const snapped = (host: GestureHost, p: Pointer, beat: Beats) => {
   return Math.max(0, step ? snapTo(beat, step) : beat);
 };
 
-/** Trascinare clip: sposta (o copia, con Ctrl) tutta la selezione, anche su altre tracce.
- *  Se si prende il tratto di tempo selezionato, come in Live le clip si dividono ai suoi bordi e
- *  si sposta solo quello: la divisione si vede subito, ma entra nel progetto solo al rilascio. */
+/** Dragging clips: moves (or copies, with Ctrl) the whole selection, also onto other tracks.
+ *  If the selected time range is grabbed, as in Live the clips are split at its edges and
+ *  only that is moved: the split is visible right away, but enters the project only on release. */
 export class MoveClipsGesture implements Gesture {
   readonly cursor = 'grabbing';
   private plan: Relocation[] = [];
@@ -69,7 +69,7 @@ export class MoveClipsGesture implements Gesture {
   private readonly startBeat: Beats;
   private readonly base: Project;
   private readonly range: TimeRange | null;
-  /** Il progetto da cui si sposta (diviso, se si trascina un tratto) e le clip che si spostano. */
+  /** The project moved from (split, if a range is dragged) and the clips that move. */
   private source: Project;
   private refs: PlacementRef[] = [];
   private hiddenIds: ReadonlySet<PlacementId> = NONE;
@@ -78,7 +78,7 @@ export class MoveClipsGesture implements Gesture {
     const { ui } = host;
     const id = hit.placement.id, r = ui.range;
     if (origin.shift) ui.toggle(id);
-    // fuori dal tratto selezionato si prende la clip intera
+    // outside the selected range the whole clip is taken
     else if (!ui.selection.has(id) || (r && (hit.beat < r.start || hit.beat >= r.end))) ui.select([id]);
     this.range = ui.range;
     this.startBeat = host.geo.xToBeat(origin.x);
@@ -108,12 +108,12 @@ export class MoveClipsGesture implements Gesture {
 
   end(): void {
     const { host, source } = this;
-    // un clic seleziona e basta: il cursore si sposta solo dal righello, la riproduzione non si interrompe
+    // a click just selects: the cursor moves only from the ruler, playback isn't interrupted
     if (!this.moved) return;
     const changed = this.plan.some(m => m.copy || m.to !== m.track || m.start !== source.track(m.track)?.placement(m.id)?.start);
-    // tornati al punto di partenza il tratto non si stacca
+    // back at the starting point the range doesn't detach
     if (!changed || host.store.project !== this.base) return host.invalidate();
-    const label = this.copy ? 'Copia clip' : 'Sposta clip';
+    const label = this.copy ? 'Copy clip' : 'Move clip';
     host.store.apply(edit(label, (_p, ctx) => relocate(label, this.plan).apply(source, ctx)));
     if (this.copy) host.ui.select(addedPlacements(source, host.store.project).map(r => r.id));
     else if (this.range) host.ui.select(this.refs.map(r => r.id));
@@ -135,7 +135,7 @@ export class MoveClipsGesture implements Gesture {
     }
   }
 
-  /** All'inizio del trascinamento: le clip da spostare (i pezzi del tratto, se c'è). */
+  /** At the start of the drag: the clips to move (the pieces of the range, if any). */
   private begin(): void {
     const { host, range } = this;
     const selected = resolveSelection(this.base, host.ui.selection);
@@ -145,8 +145,8 @@ export class MoveClipsGesture implements Gesture {
   }
 }
 
-/** Trascinare un bordo: accorcia o allunga la clip (a sinistra sposta anche l'inizio del contenuto).
- *  Se la clip è nella selezione si ridimensionano tutte le clip selezionate, come in Live. */
+/** Dragging an edge: shortens or lengthens the clip (on the left it also moves the start of the content).
+ *  If the clip is in the selection all the selected clips are resized, as in Live. */
 export class ResizeClipGesture implements Gesture {
   readonly cursor = 'ew-resize';
   readonly hidden: ReadonlySet<PlacementId>;
@@ -157,7 +157,7 @@ export class ResizeClipGesture implements Gesture {
   constructor(private readonly host: GestureHost, private readonly hit: Extract<Hit, { kind: 'clip' }>) {
     const { ui } = host, id = hit.placement.id;
     this.base = host.store.project;
-    // il tratto di tempo selezionato non conta: si prendono le clip intere
+    // the selected time range doesn't count: the whole clips are taken
     ui.select(ui.selection.has(id) ? ui.selection : [id]);
     this.refs = resolveSelection(this.base, ui.selection);
     this.hidden = new Set(this.refs.map(r => r.id));
@@ -197,9 +197,9 @@ export class ResizeClipGesture implements Gesture {
   }
 }
 
-/** Trascinare una maniglia in alto a una clip audio: la dissolvenza in entrata (a sinistra) o in
- *  uscita (a destra), libera dalla griglia come in Live. Si sente subito; resta un solo passo di
- *  annullamento. */
+/** Dragging a handle at the top of an audio clip: the fade-in (on the left) or
+ *  fade-out (on the right), free from the grid as in Live. It's heard right away; it stays a single undo
+ *  step. */
 export class FadeGesture implements Gesture {
   readonly cursor = 'col-resize';
   readonly hidden = NONE;
@@ -228,12 +228,12 @@ export class FadeGesture implements Gesture {
     this.host.store.endMerge();
   }
 
-  paint(): void { /* la dissolvenza si vede sulla clip */ }
+  paint(): void { /* the fade is visible on the clip */ }
 }
 
-/** Trascinare nel vuoto: selezione a riquadro, con i bordi sulla griglia. Se il riquadro prende
- *  le clip solo in parte, resta selezionato quel tratto di tempo (come in Live): trascinarlo lo
- *  stacca dalla clip. Un clic senza trascinare toglie la selezione (il cursore si sposta solo dal righello). */
+/** Dragging in empty space: box selection, with the edges on the grid. If the box takes
+ *  the clips only partly, that time range stays selected (as in Live): dragging it
+ *  detaches it from the clip. A click without dragging removes the selection (the cursor moves only from the ruler). */
 export class MarqueeGesture implements Gesture {
   readonly cursor = 'crosshair';
   readonly hidden = NONE;
@@ -276,7 +276,7 @@ export class MarqueeGesture implements Gesture {
     ui.select(refs.map(ref => ref.id), partial ? r : null);
   }
 
-  /** Il tratto di tempo del riquadro, agganciato alla griglia. */
+  /** The box's time range, snapped to the grid. */
   private span(): TimeRange {
     const { geo } = this.host;
     const a = snapped(this.host, this.current, geo.xToBeat(this.origin.x));
@@ -289,8 +289,8 @@ export class MarqueeGesture implements Gesture {
   }
 }
 
-/** Nella fascia alta del righello: dai bordi si allunga o accorcia il loop tenendo fermo
- *  l'altro estremo, dal corpo lo si sposta, fuori se ne disegna uno nuovo; un clic lo accende o spegne. */
+/** In the ruler's top band: from the edges the loop lengthens or shortens keeping the
+ *  other end still, from the body it's moved, outside a new one is drawn; a click turns it on or off. */
 export class LoopRegionGesture implements Gesture {
   readonly cursor: string;
   readonly hidden = NONE;
@@ -311,7 +311,7 @@ export class LoopRegionGesture implements Gesture {
     this.moved = true;
     const r = dragLoop(this.part, this.original, this.anchor, snapped(this.host, p, this.host.geo.xToBeat(p.x)), 0);
     if (!r) return;
-    // durante il trascinamento il loop cambia davvero (si sente subito), in un solo passo di annullamento
+    // during the drag the loop really changes (it's heard right away), in a single undo step
     this.host.store.apply(setLoopRegion({ enabled: true, ...r }), { mergeKey: 'loop-drag' });
   }
 
@@ -325,10 +325,10 @@ export class LoopRegionGesture implements Gesture {
     this.host.store.endMerge();
   }
 
-  paint(): void { /* il loop si vede sul righello */ }
+  paint(): void { /* the loop is visible on the ruler */ }
 }
 
-/** Tasto centrale trascinato: la vista segue la mano, avanti e indietro e su e giù. */
+/** Middle button dragged: the view follows the hand, back and forth and up and down. */
 export class PanGesture implements Gesture {
   readonly cursor = 'grabbing';
   readonly hidden = NONE;
@@ -348,7 +348,7 @@ export class PanGesture implements Gesture {
   paint(): void { /* niente */ }
 }
 
-/** Nella parte bassa del righello: sposta la testina (anche trascinando). */
+/** In the ruler's lower part: moves the playhead (also by dragging). */
 export class ScrubGesture implements Gesture {
   readonly cursor = 'text';
   readonly hidden = NONE;

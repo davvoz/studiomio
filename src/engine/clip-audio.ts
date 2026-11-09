@@ -11,41 +11,41 @@ import { renderKey, type RenderCache } from './render-cache';
 import type { SampleLibrary } from './sample-library';
 import { clipRender, shiftedPitch, type ClipRender } from './warp-job';
 
-/** Audio pronto per una clip: il buffer, il battito della clip in cui cade il suo primo
- *  campione e la velocità di lettura (≠ 1 solo senza warp, per il transpose). */
+/** Audio ready for a clip: the buffer, the clip's beat its first sample falls on
+ *  and the reading speed (≠ 1 only without warp, for the transpose). */
 export interface Playable {
   readonly buffer: AudioBufferLike;
   readonly startBeat: Beats;
   readonly rate: number;
-  /** Audio provvisorio (il render di prima, mentre arriva quello nuovo): chi lo suona lo
-   *  riprogrammi quando arriva quello giusto. */
+  /** Provisional audio (the previous render, while the new one arrives): whoever plays it should
+   *  reschedule it when the right one arrives. */
   readonly provisional?: boolean;
 }
 
 export interface PlayableProvider {
-  /** L'audio della clip (trasposta di `shift` semitoni in più) se è pronto; altrimenti lo
-   *  chiede e restituisce null. */
+  /** The clip's audio (transposed by `shift` extra semitones) if it's ready; otherwise it
+   *  requests it and returns null. */
   playable(clip: AudioClip, shift?: number): Playable | null;
 }
 
-/** Gli spostamenti in semitoni che la curva del transpose della clip suona, oltre a 0. */
+/** The semitone offsets the clip's transpose curve plays, besides 0. */
 const shiftsOf = (clip: AudioClip) => steppedValues(clip.envelope(CLIP_TRANSPOSE)?.points ?? []).filter(s => s !== 0);
 
 type ClipAudioEvents = {
-  /** Un render richiesto è pronto: chi sta suonando può riprogrammare. */
+  /** A requested render is ready: whoever is playing can reschedule. */
   ready: [];
   error: [clip: AudioClip, error: unknown];
 };
 
-/** Dalle clip audio ai buffer da suonare, al tempo del progetto corrente. */
+/** From the audio clips to the buffers to play, at the current project's tempo. */
 export class ClipAudio implements PlayableProvider {
   private tempo: TempoMap | null = null;
   private samples = new Map<string, SampleRef>();
   private readonly jobs = new WeakMap<AudioClip, Map<number, { tempo: TempoMap; sample: SampleRef; render: ClipRender; key: string }>>();
   private readonly buffers = new WeakMap<readonly Float32Array[], AudioBufferLike>();
   private readonly raw = new Map<string, AudioBufferLike>();
-  /** L'ultimo render pronto di ogni clip e il tempo a cui è fatto: suona al posto di quello
-   *  nuovo finché non arriva (cambiando il tempo l'audio non si interrompe). */
+  /** Each clip's last ready render and the tempo it was made at: it plays in place of the
+   *  new one until it arrives (changing the tempo doesn't interrupt the audio). */
   private readonly last = new Map<ClipId, { readonly playable: Playable; readonly tempo: TempoMap; readonly sample: SampleId }>();
   private readonly events = new Emitter<ClipAudioEvents>();
 
@@ -59,7 +59,7 @@ export class ClipAudio implements PlayableProvider {
     return this.events.on(event, fn);
   }
 
-  /** Tempo e sample del progetto; chiede in anticipo i render delle clip sulla timeline. */
+  /** The project's tempo and samples; requests in advance the renders of the clips on the timeline. */
   setProject(project: Project): void {
     this.tempo = project.tempo;
     this.samples = new Map(project.samples.map(s => [s.id, s]));
@@ -74,7 +74,7 @@ export class ClipAudio implements PlayableProvider {
     }
   }
 
-  /** Attende che tutte le clip sulla timeline abbiano il loro audio (per l'export). */
+  /** Waits until all the clips on the timeline have their audio (for the export). */
   async prepare(project: Project): Promise<void> {
     this.setProject(project);
     const waits: Promise<unknown>[] = [];
@@ -94,7 +94,7 @@ export class ClipAudio implements PlayableProvider {
     const audio = this.library.get(clip.sample);
     if (!audio) return null;
     if (!clip.warp.enabled) {
-      // senza warp: il sample com'è, alla sua velocità (il transpose cambia la velocità)
+      // without warp: the sample as it is, at its own speed (the transpose changes the speed)
       const key = clip.reversed ? `${clip.sample}|reverse` : clip.sample;
       let buffer = this.raw.get(key);
       if (!buffer) {
@@ -112,7 +112,7 @@ export class ClipAudio implements PlayableProvider {
         () => this.events.emit('ready'),
         err => { if (!(err instanceof SupersededError)) this.events.emit('error', clip, err); },
       );
-      // i semitoni della curva non hanno un sostituto: arrivano in fretta e si riprogramma
+      // the curve's semitones have no substitute: they arrive quickly and get rescheduled
       return shift ? null : this.standIn(clip, j.tempo);
     }
     let buffer = this.buffers.get(channels);
@@ -125,18 +125,18 @@ export class ClipAudio implements PlayableProvider {
     return playable;
   }
 
-  /** Mentre il render nuovo si calcola: l'ultimo pronto della clip, letto più veloce o più lento
-   *  quanto basta per restare a tempo (per un attimo l'altezza segue la velocità). Null se la
-   *  clip non ne ha uno dello stesso sample. */
+  /** While the new render is being computed: the clip's last ready one, read faster or slower
+   *  as much as needed to stay in time (for a moment the pitch follows the speed). Null if the
+   *  clip doesn't have one of the same sample. */
   private standIn(clip: AudioClip, tempo: TempoMap): Playable | null {
     const last = this.last.get(clip.id);
     if (!last || last.sample !== clip.sample) return null;
-    // a tempo costante il battito b è a secondsAt(b): basta il rapporto tra le durate di un battito
+    // at constant tempo beat b is at secondsAt(b): the ratio between the durations of a beat is enough
     const speed = last.tempo.secondsAt(1) / tempo.secondsAt(1);
     return { ...last.playable, rate: last.playable.rate * speed, provisional: true };
   }
 
-  /** Lavoro di warp della clip al tempo corrente (memorizzato per clip, semitoni e tempo). */
+  /** The clip's warp work at the current tempo (memoized per clip, semitones and tempo). */
   private job(clip: AudioClip, shift: number) {
     const tempo = this.tempo, sample = this.samples.get(clip.sample);
     if (!tempo || !sample) return null;

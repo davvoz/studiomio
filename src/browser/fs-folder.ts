@@ -1,13 +1,13 @@
-/* Le cartelle del disco per il browser, con la File System Access API (Chrome, Edge ed
- * Electron): la cartella la sceglie l'utente; le scelte si ricordano tra un avvio e l'altro in
- * IndexedDB (un handle di cartella si può conservare lì, non in localStorage). Dopo un riavvio
- * il browser può chiedere di nuovo il permesso di leggerla: lo chiede un clic dell'utente. */
+/* Disk folders for the browser, with the File System Access API (Chrome, Edge and
+ * Electron): the user chooses the folder; the choices are remembered from one start to the next in
+ * IndexedDB (a folder handle can be kept there, not in localStorage). After a restart
+ * the browser may ask again for permission to read it: a user click asks for it. */
 import type { FolderPlaces } from './catalog';
 import type { FolderEntry, FolderReader } from './sample-sources';
 
 type Permission = 'granted' | 'denied' | 'prompt';
 
-/** I metodi dei permessi non sono ancora nei tipi di TypeScript. */
+/** The permission methods aren't in TypeScript's types yet. */
 interface PermissionHandle extends FileSystemDirectoryHandle {
   queryPermission?(o: { mode: 'read' }): Promise<Permission>;
   requestPermission?(o: { mode: 'read' }): Promise<Permission>;
@@ -29,27 +29,27 @@ export class FsFolder implements FolderReader {
     return out;
   }
 
-  /** Si può leggere senza chiedere? */
+  /** Can it be read without asking? */
   async readable(): Promise<boolean> {
     const h = this.handle as PermissionHandle;
     return !h.queryPermission || (await h.queryPermission({ mode: 'read' })) === 'granted';
   }
 
-  /** Chiede il permesso di leggerla (serve un clic dell'utente). */
+  /** Asks for permission to read it (needs a user click). */
   async request(): Promise<boolean> {
     const h = this.handle as PermissionHandle;
     return !h.requestPermission || (await h.requestPermission({ mode: 'read' })) === 'granted';
   }
 
-  /** È la stessa cartella del disco? */
+  /** Is it the same disk folder? */
   same(other: FsFolder): Promise<boolean> {
     return this.handle.isSameEntry(other.handle);
   }
 
-  /** Fa scegliere una cartella all'utente. */
+  /** Lets the user choose a folder. */
   static async pick(): Promise<FsFolder> {
     const picker = (window as unknown as { showDirectoryPicker?: (o: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker;
-    if (!picker) throw new Error('questo browser non permette di scegliere una cartella: usa Chrome o Edge');
+    if (!picker) throw new Error('this browser doesn\'t allow choosing a folder: use Chrome or Edge');
     return new FsFolder(await picker({ mode: 'read', id: 'studiomio-browser' }));
   }
 }
@@ -73,7 +73,7 @@ function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<
   }).finally(() => db.close()));
 }
 
-/** Le cartelle ricordate sotto `key` (vuoto se IndexedDB non c'è o è bloccato). */
+/** The folders remembered under `key` (empty if IndexedDB is missing or blocked). */
 export async function loadHandles(key: string): Promise<FileSystemDirectoryHandle[]> {
   try {
     return (await run<FileSystemDirectoryHandle[] | undefined>('readonly', s => s.get(key))) ?? [];
@@ -82,16 +82,16 @@ export async function loadHandles(key: string): Promise<FileSystemDirectoryHandl
   }
 }
 
-/** Ricorda le cartelle sotto `key`; senza IndexedDB restano solo finché l'app è aperta. */
+/** Remembers the folders under `key`; without IndexedDB they only last while the app is open. */
 export async function saveHandles(key: string, handles: readonly FileSystemDirectoryHandle[]): Promise<void> {
   try {
     await run('readwrite', s => s.put([...handles], key));
   } catch (e) {
-    console.warn('non è stato possibile ricordare le cartelle', e);
+    console.warn('couldn\'t remember the folders', e);
   }
 }
 
-/** Le cartelle del browser in IndexedDB. */
+/** The browser's folders in IndexedDB. */
 export const indexedDbPlaces: FolderPlaces<FsFolder> = {
   load: async () => (await loadHandles(KEY)).map(h => new FsFolder(h)),
   save: folders => saveHandles(KEY, folders.map(f => f.handle)),

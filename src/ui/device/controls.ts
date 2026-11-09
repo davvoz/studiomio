@@ -1,37 +1,37 @@
-/* Controlli dei parametri: una manopola per i numeri, pulsanti o un menu per le scelte.
- * Nascono dalla descrizione del parametro, così ogni dispositivo ha la sua interfaccia senza
- * scriverla. */
+/* Parameter controls: a knob for numbers, buttons or a menu for choices.
+ * They're born from the parameter's description, so each device has its interface without
+ * writing it. */
 import { clampParam, formatParam, paramFromUnit, paramToUnit, type ChoiceParam, type NumberParam, type ParamSpec } from '../../devices/params';
 
-/** `final` è vero alla fine di un gesto (rilascio, clic): chiude il passo di annullamento. */
+/** `final` is true at the end of a gesture (release, click): it closes the undo step. */
 export type ParamChange = (value: number, final: boolean) => void;
 
 export interface ParamControl {
   readonly element: HTMLElement;
   set(value: number): void;
-  /** Lo spostamento di una curva che suona, in frazioni della corsa (0: nessuno): il controllo
-   *  mostra il valore che si sente, la manopola resta dov'è. */
+  /** The offset of a playing curve, in fractions of the travel (0: none): the control
+   *  shows the value that's heard, the knob stays where it is. */
   modulate?(offset: number): void;
 }
 
-/** I controlli per elemento, per chi trova i parametri dal loro `data-param` (le curve). */
+/** The controls by element, for whoever finds the parameters from their `data-param` (the curves). */
 const CONTROLS = new WeakMap<Element, ParamControl>();
 
-/** Il controllo di un elemento, se ne è uno. */
+/** An element's control, if it is one. */
 export const controlOf = (element: Element): ParamControl | undefined => CONTROLS.get(element);
 
-/** Fa trovare il controllo dal suo elemento (vedi controlOf). */
+/** Makes the control findable from its element (see controlOf). */
 export function registerControl<C extends ParamControl>(control: C): C {
   CONTROLS.set(control.element, control);
   return control;
 }
 
-/** Sotto questo spostamento una curva non si mostra. */
+/** Below this offset a curve isn't shown. */
 const NO_OFFSET = 1e-4;
 const offsetOf = (offset: number) => (Math.abs(offset) < NO_OFFSET ? 0 : offset);
 
 const SVG = 'http://www.w3.org/2000/svg';
-/** La manopola copre 270°, da −135° (minimo) a +135° (massimo). */
+/** The knob covers 270°, from −135° (minimum) to +135° (maximum). */
 const SWEEP = 270, R = 15;
 
 function arc(fromDeg: number, toDeg: number, r = R): string {
@@ -43,8 +43,8 @@ function arc(fromDeg: number, toDeg: number, r = R): string {
   return `M ${pt(fromDeg)} A ${r} ${r} 0 ${large} 1 ${pt(toDeg)}`;
 }
 
-/** Un arco attorno alla manopola fra due posizioni della sua corsa (0…1), a raggio `r` (la
- *  faccia è 40×40): per esempio l'anello di una modulazione. */
+/** An arc around the knob between two positions of its travel (0…1), at radius `r` (the
+ *  face is 40×40): for example a modulation's ring. */
 export const knobArc = (fromUnit: number, toUnit: number, r: number): string => {
   const deg = (u: number) => -SWEEP / 2 + Math.max(0, Math.min(1, u)) * SWEEP;
   const a = deg(Math.min(fromUnit, toUnit)), b = deg(Math.max(fromUnit, toUnit));
@@ -57,9 +57,9 @@ function svg(tag: string, attrs: Record<string, string>): SVGElement {
   return e;
 }
 
-/** Manopola: trascinare in verticale (Maiusc per la regolazione fine), rotella, doppio clic
- *  per tornare al valore predefinito. Mossa da una curva, l'indice e il numero vanno al valore
- *  che si sente e un arco unisce la manopola a lì. */
+/** Knob: drag vertically (Shift for fine adjustment), wheel, double click
+ *  to go back to the default value. Moved by a curve, the pointer and the number go to the value
+ *  that's heard and an arc joins the knob to there. */
 class Knob implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'knob', tabIndex: 0 });
   private readonly valueArc = svg('path', { class: 'knob-value' });
@@ -74,7 +74,7 @@ class Knob implements ParamControl {
     const face = svg('svg', { viewBox: '0 0 40 40', class: 'knob-face' });
     face.append(svg('path', { class: 'knob-track', d: arc(-SWEEP / 2, SWEEP / 2) }), this.valueArc, this.autoArc, this.pointer);
     this.element.append(face, this.readout, Object.assign(document.createElement('div'), { className: 'knob-label', textContent: spec.label }));
-    this.element.title = `${spec.label}: doppio clic per il valore predefinito`;
+    this.element.title = `${spec.label}: double click for the default value`;
     this.bind();
     this.render();
   }
@@ -135,7 +135,7 @@ class Knob implements ParamControl {
   private render(): void {
     const unit = paramToUnit(this.spec, this.value), heard = Math.max(0, Math.min(1, unit + this.offset));
     const deg = -SWEEP / 2 + unit * SWEEP;
-    // con un minimo negativo (es. inviluppo −100..100) l'arco parte dallo zero
+    // with a negative minimum (e.g. envelope −100..100) the arc starts from zero
     const zero = this.spec.min < 0 && this.spec.max > 0 ? -SWEEP / 2 + paramToUnit(this.spec, 0) * SWEEP : -SWEEP / 2;
     this.valueArc.setAttribute('d', deg >= zero ? arc(zero, Math.max(zero + 0.01, deg)) : arc(deg, zero));
     const moved = heard !== unit;
@@ -146,8 +146,8 @@ class Knob implements ParamControl {
   }
 }
 
-/** Scelta tra poche opzioni: pulsanti affiancati. Mossa da una curva, si segna anche l'opzione
- *  che si sente. */
+/** Choice among few options: buttons side by side. Moved by a curve, the option
+ *  that's heard is also marked. */
 class Choice implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'choice' });
   private readonly buttons: HTMLButtonElement[];
@@ -185,12 +185,12 @@ class Choice implements ParamControl {
   }
 }
 
-/** L'opzione che si sente con la scelta `value` spostata di `offset` (come la calcola il motore). */
+/** The option heard with choice `value` moved by `offset` (as the engine computes it). */
 const heardOption = (spec: ChoiceParam, value: number, offset: number) =>
   (offset ? paramFromUnit(spec, paramToUnit(spec, value) + offset) : value);
 
-/** Scelta tra molte opzioni (es. le divisioni del delay): un menu a tendina. Mossa da una curva,
- *  mostra l'opzione che si sente. */
+/** Choice among many options (e.g. the delay's divisions): a drop-down menu. Moved by a curve,
+ *  it shows the option that's heard. */
 class ChoiceMenu implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'choice' });
   private readonly select = document.createElement('select');
@@ -223,18 +223,18 @@ class ChoiceMenu implements ParamControl {
   }
 }
 
-/** Oltre questo numero di opzioni una scelta diventa un menu. */
+/** Beyond this number of options a choice becomes a menu. */
 const MAX_BUTTONS = 4;
 
-/** Il controllo per ogni tipo di parametro: un tipo nuovo è una riga nuova. */
+/** The control for each parameter type: a new type is a new line. */
 const MAKERS: { readonly [K in ParamSpec['kind']]: (spec: Extract<ParamSpec, { kind: K }>, value: number, onChange: ParamChange) => ParamControl } = {
   number: (s, v, c) => new Knob(s, v, c),
   choice: (s, v, c) => (s.options.length > MAX_BUTTONS ? new ChoiceMenu(s, v, c) : new Choice(s, v, c)),
 };
 
-/** Il controllo porta l'id del parametro in `data-param`: da lì la catena lo mappa sulle macro
- *  (anche nei pannelli grafici). Con `menu` una scelta è sempre un menu a tendina (dove i
- *  pulsanti non ci stanno). */
+/** The control carries the parameter's id in `data-param`: from there the chain maps it to the macros
+ *  (also in the graphic panels). With `menu` a choice is always a drop-down menu (where the
+ *  buttons don't fit). */
 export function controlFor(spec: ParamSpec, value: number, onChange: ParamChange, options: { readonly menu?: boolean } = {}): ParamControl {
   const control = options.menu && spec.kind === 'choice' ? new ChoiceMenu(spec, value, onChange)
     : (MAKERS[spec.kind] as (s: ParamSpec, v: number, c: ParamChange) => ParamControl)(spec, value, onChange);
@@ -242,7 +242,7 @@ export function controlFor(spec: ParamSpec, value: number, onChange: ParamChange
   return registerControl(control);
 }
 
-/** Attenua un controllo che con i valori attuali non conta (es. i ms con il delay a tempo). */
+/** Dims a control that doesn't count with the current values (e.g. the ms with the synced delay). */
 export const setActive = (control: ParamControl, active: boolean): void => {
   control.element.classList.toggle('inactive', !active);
 };

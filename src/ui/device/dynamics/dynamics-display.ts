@@ -1,7 +1,7 @@
-/* Il pannello del Compressore e del Noise Gate: il grafico della curva (ciò che entra in
- * orizzontale, ciò che esce in verticale, con la matematica del motore) e accanto le manopole
- * generate dai parametri. Mentre il suono passa, il punto segna dove sta lavorando: su un suono
- * fermo sta sulla curva. A destra la barra di quanto abbassa. La soglia si trascina sul grafico. */
+/* The panel of the Compressor and the Noise Gate: the curve's graph (what goes in
+ * horizontally, what comes out vertically, with the engine's maths) and next to it the knobs
+ * generated from the parameters. While the sound passes, the dot marks where it's working: on a steady
+ * sound it sits on the curve. On the right the bar of how much it reduces. The threshold is dragged on the graph. */
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import { autoMakeup, curveDb, type Curve } from '../../../devices/effects/compressor/compressor-math';
 import type { DeviceSettings, ParamValues } from '../../../model/device';
@@ -10,15 +10,15 @@ import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext, DynamicsTap } from '../displays';
 import { ACCENT, BACKGROUND, drag, fit, GRID, LABEL } from '../prisma/canvas';
 
-/** Ciò che cambia tra un effetto e l'altro. */
+/** What changes from one effect to another. */
 export interface DynamicsGraph {
-  /** Da quanti dB parte il grafico (arriva sempre a 0). */
+  /** How many dB the graph starts from (it always reaches 0). */
   readonly floor: number;
-  /** Quanti dB di riduzione riempiono la barra. */
+  /** How many dB of reduction fill the bar. */
   readonly meterRange: number;
-  /** I dB in uscita per `x` dB in ingresso, con i parametri `v`. */
+  /** The dB out for `x` dB in, with the parameters `v`. */
   transfer(v: Readonly<Record<string, number>>, x: number): number;
-  /** Quanto si aggiunge dopo la riduzione (guadagno d'uscita): serve per mettere il punto. */
+  /** How much is added after the reduction (output gain): needed to place the dot. */
   gain(v: Readonly<Record<string, number>>): number;
 }
 
@@ -40,22 +40,22 @@ export const NOISE_GATE_GRAPH: DynamicsGraph = {
 const METER = 12;
 const PAD = 4;
 const GRID_DB = 12;
-/** Quanto si muove il punto verso la lettura nuova, a ogni fotogramma. */
+/** How much the dot moves towards the new reading, at every frame. */
 const SMOOTH = 0.35;
-/** Il pallino sparisce con il suono. */
+/** The dot disappears with the sound. */
 const SILENT = -100;
 
 export class DynamicsDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'dynamics-display' });
   private readonly canvas = el<HTMLCanvasElement>('canvas', {
-    className: 'dynamics-graph', title: 'La curva: il punto è dove sta lavorando adesso · trascina per spostare la soglia',
+    className: 'dynamics-graph', title: 'The curve: the dot is where it\'s working now · drag to move the threshold',
   });
   private readonly controls = new Map<string, { control: ParamControl; spec: NonNullable<ReturnType<typeof paramSpec>> }>();
   private readonly tap: DynamicsTap | undefined;
   private values: Record<string, number>;
   private params: ParamValues | null = null;
   private dirty = true;
-  /** L'altezza è cambiata: la larghezza segue al fotogramma dopo (dentro l'osservatore non si può). */
+  /** The height changed: the width follows at the next frame (inside the observer it can't). */
   private resized = true;
   private input = -120;
   private reduction = 0;
@@ -85,8 +85,8 @@ export class DynamicsDisplay implements DeviceDisplay {
     this.dirty = true;
   }
 
-  /** La curva sta in un quadrato: l'altezza la dà il pannello, la larghezza la segue, con in più
-   *  la barra di quanto abbassa. */
+  /** The curve sits in a square: the panel gives the height, the width follows it, plus
+   *  the bar of how much it reduces. */
   private square(): void {
     const height = this.canvas.offsetHeight;
     if (height) this.canvas.style.width = `${height + METER}px`;
@@ -111,7 +111,7 @@ export class DynamicsDisplay implements DeviceDisplay {
     return PAD + (-db / -this.graph.floor) * (h - 2 * PAD);
   }
 
-  /** La soglia si trascina in orizzontale, da dove si è premuto. */
+  /** The threshold is dragged horizontally, from where it was pressed. */
   private press(e: PointerEvent): void {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -133,7 +133,7 @@ export class DynamicsDisplay implements DeviceDisplay {
     requestAnimationFrame(this.frame);
     const reading = this.tap?.read();
     if (reading) {
-      // sale subito, scende con calma: si legge meglio
+      // rises right away, falls calmly: it reads better
       this.input = reading.input > this.input ? reading.input : this.input + (reading.input - this.input) * SMOOTH;
       this.reduction = reading.reduction > this.reduction ? reading.reduction : this.reduction + (reading.reduction - this.reduction) * SMOOTH;
       this.dirty = true;
@@ -162,14 +162,14 @@ export class DynamicsDisplay implements DeviceDisplay {
       g.lineTo(right, this.yOf(db, h));
     }
     g.stroke();
-    // la diagonale: il suono che passa com'è
+    // the diagonal: the sound passing as it is
     g.strokeStyle = 'rgba(255,255,255,0.14)';
     g.setLineDash([3, 3]);
     g.beginPath();
     g.moveTo(this.xOf(floor), this.yOf(floor, h));
     g.lineTo(this.xOf(0), this.yOf(0, h));
     g.stroke();
-    // la soglia
+    // the threshold
     const tx = this.xOf(Math.max(floor, v.threshold));
     g.strokeStyle = 'rgba(255,255,255,0.4)';
     g.beginPath();
@@ -177,7 +177,7 @@ export class DynamicsDisplay implements DeviceDisplay {
     g.lineTo(tx, h - PAD);
     g.stroke();
     g.setLineDash([]);
-    // la curva, dentro il grafico
+    // the curve, inside the graph
     g.save();
     g.beginPath();
     g.rect(PAD, PAD, right - PAD, h - 2 * PAD);
@@ -199,7 +199,7 @@ export class DynamicsDisplay implements DeviceDisplay {
       g.fill();
     }
     g.restore();
-    // quanto abbassa
+    // how much it lowers
     const meterX = w - METER - 1, reduced = Math.min(1, this.reduction / meterRange) * (h - 2 * PAD);
     g.fillStyle = GRID;
     g.fillRect(meterX, PAD, METER - 3, h - 2 * PAD);

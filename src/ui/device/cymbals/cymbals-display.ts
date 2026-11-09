@@ -1,7 +1,7 @@
-/* Il pannello di Hat e Piatti. A sinistra i sei pezzi come pad (un clic sceglie il pezzo e lo
- * suona; un file audio o un sample del browser lasciato su un pad diventa il suo sample) e,
- * sotto, il colpo del pezzo scelto com'è, calcolato con lo stesso motore che suona. Accanto i
- * controlli del pezzo scelto, poi quelli di tutti i pezzi. */
+/* The Hat and Cymbals panel. On the left the six pieces as pads (a click chooses the piece and
+ * plays it; an audio file or a browser sample dropped on a pad becomes its sample) and,
+ * below, the hit of the chosen piece as it is, computed with the same engine that plays. Next to it the
+ * controls of the chosen piece, then those of all the pieces. */
 import type { SampleId } from '../../../core/id';
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import { PIECES, pieceOfNote, pieceParam, pieceSlot, SOURCE, type PieceKey } from '../../../devices/instruments/cymbals/cymbals';
@@ -15,23 +15,23 @@ import { pitchName } from '../../piano-roll/pitch-axis';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext } from '../displays';
 
-/** I file che si possono lasciare su un pad. */
+/** The files that can be dropped on a pad. */
 const isAudio = (f: File) => f.type.startsWith('audio/') || /\.(wav|aiff?|flac|mp3|ogg|m4a)$/i.test(f.name);
 
-/** I controlli del pezzo scelto (la sorgente sta nell'intestazione). */
+/** The controls of the chosen piece (the source is in the header). */
 const PIECE_CONTROLS: readonly PieceKey[] = ['tune', 'decay', 'tone', 'noise', 'bell', 'level', 'pan'];
 const GLOBAL_CONTROLS = ['metal', 'variation', 'width', 'drive', 'velocity', 'volume'];
-/** I controlli che, quando non contano (dipendono dalla sorgente), si tolgono invece di attenuarsi. */
+/** The controls that, when they don't count (they depend on the source), are removed instead of dimmed. */
 const SWAPPED: ReadonlySet<PieceKey> = new Set(['noise', 'bell']);
-/** Gli hi-hat in giallo, i piatti in azzurro. */
+/** The hi-hats in yellow, the cymbals in light blue. */
 const COLORS = ['#f2d14b', '#e8c06a', '#f2b84b', '#7fb6ff', '#4fd1e0', '#c79bff'];
 
 const AUDITION_VELOCITY = 110;
-/** Quanto si disegna del colpo, al massimo e al minimo (in secondi). */
+/** How much of the hit is drawn, at most and at least (in seconds). */
 const MAX_VIEW = 4;
 const MIN_VIEW = 0.12;
 
-/** Un canvas nitido, ridimensionato al suo posto. */
+/** A sharp canvas, resized to its place. */
 function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
   const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
   if (!w || !h) return null;
@@ -41,16 +41,16 @@ function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
   return g;
 }
 
-/** Il pezzo scelto (resta fra un pannello e l'altro). */
+/** The chosen piece (it stays from one panel to the next). */
 const view = { piece: 0 };
 
 export class CymbalsDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'cym' });
   private readonly pads: HTMLButtonElement[];
-  private readonly wave = el<HTMLCanvasElement>('canvas', { className: 'cym-wave', title: 'Il colpo del pezzo scelto (clic: suona)' });
+  private readonly wave = el<HTMLCanvasElement>('canvas', { className: 'cym-wave', title: 'The hit of the chosen piece (click: play)' });
   private readonly title = el('span', { className: 'cym-card-title' });
   private readonly sourceSlot = el('div', { className: 'cym-source' });
-  private readonly sampleChoice = el<HTMLSelectElement>('select', { className: 'cym-sample', title: 'Il sample del pezzo (tra quelli del progetto)' });
+  private readonly sampleChoice = el<HTMLSelectElement>('select', { className: 'cym-sample', title: 'The piece\'s sample (among the project\'s)' });
   private readonly sampleRow: HTMLElement;
   private readonly knobs = el('div', { className: 'cym-knobs' });
   private readonly controls = new Map<string, { control: ParamControl; spec: ParamSpec }>();
@@ -71,14 +71,14 @@ export class CymbalsDisplay implements DeviceDisplay {
     this.pads = PIECES.map((_, i) => this.pad(i));
     this.wave.addEventListener('pointerdown', e => { if (e.button === 0) this.play(view.piece); });
     this.sampleChoice.onchange = () => this.assign(view.piece, (this.sampleChoice.value || null) as SampleId | null);
-    const load = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Carica…', title: 'Carica un file audio sul pezzo (o trascinalo sul suo pad)' });
+    const load = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Load…', title: 'Load an audio file on the piece (or drag it onto its pad)' });
     load.onclick = () => this.pickFile(view.piece);
     this.sampleRow = el('div', { className: 'cym-sample-row' }, this.sampleChoice, load);
     const global = el('div', { className: 'cym-knobs' }, ...GLOBAL_CONTROLS.map(id => this.control(id)));
     this.element.append(
       el('div', { className: 'cym-left' }, el('div', { className: 'cym-pads' }, ...this.pads), el('div', { className: 'cym-wave-box' }, this.wave)),
       el('div', { className: 'cym-card' }, el('div', { className: 'cym-card-head' }, this.title, this.sourceSlot), this.sampleRow, this.knobs),
-      el('div', { className: 'cym-card' }, el('div', { className: 'cym-card-head' }, el('span', { className: 'cym-card-title', textContent: 'Tutti i pezzi' })), global));
+      el('div', { className: 'cym-card' }, el('div', { className: 'cym-card-head' }, el('span', { className: 'cym-card-title', textContent: 'All the pieces' })), global));
     this.select(Math.min(view.piece, PIECES.length - 1));
     new ResizeObserver(() => { this.dirty = true; }).observe(this.wave);
     requestAnimationFrame(this.frame);
@@ -94,12 +94,12 @@ export class CymbalsDisplay implements DeviceDisplay {
     this.refresh();
   }
 
-  /** Il pezzo scelto (per i test automatici). */
+  /** The chosen piece (for automated tests). */
   get selectedPiece(): number {
     return view.piece;
   }
 
-  /** Sceglie il pezzo da modificare (la Drum Machine: quello che suona il suo pad). */
+  /** Chooses the piece to edit (the Drum Machine: the one its pad plays). */
   selectPiece(i: number): void {
     if (i !== view.piece && PIECES[i]) this.select(i);
   }
@@ -122,7 +122,7 @@ export class CymbalsDisplay implements DeviceDisplay {
     this.sampleRow.hidden = !isSample || !this.ctx.samples;
     if (!this.sampleRow.hidden) {
       const all = this.ctx.samples?.list() ?? [];
-      this.sampleChoice.replaceChildren(el('option', { value: '', textContent: '— nessun sample —' }),
+      this.sampleChoice.replaceChildren(el('option', { value: '', textContent: '— no sample —' }),
         ...all.map(s => el('option', { value: s.id, textContent: s.name })));
       this.sampleChoice.value = sampleAt(this.settings, pieceSlot(i)) ?? '';
     }
@@ -153,13 +153,13 @@ export class CymbalsDisplay implements DeviceDisplay {
   private flash(i: number): void {
     const b = this.pads[i];
     b.classList.remove('hit');
-    void b.offsetWidth; // fa ripartire l'animazione
+    void b.offsetWidth; // restarts the animation
     b.classList.add('hit');
   }
 
   private pad(i: number): HTMLButtonElement {
     const p = PIECES[i];
-    const b = el<HTMLButtonElement>('button', { className: 'cym-pad', title: 'Clic: scegli e suona · lascia qui un file audio: diventa il suo sample' },
+    const b = el<HTMLButtonElement>('button', { className: 'cym-pad', title: 'Click: choose and play · drop an audio file here: it becomes its sample' },
       el('span', { className: 'cym-pad-name', textContent: p.label }), el('span', { className: 'cym-pad-note', textContent: pitchName(p.note) }));
     b.style.setProperty('--pad', COLORS[i]);
     b.addEventListener('pointerdown', e => {
@@ -193,7 +193,7 @@ export class CymbalsDisplay implements DeviceDisplay {
     return b;
   }
 
-  /** Il pezzo diventa un pezzo Sample, se non lo era già. */
+  /** The piece becomes a Sample piece, if it wasn't already. */
   private asSample(i: number): ParamValues {
     return this.values[pieceParam(i, 'source')] === SOURCE.sample ? {} : { [pieceParam(i, 'source')]: SOURCE.sample };
   }
@@ -210,7 +210,7 @@ export class CymbalsDisplay implements DeviceDisplay {
       if (view.piece !== i) this.select(i);
       this.play(i);
     } catch (err) {
-      console.warn(`Hat e Piatti: impossibile caricare "${file.name}"`, err);
+      console.warn(`Hats and Cymbals: can't load "${file.name}"`, err);
     }
   }
 
@@ -220,7 +220,7 @@ export class CymbalsDisplay implements DeviceDisplay {
     input.click();
   }
 
-  // ---------------------------------------------------------------- il colpo
+  // ---------------------------------------------------------------- the hit
 
   private readonly frame = (): void => {
     if (this.element.isConnected) this.shown = true;
@@ -241,7 +241,7 @@ export class CymbalsDisplay implements DeviceDisplay {
     this.paint();
   };
 
-  /** Il colpo del pezzo scelto, calcolato con il motore vero (a frequenza ridotta: per disegnarlo basta). */
+  /** The hit of the chosen piece, computed with the real engine (at reduced rate: enough to draw it). */
   private renderHit(audio: SampleData | undefined): void {
     const i = view.piece, rate = 24000;
     const seconds = Math.max(MIN_VIEW, Math.min(MAX_VIEW, this.values[pieceParam(i, 'decay')] * 0.8));
@@ -288,7 +288,7 @@ export class CymbalsDisplay implements DeviceDisplay {
     g.globalAlpha = 1;
     if (top < 1e-6) {
       g.fillStyle = 'rgba(255,255,255,0.4)';
-      g.fillText('Nessun sample: trascina un file sul pad', 8, 16);
+      g.fillText('No sample: drag a file onto the pad', 8, 16);
     }
   }
 }

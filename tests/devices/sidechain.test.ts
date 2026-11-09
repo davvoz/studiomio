@@ -7,7 +7,7 @@ import { EFFECT_PROCESSOR, type EffectMessage, type EffectProcessorOptions } fro
 const SR = 48000, BLOCK = 128;
 const params = resolveParams(COMPRESSOR, { auto: 0, threshold: -24, ratio: 10, attack: 1, release: 50 });
 
-/** Un pad piano (−30 dB, sotto la soglia) e una cassa forte: colpi di 50 ms ogni mezzo secondo. */
+/** A quiet pad (−30 dB, below the threshold) and a loud kick: 50 ms hits every half second. */
 const pad = Float32Array.from({ length: SR }, (_, i) => 0.03 * Math.sin((2 * Math.PI * 220 * i) / SR));
 const kick = Float32Array.from({ length: SR }, (_, i) => (i % (SR / 2) < SR / 20 ? 0.9 * Math.sin((2 * Math.PI * 60 * i) / SR) : 0));
 const silence = new Float32Array(SR);
@@ -16,11 +16,11 @@ const peak = (x: Float32Array, from: number, to: number) => {
   for (let i = from; i < to; i++) p = Math.max(p, Math.abs(x[i]));
   return p;
 };
-/** Durante il colpo (dopo l'attacco) e lontano dal colpo (dopo il rilascio). */
+/** During the hit (after the attack) and far from the hit (after the release). */
 const during = (x: Float32Array) => peak(x, SR / 100, SR / 20);
 const between = (x: Float32Array) => peak(x, SR / 4, SR / 2 - 1);
 
-/** Il compressore a blocchi; `key` è il suono che il rilevatore ascolta (null: l'ingresso). */
+/** The compressor in blocks; `key` is the sound the detector listens to (null: the input). */
 function run(input: Float32Array, key: Float32Array | null, core = new CompressorCore(SR)): Float32Array {
   core.setParams(params);
   const out = new Float32Array(input.length);
@@ -33,22 +33,22 @@ function run(input: Float32Array, key: Float32Array | null, core = new Compresso
   return out;
 }
 
-describe('Compressore con il sidechain', () => {
-  it('da solo il pad piano passa intatto; con la cassa come chiave si abbassa sui colpi', () => {
+describe('Compressor with the sidechain', () => {
+  it('alone the quiet pad passes intact; with the kick as key it ducks on the hits', () => {
     const alone = run(pad, null);
     expect(during(alone)).toBeCloseTo(0.03, 3);
     const ducked = run(pad, kick);
     expect(20 * Math.log10(during(ducked) / 0.03)).toBeLessThan(-12);
-    // tra un colpo e l'altro il pad torna su
+    // between one hit and the next the pad comes back up
     expect(between(ducked)).toBeCloseTo(0.03, 3);
   });
 
-  it('una chiave che tace non fa lavorare il compressore, anche se il suono che passa è forte', () => {
+  it('a silent key doesn\'t make the compressor work, even if the passing sound is loud', () => {
     const out = run(kick, silence);
     expect(during(out)).toBeCloseTo(during(kick), 4);
   });
 
-  it('tolta la chiave ascolta di nuovo sé stesso, esattamente come senza sidechain', () => {
+  it('with the key removed it listens to itself again, exactly as without sidechain', () => {
     const core = new CompressorCore(SR);
     core.setKey(kick, null);
     core.setKey(null, null);
@@ -56,15 +56,15 @@ describe('Compressore con il sidechain', () => {
   });
 });
 
-// ------------------------------------------------------------------ il processore dell'AudioWorklet
+// ------------------------------------------------------------------ the AudioWorklet's processor
 
 interface FakePort { onmessage: ((e: { data: EffectMessage }) => void) | null; postMessage(): void }
 type Processor = { port: FakePort; process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean };
 const processors = new Map<string, new (o: { processorOptions: EffectProcessorOptions }) => Processor>();
 
-describe('processore degli effetti con il sidechain', () => {
+describe('effects processor with the sidechain', () => {
   beforeAll(async () => {
-    // i globali dell'AudioWorkletGlobalScope che il modulo usa
+    // the AudioWorkletGlobalScope globals the module uses
     Object.assign(globalThis, {
       sampleRate: SR, currentFrame: 0,
       AudioWorkletProcessor: class { readonly port: FakePort = { onmessage: null, postMessage() {} }; },
@@ -76,7 +76,7 @@ describe('processore degli effetti con il sidechain', () => {
   const make = (keyed: boolean) => new (processors.get(EFFECT_PROCESSOR)!)({
     processorOptions: { type: 'compressor', params, enabled: true, bpm: 120, keyed, transport: null },
   });
-  /** Fa suonare il processore: `key` va nel secondo ingresso (null: niente collegato). */
+  /** Plays the processor: `key` goes into the second input (null: nothing connected). */
   function play(p: Processor, input: Float32Array, key: Float32Array | null): Float32Array {
     const out = new Float32Array(input.length);
     for (let f = 0; f < input.length; f += BLOCK) {
@@ -89,16 +89,16 @@ describe('processore degli effetti con il sidechain', () => {
     return out;
   }
 
-  it('con il sidechain il rilevatore ascolta il secondo ingresso', () => {
+  it('with the sidechain the detector listens to the second input', () => {
     expect(20 * Math.log10(during(play(make(true), pad, kick)) / 0.03)).toBeLessThan(-12);
   });
 
-  it('senza, il secondo ingresso non conta: suona come prima', () => {
+  it('without, the second input doesn\'t count: it plays as before', () => {
     expect(play(make(false), kick, pad)).toEqual(play(make(false), kick, null));
     expect(during(play(make(false), pad, kick))).toBeCloseTo(0.03, 3);
   });
 
-  it('acceso e spento per messaggio; senza niente collegato la chiave è silenzio', () => {
+  it('turned on and off by message; with nothing connected the key is silence', () => {
     const p = make(false);
     p.port.onmessage!({ data: { type: 'keyed', keyed: true } });
     expect(during(play(p, kick, null))).toBeCloseTo(during(kick), 4);

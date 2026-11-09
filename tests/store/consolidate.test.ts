@@ -13,36 +13,36 @@ import { setup } from '../helpers/fixtures';
 const note = (pitch: number, start: number, duration = 0.5): Note => ({ pitch, start, duration, velocity: 100 });
 const VOLUME = { kind: 'mixer', param: 'volume' } as const;
 
-/** Una clip di `length` battiti (in loop se `loop`) posata da `start` per `placed` battiti. */
+/** A clip of `length` beats (looping if `loop`) placed from `start` for `placed` beats. */
 function placed(id: string, notes: Note[], start: number, length: number, placed = length, loop = false): Placement<MidiClip> {
   const clip = MidiClip.create({ id: `clip-${id}` as ClipId, name: id, color: '#ff0000', ...fullRange(0, length, loop), notes });
   return { id: `placement-${id}` as PlacementId, clip, start, length: placed, offset: 0 };
 }
 
-describe('consolida', () => {
-  it('le note in fila, i giri di loop diventano note vere', () => {
-    const a = placed('a', [note(60, 0), note(62, 1.5, 2)], 0, 2); // la seconda nota esce dalla clip: si accorcia
-    const b = placed('b', [note(64, 0)], 4, 1, 3, true); // un battito in loop, posato per tre
+describe('consolidate', () => {
+  it('the notes in a row, the loop rounds become real notes', () => {
+    const a = placed('a', [note(60, 0), note(62, 1.5, 2)], 0, 2); // the second note goes out of the clip: it's shortened
+    const b = placed('b', [note(64, 0)], 4, 1, 3, true); // one beat looping, placed for three
     expect(consolidatedNotes([a, b], 0)).toEqual([
       note(60, 0), note(62, 1.5), note(64, 4), note(64, 5), note(64, 6),
     ]);
   });
 
-  it('le modulazioni in fila, neutre dove non suona niente', () => {
+  it('the modulations in a row, neutral where nothing plays', () => {
     const a = placed('a', [], 0, 2);
     const withCurve = { ...a, clip: a.clip.withEnvelope(VOLUME, [{ beat: 0, value: 0.5 }, { beat: 2, value: 1 }]) };
     const b = placed('b', [], 3, 1);
     const [env] = consolidatedEnvelopes([withCurve, b], 0, 5);
     expect(env.points).toEqual([
-      { beat: 0, value: 0.5 }, { beat: 2, value: 1 }, // la curva di a
-      { beat: 2, value: 1 }, { beat: 3, value: 1 }, // il vuoto: neutro (volume pieno)
-      { beat: 3, value: 1 }, { beat: 4, value: 1 }, // b non ha curva: neutro
-      { beat: 4, value: 1 }, // dopo l'ultima clip
+      { beat: 0, value: 0.5 }, { beat: 2, value: 1 }, // a's curve
+      { beat: 2, value: 1 }, { beat: 3, value: 1 }, // the gap: neutral (full volume)
+      { beat: 3, value: 1 }, { beat: 4, value: 1 }, // b has no curve: neutral
+      { beat: 4, value: 1 }, // after the last clip
     ]);
     expect(consolidatedEnvelopes([b], 0, 4)).toEqual([]);
   });
 
-  it('su ogni traccia una clip dalla prima all\'ultima selezionata, comprese quelle in mezzo', () => {
+  it('on each track a clip from the first to the last selected, including those in between', () => {
     const { store, track, ids } = setup({ midi: 1 });
     for (const start of [0, 4, 8]) store.apply(addMidiClip(track(0), start, 2));
     const p = store.project, lane = p.tracks[0].arrangement;
@@ -56,15 +56,15 @@ describe('consolida', () => {
     expect(consolidateSpans(p, refs, { start: 1, end: 5 })[0]).toMatchObject({ start: 1, end: 5 });
   });
 
-  it('nella session: una clip che ripete il suo pezzo resta lei, il resto si mette in fila', () => {
+  it('in the session: a clip repeating its piece stays itself, the rest is lined up', () => {
     const id = 'clip-x' as ClipId;
-    // un battito in loop posato per quattro: resta la clip di un battito
+    // one beat looping placed for four: the one-beat clip remains
     const loop = sessionClip(id, [placed('a', [note(60, 0)], 0, 1, 4, true)], 0, 4)!;
     expect([loop.id, loop.region, loop.loop]).toEqual([id, { start: 0, end: 1 }, { enabled: true, start: 0, end: 1 }]);
-    // una clip accorciata da sinistra: solo il pezzo che suona
+    // a clip shortened from the left: only the playing piece
     const trimmed = { ...placed('b', [note(60, 0), note(62, 2)], 4, 4, 2), offset: 2 };
     expect(sessionClip(id, [trimmed], 4, 6)!.loop).toEqual({ enabled: true, start: 2, end: 4 });
-    // più tardi del tratto, o due clip: le note in fila su tutto il tratto
+    // later than the stretch, or two clips: the notes in a row over the whole stretch
     const late = sessionClip(id, [placed('c', [note(60, 0)], 2, 2)], 0, 4) as MidiClip;
     expect([late.notes, late.loop]).toEqual([[note(60, 2)], { enabled: true, start: 0, end: 4 }]);
     expect((sessionClip(id, [placed('d', [note(60, 0)], 0, 2), placed('e', [note(62, 0)], 2, 2)], 0, 4) as MidiClip).notes)

@@ -1,28 +1,28 @@
-/* Il suono dell'EQ: per ogni banda le sezioni di filtro di eq-math.ts, in serie, sui due
- * canali. Frequenza, guadagno e Q scorrono verso il valore nuovo (niente scatti mentre si
- * trascina un punto), l'accensione di una banda è una breve dissolvenza. I coefficienti si
- * ricalcolano ogni CHUNK campioni solo mentre qualcosa si muove. Gira nell'AudioWorklet. */
+/* The EQ's sound: for each band the filter sections of eq-math.ts, in series, on the two
+ * channels. Frequency, gain and Q glide towards the new value (no jumps while
+ * dragging a point), switching a band on is a short crossfade. The coefficients are
+ * recomputed every CHUNK samples only while something is moving. Runs in the AudioWorklet. */
 import type { EffectCore } from '../../dsp/core';
 import { BAND_TYPES, bandsOf, type EqBand } from './eq';
 import { sectionsOf, type Section } from './eq-math';
 
-/** Campioni tra un aggiornamento dei coefficienti e il successivo. */
+/** Samples between one coefficient update and the next. */
 const CHUNK = 32;
-/** Tempo di assestamento dei parametri e durata della dissolvenza on/off, in secondi. */
+/** Settling time of the parameters and length of the on/off crossfade, in seconds. */
 const GLIDE = 0.02, FADE = 0.01;
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
 
-/** Una banda che suona: valori attuali (che inseguono quelli voluti), sezioni e loro stato. */
+/** A playing band: current values (chasing the target ones), sections and their state. */
 class BandVoice {
   target: EqBand;
   private logFreq: number;
   private gain: number;
   private logQ: number;
-  /** Quanto della banda si sente: 0 spenta, 1 accesa. */
+  /** How much of the band is heard: 0 off, 1 on. */
   amount: number;
   private sections: Section[] = [];
-  /** Per sezione: ic1, ic2 del canale sinistro, poi del destro. */
+  /** Per section: ic1, ic2 of the left channel, then of the right. */
   private state = new Float64Array(0);
   private dirty = true;
 
@@ -41,14 +41,14 @@ class BandVoice {
     this.dirty = true;
   }
 
-  /** Vero se in questo momento la banda non cambia il suono (spenta, o a 0 dB). */
+  /** True if at this moment the band doesn't change the sound (off, or at 0 dB). */
   get silent(): boolean {
     const t = this.target;
     if (this.amount === 0 && !t.on) return true;
     return !!BAND_TYPES[t.type]?.gain && this.gain === 0 && t.gain === 0 && this.amount === (t.on ? 1 : 0);
   }
 
-  /** Fa un passo verso i valori voluti e, se serve, ricalcola le sezioni. */
+  /** Takes a step towards the target values and, if needed, recomputes the sections. */
   advance(glide: number, fadeStep: number, sampleRate: number): void {
     const t = this.target;
     const chase = (now: number, to: number, eps: number) => (Math.abs(to - now) < eps ? to : now + (to - now) * glide);
@@ -67,8 +67,8 @@ class BandVoice {
     }
   }
 
-  /** Filtra [from, to) dei due canali, sul posto; durante la dissolvenza mescola con il suono
-   *  che entra nella banda (copiato in `dryL`/`dryR`, lunghi almeno CHUNK). */
+  /** Filters [from, to) of the two channels, in place; during the crossfade it mixes with the sound
+   *  entering the band (copied into `dryL`/`dryR`, at least CHUNK long). */
   process(left: Float32Array, right: Float32Array, from: number, to: number, dryL: Float32Array, dryR: Float32Array): void {
     const a = this.amount;
     if (a < 1) {
@@ -92,7 +92,7 @@ class BandVoice {
   }
 }
 
-/** Una sezione su un canale, sul posto; `state[o]`, `state[o + 1]` sono la sua memoria. */
+/** A section on a channel, in place; `state[o]`, `state[o + 1]` are its memory. */
 function runSection({ g, k, m0, m1, m2 }: Section, state: Float64Array, o: number, buf: Float32Array, from: number, to: number): void {
   const a1 = 1 / (1 + g * (g + k)), a2 = g * a1, a3 = g * a2;
   let ic1 = state[o], ic2 = state[o + 1];
@@ -105,7 +105,7 @@ function runSection({ g, k, m0, m1, m2 }: Section, state: Float64Array, o: numbe
     ic2 = 2 * v2 - ic2;
     buf[i] = m0 * v0 + m1 * v1 + m2 * v2;
   }
-  // valori minuscoli a zero: niente numeri denormali nel silenzio
+  // tiny values to zero: no denormal numbers in silence
   state[o] = Math.abs(ic1) < 1e-20 ? 0 : ic1;
   state[o + 1] = Math.abs(ic2) < 1e-20 ? 0 : ic2;
 }
@@ -128,7 +128,7 @@ export class EqCore implements EffectCore {
     const bands = bandsOf(params);
     this.outputTarget = dbToGain(params.output ?? 0);
     if (!this.bands) {
-      // la prima volta i valori valgono subito
+      // the first time the values apply right away
       this.bands = bands.map(b => new BandVoice(b));
       this.output = this.outputTarget;
     } else bands.forEach((b, i) => this.bands![i].set(b));

@@ -4,19 +4,19 @@ import type { StretchInput, TimeStretcher, SettingsOf } from './stretcher';
 
 interface GrainOptions {
   readonly grainMs: number;
-  /** Cerca l'attacco del grano più coerente con il precedente (WSOLA). */
+  /** Looks for the grain attack most coherent with the previous one (WSOLA). */
   readonly search: boolean;
-  /** 0..1: spostamento casuale del grano quando non si cerca. */
+  /** 0..1: random offset of the grain when not searching. */
   readonly flux: number;
 }
 
-/** Generatore pseudo-casuale deterministico (stesso risultato a ogni render). */
+/** Deterministic pseudo-random generator (same result at every render). */
 function lcg(seed: number): () => number {
   let s = seed;
   return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
 }
 
-/** Cerca, attorno a `target`, l'inizio di frame più simile alla continuazione naturale `nat`. */
+/** Searches, around `target`, for the frame start most similar to the natural continuation `nat`. */
 function bestMatch(x: Samples, nat: number, target: number, tol: number, N: number, stride: number): number {
   const len = x.length;
   const score = (s: number, st: number): number => {
@@ -45,7 +45,7 @@ function bestMatch(x: Samples, nat: number, target: number, tol: number, N: numb
   return refined;
 }
 
-/** Overlap-add di grani: con ricerca è WSOLA (Tones), senza è granulare (Texture). */
+/** Overlap-add of grains: with search it's WSOLA (Tones), without it's granular (Texture). */
 export function grainStretch({ channels, sampleRate, map, outLength }: StretchInput, opts: GrainOptions): Float32Array[] {
   let N = Math.round((opts.grainMs / 1000) * sampleRate);
   N = Math.max(256, Math.min(16384, N));

@@ -23,22 +23,22 @@ export interface ArrangementDeps {
   readonly ui: UiState;
   readonly engine: PlaybackEngine;
   readonly peaks: PeakStore;
-  /** Doppio clic su una clip: apre il suo editor. */
+  /** Double click on a clip: opens its editor. */
   readonly openClip: (track: TrackId, placement: PlacementId) => void;
-  /** File trascinati sulla timeline. */
+  /** Files dragged onto the timeline. */
   readonly dropFiles: (files: File[], track: TrackId | null, beat: Beats) => void;
-  /** Una voce del browser lasciata su una corsia (o sotto le tracce: `track` null). */
+  /** A browser item dropped on a lane (or below the tracks: `track` null). */
   readonly dropItem?: (item: BrowserItem, target: LoadTarget) => void;
-  /** Tasto destro: `hit` è ciò che c'è sotto, (x, y) il punto nella finestra. */
+  /** Right click: `hit` is what's underneath, (x, y) the point in the window. */
   readonly contextMenu: (hit: Hit, x: number, y: number) => void;
-  /** Tasto destro sul righello, (x, y) il punto nella finestra. */
+  /** Right click on the ruler, (x, y) the point in the window. */
   readonly rulerMenu?: (x: number, y: number) => void;
 }
 
 type HitKey = `clip:${ClipZone}` | 'lane' | 'empty';
 const keyOf = (h: Hit): HitKey => (h.kind === 'clip' ? `clip:${h.zone}` : h.kind);
 
-/** Quale gesto inizia premendo su ciascuna cosa. */
+/** Which gesture starts by pressing on each thing. */
 const gestureFor: Readonly<Record<HitKey, (host: GestureHost, hit: Hit, p: Pointer) => Gesture>> = {
   'clip:body': (h, hit, p) => new MoveClipsGesture(h, hit as Extract<Hit, { kind: 'clip' }>, p),
   'clip:start': (h, hit) => new ResizeClipGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
@@ -54,7 +54,7 @@ const hoverCursor: Readonly<Record<HitKey, string>> = {
   lane: 'default', empty: 'default',
 };
 
-/** La timeline: righello con loop e testina, corsie con le clip, gesti del mouse. */
+/** The timeline: ruler with loop and playhead, lanes with the clips, mouse gestures. */
 export class ArrangementView implements GestureHost {
   readonly element: HTMLElement;
   readonly store: ProjectStore;
@@ -67,7 +67,7 @@ export class ArrangementView implements GestureHost {
     this.scrollTo(beat, this.geo.scrollY);
   });
   private gesture: Gesture | null = null;
-  /** La clip sotto il puntatore (mostra le maniglie delle dissolvenze). */
+  /** The clip under the pointer (shows the fade handles). */
   private hovered: PlacementId | null = null;
   private dirty = true;
 
@@ -81,15 +81,15 @@ export class ArrangementView implements GestureHost {
     rulerWrap.append(this.ruler.canvas);
     lanesWrap.append(this.lanes.canvas, this.overlay.canvas);
     this.element.append(rulerWrap, lanesWrap, this.scrollbar.element);
-    // il tasto centrale trascina la vista: niente scorrimento automatico del browser
+    // the middle button drags the view: no automatic scrolling by the browser
     this.element.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
 
     new ResizeObserver(() => {
       this.ruler.resize(rulerWrap.clientWidth, rulerWrap.clientHeight);
       this.lanes.resize(lanesWrap.clientWidth, lanesWrap.clientHeight);
       this.overlay.resize(lanesWrap.clientWidth, lanesWrap.clientHeight);
-      // ridimensionare svuota i canvas: si ridisegnano subito, non al frame dopo (resterebbero
-      // neri a ogni frame mentre l'area in basso si alza o si chiude)
+      // resizing empties the canvases: they're redrawn right away, not at the next frame (they'd stay
+      // black at every frame while the bottom area rises or closes)
       this.invalidate();
       this.paint();
     }).observe(lanesWrap);
@@ -100,7 +100,7 @@ export class ArrangementView implements GestureHost {
     this.bindDrop(lanesWrap);
     deps.store.onChange(() => this.invalidate());
     deps.engine.onSessionChange(() => this.invalidate());
-    // come in Live: ripremere Play riprende Segui
+    // as in Live: pressing Play again resumes Follow
     deps.engine.onStateChange(playing => { if (playing) this.ui.resumeFollow(); });
     deps.ui.onChange(() => this.invalidate());
     requestAnimationFrame(this.frame);
@@ -125,23 +125,23 @@ export class ArrangementView implements GestureHost {
     this.dirty = true;
   }
 
-  /** Porta in vista il battito `beat` (per esempio la testina che esce dallo schermo). */
+  /** Brings beat `beat` into view (for example the playhead leaving the screen). */
   reveal(beat: Beats): void {
     const g = this.geo, w = this.lanes.width;
     const x = g.beatToX(beat);
     if (x < 0 || x > w * 0.92) this.ui.setGeometry(g.scrolled(beat - (w * 0.1) / g.pxPerBeat, g.scrollY));
   }
 
-  /** Porta la vista al battito `beat` (bordo sinistro) e a `y` pixel scorsi in verticale,
-   *  senza andare oltre l'ultima traccia. */
+  /** Brings the view to beat `beat` (left edge) and `y` pixels scrolled vertically,
+   *  without going past the last track. */
   private scrollTo(beat: Beats, y: number): void {
     const g = this.geo;
     const maxY = Math.max(0, this.store.project.visibleTracks.length * g.trackHeight - this.lanes.height + 40);
     this.ui.setGeometry(g.scrolled(beat, Math.min(maxY, y)));
   }
 
-  /** La barra sotto la timeline: si scorre fino a portare la fine del brano (o del loop,
-   *  o la testina) al bordo sinistro. */
+  /** The bar under the timeline: it scrolls up to bringing the end of the piece (or of the loop,
+   *  or the playhead) to the left edge. */
   private updateScrollbar(): void {
     const { project } = this.store, g = this.geo;
     const visible = this.lanes.width / g.pxPerBeat;
@@ -149,7 +149,7 @@ export class ArrangementView implements GestureHost {
     this.scrollbar.update({ total: Math.max(content, g.scrollBeat) + visible, start: g.scrollBeat, visible });
   }
 
-  // ---------------------------------------------------------------- disegno
+  // ---------------------------------------------------------------- drawing
 
   private readonly frame = () => {
     this.paint();
@@ -159,7 +159,7 @@ export class ArrangementView implements GestureHost {
   private paint(): void {
     const { project } = this.store;
     const engine = this.deps.engine;
-    // durante un gesto la vista sta ferma: scorrere sotto il mouse sposterebbe ciò che si trascina
+    // during a gesture the view stays still: scrolling under the mouse would move what's being dragged
     if (engine.playing && this.ui.following && !this.gesture) this.reveal(engine.position);
     if (this.dirty) {
       this.dirty = false;
@@ -178,7 +178,7 @@ export class ArrangementView implements GestureHost {
     paintPlayhead(o.g, this.geo, o.height, engine.position, engine.playing ? engine.position : null);
   }
 
-  // ---------------------------------------------------------------- puntatore
+  // ---------------------------------------------------------------- pointer
 
   private pointer(e: PointerEvent | MouseEvent, el: HTMLElement): Pointer {
     const r = el.getBoundingClientRect();
@@ -216,12 +216,12 @@ export class ArrangementView implements GestureHost {
     this.invalidate();
   }
 
-  /** Mentre suona, chi sposta la vista o modifica la timeline sospende Segui (come in Live). */
+  /** While playing, whoever moves the view or edits the timeline suspends Follow (as in Live). */
   private pauseFollow(): void {
     if (this.deps.engine.playing) this.ui.pauseFollow();
   }
 
-  /** Tasto centrale: trascinando si sposta la vista. Vero se è iniziato il gesto. */
+  /** Middle button: dragging moves the view. True if the gesture started. */
   private startPan(e: PointerEvent, el: HTMLElement): boolean {
     if (e.button !== 1) return false;
     this.pauseFollow();
@@ -255,7 +255,7 @@ export class ArrangementView implements GestureHost {
       if (this.gesture) return;
       const p = this.pointer(e, el);
       const hit = hitTest(this.store.project, this.geo, p.x, p.y);
-      // tasto destro su una clip non selezionata: diventa la selezione, come in Live
+      // right click on an unselected clip: it becomes the selection, as in Live
       if (hit.kind === 'clip' && !this.ui.selection.has(hit.placement.id)) this.ui.select([hit.placement.id]);
       this.deps.contextMenu(hit, e.clientX, e.clientY);
     });
@@ -264,7 +264,7 @@ export class ArrangementView implements GestureHost {
       const hit = hitTest(this.store.project, this.geo, p.x, p.y);
       if (hit.kind === 'clip') this.deps.openClip(hit.track, hit.placement.id);
       else if (hit.kind === 'lane' && this.store.project.track(hit.track)?.kind === 'midi') {
-        // doppio clic su una traccia MIDI vuota: una clip di una battuta
+        // double click on an empty MIDI track: a one-bar clip
         const bar = this.store.project.signature.beatsPerBar;
         this.store.apply(addMidiClip(hit.track, Math.floor(hit.beat / bar) * bar, bar));
       }
@@ -275,7 +275,7 @@ export class ArrangementView implements GestureHost {
     el.addEventListener('pointerdown', e => {
       if (this.startPan(e, el)) return;
       const p = this.pointer(e, el);
-      // un clic nel righello (non sulla banda del loop) sposta la testina e riprende Segui
+      // a click in the ruler (not on the loop band) moves the playhead and resumes Follow
       if (e.button === 0 && p.y >= RULER_LOOP_BAND + 2) this.ui.resumeFollow();
       this.startGesture(e, el, pp => (p.y < RULER_LOOP_BAND + 2 ? new LoopRegionGesture(this, pp) : new ScrubGesture(this, pp)));
     });
@@ -291,9 +291,9 @@ export class ArrangementView implements GestureHost {
     });
   }
 
-  /** Rotella: scorre; con Ctrl zooma attorno al puntatore; con Maiusc scorre in orizzontale.
-   *  Zoomare o scorrere in orizzontale mentre suona sospende Segui. Vale anche per la colonna
-   *  delle tracce, che scorre insieme alle corsie (lì lo zoom si ancora al bordo sinistro). */
+  /** Wheel: scrolls; with Ctrl it zooms around the pointer; with Shift it scrolls horizontally.
+   *  Zooming or scrolling horizontally while playing suspends Follow. It also applies to the column
+   *  of the tracks, which scrolls together with the lanes (there the zoom anchors to the left edge). */
   bindWheel(el: HTMLElement): void {
     el.addEventListener('wheel', e => {
       e.preventDefault();
@@ -304,7 +304,7 @@ export class ArrangementView implements GestureHost {
         this.ui.setGeometry(g.zoomed(g.pxPerBeat * Math.exp(-e.deltaY * 0.0025), Math.max(0, e.clientX - r.left)));
         return;
       }
-      // Maiusc+rotella: Chromium su Windows la consegna già come deltaX (con deltaY a 0)
+      // Shift+wheel: Chromium on Windows already delivers it as deltaX (with deltaY at 0)
       const dx = e.shiftKey ? e.deltaX || e.deltaY : e.deltaX, dy = e.shiftKey ? 0 : e.deltaY;
       if (dx) this.pauseFollow();
       this.scrollTo(g.scrollBeat + dx / g.pxPerBeat, g.scrollY + dy);
@@ -318,7 +318,7 @@ export class ArrangementView implements GestureHost {
         e.dataTransfer.dropEffect = 'copy';
       }
     });
-    // dove cade qualcosa: la traccia sotto (null sotto le tracce) e il battito, sulla griglia
+    // where something falls: the track underneath (null below the tracks) and the beat, on the grid
     const place = (e: DragEvent) => {
       const r = el.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;

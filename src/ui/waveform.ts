@@ -2,7 +2,7 @@ import type { SampleId } from '../core/id';
 import type { Seconds } from '../core/music-time';
 import type { AudioData } from '../dsp/types';
 
-/** Un livello di riduzione: minimo e massimo per gruppi di `bucket` campioni. */
+/** A reduction level: minimum and maximum per groups of `bucket` samples. */
 interface Level {
   readonly bucket: number;
   readonly min: Float32Array;
@@ -12,12 +12,12 @@ interface Level {
 const BASE_BUCKET = 64;
 const FACTOR = 8;
 
-/** Picchi della forma d'onda (mono) a più risoluzioni, per disegnarla velocemente a
- *  qualunque zoom senza rileggere tutti i campioni. */
+/** Waveform peaks (mono) at several resolutions, to draw it quickly at
+ *  any zoom without rereading all the samples. */
 export class Peaks {
   private constructor(
     private readonly levels: readonly Level[], readonly sampleRate: number, readonly length: number,
-    /** Letti al contrario: il secondo `t` è il secondo `durata − t` del sample. */
+    /** Read backwards: second `t` is second `duration − t` of the sample. */
     private readonly flipped = false,
   ) {}
 
@@ -55,12 +55,12 @@ export class Peaks {
     return new Peaks(levels, sampleRate, n);
   }
 
-  /** Gli stessi picchi per il sample rovesciato (condividono i dati). */
+  /** The same peaks for the reversed sample (they share the data). */
   reversed(): Peaks {
     return new Peaks(this.levels, this.sampleRate, this.length, !this.flipped);
   }
 
-  /** Minimo e massimo tra i secondi `t0` e `t1` (0 fuori dal sample). */
+  /** Minimum and maximum between seconds `t0` and `t1` (0 outside the sample). */
   range(t0: Seconds, t1: Seconds): [number, number] {
     if (this.flipped) {
       const d = this.length / this.sampleRate;
@@ -69,7 +69,7 @@ export class Peaks {
     const a = Math.max(0, Math.floor(Math.min(t0, t1) * this.sampleRate));
     const b = Math.min(this.length, Math.ceil(Math.max(t0, t1) * this.sampleRate));
     if (b <= a) return [0, 0];
-    // il livello più fine che richiede di leggere al massimo ~16 gruppi
+    // the finest level requiring reading at most ~16 groups
     const level = this.levels.find(l => (b - a) / l.bucket <= 16) ?? this.levels[this.levels.length - 1];
     const i0 = Math.floor(a / level.bucket), i1 = Math.min(level.min.length, Math.ceil(b / level.bucket));
     let lo = Infinity, hi = -Infinity;
@@ -81,13 +81,13 @@ export class Peaks {
   }
 }
 
-/** Picchi per sample, calcolati alla prima richiesta. */
+/** Peaks per sample, computed at the first request. */
 export class PeakStore {
   private readonly peaks = new Map<SampleId, { readonly forward: Peaks; readonly reversed: Peaks }>();
 
   constructor(private readonly audio: (id: SampleId) => AudioData | undefined) {}
 
-  /** I picchi del sample, letti al contrario se `reversed` (per le clip al contrario). */
+  /** The sample's peaks, read backwards if `reversed` (for the reversed clips). */
   get(id: SampleId, reversed = false): Peaks | null {
     let p = this.peaks.get(id);
     if (!p) {

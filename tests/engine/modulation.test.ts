@@ -28,7 +28,7 @@ const PAN: ModTarget = { kind: 'mixer', param: 'pan' };
 const CUTOFF: ModTarget = { kind: 'device', device: INSTRUMENT_DEVICE, param: 'cutoff' };
 const pts = (...p: [number, number][]) => p.map(([beat, value]) => ({ beat, value }));
 
-/** Il valore di un parametro all'istante `t`, rifacendo i suoi eventi con le regole degli AudioParam. */
+/** A parameter's value at instant `t`, replaying its events with the AudioParam rules. */
 function replay(events: readonly { type: string; value: number; time: number }[], neutral: number, t: number): number {
   const line = new ModTimeline(neutral);
   for (const e of events) {
@@ -38,19 +38,19 @@ function replay(events: readonly { type: string; value: number; time: number }[]
   return line.valueAt(t);
 }
 
-describe('modulazioni: il modello', () => {
-  it('valore della curva: prima, in mezzo, dopo, scalini', () => {
+describe('modulations: the model', () => {
+  it('curve value: before, in between, after, steps', () => {
     const p = pts([1, 0.2], [3, 0.6], [3, 1], [4, 0]);
     expect(envelopeValueAt(p, 0)).toBe(0.2);
     expect(envelopeValueAt(p, 2)).toBeCloseTo(0.4, 9);
-    expect(envelopeValueAt(p, 3)).toBe(1); // sullo scalino vale già il punto dopo
+    expect(envelopeValueAt(p, 3)).toBe(1); // on the step it's already the next point
     expect(envelopeValueAt(p, 3.5)).toBeCloseTo(0.5, 9);
     expect(envelopeValueAt(p, 9)).toBe(0);
   });
 
-  it('una curva per bersaglio: si aggiunge, si sostituisce, sparisce senza punti; valori nella scala', () => {
+  it('one curve per target: it\'s added, replaced, disappears without points; values in the scale', () => {
     let envs = withEnvelope([], VOLUME, pts([2, 0.5], [0, 3]));
-    expect(envs[0].points).toEqual(pts([0, 1], [2, 0.5])); // in ordine e dentro 0..1
+    expect(envs[0].points).toEqual(pts([0, 1], [2, 0.5])); // in order and inside 0..1
     envs = withEnvelope(envs, PAN, pts([0, -2]));
     envs = withEnvelope(envs, VOLUME, pts([1, 0]));
     expect(envs.map(e => targetKey(e.target))).toEqual(['mixer:volume', 'mixer:pan']);
@@ -60,7 +60,7 @@ describe('modulazioni: il modello', () => {
     expect(parseTargetKey('mixer:tempo')).toBeNull();
   });
 
-  it('si salvano con la clip; un file v5 si apre', () => {
+  it('they\'re saved with the clip; a v5 file opens', () => {
     const ids = sequentialIds();
     const store = new ProjectStore(Project.empty('t', ids, 2), ids);
     store.apply(addTrack('midi'));
@@ -76,11 +76,11 @@ describe('modulazioni: il modello', () => {
   });
 });
 
-describe('disegno a scalini', () => {
-  it('uno scalino in una cella: fuori la curva resta com\'era; i punti inutili spariscono', () => {
+describe('step drawing', () => {
+  it('a step in a cell: outside the curve stays as it was; the useless points disappear', () => {
     const ramp = pts([0, 0], [4, 1]);
     expect(paintStep(ramp, 1, 2, 0.9, 0)).toEqual(pts([0, 0], [1, 0.25], [1, 0.9], [2, 0.9], [2, 0.5], [4, 1]));
-    // celle vicine con lo stesso valore: uno scalino solo
+    // neighbouring cells with the same value: a single step
     let p = paintStep([], 0, 1, -1, 0);
     p = paintStep(p, 1, 2, -1, 0);
     expect(p).toEqual(pts([0, -1], [2, -1], [2, 0]));
@@ -88,13 +88,13 @@ describe('disegno a scalini', () => {
   });
 });
 
-describe('modulazioni nell\'AudioWorklet', () => {
-  it('scalini e rampe come gli AudioParam; "tieni" a metà rampa', () => {
+describe('modulations in the AudioWorklet', () => {
+  it('steps and ramps like the AudioParams; "hold" halfway through a ramp', () => {
     const line = new ModTimeline(0);
     line.add({ kind: 'set', value: 0.2, time: 1 });
     line.add({ kind: 'ramp', value: 1, time: 2 });
     line.add({ kind: 'set', value: 0, time: 3 });
-    line.add({ kind: 'set', value: 0.7, time: 3 }); // stesso istante: vale l'ultimo
+    line.add({ kind: 'set', value: 0.7, time: 3 }); // same instant: the last wins
     expect(line.valueAt(0.5)).toBe(0);
     expect(line.valueAt(1.5)).toBeCloseTo(0.6, 9);
     expect(line.valueAt(3)).toBe(0.7);
@@ -106,13 +106,13 @@ describe('modulazioni nell\'AudioWorklet', () => {
     expect(held.pending).toBe(false);
   });
 
-  it('lo spostamento si somma alla manopola nella sua scala (il cutoff in ottave)', () => {
+  it('the offset adds to the knob in its scale (the cutoff in octaves)', () => {
     const cutoff = paramSpec(ANALOG, 'cutoff') as NumberParam;
     const mod = new ParamModulation(new Map([['cutoff', cutoff]]), { cutoff: 1000, resonance: 20 });
-    expect(mod.paramsAt(0)).toEqual({ cutoff: 1000, resonance: 20 }); // la prima volta, i valori delle manopole
-    expect(mod.paramsAt(0.1)).toBeNull(); // niente di cambiato
+    expect(mod.paramsAt(0)).toEqual({ cutoff: 1000, resonance: 20 }); // the first time, the knobs' values
+    expect(mod.paramsAt(0.1)).toBeNull(); // nothing changed
     mod.event('cutoff', 'set', 0.1, 1);
-    mod.event('resonance', 'set', 0.5, 1); // non è nelle specifiche: ignorato
+    mod.event('resonance', 'set', 0.5, 1); // it isn't in the specs: ignored
     const p = mod.paramsAt(1)!;
     expect(p.cutoff).toBeCloseTo(paramFromUnit(cutoff, paramToUnit(cutoff, 1000) + 0.1), 6);
     expect(p.resonance).toBe(20);
@@ -121,22 +121,22 @@ describe('modulazioni nell\'AudioWorklet', () => {
     expect(mod.paramsAt(3)).toBeNull();
   });
 
-  it('un interruttore scatta quando la curva lo sposta oltre metà strada, in su o in giù', () => {
+  it('a switch snaps when the curve moves it past halfway, up or down', () => {
     const stop = paramSpec(TAPE_STOP, 'stop')!;
     const mod = new ParamModulation(new Map([['stop', stop]]), { stop: 0 });
     mod.paramsAt(0);
-    // una rampa da 0 a +1 in un secondo: Off fino a metà, poi On
+    // a ramp from 0 to +1 in a second: Off until halfway, then On
     mod.event('stop', 'set', 0, 0);
     mod.event('stop', 'ramp', 1, 1);
     expect(mod.paramsAt(0.49)?.stop ?? 0).toBe(0);
     expect(mod.paramsAt(0.51)!.stop).toBe(1);
-    // con la manopola su On ci vuole uno spostamento in giù
+    // with the knob on On a downward offset is needed
     mod.setBase({ stop: 1 });
     mod.event('stop', 'set', -0.6, 2);
     expect(mod.paramsAt(2)!.stop).toBe(0);
   });
 
-  it('un menu si sposta lungo le sue opzioni', () => {
+  it('a menu moves along its options', () => {
     const curve = paramSpec(TAPE_STOP, 'curve')!;
     expect(BRAKE_CURVES).toHaveLength(3);
     const mod = new ParamModulation(new Map([['curve', curve]]), { curve: 0 });
@@ -147,8 +147,8 @@ describe('modulazioni nell\'AudioWorklet', () => {
   });
 });
 
-/** 120 BPM (un battito = 0.5 s, il battito b suona a 0.05 + b/2): una traccia MIDI con una clip
- *  di 4 battiti in loop posata per 8, e una seconda traccia MIDI. */
+/** 120 BPM (a beat = 0.5 s, beat b plays at 0.05 + b/2): a MIDI track with a 4-beat
+ *  looping clip placed for 8, and a second MIDI track. */
 function rig() {
   const ids = sequentialIds();
   const store = new ProjectStore(Project.empty('t', ids, 2), ids);
@@ -172,15 +172,15 @@ function rig() {
     }
   };
   const editClip = (fn: (c: MidiClip) => MidiClip) => store.apply(updateClip<MidiClip>('m', t(0), pl.id, fn));
-  /** Il guadagno della modulazione del volume e lo spostamento del pan della traccia `i`. */
+  /** The gain of the volume modulation and the pan offset of track `i`. */
   const volume = (i: number) => graph.gains.find(g => g.outputs.includes(graph.panners[i]))!.gain;
   const pan = (i: number) => graph.constants[i].offset as FakeParam;
   const at = (beat: number) => 0.05 + beat / 2;
   return { store, engine, graph, instruments, effects, t, runUntil, editClip, volume, pan, at, ids };
 }
 
-describe('modulazioni nel motore', () => {
-  it('il volume segue la curva nel tempo della clip, a ogni giro del loop, e torna neutro dopo la clip', () => {
+describe('modulations in the engine', () => {
+  it('the volume follows the curve in the clip\'s time, at every round of the loop, and goes back to neutral after the clip', () => {
     const r = rig();
     r.editClip(c => c.withEnvelope(VOLUME, pts([0, 1], [2, 0])));
     r.engine.play(0);
@@ -188,28 +188,28 @@ describe('modulazioni nel motore', () => {
     const ev = r.volume(0).events;
     const v = (beat: number) => replay(ev, 1, r.at(beat));
     expect(v(0)).toBeCloseTo(1, 3);
-    expect(v(1)).toBeCloseTo(0.25, 2); // metà curva: guadagno 0.5² (≈ −12 dB)
+    expect(v(1)).toBeCloseTo(0.25, 2); // half curve: gain 0.5² (≈ −12 dB)
     expect(v(2.5)).toBeCloseTo(0, 6);
-    expect(v(4.5)).toBeCloseTo(0.5625, 2); // secondo giro: 0.75²
-    expect(v(8.2)).toBe(1); // finita la clip
-    // la seconda traccia non ha curve: il suo volume non si muove
+    expect(v(4.5)).toBeCloseTo(0.5625, 2); // second round: 0.75²
+    expect(v(8.2)).toBe(1); // the clip is over
+    // the second track has no curves: its volume doesn't move
     expect(r.volume(1).events).toEqual([]);
   });
 
-  it('togliere la curva mentre suona: dopo la riprogrammazione il volume torna neutro', () => {
+  it('removing the curve while playing: after the rescheduling the volume goes back to neutral', () => {
     const r = rig();
     r.editClip(c => c.withEnvelope(VOLUME, pts([0, 0])));
     r.engine.play(0);
     r.runUntil(1);
     expect(replay(r.volume(0).events, 1, 1)).toBe(0);
-    r.editClip(c => c.withEnvelope(VOLUME, [])); // come un Ctrl+Z
+    r.editClip(c => c.withEnvelope(VOLUME, [])); // like a Ctrl+Z
     r.runUntil(2);
     const ev = r.volume(0).events;
-    expect(replay(ev, 1, 1.02)).toBe(0); // fino alla ripartenza tiene il valore: nessun salto
+    expect(replay(ev, 1, 1.02)).toBe(0); // until the restart it holds the value: no jump
     expect(replay(ev, 1, 1.2)).toBe(1);
   });
 
-  it('parametri dello strumento e di un effetto: spostamenti in frazioni della manopola', () => {
+  it('parameters of the instrument and of an effect: offsets in fractions of the knob', () => {
     const r = rig();
     r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
     const fx = r.store.project.tracks[0].effects[0].id;
@@ -222,7 +222,7 @@ describe('modulazioni nel motore', () => {
     expect(replay(delay, 0, r.at(1))).toBe(-0.5);
   });
 
-  it('una curva su una macro sposta i parametri mappati, ciascuno della sua parte di corsa', () => {
+  it('a curve on a macro moves the mapped parameters, each by its part of the travel', () => {
     const r = rig();
     r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
     const fx = r.store.project.tracks[0].effects[0].id;
@@ -230,7 +230,7 @@ describe('modulazioni nel motore', () => {
     const rack = r.store.project.tracks[0].racks[0].id;
     r.store.apply(mapMacro(r.t(0), rack, 0, INSTRUMENT_DEVICE, 'cutoff'));
     r.store.apply(mapMacro(r.t(0), rack, 0, fx, 'mix'));
-    r.store.apply(setMappingRange(r.t(0), fx, 'mix', { min: 100, max: 50 })); // metà corsa, al contrario
+    r.store.apply(setMappingRange(r.t(0), fx, 'mix', { min: 100, max: 50 })); // half travel, reversed
     r.editClip(c => c.withEnvelope({ kind: 'device', device: rack, param: macroParam(0) }, pts([0, 0], [4, 0.4])));
     r.engine.play(0);
     r.runUntil(2);
@@ -240,7 +240,7 @@ describe('modulazioni nel motore', () => {
     expect(replay(delay, 0, r.at(2))).toBeCloseTo(-0.1, 4);
   });
 
-  it('una curva su una macro di un rack fuori passa per la macro del rack dentro fino ai suoi parametri', () => {
+  it('a curve on a macro of an outer rack goes through the macro of the inner rack down to its parameters', () => {
     const r = rig();
     r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
     const fx = r.store.project.tracks[0].effects[0].id;
@@ -249,9 +249,9 @@ describe('modulazioni nel motore', () => {
     r.store.apply(groupDevices(r.t(0), [fx]));
     const outer = r.store.project.tracks[0].racks.find(x => x.id !== inner)!.id;
     r.store.apply(mapMacro(r.t(0), inner, 0, fx, 'mix'));
-    r.store.apply(setMappingRange(r.t(0), fx, 'mix', { min: 100, max: 50 })); // metà corsa, al contrario
+    r.store.apply(setMappingRange(r.t(0), fx, 'mix', { min: 100, max: 50 })); // half travel, reversed
     r.store.apply(mapMacro(r.t(0), outer, 0, inner, macroParam(0)));
-    r.store.apply(setMappingRange(r.t(0), inner, macroParam(0), { min: 0, max: 63.5 })); // metà della macro dentro
+    r.store.apply(setMappingRange(r.t(0), inner, macroParam(0), { min: 0, max: 63.5 })); // half of the inner macro
     r.editClip(c => c.withEnvelope({ kind: 'device', device: outer, param: macroParam(0) }, pts([0, 0], [4, 0.4])));
     r.engine.play(0);
     r.runUntil(2);
@@ -259,32 +259,32 @@ describe('modulazioni nel motore', () => {
     expect(replay(delay, 0, r.at(2))).toBeCloseTo(-0.05, 4);
   });
 
-  it('una curva su una macro interruttore la fa scattare a metà strada, come premerla', () => {
+  it('a curve on a toggle macro makes it snap halfway, like pressing it', () => {
     const r = rig();
     r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
     const fx = r.store.project.tracks[0].effects[0].id;
     r.store.apply(groupDevices(r.t(0), [fx]));
     const rack = r.store.project.tracks[0].racks[0].id;
     r.store.apply(mapMacro(r.t(0), rack, 0, fx, 'mix'));
-    r.store.apply(setMacroMode(r.t(0), rack, 0, 'toggle')); // mix 30: spenta (0 %)
-    // da 0 a +1 in 4 battiti: passa la metà a 2 battiti, e lì il mix va tutto su
+    r.store.apply(setMacroMode(r.t(0), rack, 0, 'toggle')); // mix 30: off (0 %)
+    // from 0 to +1 in 4 beats: it crosses the half at 2 beats, and there the mix goes all the way up
     r.editClip(c => c.withEnvelope({ kind: 'device', device: rack, param: macroParam(0) }, pts([0, 0], [4, 1])));
     r.engine.play(0);
     r.runUntil(3);
     const mix = r.effects.created[0].modulation.events.filter(e => e.param === 'mix');
     expect(replay(mix, 0, r.at(1.9))).toBe(0);
     expect(replay(mix, 0, r.at(2.1))).toBe(1);
-    expect(mix.some(e => e.type === 'ramp')).toBe(false); // solo scalini
+    expect(mix.some(e => e.type === 'ramp')).toBe(false); // steps only
   });
 
-  it('una clip lanciata al posto di un\'altra: il pan torna neutro al confine; lo stop riporta tutto neutro', () => {
+  it('a clip launched in place of another: the pan goes back to neutral at the boundary; the stop brings everything back to neutral', () => {
     const r = rig();
     const clip = (name: string) => MidiClip.empty(r.ids.next('clip'), name, '#fff', 4);
-    r.store.apply(setSlot(r.t(1), 0, clip('Sinistra').withEnvelope(PAN, pts([0, -1]))));
+    r.store.apply(setSlot(r.t(1), 0, clip('Left').withEnvelope(PAN, pts([0, -1]))));
     r.store.apply(setSlot(r.t(1), 1, clip('Niente')));
     r.engine.launchSlot(r.t(1), 0);
     r.runUntil(1);
-    r.engine.launchSlot(r.t(1), 1); // al prossimo confine di battuta: battito 4
+    r.engine.launchSlot(r.t(1), 1); // at the next bar boundary: beat 4
     r.runUntil(3);
     const ev = r.pan(1).events;
     expect(replay(ev, 0, r.at(1))).toBe(-1);
@@ -297,8 +297,8 @@ describe('modulazioni nel motore', () => {
     expect(replay(r.pan(1).events, 0, 5.01)).toBe(0);
   });
 
-  it('la clip della Drum Machine modula un pad', () => {
-    // un parametro qualunque di un altro strumento: il motore non conosce i parametri
+  it('the Drum Machine\'s clip modulates a pad', () => {
+    // any parameter of another instrument: the engine doesn't know the parameters
     const r = rig();
     const target: ModTarget = { kind: 'device', device: INSTRUMENT_DEVICE, param: 'p1decay' };
     expect(paramSpec(DRUMS, 'p1decay')?.kind).toBe('number');
@@ -309,27 +309,27 @@ describe('modulazioni nel motore', () => {
   });
 });
 
-describe('le manopole seguono le curve', () => {
-  it('il motore dice dove una curva porta adesso un parametro; stop: di nuovo neutro', () => {
+describe('the knobs follow the curves', () => {
+  it('the engine says where a curve takes a parameter now; stop: neutral again', () => {
     const r = rig();
     r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
     const fx = r.store.project.tracks[0].effects[0].id;
     const feedback: ModTarget = { kind: 'device', device: fx, param: 'feedback' };
     r.editClip(c => c.withEnvelope(CUTOFF, pts([0, 0], [4, 0.4])).withEnvelope(VOLUME, pts([0, 1], [2, 0])));
-    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBeNull(); // mai suonata
+    expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBeNull(); // never played
     r.engine.play(0);
     r.runUntil(r.at(2));
     expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBeCloseTo(0.2, 4);
     expect(r.engine.modulationAt(r.t(0), VOLUME)).toBeCloseTo(0, 4);
-    r.runUntil(r.at(5)); // secondo giro del loop della clip
+    r.runUntil(r.at(5)); // second round of the clip's loop
     expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBeCloseTo(0.1, 4);
-    expect(r.engine.modulationAt(r.t(0), feedback)).toBeNull(); // senza curva
-    expect(r.engine.modulationAt(r.t(1), CUTOFF)).toBeNull(); // un'altra traccia
+    expect(r.engine.modulationAt(r.t(0), feedback)).toBeNull(); // without curve
+    expect(r.engine.modulationAt(r.t(1), CUTOFF)).toBeNull(); // another track
     r.engine.stop();
     expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBe(0);
   });
 
-  it('una curva su una macro: la macro e i parametri mappati, ciascuno della sua parte di corsa', () => {
+  it('a curve on a macro: the macro and the mapped parameters, each by its part of the travel', () => {
     const r = rig();
     r.store.apply(addEffect(r.t(0), 'delay', 'Delay'));
     const fx = r.store.project.tracks[0].effects[0].id;
@@ -347,7 +347,7 @@ describe('le manopole seguono le curve', () => {
     expect(r.engine.modulationAt(r.t(0), { kind: 'device', device: fx, param: 'mix' })).toBeCloseTo(-0.1, 4);
   });
 
-  it('la curva tolta mentre suona: la manopola torna dov\'è dopo la riprogrammazione', () => {
+  it('the curve removed while playing: the knob goes back to where it is after the rescheduling', () => {
     const r = rig();
     r.editClip(c => c.withEnvelope(CUTOFF, pts([0, 0.5])));
     r.engine.play(0);
@@ -358,7 +358,7 @@ describe('le manopole seguono le curve', () => {
     expect(r.engine.modulationAt(r.t(0), CUTOFF)).toBe(0);
   });
 
-  it('le curve del master muovono gli effetti del master', () => {
+  it('the master\'s curves move the master\'s effects', () => {
     const r = rig();
     r.store.apply(addEffect(MASTER, 'delay', 'Delay'));
     const fx = r.store.project.masterEffects[0].id;
@@ -370,7 +370,7 @@ describe('le manopole seguono le curve', () => {
   });
 });
 
-describe('modulazioni delle scelte nell\'editor', () => {
+describe('modulations of the choices in the editor', () => {
   function withTapeStop() {
     const r = rig();
     r.store.apply(addEffect(r.t(0), 'tapeStop', 'Tape Stop'));
@@ -379,7 +379,7 @@ describe('modulazioni delle scelte nell\'editor', () => {
     return { r, tape, gate, track: () => r.store.project.tracks[0], chain: () => trackChain(r.store.project.tracks[0]) };
   }
 
-  it('i menu degli inviluppi mostrano anche le scelte, non i parametri del solo pannello grafico', () => {
+  it('the envelope menus also show the choices, not the parameters of the graphic panel only', () => {
     const { tape, gate, track } = withTapeStop();
     const devices = targetDevices(track());
     const params = (key: string) => devices.find(d => d.key === key)!.sections.flatMap(s => s.params.map(p => (p.target as { param: string }).param));
@@ -388,7 +388,7 @@ describe('modulazioni delle scelte nell\'editor', () => {
     expect(params(gate).some(p => p.startsWith('step'))).toBe(false);
   });
 
-  it('il valore sotto il puntatore dice anche l\'opzione che si sente, dalla manopola di adesso', () => {
+  it('the value under the pointer also says the option that\'s heard, from the current knob', () => {
     const { r, tape, chain } = withTapeStop();
     const stop: ModTarget = { kind: 'device', device: tape, param: 'stop' };
     expect(formatModValue(stop, 0.6, chain())).toBe('On · +60 %');
@@ -396,12 +396,12 @@ describe('modulazioni delle scelte nell\'editor', () => {
     r.store.apply(setEffectParam(r.t(0), tape, 'stop', 1));
     expect(formatModValue(stop, -0.6, chain())).toBe('Off · −60 %');
     expect(choiceTarget(chain(), stop)!.heard(0.2)).toBe(1);
-    // i numeri e il mixer restano come prima
+    // the numbers and the mixer stay as before
     expect(formatModValue({ kind: 'device', device: tape, param: 'spin' }, 0.6, chain())).toBe('+60 %');
     expect(choiceTarget(chain(), VOLUME)).toBeNull();
   });
 
-  it('nel motore la curva di una scelta arriva all\'effetto come quella di un numero', () => {
+  it('in the engine a choice\'s curve reaches the effect like a number\'s', () => {
     const { r, tape } = withTapeStop();
     r.editClip(c => c.withEnvelope({ kind: 'device', device: tape, param: 'stop' }, pts([0, 0], [2, 0], [2, 1])));
     r.engine.play(0);
@@ -412,8 +412,8 @@ describe('modulazioni delle scelte nell\'editor', () => {
   });
 });
 
-describe('modulazione a scatto (macro interruttore e pulsante)', () => {
-  /** Registra gli eventi che arrivano a un bersaglio. */
+describe('snapping modulation (toggle and button macro)', () => {
+  /** Records the events reaching a target. */
   const recorder = () => {
     const events: { type: string; value: number; time: number }[] = [];
     const sink: ModSink = {
@@ -424,11 +424,11 @@ describe('modulazione a scatto (macro interruttore e pulsante)', () => {
     return { events, sink };
   };
 
-  it('spento: una rampa che passa +½ diventa uno scalino a +1 nell\'istante esatto', () => {
+  it('off: a ramp crossing +½ becomes a step to +1 at the exact instant', () => {
     const { events, sink } = recorder();
     const s = switchSink(sink, false);
     s.set(0, 0);
-    s.ramp(1, 4); // passa ½ a 2 s
+    s.ramp(1, 4); // ½ passes at 2 s
     s.ramp(0.2, 7); // ripassa ½ a 4 + 3·(0.5/0.8)
     expect(events).toEqual([
       { type: 'set', value: 0, time: 0 },
@@ -437,7 +437,7 @@ describe('modulazione a scatto (macro interruttore e pulsante)', () => {
     ]);
   });
 
-  it('acceso: scatta in giù solo sotto −½', () => {
+  it('on: it snaps down only below −½', () => {
     const { events, sink } = recorder();
     const s = switchSink(sink, true);
     s.set(0.3, 0);
@@ -447,18 +447,18 @@ describe('modulazione a scatto (macro interruttore e pulsante)', () => {
   });
 });
 
-describe('curve del master sulla timeline', () => {
-  /** Il rig con un delay sul master (feedback e mix); `fx` il suo id. */
+describe('master curves on the timeline', () => {
+  /** The rig with a delay on the master (feedback and mix); `fx` its id. */
   function masterRig() {
     const r = rig();
     r.store.apply(addEffect(MASTER, 'delay', 'Delay'));
     const fx = r.store.project.masterEffects[0].id;
-    // l'ultimo effetto creato è quello del master (le tracce non ne hanno)
+    // the last effect created is the master's (the tracks have none)
     const delay = (param: string) => r.effects.created.at(-1)!.modulation.events.filter(e => e.param === param);
     return { ...r, fx, delay };
   }
 
-  it('nel modello: una curva per bersaglio, nella scala; senza punti sparisce; il mixer no', () => {
+  it('in the model: one curve per target, in the scale; without points it disappears; not the mixer', () => {
     const { store, fx } = masterRig();
     const target: ModTarget = { kind: 'device', device: fx, param: 'feedback' };
     store.apply(setMasterAutomation(target, pts([4, -2], [0, 0])));
@@ -468,7 +468,7 @@ describe('curve del master sulla timeline', () => {
     expect(() => store.project.withMasterAutomation(VOLUME, pts([0, 0]))).toThrow();
   });
 
-  it('nei menu dell\'automazione: gli effetti del master e le macro dei suoi rack, senza mixer', () => {
+  it('in the automation menus: the master\'s effects and the macros of its racks, without mixer', () => {
     const { store, fx } = masterRig();
     store.apply(addEffect(MASTER, 'tapeStop', 'Tape Stop'));
     const tape = store.project.masterEffects[1].id;
@@ -476,11 +476,11 @@ describe('curve del master sulla timeline', () => {
     const rack = store.project.masterRacks[0].id;
     expect(masterTargetDevices(store.project).map(d => d.key)).toEqual([rack, fx, tape]);
     expect(masterTargetDevices(store.project)[0].sections[0].params[0].target).toEqual({ kind: 'device', device: rack, param: macroParam(0) });
-    // una scelta del master dice l'opzione che si sente, come sulle tracce
+    // a master choice says the option that's heard, as on the tracks
     expect(formatModValue({ kind: 'device', device: tape, param: 'stop' }, 0.6, masterChain(store.project))).toBe('On · +60 %');
   });
 
-  it('si salvano con il progetto; un file senza si apre', () => {
+  it('they\'re saved with the project; a file without opens', () => {
     const { store, fx } = masterRig();
     const target: ModTarget = { kind: 'device', device: fx, param: 'mix' };
     store.apply(setMasterAutomation(target, pts([0, 0], [16, 0.5])));
@@ -492,20 +492,20 @@ describe('curve del master sulla timeline', () => {
     expect(codec.decode(json).masterAutomation).toEqual([]);
   });
 
-  it('un parametro di un effetto del master segue la curva nei battiti della timeline, anche senza clip', () => {
+  it('a parameter of a master effect follows the curve in the timeline\'s beats, even without clips', () => {
     const r = masterRig();
     r.store.apply(setMasterAutomation({ kind: 'device', device: r.fx, param: 'feedback' }, pts([2, 0], [6, 0.8])));
     r.engine.play(0);
     r.runUntil(4);
     const ev = r.delay('feedback');
-    expect(replay(ev, 0, r.at(1))).toBe(0); // prima del primo punto vale il primo
+    expect(replay(ev, 0, r.at(1))).toBe(0); // before the first point it's the first
     expect(replay(ev, 0, r.at(4))).toBeCloseTo(0.4, 4);
-    expect(replay(ev, 0, r.at(7))).toBeCloseTo(0.8, 4); // dopo l'ultimo resta l'ultimo
+    expect(replay(ev, 0, r.at(7))).toBeCloseTo(0.8, 4); // after the last it stays the last
     r.engine.stop();
-    expect(replay(r.delay('feedback'), 0, 99)).toBe(0); // fermo: neutro
+    expect(replay(r.delay('feedback'), 0, 99)).toBe(0); // stopped: neutral
   });
 
-  it('con il loop della timeline la curva riparte dall\'inizio del loop a ogni giro', () => {
+  it('with the timeline loop the curve restarts from the start of the loop at every round', () => {
     const r = masterRig();
     r.store.apply(setLoopRegion({ enabled: true, start: 0, end: 4 }));
     r.store.apply(setMasterAutomation({ kind: 'device', device: r.fx, param: 'feedback' }, pts([0, 0], [4, 1])));
@@ -513,10 +513,10 @@ describe('curve del master sulla timeline', () => {
     r.runUntil(4.3);
     const ev = r.delay('feedback');
     expect(replay(ev, 0, r.at(3))).toBeCloseTo(0.75, 4);
-    expect(replay(ev, 0, r.at(5))).toBeCloseTo(0.25, 4); // secondo giro: di nuovo al battito 1
+    expect(replay(ev, 0, r.at(5))).toBeCloseTo(0.25, 4); // second round: again at beat 1
   });
 
-  it('togliere la curva mentre suona: dopo la riprogrammazione il parametro torna neutro', () => {
+  it('removing the curve while playing: after the rescheduling the parameter goes back to neutral', () => {
     const r = masterRig();
     const target: ModTarget = { kind: 'device', device: r.fx, param: 'feedback' };
     r.store.apply(setMasterAutomation(target, pts([0, -0.5])));
@@ -526,17 +526,17 @@ describe('curve del master sulla timeline', () => {
     r.store.apply(setMasterAutomation(target, []));
     r.runUntil(2);
     const ev = r.delay('feedback');
-    expect(replay(ev, 0, 1.02)).toBe(-0.5); // fino alla ripartenza tiene il valore: nessun salto
+    expect(replay(ev, 0, 1.02)).toBe(-0.5); // until the restart it holds the value: no jump
     expect(replay(ev, 0, 1.2)).toBe(0);
   });
 
-  it('una curva su una macro pulsante di un rack del master la fa scattare, come premerla', () => {
+  it('a curve on a button macro of a master rack makes it snap, like pressing it', () => {
     const r = masterRig();
     r.store.apply(groupDevices(MASTER, [r.fx]));
     const rack = r.store.project.masterRacks[0].id;
     r.store.apply(mapMacro(MASTER, rack, 0, r.fx, 'mix'));
     r.store.apply(setMacroMode(MASTER, rack, 0, 'button'));
-    // premuta dal battito 2 al 3, come il Ripeti o lo Stop nastro prima di un drop
+    // pressed from beat 2 to 3, like Ripeti or Stop nastro before a drop
     r.store.apply(setMasterAutomation({ kind: 'device', device: rack, param: macroParam(0) }, pts([0, 0], [2, 0], [2, 1], [3, 1], [3, 0])));
     r.engine.play(0);
     r.runUntil(3);

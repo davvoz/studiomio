@@ -1,9 +1,9 @@
-/* Le modulazioni delle clip nel motore. Per ogni traccia un TrackModulator guarda, come i player,
- * quali tratti di clip suonano in ogni finestra di programmazione e per le loro curve programma
- * in anticipo scalini e rampe sui bersagli: gli AudioParam del canale (volume e pan) o i
- * parametri dei dispositivi nell'AudioWorklet. Fuori dalle clip (e dove una clip non ha la
- * curva) ogni bersaglio torna neutro. Un MasterModulator fa lo stesso con le curve del master
- * sulla timeline. */
+/* The clip modulations in the engine. For each track a TrackModulator watches, like the players,
+ * which clip stretches play in each scheduling window and for their curves schedules
+ * steps and ramps in advance on the targets: the channel's AudioParams (volume and pan) or the
+ * device parameters in the AudioWorklet. Outside the clips (and where a clip doesn't have the
+ * curve) each target goes back to neutral. A MasterModulator does the same with the master's curves
+ * on the timeline. */
 import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 import { envelopeValueAt, scaleKindOf, scaleOf, targetKey, type ClipEnvelope, type ModScaleKind, type ModTarget } from '../model/envelope';
@@ -14,23 +14,23 @@ import { placementSegments, type Segment } from './segments';
 import type { Program } from './session';
 import { piecesInWindow } from './track-content';
 
-/** Dove va una modulazione: riceve scalini e rampe con l'istante (secondi del contesto). */
+/** Where a modulation goes: it receives steps and ramps with the instant (context seconds). */
 export interface ModSink {
   set(value: number, time: number): void;
-  /** Rampa lineare dal valore dell'evento prima fino a `value` all'istante `time`. */
+  /** Linear ramp from the previous event's value up to `value` at instant `time`. */
   ramp(value: number, time: number): void;
-  /** Da `time` resta il valore che c'è; ciò che era programmato dopo si dimentica. */
+  /** From `time` the current value stays; what was scheduled after is forgotten. */
   hold(time: number): void;
 }
 
-/** I parametri modulabili di un dispositivo che suona (strumento o effetto). */
+/** The modulatable parameters of a playing device (instrument or effect). */
 export interface DeviceModulation {
-  /** Lo spostamento del parametro, in frazioni della corsa della manopola (−1 … +1), nel canale
-   *  `channel` (assente: quello delle curve delle clip). I canali di un parametro si sommano. */
+  /** The parameter's offset, in fractions of the knob's travel (−1 … +1), in channel
+   *  `channel` (absent: the clip curves' one). A parameter's channels add up. */
   sink(param: string, channel?: string): ModSink;
 }
 
-/** Un AudioParam come destinazione delle modulazioni. */
+/** An AudioParam as a modulation destination. */
 export function audioParamSink(param: AudioParamLike): ModSink {
   return {
     set: (v, t) => param.setValueAtTime(v, t),
@@ -42,8 +42,8 @@ export function audioParamSink(param: AudioParamLike): ModSink {
   };
 }
 
-/** Una modulazione che ne muove altre, ognuna in scala: una macro sposta i parametri mappati
- *  della parte di corsa che la macro dà a ciascuno. */
+/** A modulation moving others, each scaled: a macro moves the mapped parameters
+ *  by the part of the travel the macro gives each one. */
 export function scaledSinks(targets: readonly { readonly sink: ModSink; readonly scale: number }[]): ModSink {
   return {
     set: (v, t) => { for (const x of targets) x.sink.set(v * x.scale, t); },
@@ -52,10 +52,10 @@ export function scaledSinks(targets: readonly { readonly sink: ModSink; readonly
   };
 }
 
-/** Una modulazione che scatta: per un interruttore (una macro interruttore o pulsante), la curva
- *  oltre metà strada lo porta all'altro capo, prima nulla. Spento (`on` falso) scatta in su a
- *  +½ e va a +1; acceso scatta in giù a −½ e va a −1. Le rampe diventano uno scalino
- *  all'istante esatto in cui la curva passa la metà. */
+/** A snapping modulation: for a switch (a toggle or button macro), the curve
+ *  past halfway takes it to the other end, before that nothing. Off (`on` false) it snaps up at
+ *  +½ and goes to +1; on it snaps down at −½ and goes to −1. The ramps become a step
+ *  at the exact instant the curve crosses the half. */
 export function switchSink(inner: ModSink, on: boolean): ModSink {
   const threshold = on ? -0.5 : 0.5, full = on ? -1 : 1;
   const step = (v: number) => ((on ? v <= threshold : v >= threshold) ? full : 0);
@@ -77,42 +77,42 @@ export function switchSink(inner: ModSink, on: boolean): ModSink {
   };
 }
 
-/** Come il valore di una curva arriva al bersaglio. `curved`: la mappa non è una retta, quindi
- *  le rampe si spezzano in tratti brevi per seguire la curva disegnata. */
+/** How a curve's value reaches the target. `curved`: the map isn't a straight line, so
+ *  the ramps are broken into short stretches to follow the drawn curve. */
 const OUTPUT: { readonly [K in ModScaleKind]: { readonly map: (v: number) => number; readonly curved: boolean } } = {
-  // il volume va al guadagno con un quadrato: metà curva ≈ −12 dB, come si sente
+  // the volume goes to the gain with a square: half curve ≈ −12 dB, as it's heard
   volume: { map: v => v * v, curved: true },
   pan: { map: v => v, curved: false },
   param: { map: v => v, curved: false },
-  // il transpose lo suona la clip audio stessa (vedi AudioTrackPlayer): qui non arriva
+  // the transpose is played by the audio clip itself (see AudioTrackPlayer): it doesn't arrive here
   transpose: { map: v => v, curved: false },
 };
 
-/** Lunghezza massima (in battiti) di un tratto di rampa per le mappe curve. */
+/** Maximum length (in beats) of a ramp stretch for the curved maps. */
 const CURVE_STEP = 1 / 16;
 const EPS = 1e-9;
 
-/** Il valore neutro di un bersaglio, come arriva alla destinazione. */
+/** A target's neutral value, as it reaches the destination. */
 const neutralOf = (t: ModTarget) => OUTPUT[scaleKindOf(t)].map(scaleOf(t).neutral);
 
-/** Vero se qualche clip della traccia (timeline o slot) ha delle modulazioni. */
+/** True if some clip of the track (timeline or slot) has modulations. */
 const hasEnvelopes = (t: Track) => t.arrangement.some(p => p.clip.envelopes.length) || t.slots.some(c => !!c?.envelopes.length);
 
-/** Un tratto in cui una curva suona: da `start` a `end` (orologio continuo) il battito della curva
- *  va da `contentStart` in avanti, senza salti. */
+/** A stretch in which a curve plays: from `start` to `end` (continuous clock) the curve's beat
+ *  goes from `contentStart` onwards, without jumps. */
 interface CurveSpan {
   readonly start: number;
   readonly end: number;
   readonly contentStart: number;
 }
 
-/** Ciò che le sorgenti di curve hanno in comune: programmano scalini e rampe sui bersagli e se li
- *  ricordano, per riportarli neutri quando la curva finisce, si cambia qualcosa o ci si ferma. */
+/** What the curve sources have in common: they schedule steps and ramps on the targets and
+ *  remember them, to bring them back to neutral when the curve ends, something changes or it stops. */
 abstract class CurveModulator implements ScheduledSource {
-  /** I bersagli già toccati, per riportarli neutri. */
+  /** The targets already touched, to bring them back to neutral. */
   private readonly touched = new Map<string, { readonly target: ModTarget; sink: ModSink }>();
-  /** Dopo una riprogrammazione: bersagli che tengono il valore di prima finché la prima
-   *  finestra nuova non li riprende (o, se la curva non c'è più, li riporta neutri). */
+  /** After a rescheduling: targets holding the previous value until the first
+   *  new window picks them up (or, if the curve is gone, brings them back to neutral). */
   private stale = false;
 
   constructor(
@@ -120,13 +120,13 @@ abstract class CurveModulator implements ScheduledSource {
     private readonly now: () => number,
   ) {}
 
-  /** Le curve che suonano nella finestra, ciascuna con il suo tratto. */
+  /** The curves playing in the window, each with its stretch. */
   protected abstract curves(w: ScheduleWindow): Iterable<{ readonly envelopes: readonly ClipEnvelope[]; readonly span: CurveSpan }>;
 
   schedule(w: ScheduleWindow): void {
     if (this.stale) {
-      // prima tutti neutri dall'inizio della finestra: le curve che ci sono ancora, programmate
-      // subito dopo allo stesso istante, prendono il loro posto
+      // first all neutral from the start of the window: the curves still there, scheduled
+      // right after at the same instant, take their place
       this.stale = false;
       const t = w.timeAt(w.from);
       for (const { target, sink } of this.touched.values()) sink.set(neutralOf(target), t);
@@ -136,23 +136,23 @@ abstract class CurveModulator implements ScheduledSource {
     }
   }
 
-  /** Riprogrammazione: ciò che era programmato si dimentica, il valore di adesso resta finché
-   *  le finestre nuove non lo riprendono (niente salti mentre suona). */
+  /** Rescheduling: what was scheduled is forgotten, the current value stays until
+   *  the new windows pick it up (no jumps while playing). */
   stopAll(): void {
     const t = this.now();
     for (const { sink } of this.touched.values()) sink.hold(t);
     this.stale = this.touched.size > 0;
   }
 
-  /** Riprogrammazione da `at`: fino a lì resta ciò che era programmato, poi le finestre nuove
-   *  riprendono i bersagli (o li riportano neutri). */
+  /** Rescheduling from `at`: up to there what was scheduled stays, then the new windows
+   *  pick up the targets (or bring them back to neutral). */
   retake(at: number): void {
     for (const { sink } of this.touched.values()) sink.hold(at);
     this.stale = this.touched.size > 0;
   }
 
-  /** Da `at` (secondi) tutti i bersagli toccati tornano neutri: una clip lanciata al posto di
-   *  quella che suonava porta le sue curve, o nessuna. */
+  /** From `at` (seconds) all the touched targets go back to neutral: a clip launched in place of
+   *  the one playing brings its own curves, or none. */
   cut(at: number): void {
     for (const { target, sink } of this.touched.values()) {
       sink.hold(at);
@@ -160,16 +160,16 @@ abstract class CurveModulator implements ScheduledSource {
     }
   }
 
-  /** Trasporto fermo: tutto neutro da subito. */
+  /** Transport stopped: everything neutral right away. */
   reset(): void {
     this.cut(this.now());
     this.touched.clear();
     this.stale = false;
   }
 
-  /** La parte della curva che cade nella finestra: uno scalino all'inizio (lo stesso valore della
-   *  rampa che arriva lì, quindi nessun salto), le rampe verso i punti, la rampa fino alla fine
-   *  della finestra; dove il tratto finisce, il bersaglio torna neutro. */
+  /** The part of the curve falling in the window: a step at the start (the same value as the
+   *  ramp arriving there, so no jump), the ramps towards the points, the ramp up to the end
+   *  of the window; where the stretch ends, the target goes back to neutral. */
   private play(env: ClipEnvelope, span: CurveSpan, w: ScheduleWindow): void {
     const from = Math.max(w.from + w.shift, span.start), to = Math.min(w.to + w.shift, span.end);
     if (to - from <= EPS || !env.points.length) return;
@@ -201,7 +201,7 @@ abstract class CurveModulator implements ScheduledSource {
   }
 }
 
-/** Le modulazioni di una traccia, programmate insieme al resto (è una sorgente dello scheduler). */
+/** A track's modulations, scheduled together with the rest (it's a scheduler source). */
 export class TrackModulator extends CurveModulator {
   private track: Track;
   private active: boolean;
@@ -238,8 +238,8 @@ export class TrackModulator extends CurveModulator {
   }
 }
 
-/** Le curve del master sulla timeline: suonano per tutta la corsa del trasporto (a ogni giro di
- *  loop ripartono dall'inizio del loop), sui dispositivi e sulle macro della catena del master. */
+/** The master's curves on the timeline: they play for the whole run of the transport (at every loop
+ *  round they restart from the start of the loop), on the devices and macros of the master's chain. */
 export class MasterModulator extends CurveModulator {
   private lanes: readonly ClipEnvelope[];
 
@@ -248,7 +248,7 @@ export class MasterModulator extends CurveModulator {
     this.lanes = lanes;
   }
 
-  /** Le curve nuove; vero se sono cambiate. */
+  /** The new curves; true if they changed. */
   update(lanes: readonly ClipEnvelope[]): boolean {
     if (lanes === this.lanes) return false;
     this.lanes = lanes;
@@ -257,7 +257,7 @@ export class MasterModulator extends CurveModulator {
 
   protected *curves(w: ScheduleWindow): Iterable<{ readonly envelopes: readonly ClipEnvelope[]; readonly span: CurveSpan }> {
     if (!this.lanes.length) return;
-    // nella corsa il battito b della timeline suona all'orologio b + shift
+    // in the run timeline beat b plays at clock b + shift
     yield { envelopes: this.lanes, span: { start: w.runStart + w.shift, end: w.runEnd + w.shift, contentStart: w.runStart } };
   }
 }

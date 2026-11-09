@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
 
-/** La versione dell'app (da package.json), mostrata nella barra di stato. */
+/** The app's version (from package.json), shown in the status bar. */
 const version: string = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
 
-// COOP + COEP rendono la pagina "cross-origin isolated": senza queste intestazioni il
-// browser non concede SharedArrayBuffer (memoria condivisa tra interfaccia, worker e WASM).
+// COOP + COEP make the page "cross-origin isolated": without these headers the
+// browser doesn't grant SharedArrayBuffer (memory shared between interface, workers and WASM).
 const isolation = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -21,7 +21,7 @@ export default defineConfig({
     rollupOptions: { input: { main: 'index.html', bench: 'bench.html' } },
   },
   test: {
-    // i benchmark (lenti) girano solo con `npm run bench`
+    // the (slow) benchmarks run only with `npm run bench`
     include: process.env.BENCH ? ['tests/**/*.perf.ts'] : ['tests/**/*.test.ts'],
     testTimeout: 60_000,
   },

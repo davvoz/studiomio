@@ -1,9 +1,9 @@
-/* Il mix della timeline calcolato in Node, senza browser: gli stessi motori DSP dell'AudioWorklet
- * (strumenti, effetti, modulazioni a blocchi di 128 campioni), la stessa lettura della timeline
- * (tratti delle clip, note tagliate alla fine del tratto) e lo stesso canale del mixer di
- * mixer-graph.ts (effetti → volume → modulazione del volume al quadrato → pan stereo di Web
- * Audio). Serve a misurare un progetto (loudness, spettro, picchi) mentre lo si costruisce;
- * può dare anche le tracce separate (stem). */
+/* The timeline mix computed in Node, without a browser: the same DSP engines as the AudioWorklet
+ * (instruments, effects, modulations in blocks of 128 samples), the same reading of the timeline
+ * (clip segments, notes cut at the end of the segment) and the same mixer channel as
+ * mixer-graph.ts (effects → volume → squared volume modulation → Web Audio stereo
+ * pan). It's for measuring a project (loudness, spectrum, peaks) while building it;
+ * it can also give the separate tracks (stems). */
 import { resolveParams } from '../src/devices/device-type';
 import { dbToGain, followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type SampleData } from '../src/devices/dsp/core';
 import type { ParamSpec } from '../src/devices/params';
@@ -25,11 +25,11 @@ import type { SampleId, TrackId } from '../src/core/id';
 const BLOCK = 128;
 const SILENCE = new Float32Array(BLOCK);
 
-/** Un WAV (PCM 8/16/24/32 o float 32/64, anche "extensible") in canali float. */
+/** A WAV (PCM 8/16/24/32 or float 32/64, also "extensible") into float channels. */
 export function decodeWav(bytes: Uint8Array): SampleData {
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const tag = (at: number) => String.fromCharCode(...bytes.subarray(at, at + 4));
-  if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error('non è un WAV');
+  if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error('not a WAV');
   let channels = 0, sampleRate = 0, bits = 0, format = 1;
   for (let at = 12; at + 8 <= bytes.length;) {
     const id = tag(at), size = v.getUint32(at + 4, true);
@@ -38,7 +38,7 @@ export function decodeWav(bytes: Uint8Array): SampleData {
       channels = v.getUint16(at + 10, true);
       sampleRate = v.getUint32(at + 12, true);
       bits = v.getUint16(at + 22, true);
-      // WAVE_FORMAT_EXTENSIBLE: il formato vero è nel sottotipo
+      // WAVE_FORMAT_EXTENSIBLE: the real format is in the subtype
       if (format === 0xfffe && size >= 26) format = v.getUint16(at + 32, true);
     } else if (id === 'data') {
       const bps = bits / 8, frames = Math.floor(Math.min(size, bytes.length - at - 8) / (channels * bps));
@@ -57,19 +57,19 @@ export function decodeWav(bytes: Uint8Array): SampleData {
     }
     at += 8 + size + (size & 1);
   }
-  throw new Error('nessun dato audio');
+  throw new Error('no audio data');
 }
 
-/** I parametri che le modulazioni muovono: tutti, numeri e scelte, come nell'AudioWorklet. */
+/** The parameters the modulations move: all of them, numbers and choices, as in the AudioWorklet. */
 const modSpecs = (t: ReturnType<typeof effectType>): Map<string, ParamSpec> => new Map((t ? paramsOf(t) : []).map(p => [p.id, p] as const));
 
-/** Il suono di un blocco di una traccia dopo i suoi effetti e prima del volume: quello che
- *  ascolta il sidechain (vedi model/sidechain.ts). */
+/** The sound of a track's block after its effects and before the volume: what the
+ *  sidechain listens to (see model/sidechain.ts). */
 type KeySource = (track: TrackId) => { readonly l: Float32Array; readonly r: Float32Array } | undefined;
 
-/** Una catena di effetti come nell'AudioWorklet: un motore, le sue modulazioni, il bypass; il
- *  compressore in sidechain ascolta la traccia sorgente nello stesso blocco (le tracce si
- *  calcolano in ordine: una sorgente che viene dopo arriva con un blocco di ritardo). */
+/** An effect chain as in the AudioWorklet: an engine, its modulations, the bypass; the
+ *  sidechain compressor listens to the source track in the same block (tracks are
+ *  computed in order: a source that comes later arrives one block late). */
 class Chain {
   readonly fx: { id: string; core: EffectCore; runner: EffectRunner; mod: ParamModulation; key: TrackId | undefined }[];
   private readonly tmpL = new Float32Array(BLOCK);
@@ -102,9 +102,9 @@ class Chain {
   }
 }
 
-/** Le curve di una traccia come eventi nel tempo: i parametri dei dispositivi come li riceve
- *  l'AudioWorklet (scalino all'inizio del tratto, rampe ai punti, neutro alla fine), volume e
- *  pan come funzioni del tempo per il canale. */
+/** A track's curves as events in time: the device parameters as the AudioWorklet
+ *  receives them (step at the start of the segment, ramps at the points, neutral at the end), volume and
+ *  pan as functions of time for the channel. */
 interface MixerCurves {
   volume: { start: number; end: number; at: (t: number) => number }[];
   pan: { start: number; end: number; at: (t: number) => number }[];
@@ -165,7 +165,7 @@ class TrackRender {
       this.curves[t.param].push({ start: startSec, end: endSec, at });
       return;
     }
-    if (t.kind === 'clip') return; // il transpose delle clip audio: qui suonano solo le MIDI
+    if (t.kind === 'clip') return; // audio clip transpose: only MIDI ones play here
     const sink = t.device === 'instrument' ? this.instMod : this.chain.fx.find(f => f.id === t.device)?.mod;
     if (!sink) return;
     sink.event(t.param, 'set', envelopeValueAt(env.points, c0), time(c0));
@@ -174,7 +174,7 @@ class TrackRender {
     sink.event(t.param, 'set', scaleOf(t).neutral, time(c1));
   }
 
-  /** Il blocco che inizia al campione `frame`, sommato nei bus. */
+  /** The block starting at sample `frame`, summed into the buses. */
   render(frame: number, busL: Float32Array, busR: Float32Array, stem?: { l: Float32Array; r: Float32Array }): void {
     const { l, r, sampleRate } = this;
     l.fill(0);
@@ -182,7 +182,7 @@ class TrackRender {
     const time = frame / sampleRate;
     const p = this.instMod.paramsAt(time);
     if (p) this.core.setParams(p);
-    // il trasporto parte dal battito 0 e non salta: come la timeline suonata dall'inizio
+    // the transport starts from beat 0 and doesn't jump: like the timeline played from the start
     if (followsTransport(this.core)) this.core.setTransport({ beat: (time * this.bpm) / 60, bpm: this.bpm, beatsPerBar: 4 });
     this.queue.renderBlock(this.core, l, r, frame);
     this.chain.process(l, r, time);
@@ -193,7 +193,7 @@ class TrackRender {
       for (const c of this.curves.volume) if (t >= c.start && t < c.end) { const v = c.at(t); g *= v * v; break; }
       for (const c of this.curves.pan) if (t >= c.start && t < c.end) { pan += c.at(t); break; }
       pan = Math.max(-1, Math.min(1, pan));
-      // StereoPannerNode con ingresso stereo
+      // StereoPannerNode with stereo input
       const x = (pan <= 0 ? pan + 1 : pan) * Math.PI / 2, gl = Math.cos(x), gr = Math.sin(x);
       const inL = l[i] * g, inR = r[i] * g;
       const outL = pan <= 0 ? inL + inR * gl : inL * gl, outR = pan <= 0 ? inR * gr : inR + inL * gr;
@@ -211,11 +211,11 @@ export interface RenderResult {
   readonly sampleRate: number;
   readonly left: Float32Array;
   readonly right: Float32Array;
-  /** Le tracce separate (dopo volume e pan, prima del master), se chieste. */
+  /** The separate tracks (after volume and pan, before the master), if requested. */
   readonly stems: ReadonlyMap<string, { l: Float32Array; r: Float32Array }>;
 }
 
-/** Il mix della timeline da `from` a `to` battiti (predefinito: tutta), più `tail` secondi di code. */
+/** The timeline mix from `from` to `to` beats (default: all of it), plus `tail` seconds of tails. */
 export function renderProject(
   project: Project, samples: ReadonlyMap<SampleId, SampleData>,
   opts: { sampleRate?: number; stems?: boolean; tail?: number; onProgress?: (fraction: number) => void } = {},

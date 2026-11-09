@@ -20,20 +20,20 @@ describe('Sacrificio', () => {
     return store.project;
   };
 
-  it('intro, drop, bridge, drop modificato, outro; master con multibanda, colla e limiter', () => {
+  it('intro, drop, bridge, modified drop, outro; master with multiband, glue and limiter', () => {
     const p = build();
     expect(p.tempo.bpm).toBe(SACRIFICIO_LIVE_BPM);
     expect(p.scenes.map(s => s.name)).toEqual(['Intro', 'Drop', 'Drop +', 'Bridge', 'Salita', 'Drop modificato', 'Drop modificato +', 'Outro']);
     expect(p.masterEffects.map(e => e.type)).toEqual(['eq', 'multiband', 'compressor', 'limiter']);
     expect(Math.max(...p.tracks.map(t => t.arrangementEnd))).toBe(112 * 4);
-    // il bridge è senza cassa, il drop modificato ha gli stab
+    // the bridge has no kick, the modified drop has the stabs
     const kick = p.tracks.find(t => t.name === 'Cassa')!, stab = p.tracks.find(t => t.name === 'Stab')!;
     expect(kick.slots[3]).toBeNull();
     expect(stab.slots[5]).not.toBeNull();
     expect(stab.slots[1]).toBeNull();
   });
 
-  it('il rumble è la cassa nel riverbero, distorta e filtrata, e tace sul colpo', () => {
+  it('the rumble is the kick in the reverb, distorted and filtered, and silent on the hit', () => {
     const p = build();
     const rumble = p.tracks.find(t => t.name === 'Rumble') as MidiTrack;
     expect(rumble.effects.map(e => e.type)).toEqual(['reverb', 'drive', 'eq']);
@@ -43,7 +43,7 @@ describe('Sacrificio', () => {
     expect(envelopeValueAt(pump.points, 2.85)).toBeGreaterThan(0.9);
   });
 
-  it('lead e stab sono supersaw (unison a 7); le clip stanno nel giro; si salva e si riapre uguale', () => {
+  it('lead and stab are supersaws (unison at 7); the clips sit in the loop; it saves and reopens the same', () => {
     const p = build();
     for (const name of ['Lead', 'Stab']) expect((p.tracks.find(t => t.name === name) as MidiTrack).instrument.params.unison).toBe(7);
     for (const t of p.tracks as MidiTrack[]) {

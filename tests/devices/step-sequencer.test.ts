@@ -9,12 +9,12 @@ import { INSTRUMENT_CORES } from '../../src/devices/worklet/cores';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
 
 const SR = 48000, BLOCK = 128, BPM = 120;
-/** Campioni per battito a 120 BPM: un sedicesimo sono 6000 campioni. */
+/** Samples per beat at 120 BPM: a sixteenth is 6000 samples. */
 const BEAT = 24000, STEP = BEAT / 4;
 
 type Event = { kind: 'on' | 'off'; frame: number; id: number; pitch?: number; velocity?: number };
 
-/** Uno strumento finto che scrive cosa riceve e quando (il campione da cui riprende a suonare). */
+/** A fake instrument writing what it receives and when (the sample it resumes playing from). */
 class Recorder implements InstrumentCore {
   readonly events: Event[] = [];
   frame = 0;
@@ -28,7 +28,7 @@ class Recorder implements InstrumentCore {
 
 interface Held { readonly pitch: number; readonly on: number; readonly off: number }
 
-/** Suona il sequencer a blocchi come l'AudioWorklet: note tenute dalla coda, trasporto da 0. */
+/** Plays the sequencer in blocks like the AudioWorklet: notes held from the queue, transport from 0. */
 function play(params: Record<string, number>, held: readonly Held[], frames: number, transport: (f: number) => TransportPosition | null = f => ({ beat: f / BEAT, bpm: BPM, beatsPerBar: 4 })) {
   const rec = new Recorder();
   const seq = new StepSequencer(rec, SR);
@@ -48,8 +48,8 @@ function play(params: Record<string, number>, held: readonly Held[], frames: num
 
 const ons = (events: readonly Event[]) => events.filter(e => e.kind === 'on');
 
-describe('sequencer a passi', () => {
-  it('spento lascia passare le note com\'è', () => {
+describe('step sequencer', () => {
+  it('off it lets the notes through as they are', () => {
     const rec = new Recorder();
     const seq = new StepSequencer(rec, SR);
     seq.setParams(resolveParams(ANALOG, {}));
@@ -58,7 +58,7 @@ describe('sequencer a passi', () => {
     expect(rec.events.map(e => [e.kind, e.id, e.pitch])).toEqual([['on', 7, 48], ['off', 7, undefined]]);
   });
 
-  it('acceso suona i passi sui sedicesimi, trasposti sulla nota tenuta, finché la si tiene', () => {
+  it('on it plays the steps on the sixteenths, transposed onto the held note, while it\'s held', () => {
     const events = play({ seqDensity: 100, seqRange: 0, seqSlide: 0, seqGate: 50 }, [{ pitch: 36, on: 0, off: 8 * STEP }], 12 * STEP);
     const on = ons(events);
     expect(on).toHaveLength(8);
@@ -66,20 +66,20 @@ describe('sequencer a passi', () => {
       expect(e.frame).toBe(k * STEP);
       expect(e.pitch).toBe(36);
     });
-    // gate al 50 %: ogni nota finisce a metà del suo passo
+    // gate at 50 %: each note ends halfway through its step
     const offs = events.filter(e => e.kind === 'off');
     expect(offs[0].frame).toBe(STEP / 2);
     expect(events.at(-1)!.kind).toBe('off');
   });
 
-  it('una nota tenuta che arriva un attimo dopo il confine suona lo stesso il primo passo', () => {
+  it('a held note arriving a moment after the boundary plays the first step anyway', () => {
     const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 40, on: 300, off: 4 * STEP }], 6 * STEP);
     expect(ons(events)[0].frame).toBe(300);
     expect(ons(events)[0].pitch).toBe(40);
     expect(ons(events)).toHaveLength(4);
   });
 
-  it('acceso un blocco dopo la sua nota (la clip che lo accende) prende quella nota e suona il primo passo', () => {
+  it('turned on a block after its note (the clip turning it on) it takes that note and plays the first step', () => {
     const rec = new Recorder();
     const seq = new StepSequencer(rec, SR);
     seq.setTempo(BPM);
@@ -92,7 +92,7 @@ describe('sequencer a passi', () => {
       if (f === 0) seq.noteOn(1, 41, 100);
       seq.render(l, r, 0, BLOCK);
     }
-    // la nota passata diretta si spegne; il primo passo suona subito, gli altri sui sedicesimi
+    // the note passed directly turns off; the first step plays right away, the others on the sixteenths
     expect(rec.events[0]).toMatchObject({ kind: 'on', id: 1, pitch: 41 });
     expect(rec.events[1]).toMatchObject({ kind: 'off', id: 1, frame: BLOCK });
     const steps = ons(rec.events).slice(1).filter(e => e.frame < 4 * STEP);
@@ -100,7 +100,7 @@ describe('sequencer a passi', () => {
     expect(steps.every(e => e.pitch === 41)).toBe(true);
   });
 
-  it('a densità più alta si aggiungono passi, quelli che c\'erano restano', () => {
+  it('with higher density steps are added, the existing ones stay', () => {
     const s = (density: number) => seqSettings(resolveParams(ANALOG, { seqDensity: density }));
     const hits = (density: number) => Array.from({ length: 16 }, (_, i) => seqStep(s(density), 5, i, i / 4).hit);
     let prev = hits(0);
@@ -111,34 +111,34 @@ describe('sequencer a passi', () => {
       prev = now;
     }
     expect(prev.every(Boolean)).toBe(true);
-    // con poca densità entrano prima i levare dell'ottavo (tra una cassa e l'altra)
+    // with little density first the eighth's offbeats come in (between one kick and the next)
     const few = Array.from({ length: 64 }, (_, pattern) => Array.from({ length: 16 }, (_, i) => (seqStep(s(25), pattern, i, i / 4).hit ? [i % 4] : [])).flat()).flat();
     expect(few.length).toBeGreaterThan(64);
     expect(few.filter(p => p === 2).length / few.length).toBeGreaterThan(0.75);
   });
 
-  it('l\'altezza allarga la scala nell\'ordine: a 0 solo la tonica', () => {
-    const at = (range: number) => seqSettings(resolveParams(ANALOG, { seqRange: range, seqScale: SEQ_SCALE['Frigio e tritono'] }));
+  it('the pitch widens the scale in order: at 0 only the root', () => {
+    const at = (range: number) => seqSettings(resolveParams(ANALOG, { seqRange: range, seqScale: SEQ_SCALE['Phrygian and tritone'] }));
     const intervals = (range: number) => new Set(Array.from({ length: 32 }, (_, i) => seqStep(at(range), 9, i, i / 4).interval));
     expect([...intervals(0)]).toEqual([0]);
-    const scale = SEQ_SCALES[SEQ_SCALE['Frigio e tritono']][1];
+    const scale = SEQ_SCALES[SEQ_SCALE['Phrygian and tritone']][1];
     for (const i of intervals(100)) expect(scale).toContain(i);
     expect(intervals(100).size).toBeGreaterThan(4);
   });
 
-  it('"Lascia alla cassa": nessun passo sul battito', () => {
+  it('"Leave to the kick": no step on the beat', () => {
     const events = play({ seqDensity: 100, seqKick: 1 }, [{ pitch: 36, on: 0, off: 16 * STEP }], 16 * STEP);
     expect(ons(events).length).toBe(12);
     for (const e of ons(events)) expect(e.frame % BEAT).not.toBe(0);
   });
 
-  it('lo slide accende la nota nuova prima di spegnere quella di prima (il legato della 303)', () => {
+  it('the slide turns on the new note before turning off the previous one (the 303\'s legato)', () => {
     const events = play({ seqDensity: 100, seqSlide: 100, seqRange: 100, seqPattern: 3 }, [{ pitch: 36, on: 0, off: 4 * STEP }], 4 * STEP);
     const second = events.findIndex((e, i) => i > 0 && e.kind === 'on');
     expect(events[second + 1]).toMatchObject({ kind: 'off', id: events[0].id, frame: STEP });
   });
 
-  it('un pattern nuovo entra all\'inizio del giro', () => {
+  it('a new pattern comes in at the start of the loop', () => {
     const rec = new Recorder();
     const seq = new StepSequencer(rec, SR);
     const base = { seqOn: 1, seqDensity: 100, seqRange: 100, seqLength: 16, seqPattern: 1 };
@@ -147,7 +147,7 @@ describe('sequencer a passi', () => {
     const l = new Float32Array(BLOCK), r = new Float32Array(BLOCK);
     seq.noteOn(1, 36, 100);
     for (let f = 0; f < 32 * STEP; f += BLOCK) {
-      // il pattern cambia a metà del primo giro
+      // the pattern changes halfway through the first loop
       if (f === 8 * STEP) seq.setParams(resolveParams(ANALOG, { ...base, seqPattern: 2 }));
       rec.block = rec.frame = f;
       seq.setTransport({ beat: f / BEAT, bpm: BPM, beatsPerBar: 4 });
@@ -160,16 +160,16 @@ describe('sequencer a passi', () => {
     expect(pitches.slice(16, 32)).toEqual(expected(2));
   });
 
-  it('fermo il trasporto, tace; un salto riparte da lì', () => {
+  it('with the transport stopped, it\'s silent; a jump restarts from there', () => {
     const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 8 * STEP, off: 40 * STEP }], 20 * STEP, f => (f < 8 * STEP ? null : { beat: 100 + (f - 8 * STEP) / BEAT, bpm: BPM, beatsPerBar: 4 }));
-    // dal battito 100 i passi cadono di nuovo sui sedicesimi
+    // from beat 100 the steps fall on the sixteenths again
     const on = ons(events).filter(e => e.frame < 20 * STEP);
     expect(on[0].frame).toBe(8 * STEP);
     expect(on).toHaveLength(12);
     on.forEach((e, k) => expect(e.frame).toBe((8 + k) * STEP));
   });
 
-  it('da fermo una nota tenuta lo fa girare, dal primo passo e finché la si tiene', () => {
+  it('when stopped a held note makes it run, from the first step and while it\'s held', () => {
     const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 3 * STEP, off: 7 * STEP }], 12 * STEP, () => null);
     const on = ons(events);
     expect(on.map(e => e.frame)).toEqual([3, 4, 5, 6].map(k => k * STEP));
@@ -177,26 +177,26 @@ describe('sequencer a passi', () => {
     expect(events.filter(e => e.kind === 'off')).toHaveLength(on.length);
   });
 
-  it("una nota dopo l'altra, da fermo, riparte ogni volta dal primo passo", () => {
+  it("one note after the other, when stopped, it restarts each time from the first step", () => {
     const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 0, off: 2 * STEP }, { pitch: 40, on: 5 * STEP + 100, off: 6 * STEP + 100 }], 10 * STEP, () => null);
     expect(ons(events).map(e => e.frame)).toEqual([0, STEP, 5 * STEP + 100]);
   });
 
-  it('il trasporto che parte con una nota tenuta riprende la griglia', () => {
+  it('the transport starting with a held note picks up the grid', () => {
     const events = play({ seqDensity: 100, seqRange: 0 }, [{ pitch: 36, on: 0, off: 12 * STEP }], 12 * STEP, f => (f < 4 * STEP + 7 ? null : { beat: (f - 4 * STEP) / BEAT, bpm: BPM, beatsPerBar: 4 }));
     const after = ons(events).filter(e => e.frame >= 5 * STEP);
     after.forEach((e, k) => expect(e.frame).toBe((5 + k) * STEP));
     expect(after).toHaveLength(7);
   });
 
-  it('le velocità: ottavi, sedicesimi, terzine, trentaduesimi', () => {
+  it('the rates: eighths, sixteenths, triplets, thirty-seconds', () => {
     for (const [rate, count] of [['1/8', 4], ['1/16', 8], ['1/16T', 12], ['1/32', 16]] as const) {
       const events = play({ seqDensity: 100, seqRate: SEQ_RATE[rate] }, [{ pitch: 36, on: 0, off: 2 * BEAT }], 2 * BEAT);
       expect(ons(events), rate).toHaveLength(count);
     }
   });
 
-  it('Analog e Neuro hanno il sequencer, spento: i progetti salvati suonano come prima', () => {
+  it('Analog and Neuro have the sequencer, off: the saved projects play as before', () => {
     for (const type of [ANALOG, NEURO]) {
       expect(resolveParams(type, {}).seqOn).toBe(0);
       const core = INSTRUMENT_CORES[type.type](SR);
@@ -204,7 +204,7 @@ describe('sequencer a passi', () => {
     }
   });
 
-  it('con un Analog vero suona: c\'è segnale dove ci sono i passi', () => {
+  it('with a real Analog it plays: there\'s signal where the steps are', () => {
     const core = INSTRUMENT_CORES.analog(SR) as StepSequencer;
     core.setTempo(BPM);
     core.setParams(resolveParams(ANALOG, { seqOn: 1, seqDensity: 100, seqRange: 0, seqGate: 50, voiceMode: 2 }));

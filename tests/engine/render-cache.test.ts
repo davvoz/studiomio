@@ -7,7 +7,7 @@ const job = (outLength: number): WarpJob => ({ points: [[0, 0], [outLength, 100]
 const sid = asId<'sample'>('sample-1');
 
 describe('RenderCache', () => {
-  it('le richieste uguali in corso si uniscono, poi il risultato è pronto', async () => {
+  it('equal requests in progress are merged, then the result is ready', async () => {
     const render = vi.fn(async (_s, j: WarpJob) => [new Float32Array(j.outLength)]);
     const cache = new RenderCache(render);
     const k = renderKey(sid, job(10));
@@ -17,18 +17,18 @@ describe('RenderCache', () => {
     expect(cache.get(k)).toBe(a);
   });
 
-  it('oltre il budget scarta i render usati meno di recente', async () => {
-    const cache = new RenderCache(async (_s, j) => [new Float32Array(j.outLength)], 1300); // ci stanno tre render da ~400 byte, non quattro
+  it('beyond the budget it discards the least recently used renders', async () => {
+    const cache = new RenderCache(async (_s, j) => [new Float32Array(j.outLength)], 1300); // three renders of ~400 bytes fit, not four
     const keys = [100, 101, 102].map(n => renderKey(sid, job(n)));
     for (const [i, n] of [100, 101, 102].entries()) await cache.ensure(keys[i], sid, job(n));
-    cache.get(keys[0]); // il primo torna il più recente
+    cache.get(keys[0]); // the first becomes the most recent again
     await cache.ensure(renderKey(sid, job(103)), sid, job(103));
     expect(cache.get(keys[0])).toBeDefined();
     expect(cache.get(keys[1])).toBeUndefined();
     expect(cache.usedBytes).toBeLessThanOrEqual(1300);
   });
 
-  it('un errore non resta in cache', async () => {
+  it('an error doesn\'t stay in the cache', async () => {
     let fail = true;
     const cache = new RenderCache(async () => { if (fail) throw new Error('no'); return [new Float32Array(1)]; });
     const k = renderKey(sid, job(1));
@@ -37,7 +37,7 @@ describe('RenderCache', () => {
     await expect(cache.ensure(k, sid, job(1))).resolves.toHaveLength(1);
   });
 
-  it('la chiave dipende da tutto il lavoro', () => {
+  it('the key depends on the whole job', () => {
     expect(renderKey(sid, job(1))).not.toBe(renderKey(sid, { ...job(1), transpose: 1 }));
     expect(renderKey(sid, job(1))).toBe(renderKey(sid, job(1)));
   });

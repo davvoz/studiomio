@@ -9,11 +9,11 @@ import {
 import { shiftAudioUnderMarker } from './clip-geometry';
 import { LAYOUT } from './editor-painter';
 
-/** Ciò che i gesti usano dell'editor audio. */
+/** What the gestures use of the audio editor. */
 export interface EditorHost extends ClipHost<AudioClip> {
-  /** La clip com'è adesso nel progetto (null se l'editor è chiuso). */
+  /** The clip as it is now in the project (null if the editor is closed). */
   clip(): AudioClip | null;
-  /** Durata del sample in secondi. */
+  /** Duration of the sample in seconds. */
   duration(): Seconds;
   transients(): readonly Seconds[];
   selectMarker(index: number): void;
@@ -30,7 +30,7 @@ export type EditorHit =
 
 const MARKER_PX = 7, TRANSIENT_PX = 6;
 
-/** Cosa c'è sotto il puntatore nell'editor. */
+/** What's under the pointer in the editor. */
 export function editorHit(host: EditorHost, clip: AudioClip, x: number, y: number): EditorHit {
   const { axis } = host;
   const frame = frameHit(axis, clip, x, y);
@@ -44,7 +44,7 @@ export function editorHit(host: EditorHost, clip: AudioClip, x: number, y: numbe
     if (d < bd) { bd = d; best = i; }
   });
   if (best >= 0) return { kind: 'marker', index: best };
-  // qui il warp è attivo: i transienti si collocano attraverso i marker
+  // here warp is active: the transients are placed through the markers
   let tr: Seconds | null = null, td = TRANSIENT_PX;
   for (const t of host.transients()) {
     const d = Math.abs(axis.beatToX(clip.warp.markers.beatOf(t)) - x);
@@ -53,8 +53,8 @@ export function editorHit(host: EditorHost, clip: AudioClip, x: number, y: numbe
   return tr !== null ? { kind: 'transient', t: tr } : { kind: 'strip' };
 }
 
-/** Trascinare un warp marker: cambia il battito su cui cade (l'audio si stira attorno).
- *  Con Maiusc invece l'audio scorre sotto il marker, che resta fermo sul suo battito. */
+/** Dragging a warp marker: changes the beat it falls on (the audio stretches around it).
+ *  With Shift instead the audio slides under the marker, which stays still on its beat. */
 export class MarkerGesture implements EditorGesture {
   readonly cursor = 'ew-resize';
   private current: WarpMarkers;
@@ -65,7 +65,7 @@ export class MarkerGesture implements EditorGesture {
     private readonly base: WarpMarkers,
     private readonly index: number,
     private readonly origin: Pointer,
-    /** Vero se il marker è appena stato creato da questo gesto (da un transiente). */
+    /** True if the marker was just created by this gesture (from a transient). */
     private readonly created = false,
   ) {
     this.current = base;
@@ -85,7 +85,7 @@ export class MarkerGesture implements EditorGesture {
 
   end(): void {
     if (!this.dragged && !this.created) return this.host.invalidate();
-    const label = this.created && !this.dragged ? 'Aggiungi warp marker' : this.origin.shift ? 'Sposta audio sotto il marker' : 'Sposta warp marker';
+    const label = this.created && !this.dragged ? 'Add warp marker' : this.origin.shift ? 'Move audio under the marker' : 'Move warp marker';
     const markers = this.current;
     this.host.commit(label, c => c.withMarkers(markers));
   }
@@ -100,12 +100,12 @@ export class MarkerGesture implements EditorGesture {
   }
 }
 
-/** Quale gesto inizia premendo su ciascuna cosa. */
+/** Which gesture starts by pressing on each thing. */
 export const editorGestureFor: { readonly [K in EditorHit['kind']]: (host: EditorHost, clip: AudioClip, hit: Extract<EditorHit, { kind: K }>, p: Pointer) => EditorGesture } = {
   ...frameGestureFor,
   marker: (h, c, hit, p) => new MarkerGesture(h, c.warp.markers, hit.index, p),
   transient: (h, c, hit, p) => {
-    // il marker nasce sul transiente e si trascina subito
+    // the marker is born on the transient and is dragged right away
     const { markers, index } = c.warp.markers.withMarkerAt(hit.t);
     return new MarkerGesture(h, markers, index, p, markers !== c.warp.markers);
   },

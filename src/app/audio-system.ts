@@ -14,8 +14,8 @@ import { EffectSpectrum } from './effect-spectrum';
 import type { ProjectStore } from '../store/project-store';
 import { DspService } from '../workers/dsp-service';
 
-/** Tutto l'audio dell'app, montato in un posto solo: worker DSP, sample, cache dei render,
- *  contesto audio e motore di riproduzione, collegati allo store del progetto. */
+/** All the app's audio, assembled in one place: DSP workers, samples, render cache,
+ *  audio context and playback engine, connected to the project store. */
 export class AudioSystem {
   readonly dsp = new DspService();
   readonly library = new SampleLibrary(this.dsp);
@@ -26,18 +26,18 @@ export class AudioSystem {
   private readonly worklet = new DeviceWorklet();
   readonly instruments = new WorkletInstruments(this.worklet, id => this.library.get(id));
   readonly effects = new WorkletEffects(this.worklet);
-  /** Misuratori di livello, solo dal vivo (nell'export non servono). */
+  /** Level meters, live only (export doesn't need them). */
   private readonly meters = new WorkletMeters(this.worklet);
   private readonly unsubscribe: () => void;
 
   constructor(private readonly store: ProjectStore) {
     const graph = liveGraph(this.context);
-    // il modulo di strumenti ed effetti si carica subito: al primo play è già pronto
-    this.instruments.prepare(graph).catch(e => console.error('AudioWorklet dei dispositivi non caricato', e));
+    // the instruments and effects module loads right away: at the first play it's ready
+    this.instruments.prepare(graph).catch(e => console.error('devices AudioWorklet not loaded', e));
     this.clips = new ClipAudio(graph, this.library, this.renders);
     this.engine = new PlaybackEngine(graph, { clips: this.clips, instruments: this.instruments, effects: this.effects, meters: this.meters });
     this.clips.on('ready', () => this.engine.refresh());
-    this.clips.on('error', (clip, err) => console.error(`render della clip "${clip.name}" fallito`, err));
+    this.clips.on('error', (clip, err) => console.error(`render of clip "${clip.name}" failed`, err));
     const sync = (p: Project) => {
       this.clips.setProject(p);
       this.engine.setProject(p);
@@ -50,24 +50,24 @@ export class AudioSystem {
     return this.library.add(id, audio);
   }
 
-  /** Quando il motore di un dispositivo si guasta (e viene riavviato). */
+  /** When a device's engine breaks (and is restarted). */
   onDeviceFault(fn: FaultListener): () => void {
     return this.worklet.onFault(fn);
   }
 
-  /** Il browser avvia l'audio solo dopo un gesto dell'utente. */
+  /** The browser starts audio only after a user gesture. */
   async play(from?: Beats): Promise<void> {
     if (this.context.state !== 'running') await this.context.resume();
     this.engine.play(from);
   }
 
-  /** Fa sentire una nota con lo strumento della traccia. */
+  /** Plays a note with the track's instrument. */
   async audition(track: TrackId, pitch: number, velocity?: number, seconds?: number): Promise<void> {
     if (this.context.state !== 'running') await this.context.resume();
     this.engine.audition(track, pitch, velocity, seconds);
   }
 
-  /** Una nota suonata a mano. Senza attese: il tasto che si alza deve seguire la nota che è partita. */
+  /** A note played by hand. No waiting: the key going up must follow the note that started. */
   pressNote(track: TrackId, pitch: number, velocity: number): void {
     if (this.context.state !== 'running') void this.context.resume();
     this.engine.pressNote(track, pitch, velocity);
@@ -77,18 +77,18 @@ export class AudioSystem {
     this.engine.releaseNote(track, pitch);
   }
 
-  /** Lo spettro prima e dopo un effetto che suona. */
+  /** The spectrum before and after a playing effect. */
   spectrum(owner: ChainOwner, id: DeviceId): EffectSpectrum {
     return new EffectSpectrum(this.context, () => this.engine.effectMonitor(owner, id));
   }
 
-  /** Cosa fa un effetto di dinamica che suona, per il suo pannello. */
+  /** What a playing dynamics effect is doing, for its panel. */
   dynamics(owner: ChainOwner, id: DeviceId): EffectDynamics {
     return new EffectDynamics(() => this.engine.effectMonitor(owner, id));
   }
 
-  /** Mixdown di [from, to) del progetto corrente. */
-  /** Mixdown di [from, to) del progetto (o di un altro, es. una scena messa sulla timeline). */
+  /** Mixdown of [from, to) of the current project. */
+  /** Mixdown of [from, to) of the project (or another one, e.g. a scene put on the timeline). */
   exportMix(from: Beats, to: Beats, project = this.store.project, tailSeconds?: number): Promise<Float32Array[]> {
     return renderMix(project, from, to, {
       createGraph: offlineGraph, library: this.library, renders: this.renders, instruments: this.instruments, effects: this.effects,

@@ -1,7 +1,7 @@
 import type { StretchInput, TimeStretcher, SettingsOf, BeatsLoopMode } from './stretcher';
 
-/** Dove leggere, nella sorgente, il campione n-esimo dopo la fine della fetta (n ≥ 0),
- *  e con quale guadagno. Una strategia per ogni loop mode. */
+/** Where to read, in the source, the n-th sample after the end of the slice (n ≥ 0),
+ *  and with which gain. One strategy per loop mode. */
 type LoopReader = (n: number, slice: { inB: number; loopStart: number; loopLen: number; xf: number }) => { src: number; gain: number };
 
 const loopReaders: Record<Exclude<BeatsLoopMode, 'off'>, LoopReader> = {
@@ -15,8 +15,8 @@ const loopReaders: Record<Exclude<BeatsLoopMode, 'off'>, LoopReader> = {
   },
 };
 
-/** Beats: ogni fetta (tra transienti o sulla griglia) suona a velocità originale dalla
- *  sua nuova posizione; i buchi si riempiono secondo il loop mode. */
+/** Beats: each slice (between transients or on the grid) plays at original speed from
+ *  its new position; the gaps are filled according to the loop mode. */
 export class BeatsStretcher implements TimeStretcher<SettingsOf<'beats'>> {
   readonly shiftsPitch = false;
 
@@ -66,7 +66,7 @@ export class BeatsStretcher implements TimeStretcher<SettingsOf<'beats'>> {
     return outs;
   }
 
-  /** Inizi delle fette ordinati, senza fette più corte di 32 campioni; la prima parte da 0. */
+  /** Slice starts sorted, without slices shorter than 32 samples; the first starts at 0. */
   private static slicePoints(slices: readonly number[], len: number): number[] {
     const pts = [0];
     for (const v of [...slices].sort((p, q) => p - q).map(Math.round)) {

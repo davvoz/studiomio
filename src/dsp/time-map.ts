@@ -1,34 +1,34 @@
-/** Coppia di posizioni in campioni: [uscita, ingresso]. */
+/** A pair of positions in samples: [output, input]. */
 export type MapPoint = readonly [output: number, input: number];
 
-/** Corrispondenza lineare a tratti tra campioni di uscita e di ingresso, estrapolata
- *  con la pendenza dei segmenti estremi. È la mappa di warp vista dal DSP. */
+/** Piecewise linear correspondence between output and input samples, extrapolated
+ *  with the slope of the outermost segments. It's the warp map as the DSP sees it. */
 export class TimeMap {
   private readonly out: Float64Array;
   private readonly inp: Float64Array;
 
   constructor(points: readonly MapPoint[]) {
-    if (points.length === 0) throw new RangeError('TimeMap: serve almeno un punto');
+    if (points.length === 0) throw new RangeError('TimeMap: at least one point is needed');
     this.out = Float64Array.from(points, p => p[0]);
     this.inp = Float64Array.from(points, p => p[1]);
   }
 
-  /** Campione di ingresso che suona al campione di uscita `o`. */
+  /** Input sample that plays at output sample `o`. */
   inputAt(o: number): number {
     return TimeMap.lerp(this.out, this.inp, o);
   }
 
-  /** Campione di uscita in cui suona il campione di ingresso `i`. */
+  /** Output sample at which input sample `i` plays. */
   outputAt(i: number): number {
     return TimeMap.lerp(this.inp, this.out, i);
   }
 
-  /** Copia dei punti come due array paralleli (formato per WebAssembly). */
+  /** Copy of the points as two parallel arrays (format for WebAssembly). */
   toArrays(): { readonly output: Float64Array; readonly input: Float64Array } {
     return { output: this.out.slice(), input: this.inp.slice() };
   }
 
-  /** Nuova mappa con l'asse di uscita scalato (usato per la trasposizione). */
+  /** New map with the output axis scaled (used for the transposition). */
   scaleOutput(factor: number): TimeMap {
     return new TimeMap(Array.from(this.out, (o, k) => [o * factor, this.inp[k]] as const));
   }

@@ -1,5 +1,5 @@
-/** Rumore bianco in −1..1 (xorshift32): veloce, senza allocazioni e ripetibile dal seme,
- *  così le prove nei test danno sempre lo stesso suono. */
+/** White noise in −1..1 (xorshift32): fast, allocation-free and repeatable from the seed,
+ *  so tests always give the same sound. */
 export class Noise {
   private state: number;
 

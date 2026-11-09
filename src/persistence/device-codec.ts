@@ -1,5 +1,5 @@
-/* Le impostazioni di un dispositivo (tipo, preset, parametri, sample) come JSON: lo strumento
- * di una traccia, gli effetti, il suono di una clip MIDI. */
+/* A device's settings (type, preset, parameters, samples) as JSON: a track's
+ * instrument, the effects, a MIDI clip's sound. */
 import { asId } from '../core/id';
 import type { DeviceSettings } from '../model/device';
 import type { JsonObject, JsonReader } from './json-reader';

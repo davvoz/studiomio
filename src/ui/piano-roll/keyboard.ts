@@ -2,9 +2,9 @@ import { Surface } from '../surface';
 import { isBlackKey, pitchName, type PitchAxis } from './pitch-axis';
 import { notesBottom, ROLL } from './roll-painter';
 
-/** Tastiera verticale a sinistra del piano roll, allineata alle righe delle note. Premere
- *  (e trascinare) suona le note con lo strumento della traccia. Se lo strumento dà un nome alle
- *  note (i pad della drum machine) al posto dei tasti ci sono i nomi. */
+/** Vertical keyboard on the left of the piano roll, aligned with the note rows. Pressing
+ *  (and dragging) plays the notes with the track's instrument. If the instrument names the
+ *  notes (the drum machine's pads) there are the names in place of the keys. */
 export class RollKeyboard {
   private readonly surface = new Surface('roll-keys');
   private pressed: number | null = null;
@@ -79,14 +79,14 @@ export class RollKeyboard {
     if (this.names) this.paintNames(this.names, rows);
     else for (const p of rows) {
       const y = axis.pitchToY(p), h = axis.rowHeight, black = isBlackKey(p);
-      // la riga di un tasto nero: il tasto a sinistra, il bianco accanto a destra
+      // a black key's row: the key on the left, the white one next to it on the right
       g.fillStyle = '#d9dce2';
       g.fillRect(0, y, width, h);
       g.fillStyle = p === this.pressed ? '#ff9d2e' : black ? '#26292f' : '#d9dce2';
       g.fillRect(0, y, black ? width * 0.62 : width, h);
       g.fillStyle = 'rgba(0,0,0,0.35)';
       g.fillRect(0, Math.round(y + h) - 1, width, 1);
-      // con il Fold le righe non sono in fila: ognuna ha il suo nome
+      // with Fold the rows aren't in sequence: each has its name
       if ((axis.folded || p % 12 === 0) && h >= 9) {
         g.fillStyle = p === this.pressed ? '#141414' : '#555b66';
         g.fillText(pitchName(p), width - 26, y + h - 2.5);
@@ -97,7 +97,7 @@ export class RollKeyboard {
     g.fillRect(width - 1, 0, 1, height);
   }
 
-  /** Righe con nome (i pad): il nome a sinistra, la nota a destra; le altre restano scure. */
+  /** Rows with a name (the pads): the name on the left, the note on the right; the others stay dark. */
   private paintNames(names: ReadonlyMap<number, string>, rows: readonly number[]): void {
     const { g, width } = this.surface;
     const axis = this.axis!;

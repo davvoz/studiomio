@@ -1,14 +1,14 @@
-/* Il suono di Neuro: una voce sola, calcolata al doppio della frequenza di campionamento (le
- * non linearità — FM, fold, drive, distorsione — creano armoniche che altrimenti si
- * ripiegherebbero in sporcizia stonata) e riportata giù con il filtro a mezza banda.
+/* Neuro's sound: a single voice, computed at twice the sample rate (the
+ * nonlinearities — FM, fold, drive, distortion — create harmonics that would otherwise
+ * fold back into out-of-tune dirt) and brought back down with the half-band filter.
  *
- *   oscillatori (unison, FM) → fold → drive → filtro → formante → distorsione → × inviluppo
- *   → passa-alto al taglio ─┐
- *   sub (seno, centrato) ───┴→ somma → giù a 1× → volume
+ *   oscillators (unison, FM) → fold → drive → filter → formant → distortion → × envelope
+ *   → high-pass at the cut ─┐
+ *   sub (sine, centred) ────┴→ sum → down to 1× → volume
  *
- * Le modulazioni (due LFO a tempo e un inviluppo, due destinazioni ciascuno) si ricalcolano
- * ogni CONTROL_RATE campioni e si sommano ai valori delle manopole. Gira nell'AudioWorklet;
- * qui niente Web Audio, così si prova anche in Node. */
+ * The modulations (two synced LFOs and an envelope, two targets each) are recomputed
+ * every CONTROL_RATE samples and added to the knob values. Runs in the AudioWorklet;
+ * no Web Audio here, so it's also tested in Node. */
 import { dbToGain, midiToHz, type InstrumentCore } from '../../dsp/core';
 import { Adsr } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
@@ -19,15 +19,15 @@ import { MAX_UNISON } from '../analog/analog';
 import { FM_RATIOS, LFO_RATES, MOD_DEST, MOD_DESTINATIONS, NEURO_MODE, SUB_OCTAVES } from './neuro';
 
 const OVERSAMPLE = 2;
-/** Ogni quanti campioni (alla frequenza alta) si ricalcolano modulazioni e filtri. */
+/** Every how many samples (at the high rate) modulations and filters are recomputed. */
 const CONTROL_RATE = 16;
-/** La FM al massimo sposta la fase di un giro intero (indice 2π). */
+/** FM at maximum shifts the phase by a whole cycle (index 2π). */
 const FM_DEPTH = 1;
 const SUB_GAIN = 0.7;
 const HALF_PI = Math.PI / 2;
-/** Il guadagno che rimette il formante al livello del suono che entra. */
+/** The gain bringing the formant back to the level of the incoming sound. */
 const FORMANT_MAKEUP = 2.2;
-/** Le vocali (A E I O U): tre formanti, frequenza (Hz) e livello (dB), da una voce maschile. */
+/** The vowels (A E I O U): three formants, frequency (Hz) and level (dB), from a male voice. */
 const VOWELS: readonly (readonly (readonly [hz: number, db: number])[])[] = [
   [[780, 0], [1150, -4], [2800, -14]],
   [[420, 0], [1650, -9], [2650, -13]],
@@ -35,15 +35,15 @@ const VOWELS: readonly (readonly (readonly [hz: number, db: number])[])[] = [
   [[460, 0], [820, -5], [2800, -20]],
   [[330, 0], [700, -10], [2500, -24]],
 ];
-/** Larghezza di banda dei tre formanti (Hz): stretti abbastanza da sentire la vocale. */
+/** Bandwidth of the three formants (Hz): narrow enough to hear the vowel. */
 const FORMANT_BANDWIDTH = [90, 110, 170];
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-/** La posizione della copia `k` di `n` nel ventaglio: da −1 a +1 (0 se è sola). */
+/** The position of copy `k` of `n` in the fan: from −1 to +1 (0 if it's alone). */
 const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
 
-/** I parametri già convertiti in quello che serve alla voce. */
+/** The parameters already converted into what the voice needs. */
 class Settings {
   waveA: Wave = WAVE_TABLE[0];
   waveB: Wave = WAVE_TABLE[0];
@@ -74,7 +74,7 @@ class Settings {
   gain = 1;
   ampEnv = { attack: 0.002, decay: 0.4, sustain: 1, release: 0.06 };
   modEnv = { attack: 0.001, decay: 0.25, sustain: 0, release: 0.1 };
-  /** Le tre fonti di modulazione (LFO 1, LFO 2, inviluppo), due destinazioni ciascuna. */
+  /** The three modulation sources (LFO 1, LFO 2, envelope), two targets each. */
   readonly lfos = [new LfoSettings(), new LfoSettings()];
   envRoutes: readonly Route[] = [];
 
@@ -114,7 +114,7 @@ class Settings {
   }
 }
 
-/** Una destinazione di modulazione con la sua quantità (−1..1). */
+/** A modulation target with its amount (−1..1). */
 interface Route {
   readonly dest: number;
   readonly amount: number;
@@ -142,7 +142,7 @@ class LfoSettings {
   }
 }
 
-/** Le onde dell'LFO, da −1 a 1; il triangolo parte da 0 e sale, i dente di sega dagli estremi. */
+/** The LFO waves, from −1 to 1; the triangle starts from 0 and rises, the saws from the extremes. */
 const LFO_WAVES: readonly ((phase: number, lfo: Lfo) => number)[] = [
   p => Math.sin(2 * Math.PI * p),
   p => (p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4),
@@ -153,7 +153,7 @@ const LFO_WAVES: readonly ((phase: number, lfo: Lfo) => number)[] = [
   (p, l) => l.prev + (l.next - l.prev) * (0.5 - 0.5 * Math.cos(Math.PI * p)),
 ];
 
-/** Un LFO: la fase che gira e, per le onde casuali, il valore di adesso e quello prima. */
+/** An LFO: the turning phase and, for the random waves, the current value and the previous one. */
 class Lfo {
   phase = 0;
   value = 0;
@@ -177,7 +177,7 @@ class Lfo {
   }
 }
 
-/** Un filtro a variabili di stato (TPT) con tutte le uscite. */
+/** A state-variable filter (TPT) with all its outputs. */
 class StateVariable {
   low = 0;
   band = 0;
@@ -213,8 +213,8 @@ class StateVariable {
   }
 }
 
-/** I tipi del filtro, nell'ordine delle opzioni: se c'è il primo stadio (LP 24 = due in fila)
- *  e quale uscita del secondo. La banda è normalizzata (1 al centro). */
+/** The filter types, in the order of the options: whether there's the first stage (LP 24 = two in a row)
+ *  and which output of the second. The band is normalized (1 at the centre). */
 const FILTER_MODES: readonly { readonly cascade: boolean; readonly out: (s: StateVariable) => number }[] = [
   { cascade: true, out: s => s.low },
   { cascade: false, out: s => s.low },
@@ -223,7 +223,7 @@ const FILTER_MODES: readonly { readonly cascade: boolean; readonly out: (s: Stat
   { cascade: false, out: s => s.low + s.high },
 ];
 
-/** Il filtro di un canale. */
+/** A channel's filter. */
 class ChannelFilter {
   readonly first = new StateVariable();
   readonly second = new StateVariable();
@@ -243,7 +243,7 @@ class ChannelFilter {
   }
 }
 
-/** I tre formanti di un canale: passa-banda in parallelo, ognuno al suo livello. */
+/** A channel's three formants: band-passes in parallel, each at its level. */
 class FormantBank {
   readonly bands = [new StateVariable(), new StateVariable(), new StateVariable()];
 
@@ -262,8 +262,8 @@ class FormantBank {
   }
 }
 
-/** Un crossover passa-alto Linkwitz-Riley (due Butterworth in fila): toglie dal corpo quello
- *  che spetta al sub. */
+/** A Linkwitz-Riley high-pass crossover (two Butterworths in a row): removes from the body what
+ *  belongs to the sub. */
 class HighCut {
   private readonly a = new Tpt();
   private readonly b = new Tpt();
@@ -286,21 +286,21 @@ const fold = (x: number, amount: number): number => {
   return x + (y - x) * Math.min(1, 3 * amount);
 };
 
-/** La saturazione davanti al filtro: lineare a 0, poi sempre più tanh (con il livello tenuto). */
+/** The saturation in front of the filter: linear at 0, then more and more tanh (with the level held). */
 const drive = (x: number, amount: number): number => (amount <= 0 ? x : Math.tanh(x * (1 + 8 * amount)) / (1 + 1.2 * amount));
 
-/** La distorsione finale: tanh asimmetrico (armoniche pari e dispari); la continua che nasce
- *  la toglie il passa-alto del taglio. */
+/** The final distortion: asymmetric tanh (even and odd harmonics); the DC that's born
+ *  is removed by the cut's high-pass. */
 const distort = (x: number, amount: number): number => {
   if (amount <= 0) return x;
   const bias = 0.3 * amount;
   return (Math.tanh(x * (1 + 20 * amount) + bias) - Math.tanh(bias)) / (1 + 0.8 * amount);
 };
 
-/** Le modulazioni di adesso, sommate per destinazione (vedi MOD_DESTINATIONS). */
+/** The current modulations, summed by target (see MOD_DESTINATIONS). */
 class ModSum {
   readonly values = new Float64Array(MOD_DESTINATIONS.length);
-  /** Il volume si moltiplica: ogni fonte lo può solo abbassare. */
+  /** The volume multiplies: each source can only lower it. */
   volume = 1;
 
   clear(): void {
@@ -308,7 +308,7 @@ class ModSum {
     this.volume = 1;
   }
 
-  /** `bipolar` −1..1 per gli LFO; `unipolar` 0..1 (per il volume). */
+  /** `bipolar` −1..1 for the LFOs; `unipolar` 0..1 (for the volume). */
   add(routes: readonly Route[], bipolar: number, unipolar: number): void {
     for (const { dest, amount } of routes) {
       if (dest === MOD_DEST.volume) {
@@ -336,7 +336,7 @@ class NeuroVoice {
   private readonly phasesB = new Float64Array(MAX_UNISON);
   private readonly dtsA = new Float64Array(MAX_UNISON);
   private readonly dtsB = new Float64Array(MAX_UNISON);
-  /** Il guadagno sinistro e destro di ogni copia (pan a potenza costante). */
+  /** The left and right gain of each copy (constant-power pan). */
   private readonly panL = new Float64Array(MAX_UNISON);
   private readonly panR = new Float64Array(MAX_UNISON);
   private fmPhase = 0;
@@ -347,7 +347,7 @@ class NeuroVoice {
   private target = 36;
   private level = 1;
   private countdown = 0;
-  /** I valori modulati di adesso. */
+  /** The current modulated values. */
   private fm = 0;
   private foldAmount = 0;
   private driveAmount = 0;
@@ -377,13 +377,13 @@ class NeuroVoice {
     return this.pitch;
   }
 
-  /** Una nota da capo; con `from` l'intonazione parte da lì e scivola fino a `pitch`. */
+  /** A note from the start; with `from` the pitch starts there and slides to `pitch`. */
   start(pitch: number, velocity: number, from: number | null): void {
     const { s } = this;
     if (!this.amp.active) {
       for (const f of this.filters) f.reset();
       for (const f of this.formants) f.reset();
-      // fasi fisse: ogni nota attacca uguale (il colpo resta lo stesso), le copie sfasate
+      // fixed phases: every note attacks the same (the hit stays the same), the copies offset
       for (let k = 0; k < MAX_UNISON; k++) {
         this.phasesA[k] = (k * 0.618034) % 1;
         this.phasesB[k] = (k * 0.381966 + 0.5) % 1;
@@ -403,7 +403,7 @@ class NeuroVoice {
     this.countdown = 0;
   }
 
-  /** Legato: scivola verso `pitch` senza far ripartire inviluppi e LFO. */
+  /** Legato: slides towards `pitch` without restarting envelopes and LFOs. */
   slide(pitch: number): void {
     this.target = pitch;
   }
@@ -423,7 +423,7 @@ class NeuroVoice {
     this.modEnv.set(this.s.modEnv);
   }
 
-  /** Riempie `left` e `right` (alla frequenza alta) da `from` a `to`. */
+  /** Fills `left` and `right` (at the high rate) from `from` to `to`. */
   render(left: Float32Array, right: Float32Array, from: number, to: number, bpm: number): void {
     const { s, amp, phasesA, phasesB, dtsA, dtsB, panL, panR, filters, formants, highCuts, formantGains } = this;
     const { waveA, waveB } = s;
@@ -462,14 +462,14 @@ class NeuroVoice {
     }
   }
 
-  /** Il corpo di un canale: fold, drive, filtro, formante, distorsione. */
+  /** A channel's body: fold, drive, filter, formant, distortion. */
   private body(x: number, filter: ChannelFilter, formant: FormantBank, gains: Float64Array): number {
     let y = filter.process(drive(fold(x, this.foldAmount), this.driveAmount), this.mode);
     if (this.formantAmount > 0) y += (formant.process(y, gains) * FORMANT_MAKEUP - y) * this.formantAmount;
     return distort(y, this.distAmount);
   }
 
-  /** Modulazioni, glide, intonazioni, filtri e formanti, a frequenza ridotta. */
+  /** Modulations, glide, pitches, filters and formants, at reduced rate. */
   private control(bpm: number): void {
     const { s, sampleRate, mods, dtsA, dtsB } = this;
     this.countdown = CONTROL_RATE;
@@ -511,7 +511,7 @@ class NeuroVoice {
     this.formantAmount = clamp01(s.formant + mods.get('formant') / 100);
     this.volume = mods.volume;
 
-    // il filtro
+    // the filter
     this.mode = FILTER_MODES[s.filterType] ?? FILTER_MODES[0];
     const octaves = mods.get('cutoff') + (s.keyTrack * (pitch - 60)) / 12;
     const fc = Math.max(20, Math.min(20000, s.cutoff * Math.pow(2, octaves)));
@@ -522,7 +522,7 @@ class NeuroVoice {
       f.second.set(g, k);
     }
 
-    // i formanti: la vocale tra le due vicine, frequenze in ottave e livelli in dB
+    // the formants: the vowel between the two nearest, frequencies in octaves and levels in dB
     if (this.formantAmount > 0) {
       const pos = (Math.max(0, Math.min(100, s.vowel + mods.get('vowel'))) / 100) * (VOWELS.length - 1);
       const i0 = Math.min(VOWELS.length - 2, Math.floor(pos)), t = pos - i0;
@@ -576,7 +576,7 @@ export class NeuroCore implements InstrumentCore {
     if (bpm > 0) this.bpm = bpm;
   }
 
-  /** Le note tenute stanno in una pila e suona l'ultima, come nei synth monofonici. */
+  /** The held notes are on a stack and the last plays, as in monophonic synths. */
   noteOn(id: number, pitch: number, velocity: number): void {
     const tied = this.held.length > 0 && this.voice.active && !this.voice.releasing;
     this.held.push({ id, pitch, velocity });

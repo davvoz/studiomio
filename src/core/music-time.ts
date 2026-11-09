@@ -1,5 +1,5 @@
-/** Posizioni e durate musicali in quarti (1 = una semiminima). È l'unità di tutto il
- *  modello: i secondi si ricavano dal tempo del progetto solo quando serve suonare. */
+/** Musical positions and durations in quarters (1 = a quarter note). It's the unit of the whole
+ *  model: seconds are derived from the project's tempo only when it's time to play. */
 export type Beats = number;
 export type Seconds = number;
 
@@ -14,18 +14,18 @@ export class TimeSignature {
   readonly denominator: number;
 
   constructor(numerator: number, denominator: number) {
-    if (!Number.isInteger(numerator) || numerator < 1 || numerator > 64) throw new RangeError(`numeratore non valido: ${numerator}`);
-    if (![1, 2, 4, 8, 16, 32].includes(denominator)) throw new RangeError(`denominatore non valido: ${denominator}`);
+    if (!Number.isInteger(numerator) || numerator < 1 || numerator > 64) throw new RangeError(`invalid numerator: ${numerator}`);
+    if (![1, 2, 4, 8, 16, 32].includes(denominator)) throw new RangeError(`invalid denominator: ${denominator}`);
     this.numerator = numerator;
     this.denominator = denominator;
   }
 
-  /** Quarti in una battuta (6/8 → 3). */
+  /** Quarters in a bar (6/8 → 3). */
   get beatsPerBar(): Beats {
     return (this.numerator * 4) / this.denominator;
   }
 
-  /** Posizione in formato Live "battuta.tempo.sedicesimo", contando da 1. */
+  /** Position in Live's "bar.beat.sixteenth" format, counting from 1. */
   format(beat: Beats): string {
     const bar = Math.floor(beat / this.beatsPerBar);
     const inBar = beat - bar * this.beatsPerBar;
@@ -44,8 +44,8 @@ export class TimeSignature {
   }
 }
 
-/** Conversione tra battiti e secondi. Oggi il tempo è costante; l'automazione del tempo
- *  sarà un'altra implementazione della stessa interfaccia. */
+/** Conversion between beats and seconds. Today the tempo is constant; tempo automation
+ *  will be another implementation of the same interface. */
 export interface TempoMap {
   secondsAt(beat: Beats): Seconds;
   beatAt(seconds: Seconds): Beats;
@@ -55,7 +55,7 @@ export class Tempo implements TempoMap {
   readonly bpm: number;
 
   constructor(bpm: number) {
-    if (!(bpm >= MIN_BPM && bpm <= MAX_BPM)) throw new RangeError(`tempo fuori scala: ${bpm} BPM`);
+    if (!(bpm >= MIN_BPM && bpm <= MAX_BPM)) throw new RangeError(`tempo out of range: ${bpm} BPM`);
     this.bpm = bpm;
   }
 

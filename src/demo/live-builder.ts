@@ -1,8 +1,8 @@
-/* Un live descritto come dati e montato in un progetto: tracce (una Drum Machine con i suoi pad
- * Sample, un Analog, un Neuro o un altro strumento), effetti, rack con le loro macro, scene con
- * le loro clip e modulazioni, e l'ordine delle scene per la "registrazione" sulla timeline. Per
- * suonarlo dal vivo: il sidechain, i tasti della tastiera sulle macro, la quantizzazione del
- * lancio. I live di src/demo descrivono solo la musica; il montaggio è qui, uguale per tutti. */
+/* A live described as data and assembled into a project: tracks (a Drum Machine with its Sample
+ * pads, an Analog, a Neuro or another instrument), effects, racks with their macros, scenes with
+ * their clips and modulations, and the order of the scenes for the "recording" on the timeline. To
+ * play it live: the sidechain, the keyboard keys on the macros, the launch
+ * quantization. The lives in src/demo describe only the music; the assembly is here, the same for all. */
 import type { TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { paramSpec } from '../devices/device-type';
@@ -38,18 +38,18 @@ import { edit, type ProjectStore } from '../store/project-store';
 import { renameScene } from '../store/session-edits';
 import { BAR } from './patterns';
 
-// ------------------------------------------------------------------ suoni
+// ------------------------------------------------------------------ sounds
 
-/** Un pad: un Sample (il suono per nome) o, con `model`, un suono sintetizzato della Drum
- *  Machine ("kick", "snare"…); i controlli mancanti restano quelli del modello. */
+/** A pad: a Sample (the sound by name) or, with `model`, a synthesized Drum
+ *  Machine sound ("kick", "snare"…); the missing controls stay the model's. */
 export interface PadSound<S extends string> {
   readonly sound?: S;
   readonly model?: string;
   readonly tune?: number;
   readonly decay?: number;
-  /** Inizio nel file, in percento (per affettare un loop o una frase)… */
+  /** Start in the file, in percent (to slice a loop or a phrase)… */
   readonly start?: number;
-  /** …o in secondi dall'inizio del file (diventa la percentuale con la durata del sample). */
+  /** …or in seconds from the start of the file (becomes the percentage with the sample's duration). */
   readonly at?: number;
   readonly reverse?: boolean;
   readonly tone?: number;
@@ -59,23 +59,23 @@ export interface PadSound<S extends string> {
   readonly choke?: number;
 }
 
-/** L'Inizio di un pad in percento: dato, o dai secondi `at` con la durata del suo sample. */
+/** A pad's Start in percent: given, or from the seconds `at` with its sample's duration. */
 const startOf = <S extends string>(p: PadSound<S>, sounds?: Readonly<Record<S, SampleRef>>): number => {
   if (p.at === undefined) return p.start ?? 0;
   const s = p.sound === undefined ? undefined : sounds?.[p.sound];
-  if (!s) throw new Error(`per "at" serve la durata del sample "${p.sound}"`);
+  if (!s) throw new Error(`"at" needs the duration of sample "${p.sound}"`);
   return Math.round((p.at / sampleDuration(s)) * 1e6) / 1e4;
 };
 
-/** Il modello di un pad: quello dato o, se c'è un suono, Sample. */
+/** A pad's model: the given one or, if there's a sound, Sample. */
 const modelOf = <S extends string>(p: PadSound<S>): number => {
   const model = MODEL[p.model ?? 'sample'];
-  if (model === undefined) throw new Error(`modello di pad sconosciuto: "${p.model}"`);
-  if (model === MODEL.sample && p.sound === undefined) throw new Error('un pad Sample vuole il suo suono');
+  if (model === undefined) throw new Error(`unknown pad model: "${p.model}"`);
+  if (model === MODEL.sample && p.sound === undefined) throw new Error('a Sample pad needs its sound');
   return model;
 };
 
-/** I parametri dei pad di un kit (con i sample, se qualche pad dice "at"). */
+/** The parameters of a kit's pads (with the samples, if some pad says "at"). */
 export const kitParams = <S extends string>(kit: readonly PadSound<S>[], sounds?: Readonly<Record<S, SampleRef>>): Record<string, number> =>
   Object.fromEntries(kit.flatMap((p, i) => {
     const model = modelOf(p), d = DRUM_MODELS[model];
@@ -87,16 +87,16 @@ export const kitParams = <S extends string>(kit: readonly PadSound<S>[], sounds?
     ];
   }));
 
-// ------------------------------------------------------------------ effetti
+// ------------------------------------------------------------------ effects
 
-/** Un effetto con i suoi parametri (sopra i predefiniti del tipo). */
+/** An effect with its parameters (over the type's defaults). */
 export interface EffectSpec {
   readonly type: string;
   readonly label: string;
   readonly name: string;
   readonly params: ParamValues;
-  /** Per i modulatori (LFO, Inviluppo): cosa muove ogni destinazione, in ordine (la quantità è il
-   *  parametro `a1`, `a2`…). Un effetto per posto è della stessa catena (in un rack: del rack). */
+  /** For modulators (LFO, Envelope): what each target moves, in order (the amount is the
+   *  parameter `a1`, `a2`…). An effect by position belongs to the same chain (in a rack: the rack's). */
   readonly targets?: readonly (ModSpecTarget | null)[];
 }
 
@@ -114,42 +114,42 @@ export const eq = effect(EQ);
 export const clipper = effect(CLIPPER);
 export const stereo = effect(STEREO);
 
-/** Un LFO o un Inviluppo con le sue destinazioni. */
+/** An LFO or an Envelope with its targets. */
 export const lfo = (name: string, params: ParamValues, targets: readonly (ModSpecTarget | null)[]): EffectSpec =>
   ({ ...effect(LFO_DEVICE)(name, params), targets });
 export const envelope = (name: string, params: ParamValues, targets: readonly (ModSpecTarget | null)[]): EffectSpec =>
   ({ ...effect(ENVELOPE_DEVICE)(name, params), targets });
 
-/** Un EQ che taglia sotto `freq` (lascia i bassi a chi li deve tenere). */
+/** An EQ cutting below `freq` (leaves the lows to whoever must hold them). */
 export const lowCut = (freq: number): EffectSpec =>
-  eq(`Taglio ${freq} Hz`, { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: freq });
+  eq(`Cut ${freq} Hz`, { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: freq });
 
 // ------------------------------------------------------------------ rack
 
-/** Un parametro mosso da una macro: il dispositivo per posto nel rack (0 il primo: lo strumento,
- *  se è un Instrument Rack), il parametro, il suo valore con la macro a 0 e a 127. */
+/** A parameter moved by a macro: the device by position in the rack (0 the first: the instrument,
+ *  if it's an Instrument Rack), the parameter, its value with the macro at 0 and at 127. */
 export type Move = readonly [device: number, param: string, min: number, max: number];
 
 export interface MacroSpec {
   readonly name: string;
-  /** Assente: manopola. */
+  /** Missing: knob. */
   readonly mode?: MacroMode;
-  /** Dove parte (0 … 127); assente: 0. I parametri mappati partono dove la macro li porta. */
+  /** Where it starts (0 … 127); absent: 0. The mapped parameters start where the macro takes them. */
   readonly value?: number;
   readonly moves: readonly Move[];
 }
 
-/** Un rack: i suoi effetti (dopo lo strumento, se è l'Instrument Rack della traccia) e le macro. */
+/** A rack: its effects (after the instrument, if it's the track's Instrument Rack) and the macros. */
 export interface RackSpec {
   readonly name: string;
   readonly effects: readonly EffectSpec[];
   readonly macros: readonly MacroSpec[];
 }
 
-/** Il rack come quelli salvati, pronto per loadRack (con lo strumento, se c'è). Controlla che le
- *  macro muovano parametri che esistono: un errore di battitura si vede subito. */
+/** The rack like the saved ones, ready for loadRack (with the instrument, if there is one). Checks that the
+ *  macros move parameters that exist: a typo shows up right away. */
 export function rackPreset(spec: RackSpec, instrument: SavedDevice | null): RackPreset {
-  if (spec.macros.length > MACRO_COUNT) throw new RangeError(`${spec.name}: più di ${MACRO_COUNT} macro`);
+  if (spec.macros.length > MACRO_COUNT) throw new RangeError(`${spec.name}: more than ${MACRO_COUNT} macros`);
   const devices = [...(instrument ? [instrument] : []), ...spec.effects];
   const typeOf = (i: number) => (instrument && i === 0 ? instrumentType(instrument.type) : effectType(devices[i].type));
   return {
@@ -164,10 +164,10 @@ export function rackPreset(spec: RackSpec, instrument: SavedDevice | null): Rack
       if (!m) return { name: null, value: 0, mappings: [] };
       for (const [device, param] of m.moves) {
         const type = devices[device] && typeOf(device);
-        if (!type || !paramSpec(type, param)) throw new RangeError(`${spec.name}, macro «${m.name}»: il dispositivo ${device} non ha «${param}»`);
+        if (!type || !paramSpec(type, param)) throw new RangeError(`${spec.name}, macro «${m.name}»: device ${device} has no «${param}»`);
       }
       const value = m.value ?? 0;
-      if (value < 0 || value > MACRO_MAX) throw new RangeError(`${spec.name}, macro «${m.name}»: valore ${value}`);
+      if (value < 0 || value > MACRO_MAX) throw new RangeError(`${spec.name}, macro «${m.name}»: value ${value}`);
       return {
         name: m.name, value,
         mappings: m.moves.map(([device, param, min, max]) => ({ device, param, min, max })),
@@ -177,33 +177,33 @@ export function rackPreset(spec: RackSpec, instrument: SavedDevice | null): Rack
   };
 }
 
-// ------------------------------------------------------------------ tracce, clip, scene
+// ------------------------------------------------------------------ tracks, clips, scenes
 
 export interface TrackSpec<S extends string, K extends string = string> {
   readonly key: K;
   readonly name: string;
   readonly volumeDb: number;
   readonly pan?: number;
-  /** Un kit di Drum Machine, un suono di Neuro, uno strumento qualunque o (se mancano) di Analog. */
+  /** A Drum Machine kit, a Neuro sound, any instrument or (if they're missing) Analog. */
   readonly kit?: readonly PadSound<S>[];
   readonly neuro?: ParamValues;
   readonly analog?: ParamValues;
   readonly instrument?: { readonly type: string; readonly params: ParamValues };
-  /** L'Instrument Rack: lo strumento qui sopra, i suoi effetti e le macro. */
+  /** The Instrument Rack: the instrument above, its effects and the macros. */
   readonly rack?: RackSpec;
-  /** Audio Effect Rack dopo l'Instrument Rack, in fila. */
+  /** Audio Effect Racks after the Instrument Rack, in a row. */
   readonly fxRacks?: readonly RackSpec[];
-  /** I sample dello strumento per posto ("sample", "z2"… del Sampler), oltre a quelli del kit. */
+  /** The instrument's samples by slot ("sample", "z2"… of the Sampler), besides those of the kit. */
   readonly samples?: Readonly<Record<string, S>>;
-  /** Gli effetti fuori dai rack, dopo i rack. */
+  /** The effects outside the racks, after the racks. */
   readonly effects: readonly EffectSpec[];
-  /** Effetti che ascoltano un'altra traccia (il compressore in sidechain sulla cassa): il posto
-   *  dell'effetto nella catena finita (rack compresi) e la traccia. */
+  /** Effects listening to another track (the sidechain compressor on the kick): the position
+   *  of the effect in the finished chain (racks included) and the track. */
   readonly sidechain?: readonly (readonly [effect: number, source: K])[];
 }
 
-/** Cosa muove una modulazione: come nel modello, o un effetto della traccia per posizione
- *  nella catena (l'id lo riceve quando la traccia nasce). */
+/** What a modulation moves: as in the model, or a track effect by position
+ *  in the chain (it gets the id when the track is created). */
 export type ModSpecTarget = ModTarget | { readonly kind: 'effect'; readonly index: number; readonly param: string };
 
 export interface ModSpec {
@@ -211,13 +211,13 @@ export interface ModSpec {
   readonly points: readonly EnvelopePoint[];
 }
 
-/** Una clip della session: note, lunghezza del giro e (a scelta) modulazioni. */
+/** A session clip: notes, loop length and (optionally) modulations. */
 export interface ClipSpec {
   readonly name: string;
   readonly notes: readonly Note[];
   readonly length: Beats;
   readonly mods?: readonly ModSpec[];
-  /** Suona una volta e si ferma (senza loop): salite, rulli, impatti. */
+  /** Plays once and stops (no loop): risers, rolls, impacts. */
   readonly once?: boolean;
 }
 
@@ -230,12 +230,12 @@ export const VOLUME: ModTarget = { kind: 'mixer', param: 'volume' };
 
 export interface SceneSpec<K extends string = string> {
   readonly name: string;
-  /** Quante battute dura la sezione nella "registrazione" sulla timeline. */
+  /** How many bars the section lasts in the "recording" on the timeline. */
   readonly bars: number;
   readonly clips: Partial<Record<K, ClipSpec>>;
 }
 
-/** Un tasto della tastiera su una macro: il rack per posto tra quelli della catena (0 il primo). */
+/** A keyboard key on a macro: the rack by position among the chain's (0 the first). */
 export interface KeySpec<K extends string = string> {
   /** KeyboardEvent.code: "KeyQ", "Digit1"… */
   readonly key: string;
@@ -247,24 +247,24 @@ export interface KeySpec<K extends string = string> {
 export interface LiveSpec<S extends string, K extends string = string> {
   readonly name: string;
   readonly bpm: number;
-  /** Gli Audio Effect Rack del master vanno prima dei suoi effetti. */
+  /** The master's Audio Effect Racks go before its effects. */
   readonly master: { readonly volumeDb: number; readonly effects: readonly EffectSpec[]; readonly racks?: readonly RackSpec[] };
   readonly tracks: readonly TrackSpec<S, K>[];
   readonly scenes: readonly SceneSpec<K>[];
-  /** L'ordine delle scene (per indice) nella "registrazione" sulla timeline. */
+  /** The order of the scenes (by index) in the "recording" on the timeline. */
   readonly arrangement: readonly number[];
-  /** La quantizzazione del lancio (vedi model/launch.ts); assente: quella predefinita. */
+  /** The launch quantization (see model/launch.ts); absent: the default one. */
   readonly launch?: string;
   readonly keys?: readonly KeySpec<K>[];
 }
 
-// ------------------------------------------------------------------ montaggio
+// ------------------------------------------------------------------ assembly
 
-/** Il bersaglio vero di una modulazione: l'effetto per posizione diventa il suo id. */
+/** The real target of a modulation: the effect by position becomes its id. */
 function resolveTarget(target: ModSpecTarget, effects: readonly EffectSettings[]): ModTarget {
   if (target.kind !== 'effect') return target;
   const fx = effects[target.index];
-  if (!fx) throw new Error(`la traccia non ha l'effetto ${target.index + 1}`);
+  if (!fx) throw new Error(`the track doesn't have effect ${target.index + 1}`);
   return { kind: 'device', device: fx.id, param: target.param };
 }
 
@@ -275,22 +275,22 @@ function addEffects(store: ProjectStore, owner: ChainOwner, effects: readonly Ef
     store.apply(addEffect(owner, fx.type, fx.label));
     store.apply(loadEffectPreset(owner, list().at(-1)!.id, fx.name, fx.params));
   }
-  // le destinazioni dei modulatori alla fine: possono muovere anche gli effetti che vengono dopo
+  // the modulators' targets at the end: they can also move the effects that come after
   effects.forEach((fx, i) => fx.targets?.forEach((t, slot) => {
     if (t) store.apply(setModTarget(owner, list()[first + i].id, slot, resolveTarget(t, list())));
   }));
 }
 
-/** La destinazione di un modulatore di un rack scritto a mano, come nei rack salvati. */
+/** The target of a modulator of a hand-written rack, as in the saved racks. */
 function savedSpecTarget(t: ModSpecTarget | null, instrument: boolean): string | null {
   if (!t) return null;
   if (t.kind === 'effect') return `d${t.index + (instrument ? 1 : 0)}:${t.param}`;
   if (t.kind === 'mixer') return `mixer:${t.param}`;
   if (t.kind === 'device' && t.device === INSTRUMENT_DEVICE && instrument) return `d0:${t.param}`;
-  throw new RangeError('in un rack un modulatore muove solo i dispositivi del rack, il volume e il pan');
+  throw new RangeError('in a rack a modulator moves only the rack\'s devices, the volume and the pan');
 }
 
-/** Lo strumento di una traccia: il kit della Drum Machine, Neuro, quello dato o Analog. */
+/** A track's instrument: the Drum Machine kit, Neuro, the given one or Analog. */
 function instrumentOf<S extends string, K extends string>(spec: TrackSpec<S, K>, sounds: Readonly<Record<S, SampleRef>>): { type: string; params: ParamValues } {
   if (spec.kit) return { type: DRUMS.type, params: { volume: 0, velocity: 60, ...kitParams(spec.kit, sounds) } };
   if (spec.neuro) return { type: NEURO.type, params: { ...spec.neuro } };
@@ -298,7 +298,7 @@ function instrumentOf<S extends string, K extends string>(spec: TrackSpec<S, K>,
   return { type: ANALOG.type, params: { ...spec.analog } };
 }
 
-/** Monta il live nel progetto (vuoto) dello store, con i sample già pronti per nome. */
+/** Assembles the live in the store's (empty) project, with the samples already ready by name. */
 export function buildLive<S extends string, K extends string>(store: ProjectStore, live: LiveSpec<S, K>, sounds: Readonly<Record<S, SampleRef>>): void {
   store.apply(renameProject(live.name));
   store.apply(setTempo(live.bpm));
@@ -327,25 +327,25 @@ export function buildLive<S extends string, K extends string>(store: ProjectStor
     if (spec.samples) store.apply(setInstrumentSamples(track, Object.fromEntries(Object.entries<S>(spec.samples).map(([slot, s]) => [slot, sounds[s]]))));
     addEffects(store, track, spec.effects);
   }
-  // il sidechain quando tutte le tracce ci sono (anche verso una traccia che viene dopo)
+  // the sidechain when all the tracks are there (also towards a track that comes after)
   for (const spec of live.tracks) {
     for (const [index, source] of spec.sidechain ?? []) {
       const track = ids.get(spec.key)!, fx = store.project.track(track)!.effects[index], from = ids.get(source);
-      if (!fx || !from) throw new Error(`${spec.name}: sidechain sull'effetto ${index + 1} da «${source}» impossibile`);
+      if (!fx || !from) throw new Error(`${spec.name}: sidechain on effect ${index + 1} from «${source}» impossible`);
       store.apply(setEffectSidechain(track, fx.id, from));
     }
   }
   for (const k of live.keys ?? []) {
     const owner: ChainOwner = k.owner === 'master' ? MASTER : ids.get(k.owner)!;
     const rack = store.project.racksOf(owner)[k.rack];
-    if (!rack) throw new Error(`tasto ${k.key}: il rack ${k.rack + 1} di «${k.owner}» non c'è`);
+    if (!rack) throw new Error(`key ${k.key}: rack ${k.rack + 1} of «${k.owner}» doesn't exist`);
     store.apply(setKey({ kind: 'macro', owner, rack: rack.id, index: k.macro }, k.key));
   }
 
-  // le clip della session, e la stessa clip riusata nella "registrazione"
+  // the session clips, and the same clip reused in the "recording"
   const trackOf = (key: K) => {
     const id = ids.get(key);
-    if (!id) throw new Error(`traccia "${key}" inesistente`);
+    if (!id) throw new Error(`track "${key}" doesn't exist`);
     return store.project.track(id)!;
   };
   const clipOf = (key: K, spec: ClipSpec): MidiClip => {
@@ -363,7 +363,7 @@ export function buildLive<S extends string, K extends string>(store: ProjectStor
   let at = 0;
   for (const index of live.arrangement) {
     const scene = live.scenes[index], length = scene.bars * BAR, start = at;
-    store.apply(edit(`Sezione ${scene.name}`, (p, { ids: idf }) => clipsOf(scene).reduce((next, [key, spec]) => {
+    store.apply(edit(`Section ${scene.name}`, (p, { ids: idf }) => clipsOf(scene).reduce((next, [key, spec]) => {
       const c = clipOf(key, spec);
       return next.updatingTrack(trackOf(key).id, t => t.placing({ id: idf.next('placement'), clip: c, start, length, offset: 0 }, idf));
     }, p)));

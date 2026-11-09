@@ -1,11 +1,11 @@
-/* Dove si trova il trasporto, nell'AudioWorklet: per gli effetti che seguono la battuta (Beat
- * Repeat). Il thread principale manda un ancoraggio a ogni partenza, giro di loop, salto o
- * cambio di tempo, con l'istante in cui vale (di solito un attimo nel futuro); da lì la
- * posizione si calcola da sola. Puro: si prova anche in Node. */
+/* Where the transport is, in the AudioWorklet: for the effects that follow the bar (Beat
+ * Repeat). The main thread sends an anchor at every start, loop round, jump or
+ * tempo change, with the instant it applies from (usually a moment in the future); from there the
+ * position is computed by itself. Pure: it's also tested in Node. */
 import type { TransportPosition } from '../dsp/core';
 
-/** Il battito `beat` della timeline suona all'istante `time` (secondi del contesto audio) e da
- *  lì il trasporto avanza a `bpm`. */
+/** Timeline beat `beat` plays at instant `time` (audio context seconds) and from
+ *  there the transport advances at `bpm`. */
 export interface TransportAnchor {
   readonly time: number;
   readonly beat: number;
@@ -14,11 +14,11 @@ export interface TransportAnchor {
 }
 
 export class TransportClock {
-  /** In ordine di istante: il primo è quello in vigore (o il prossimo, se nessuno lo è ancora). */
+  /** In order of instant: the first is the one in force (or the next, if none is yet). */
   private anchors: TransportAnchor[] = [];
 
-  /** Un ancoraggio nuovo sostituisce quelli che sarebbero valsi da quell'istante in poi (un salto
-   *  annulla il giro di loop già annunciato); null: il trasporto si è fermato, subito. */
+  /** A new anchor replaces those that would have applied from that instant on (a jump
+   *  cancels the already announced loop round); null: the transport stopped, right away. */
   set(anchor: TransportAnchor | null): void {
     if (!anchor) {
       this.anchors = [];
@@ -27,7 +27,7 @@ export class TransportClock {
     this.anchors = [...this.anchors.filter(a => a.time < anchor.time), anchor];
   }
 
-  /** La posizione all'istante `time` (null se fermo, o non ancora partito). */
+  /** The position at instant `time` (null if stopped, or not started yet). */
   at(time: number): TransportPosition | null {
     const a = this.anchors;
     while (a.length > 1 && a[1].time <= time) a.shift();

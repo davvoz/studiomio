@@ -19,36 +19,36 @@ import type { ModTarget } from '../model/envelope';
 import { addEffectItems, automationOnRightClick, fxButton, keyboardButton, midiSlot, midiTarget, setFxCount, setVolume, volumeSlider } from './mixer-controls';
 
 export interface HeaderActions {
-  /** Apre la catena dei dispositivi (strumento ed effetti) di una traccia o del master. */
+  /** Opens the device chain (instrument and effects) of a track or of the master. */
   openDevices(owner: ChainOwner): void;
-  /** Una voce del browser lasciata su una traccia (o sotto le tracce: `track` null). */
+  /** A browser item dropped on a track (or below the tracks: `track` null). */
   dropItem?(item: BrowserItem, target: LoadTarget): void;
-  /** Mostra la curva di un parametro nella clip della traccia. */
+  /** Shows a parameter's curve in the track's clip. */
   showAutomation?(owner: ChainOwner, target: ModTarget): void;
-  /** Le voci di menu per incollare dei dispositivi su `owner` (nessuna se gli appunti non ne hanno). */
+  /** The menu items to paste devices onto `owner` (none if the clipboard has none). */
   pasteDeviceItems?(owner: ChainOwner): MenuItem[];
 }
 
 const kindBadge = (text: string) => () => el('span', { className: 'kind', textContent: text });
 
-/** Accanto al nome: il tipo della traccia o, per le tracce MIDI, il loro strumento (un clic lo apre). */
+/** Next to the name: the track's kind or, for MIDI tracks, their instrument (a click opens it). */
 const BADGES: Readonly<Record<string, (t: Track, actions: HeaderActions) => HTMLElement>> = {
   audio: kindBadge('Audio'),
-  group: kindBadge('Gruppo'),
+  group: kindBadge('Group'),
   midi: (t, actions) => {
     const { instrument } = t as MidiTrack;
     const label = instrumentType(instrument.type)?.label ?? instrument.type;
     const text = instrument.preset ? `${label} · ${instrument.preset}` : label;
-    return el('button', { className: 'kind instrument', textContent: text, title: `${text}: apri lo strumento`, onclick: () => actions.openDevices(t.id) });
+    return el('button', { className: 'kind instrument', textContent: text, title: `${text}: open the instrument`, onclick: () => actions.openDevices(t.id) });
   },
 };
 
 const badgeFor = (t: Track, actions: HeaderActions) => (BADGES[t.kind] ?? kindBadge(t.kind))(t, actions);
 
-/** Colonna a sinistra della timeline: nome, mute/solo, volume di ogni traccia che si vede (le
- *  tracce di un gruppo chiuso no), allineata allo scorrimento verticale delle corsie; le tracce
- *  di un gruppo rientrano sotto di lui. Ogni riga si aggiorna al suo posto, così un volume
- *  trascinato continua anche se il progetto cambia a ogni passo. */
+/** Column on the left of the timeline: name, mute/solo, volume of each visible track (the
+ *  tracks of a closed group not), aligned with the lanes' vertical scrolling; the tracks
+ *  of a group are indented under it. Each row is updated in place, so a dragged volume
+ *  continues even if the project changes at every step. */
 export class TrackHeaders {
   readonly element = el('div', { className: 'headers' });
   private readonly list = el('div', { className: 'header-list' });
@@ -61,22 +61,22 @@ export class TrackHeaders {
     private readonly meters: MeterBoard,
   ) {
     const add = el('div', { className: 'header-add' },
-      el('button', { textContent: '+ Audio', title: 'Nuova traccia audio', onclick: () => store.apply(addTrack('audio')) }),
-      el('button', { textContent: '+ MIDI', title: 'Nuova traccia MIDI', onclick: () => store.apply(addTrack('midi')) }));
+      el('button', { textContent: '+ Audio', title: 'New audio track', onclick: () => store.apply(addTrack('audio')) }),
+      el('button', { textContent: '+ MIDI', title: 'New MIDI track', onclick: () => store.apply(addTrack('midi')) }));
     const scroll = el('div', { className: 'header-scroll' }, this.list);
-    // tasto destro sotto le tracce: solo le tracce nuove
+    // right click below the tracks: only the new tracks
     scroll.oncontextmenu = e => {
       e.preventDefault();
       showContextMenu(e.clientX, e.clientY, newTrackItems(store));
     };
     this.element.append(add, scroll);
-    // dal browser: sull'intestazione va nella catena della traccia, sotto le tracce in una nuova
+    // from the browser: on the header it goes into the track's chain, below the tracks into a new one
     if (actions.dropItem) acceptBrowserDrops(scroll, (item, e) => {
       const y = e.clientY - scroll.getBoundingClientRect().top;
       const track = store.project.visibleTracks[ui.geometry.trackIndexAt(y)];
       actions.dropItem!(item, track ? { kind: 'chain', owner: track.id } : { kind: 'lane', track: null, beat: 0 });
     });
-    // un'intestazione trascinata sposta la traccia (un gruppo con le sue)
+    // a dragged header moves the track (a group with its own)
     this.list.addEventListener('pointerdown', e => {
       const row = (e.target as HTMLElement).closest<HTMLElement>('.header');
       const id = row?.dataset.track as TrackId | undefined;
@@ -107,7 +107,7 @@ export class TrackHeaders {
     }
     for (const [id, row] of this.rows) if (!rows.has(id)) row.dispose();
     this.rows = rows;
-    // la lista si rifà solo se tracce aggiunte, tolte o spostate
+    // the list is redone only if tracks were added, removed or moved
     const elements = tracks.map(t => rows.get(t.id)!.element);
     const children = this.list.children;
     if (children.length !== elements.length || elements.some((e, i) => children[i] !== e)) this.list.replaceChildren(...elements);
@@ -115,9 +115,9 @@ export class TrackHeaders {
     this.highlight();
   }
 
-  /** Dove andrebbe la traccia `id` lasciata in `e`: nella metà alta di una riga prima di lei,
-   *  nella metà bassa dopo (in cima alle tracce, se è un gruppo aperto), sotto tutte in fondo.
-   *  La linea rientra come la traccia che ci andrà. */
+  /** Where track `id` dropped at `e` would go: in the upper half of a row before it,
+   *  in the lower half after it (at the top of the tracks, if it's an open group), below all at the end.
+   *  The line is indented like the track that will go there. */
   private dropSpot(id: TrackId, e: PointerEvent): DropSpot<TrackDrop> | null {
     const p = this.store.project, tracks = p.visibleTracks, { trackHeight: h, scrollY } = this.ui.geometry;
     const box = this.list.parentElement!.getBoundingClientRect();
@@ -144,26 +144,26 @@ export class TrackHeaders {
   }
 }
 
-/** L'intestazione di una traccia: costruita una volta, poi aggiornata da `update`. */
+/** A track's header: built once, then updated by `update`. */
 class HeaderRow {
   readonly element = el('div', { className: 'header' });
-  private readonly name = el('span', { className: 'track-name', title: 'Doppio clic per rinominare' });
-  /** ▾ / ▸ per aprire e chiudere un gruppo (null per le altre tracce). */
+  private readonly name = el('span', { className: 'track-name', title: 'Double click to rename' });
+  /** ▾ / ▸ to open and close a group (null for the other tracks). */
   private readonly fold: HTMLButtonElement | null = null;
   private badge: HTMLElement = el('span');
   private readonly mute: HTMLButtonElement;
   private readonly solo: HTMLButtonElement;
-  /** Solo le tracce MIDI hanno uno strumento da suonare con la tastiera. */
+  /** Only MIDI tracks have an instrument to play with the keyboard. */
   private readonly keyboard: HTMLButtonElement | null = null;
   private readonly volume: HTMLInputElement;
   private readonly fx: HTMLButtonElement;
-  /** La traccia mostrata l'ultima volta (per non rifare ciò che non è cambiato). */
+  /** The track shown last time (so as not to redo what didn't change). */
   private shown: Track | null = null;
   private readonly detachMeter: () => void;
 
   constructor(private readonly id: TrackId, private readonly store: ProjectStore, ui: UiState, private readonly actions: HeaderActions, meters: MeterBoard) {
     const open = () => actions.openDevices(id);
-    // un clic ovunque nell'intestazione sceglie la traccia (Maiusc, Ctrl: anche altre)
+    // a click anywhere in the header chooses the track (Shift, Ctrl: others too)
     this.element.addEventListener('pointerdown', e => clickTrack(ui, id, e, () => store.project.visibleTracks.map(t => t.id)));
     const isGroup = store.project.track(id) instanceof GroupTrack;
     if (isGroup) this.fold = el<HTMLButtonElement>('button', { className: 'fold', onclick: () => toggleFold(store, this.track() as GroupTrack) });
@@ -175,7 +175,7 @@ class HeaderRow {
     if (store.project.track(id) instanceof MidiTrack) this.keyboard = keyboardButton(ui, id);
     this.volume = volumeSlider(store, 0, `vol-${id}`, (volumeDb, merge) => this.mixer({ volumeDb }, merge));
     automationOnRightClick(this.volume, () => actions.showAutomation?.(id, { kind: 'mixer', param: 'volume' }));
-    this.fx = fxButton(0, 'Effetti della traccia', open);
+    this.fx = fxButton(0, 'Track effects', open);
     this.name.ondblclick = () => this.rename();
     const meter = new LevelMeter('track-meter', () => meters.resetClip(id));
     this.detachMeter = meters.attach(id, meter);
@@ -190,24 +190,24 @@ class HeaderRow {
       e.stopPropagation();
       const t = this.track();
       showContextMenu(e.clientX, e.clientY, [
-        { label: 'Rinomina', shortcut: 'doppio clic', run: () => this.rename() },
+        { label: 'Rename', shortcut: 'double click', run: () => this.rename() },
         { colors: PALETTE, current: t.color, required: true, pick: c => c && store.apply(setTrackColor(t.id, c)) },
-        { label: t.kind === 'midi' ? 'Strumento ed effetti' : 'Effetti', run: open },
+        { label: t.kind === 'midi' ? 'Instrument and effects' : 'Effects', run: open },
         ...addEffectItems(store, id, open),
         ...(actions.pasteDeviceItems?.(id) ?? []),
-        { label: t.mixer.mute ? 'Togli il mute' : 'Mute', run: () => this.mixer({ mute: !t.mixer.mute }) },
-        { label: t.mixer.solo ? 'Togli il solo' : 'Solo', run: () => this.mixer({ solo: !t.mixer.solo }) },
+        { label: t.mixer.mute ? 'Unmute' : 'Mute', run: () => this.mixer({ mute: !t.mixer.mute }) },
+        { label: t.mixer.solo ? 'Unsolo' : 'Solo', run: () => this.mixer({ solo: !t.mixer.solo }) },
         SEPARATOR,
         ...groupMenuItems(store, ui, t),
         SEPARATOR,
-        { label: isGroup ? 'Elimina il gruppo e le sue tracce' : 'Elimina traccia', run: () => store.apply(removeTrack(id)) },
+        { label: isGroup ? 'Delete the group and its tracks' : 'Delete track', run: () => store.apply(removeTrack(id)) },
         SEPARATOR,
         ...newTrackHereItems(store, t),
       ]);
     };
   }
 
-  /** `depth`: quanti gruppi contengono la traccia; `groupColor`: il colore del suo gruppo. */
+  /** `depth`: how many groups contain the track; `groupColor`: the colour of its group. */
   update(t: Track, height: number, depth: number, groupColor: string | null): void {
     this.element.style.height = `${height}px`;
     this.element.style.setProperty('--depth', String(depth));
@@ -226,7 +226,7 @@ class HeaderRow {
     setFxCount(this.fx, t.effects.length);
     if (this.fold && t instanceof GroupTrack) {
       this.fold.textContent = t.folded ? '▸' : '▾';
-      this.fold.title = t.folded ? 'Apri il gruppo: mostra le sue tracce' : 'Chiudi il gruppo: nasconde le sue tracce (suonano lo stesso)';
+      this.fold.title = t.folded ? 'Open the group: shows its tracks' : 'Close the group: hides its tracks (they play anyway)';
     }
   }
 
@@ -253,6 +253,6 @@ class HeaderRow {
 }
 
 const newTrackItems = (store: ProjectStore): MenuItem[] => [
-  { label: 'Nuova traccia audio', run: () => store.apply(addTrack('audio')) },
-  { label: 'Nuova traccia MIDI', run: () => store.apply(addTrack('midi')) },
+  { label: 'New audio track', run: () => store.apply(addTrack('audio')) },
+  { label: 'New MIDI track', run: () => store.apply(addTrack('midi')) },
 ];

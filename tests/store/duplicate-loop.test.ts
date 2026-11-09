@@ -8,12 +8,12 @@ import { setup } from '../helpers/fixtures';
 const shape = (store: ReturnType<typeof setup>['store'], i: number) =>
   store.project.tracks[i].arrangement.map(p => [p.start, p.length, p.offset]);
 
-describe('Duplica loop nell\'arrangement', () => {
-  it('copia il tratto del loop su tutte le tracce subito dopo e ci sposta il loop', () => {
+describe('Duplicate loop in the arrangement', () => {
+  it('copies the loop range on all the tracks right after and moves the loop there', () => {
     const { store, track } = setup({ midi: 2 });
-    store.apply(addMidiClip(track(0), 0, 8)); // a cavallo dell'inizio del loop
-    store.apply(addMidiClip(track(1), 5, 2)); // dentro
-    store.apply(addMidiClip(track(1), 9, 2)); // nel tratto che verrà coperto
+    store.apply(addMidiClip(track(0), 0, 8)); // straddling the start of the loop
+    store.apply(addMidiClip(track(1), 5, 2)); // inside
+    store.apply(addMidiClip(track(1), 9, 2)); // in the range that will be covered
     store.apply(setLoopRegion({ start: 4, end: 8 }));
     store.apply(duplicateLoopRegion());
 
@@ -23,7 +23,7 @@ describe('Duplica loop nell\'arrangement', () => {
     expect([store.project.loop.start, store.project.loop.end]).toEqual([8, 12]);
   });
 
-  it('un vuoto nel loop svuota anche il tratto copiato', () => {
+  it('a gap in the loop also empties the copied range', () => {
     const { store, track } = setup({ midi: 1 });
     store.apply(addMidiClip(track(0), 9, 2));
     store.apply(setLoopRegion({ start: 4, end: 8 }));
@@ -32,8 +32,8 @@ describe('Duplica loop nell\'arrangement', () => {
   });
 });
 
-describe('Duplica loop di una clip posata', () => {
-  it('la clip che finiva con il loop si allunga per far sentire la copia', () => {
+describe('Duplicate loop of a placed clip', () => {
+  it('the clip that ended with the loop lengthens to let the copy be heard', () => {
     const { store, track } = setup({ midi: 1 });
     store.apply(addMidiClip(track(0), 0, 4));
     const id = store.project.tracks[0].arrangement[0].id;
@@ -42,7 +42,7 @@ describe('Duplica loop di una clip posata', () => {
     expect([pl.length, (pl.clip as MidiClip).loop.end]).toEqual([8, 8]);
   });
 
-  it('una clip che ripete già il loop più volte resta lunga com\'è', () => {
+  it('a clip already repeating the loop several times stays as long as it is', () => {
     const { store, track } = setup({ midi: 1 });
     store.apply(addMidiClip(track(0), 0, 4));
     const id = store.project.tracks[0].arrangement[0].id;

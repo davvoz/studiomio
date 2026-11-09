@@ -2,17 +2,17 @@ import type { IdFactory, PlacementId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import type { Clip } from './clip';
 
-/** Una clip posata sulla timeline di una traccia. */
+/** A clip placed on a track's timeline. */
 export interface Placement<C extends Clip = Clip> {
   readonly id: PlacementId;
   readonly clip: C;
-  /** Inizio sulla timeline. */
+  /** Start on the timeline. */
   readonly start: Beats;
-  /** Durata sulla timeline (può superare la clip se è in loop). */
+  /** Length on the timeline (it can exceed the clip if it's looping). */
   readonly length: Beats;
-  /** Battiti della clip saltati all'inizio (bordo sinistro tagliato). */
+  /** Clip beats skipped at the start (left edge trimmed). */
   readonly offset: Beats;
-  /** Dissolvenze in entrata e in uscita, in battiti (le clip audio, come in Live). */
+  /** Fade-in and fade-out, in beats (audio clips, as in Live). */
   readonly fadeIn?: Beats;
   readonly fadeOut?: Beats;
 }
@@ -23,16 +23,16 @@ export const placementEnd = (p: Placement): Beats => p.start + p.length;
 
 const EPS = 1e-9;
 
-/** Una clip senza loop non può durare più del suo contenuto: la durata viene limitata. */
+/** A clip without loop can't last longer than its content: the length is limited. */
 function fitToClip<C extends Clip>(p: Placement<C>): Placement<C> {
-  if (p.offset < 0) throw new RangeError(`offset negativo: ${p.offset}`);
+  if (p.offset < 0) throw new RangeError(`negative offset: ${p.offset}`);
   const length = Math.min(p.length, p.clip.playLength - p.offset);
-  if (!(length > EPS)) throw new RangeError(`durata non valida: ${p.length}`);
+  if (!(length > EPS)) throw new RangeError(`invalid length: ${p.length}`);
   return fitFades(length === p.length ? p : { ...p, length });
 }
 
-/** Le dissolvenze dentro la durata della clip (quella in entrata ha la precedenza); quelle
- *  nulle spariscono. */
+/** The fades within the clip's length (the fade-in has priority); the
+ *  zero ones disappear. */
 function fitFades<C extends Clip>(p: Placement<C>): Placement<C> {
   if (p.fadeIn === undefined && p.fadeOut === undefined) return p;
   const { fadeIn = 0, fadeOut = 0, ...rest } = p;
@@ -40,11 +40,11 @@ function fitFades<C extends Clip>(p: Placement<C>): Placement<C> {
   return { ...rest, ...(fi > EPS ? { fadeIn: fi } : {}), ...(fo > EPS ? { fadeOut: fo } : {}) };
 }
 
-/** Parte di `p` che resta tenendo solo [from, to) della timeline, o null se non resta nulla. */
+/** Part of `p` that remains keeping only [from, to) of the timeline, or null if nothing remains. */
 export function keepBetween<C extends Clip>(p: Placement<C>, from: Beats, to: Beats, id: PlacementId): Placement<C> | null {
   const s = Math.max(p.start, from), e = Math.min(placementEnd(p), to);
   if (e - s <= EPS) return null;
-  // un bordo tagliato perde la sua dissolvenza
+  // a trimmed edge loses its fade
   const { fadeIn, fadeOut, ...rest } = p;
   return fitFades({
     ...rest, id, start: s, length: e - s, offset: p.offset + (s - p.start),
@@ -53,8 +53,8 @@ export function keepBetween<C extends Clip>(p: Placement<C>, from: Beats, to: Be
   });
 }
 
-/** Posa `placement` sulla corsia. Come in Live, la clip nuova vince: le clip sotto vengono
- *  accorciate, divise in due o tolte. Il risultato è ordinato per inizio. */
+/** Places `placement` on the lane. As in Live, the new clip wins: the clips underneath are
+ *  shortened, split in two or removed. The result is sorted by start. */
 export function place<C extends Clip>(lane: Lane<C>, placement: Placement<C>, ids: IdFactory): Placement<C>[] {
   placement = fitToClip(placement);
   const id = placement.id;
@@ -62,7 +62,7 @@ export function place<C extends Clip>(lane: Lane<C>, placement: Placement<C>, id
     .sort((a, b) => a.start - b.start);
 }
 
-/** Svuota [from, to) della corsia: le clip a cavallo vengono accorciate o divise in due. */
+/** Empties [from, to) of the lane: the straddling clips are shortened or split in two. */
 export function clear<C extends Clip>(lane: Lane<C>, from: Beats, to: Beats, ids: IdFactory): Placement<C>[] {
   const out: Placement<C>[] = [];
   for (const p of lane) {
@@ -71,7 +71,7 @@ export function clear<C extends Clip>(lane: Lane<C>, from: Beats, to: Beats, ids
       continue;
     }
     const left = keepBetween(p, -Infinity, from, p.id);
-    // se la clip sporge da entrambi i lati, la parte destra diventa una clip nuova
+    // if the clip sticks out on both sides, the right part becomes a new clip
     const right = keepBetween(p, to, Infinity, left ? ids.next('placement') : p.id);
     if (left) out.push(left);
     if (right) out.push(right);
@@ -83,29 +83,29 @@ export function remove<C extends Clip>(lane: Lane<C>, id: PlacementId): Placemen
   return lane.filter(p => p.id !== id);
 }
 
-/** Cambia una clip posata e la riposa (spostarla o allungarla può coprire le vicine). */
+/** Changes a placed clip and places it again (moving or lengthening it can cover the neighbours). */
 export function update<C extends Clip>(
   lane: Lane<C>, id: PlacementId, fn: (p: Placement<C>) => Placement<C>, ids: IdFactory,
 ): Placement<C>[] {
   const p = lane.find(x => x.id === id);
-  if (!p) throw new Error(`clip ${id} non trovata sulla traccia`);
+  if (!p) throw new Error(`clip ${id} not found on the track`);
   return place(lane, fn(p), ids);
 }
 
-/** Taglia una clip posata in due nel punto `at` della timeline. */
+/** Splits a placed clip in two at point `at` of the timeline. */
 export function split<C extends Clip>(lane: Lane<C>, id: PlacementId, at: Beats, ids: IdFactory): Placement<C>[] {
   const p = lane.find(x => x.id === id);
-  if (!p) throw new Error(`clip ${id} non trovata sulla traccia`);
+  if (!p) throw new Error(`clip ${id} not found on the track`);
   const left = keepBetween(p, -Infinity, at, p.id);
   const right = keepBetween(p, at, Infinity, ids.next('placement'));
   if (!left || !right) return [...lane];
   return [...remove(lane, id), left, right].sort((a, b) => a.start - b.start);
 }
 
-/** Clip posate che si sovrappongono a [from, to). */
+/** Placed clips overlapping [from, to). */
 export function between<C extends Clip>(lane: Lane<C>, from: Beats, to: Beats): Placement<C>[] {
   return lane.filter(p => p.start < to && placementEnd(p) > from);
 }
 
-/** Fine dell'ultima clip della corsia (0 se vuota). */
+/** End of the lane's last clip (0 if empty). */
 export const laneEnd = (lane: Lane): Beats => lane.reduce((m, p) => Math.max(m, placementEnd(p)), 0);

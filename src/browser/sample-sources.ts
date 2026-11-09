@@ -1,36 +1,36 @@
-/* I luoghi con l'audio: i sample del progetto aperto ("Current Project" di Live) e le cartelle
- * del disco che l'utente aggiunge ("Places"). Il disco si legge attraverso `FolderReader`: nel
- * browser e in Electron è la File System Access API (fs-folder.ts), nei test una finta. */
+/* The places with audio: the open project's samples (Live's "Current Project") and the disk
+ * folders the user adds ("Places"). The disk is read through `FolderReader`: in the
+ * browser and in Electron it's the File System Access API (fs-folder.ts), in tests a fake. */
 import type { Unsubscribe } from '../core/emitter';
 import type { SampleRef } from '../model/sample';
 import type { BrowserItem, BrowserSource } from './item';
 
-/** I file audio che il browser mostra (gli altri file di una cartella si saltano). */
+/** The audio files the browser shows (a folder's other files are skipped). */
 export const AUDIO_FILE = /\.(wav|wave|aif|aiff|flac|mp3|ogg|oga|opus|m4a)$/i;
 
-/** "0:04", "1:02": la durata di un sample. */
+/** "0:04", "1:02": a sample's duration. */
 export function duration(seconds: number): string {
   if (seconds < 10) return `${seconds.toFixed(1).replace('.', ',')} s`;
   const s = Math.round(seconds);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** Ciò che serve del progetto aperto (ProjectStore lo soddisfa). */
+/** What's needed of the open project (ProjectStore satisfies it). */
 export interface SampleProvider {
   readonly project: { readonly samples: readonly SampleRef[] };
   onChange(fn: () => void): Unsubscribe;
 }
 
-/** I sample del progetto aperto, in ordine di nome. */
+/** The open project's samples, in name order. */
 export function projectSamplesSource(store: SampleProvider): BrowserSource {
   const id = 'project';
   return {
-    id, label: 'Progetto corrente', section: 'places',
-    empty: 'Nessun sample nel progetto: importa o trascina dei file audio.',
+    id, label: 'Current project', section: 'places',
+    empty: 'No samples in the project: import or drag in some audio files.',
     items: async () => [...store.project.samples].sort((a, b) => a.name.localeCompare(b.name)).map((s): BrowserItem => ({
       id: `${id}/${s.id}`, name: s.name, icon: 'sample', hint: duration(s.frames / s.sampleRate), payload: { kind: 'sample', sample: s },
     })),
-    // si rilegge solo quando cambiano i sample, non a ogni modifica del progetto
+    // reread only when the samples change, not at every project change
     onChange: fn => {
       let samples = store.project.samples;
       return store.onChange(() => {
@@ -42,22 +42,22 @@ export function projectSamplesSource(store: SampleProvider): BrowserSource {
   };
 }
 
-/** Una voce di una cartella del disco. */
+/** An item of a disk folder. */
 export type FolderEntry =
   | { readonly kind: 'folder'; readonly name: string; readonly folder: FolderReader }
   | { readonly kind: 'file'; readonly name: string; readonly file: () => Promise<File> };
 
-/** Una cartella del disco, da leggere. */
+/** A disk folder, to be read. */
 export interface FolderReader {
   readonly name: string;
   entries(): Promise<readonly FolderEntry[]>;
-  /** Si può leggere senza chiedere il permesso? (Senza: sì.) */
+  /** Can it be read without asking for permission? (Without: yes.) */
   readable?(): Promise<boolean>;
-  /** Chiede il permesso di leggerla (dopo un clic dell'utente). */
+  /** Asks for permission to read it (after a user click). */
   request?(): Promise<boolean>;
 }
 
-/** Le voci di una cartella: prima le sottocartelle, poi i file audio, ognuno in ordine di nome. */
+/** A folder's items: first the subfolders, then the audio files, each in name order. */
 async function folderItems(prefix: string, folder: FolderReader): Promise<BrowserItem[]> {
   const entries = [...await folder.entries()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const folders = entries.flatMap((e): BrowserItem[] => (e.kind === 'folder' && !e.name.startsWith('.')
@@ -67,10 +67,10 @@ async function folderItems(prefix: string, folder: FolderReader): Promise<Browse
   return [...folders, ...files];
 }
 
-/** Una cartella del disco come luogo del browser; `id` la distingue dalle altre con lo stesso nome. */
+/** A disk folder as a browser place; `id` tells it apart from others with the same name. */
 export function folderSource(id: string, folder: FolderReader): BrowserSource {
   return {
-    id, label: folder.name, section: 'places', removable: true, empty: 'Nessun file audio in questa cartella.',
+    id, label: folder.name, section: 'places', removable: true, empty: 'No audio files in this folder.',
     items: () => folderItems(id, folder),
     locked: folder.readable && (async () => !(await folder.readable!())),
     unlock: folder.request && (() => folder.request!()),

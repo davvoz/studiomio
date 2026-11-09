@@ -1,8 +1,8 @@
 import type { AudioGraph } from './audio-graph';
 import type { OfflineGraph } from './offline-mix';
 
-/* Il motore lavora sulle interfacce di audio-graph.ts. Queste funzioni le collegano a
- * Web Audio e fanno controllare al compilatore che i tipi del browser le soddisfino. */
+/* The engine works on the interfaces of audio-graph.ts. These functions connect them to
+ * Web Audio and make the compiler check that the browser's types satisfy them. */
 
 export const liveGraph = (ctx: AudioContext): AudioGraph => ctx;
 

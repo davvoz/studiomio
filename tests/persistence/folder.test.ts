@@ -9,8 +9,8 @@ import { sampleRef, setup } from '../helpers/fixtures';
 const bytes = (n: number) => new Uint8Array(n).map((_, i) => i % 251);
 
 describe('ProjectFolder', () => {
-  it('salva e riapre il progetto, tenendo la versione precedente come backup', async () => {
-    const dir = new MemoryDirectory('Brano');
+  it('saves and reopens the project, keeping the previous version as backup', async () => {
+    const dir = new MemoryDirectory('Song');
     const folder = new ProjectFolder(dir);
     const { store, track, sampleId } = setup({ audio: 1, sample: true });
     await dir.writeBytes('audio/loop.wav', bytes(100));
@@ -28,11 +28,11 @@ describe('ProjectFolder', () => {
     expect(await dir.list('')).toEqual(expect.arrayContaining([PROJECT_FILE, BACKUP_FILE]));
   });
 
-  it('non salva se mancano dei file audio, e li segnala all\'apertura', async () => {
+  it('doesn\'t save if some audio files are missing, and reports them on opening', async () => {
     const dir = new MemoryDirectory();
     const folder = new ProjectFolder(dir);
     const { store } = setup({ sample: true });
-    await expect(folder.save(store.project)).rejects.toThrow(/mancano i file audio: audio\/loop.wav/);
+    await expect(folder.save(store.project)).rejects.toThrow(/audio files are missing: audio\/loop.wav/);
     await dir.writeBytes('audio/loop.wav', bytes(10));
     await folder.save(store.project);
     await dir.remove('audio/loop.wav');
@@ -40,7 +40,7 @@ describe('ProjectFolder', () => {
     expect(missing.map(s => s.file)).toEqual(['audio/loop.wav']);
   });
 
-  it('importa l\'audio con nomi sicuri e senza sovrascrivere', async () => {
+  it('imports the audio with safe names and without overwriting', async () => {
     const dir = new MemoryDirectory();
     const folder = new ProjectFolder(dir);
     expect(await folder.importAudio('kick.wav', bytes(5))).toBe('audio/kick.wav');
@@ -50,46 +50,46 @@ describe('ProjectFolder', () => {
     expect((await dir.readBytes('audio/kick 3.wav')).length).toBe(7);
   });
 
-  it('trova i file audio non più usati', async () => {
+  it('finds the audio files no longer used', async () => {
     const dir = new MemoryDirectory();
     const folder = new ProjectFolder(dir);
     const { store, ids } = setup({ sample: true });
-    store.apply(addSample(sampleRef(ids, { file: 'audio/usato.wav' })));
-    for (const f of ['loop.wav', 'usato.wav', 'vecchio.wav']) await dir.writeBytes(`audio/${f}`, bytes(1));
-    expect(await folder.unusedAudio(store.project)).toEqual(['audio/vecchio.wav']);
+    store.apply(addSample(sampleRef(ids, { file: 'audio/used.wav' })));
+    for (const f of ['loop.wav', 'used.wav', 'old.wav']) await dir.writeBytes(`audio/${f}`, bytes(1));
+    expect(await folder.unusedAudio(store.project)).toEqual(['audio/old.wav']);
   });
 
-  it('raccoglie il progetto in uno ZIP con i soli file audio che usa', async () => {
-    const dir = new MemoryDirectory('Brano');
+  it('collects the project into a ZIP with only the audio files it uses', async () => {
+    const dir = new MemoryDirectory('Song');
     const folder = new ProjectFolder(dir);
     const { store, track, sampleId, ids } = setup({ audio: 1, sample: true });
-    store.apply(addSample(sampleRef(ids, { name: 'scartato', file: 'audio/scartato.wav' })));
+    store.apply(addSample(sampleRef(ids, { name: 'discarded', file: 'audio/discarded.wav' })));
     store.apply(placeSample(track(0), sampleId, 0));
     await dir.writeBytes('audio/loop.wav', bytes(100));
-    await dir.writeBytes('audio/scartato.wav', bytes(3));
-    await dir.writeBytes('audio/vecchio.wav', bytes(3));
+    await dir.writeBytes('audio/discarded.wav', bytes(3));
+    await dir.writeBytes('audio/old.wav', bytes(3));
     await folder.save(store.project);
-    await folder.save(store.project); // c'è anche il backup
+    await folder.save(store.project); // there's also the backup
 
-    const entries = await folder.archive(store.project, 'Brano: v2');
-    expect(entries.map(e => e.name)).toEqual([`Brano_ v2/${PROJECT_FILE}`, 'Brano_ v2/audio/loop.wav']);
+    const entries = await folder.archive(store.project, 'Song: v2');
+    expect(entries.map(e => e.name)).toEqual([`Song_ v2/${PROJECT_FILE}`, 'Song_ v2/audio/loop.wav']);
     const json = JSON.parse(new TextDecoder().decode(entries[0].data));
     expect(json.samples.map((s: { file: string }) => s.file)).toEqual(['audio/loop.wav']);
     expect(entries[1].data).toEqual(bytes(100));
 
     await dir.remove('audio/loop.wav');
-    await expect(folder.archive(store.project, 'Brano')).rejects.toThrow(/mancano i file audio: audio\/loop.wav/);
+    await expect(folder.archive(store.project, 'Song')).rejects.toThrow(/audio files are missing: audio\/loop.wav/);
   });
 
-  it('riapre lo ZIP raccolto come una cartella di progetto', async () => {
-    const dir = new MemoryDirectory('Brano');
+  it('reopens the collected ZIP as a project folder', async () => {
+    const dir = new MemoryDirectory('Song');
     const { store, track, sampleId } = setup({ audio: 1, sample: true });
     store.apply(placeSample(track(0), sampleId, 4));
     await dir.writeBytes('audio/loop.wav', bytes(100));
-    const zip = makeZip(await new ProjectFolder(dir).archive(store.project, 'Brano'));
+    const zip = makeZip(await new ProjectFolder(dir).archive(store.project, 'Song'));
 
-    const unpacked = await unpackProject(zip, 'ricevuto');
-    expect(unpacked.name).toBe('Brano');
+    const unpacked = await unpackProject(zip, 'received');
+    expect(unpacked.name).toBe('Song');
     const { project, missing } = await new ProjectFolder(unpacked).load();
     expect(missing).toEqual([]);
     expect(project.id).toBe(store.project.id);
@@ -97,27 +97,27 @@ describe('ProjectFolder', () => {
     expect(await unpacked.readBytes('audio/loop.wav')).toEqual(bytes(100));
   });
 
-  it('apre anche uno ZIP fatto a mano: compresso, senza cartella in cima, con file di troppo', async () => {
+  it('also opens a ZIP made by hand: compressed, without a top folder, with extra files', async () => {
     const { store } = setup({ sample: true });
     const json = new TextEncoder().encode(await projectJson(store.project));
     const zip = deflatedZip([
       { name: PROJECT_FILE, data: json },
       { name: 'audio/loop.wav', data: bytes(1000) },
-      { name: '../fuori.txt', data: bytes(1) },
+      { name: '../outside.txt', data: bytes(1) },
       { name: BACKUP_FILE, data: bytes(1) },
     ]);
-    const unpacked = await unpackProject(zip, 'A mano');
-    expect(unpacked.name).toBe('A mano');
+    const unpacked = await unpackProject(zip, 'By hand');
+    expect(unpacked.name).toBe('By hand');
     expect((await unpacked.list('')).sort()).toEqual([PROJECT_FILE]);
     expect(await unpacked.readBytes('audio/loop.wav')).toEqual(bytes(1000));
     expect((await new ProjectFolder(unpacked).load()).missing).toEqual([]);
 
-    await expect(unpackProject(deflatedZip([{ name: 'altro/note.txt', data: bytes(1) }]), 'Niente')).rejects.toThrow(/"Niente" non contiene un progetto/);
-    await expect(readZip(bytes(100))).rejects.toThrow(/non è uno ZIP/);
+    await expect(unpackProject(deflatedZip([{ name: 'other/note.txt', data: bytes(1) }]), 'Niente')).rejects.toThrow(/"Niente" doesn't contain a studiomio project/);
+    await expect(readZip(bytes(100))).rejects.toThrow(/not a ZIP/);
   });
 
-  it('nomi di file', () => {
-    expect(safeFileName('  .nascosto. ')).toBe('nascosto');
+  it('file names', () => {
+    expect(safeFileName('  .hidden.')).toBe('hidden');
     expect(safeFileName('???')).toBe('___');
     expect(safeFileName('')).toBe('audio');
   });
@@ -130,7 +130,7 @@ async function projectJson(project: Parameters<ProjectFolder['save']>[0]): Promi
   return readText(dir, PROJECT_FILE);
 }
 
-/** Uno ZIP compresso con deflate, come lo fanno Esplora risorse o 7-Zip. */
+/** A ZIP compressed with deflate, as File Explorer or 7-Zip make it. */
 function deflatedZip(files: readonly ZipEntry[]): Uint8Array {
   const enc = new TextEncoder(), parts: Uint8Array[] = [], central: Uint8Array[] = [];
   let offset = 0;

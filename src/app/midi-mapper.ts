@@ -1,8 +1,8 @@
-/* Il MIDI di un controller qualsiasi sulle macro, sui parametri e sul mixer (vedi model/midi-map).
- * Con "MIDI" acceso il controllo mosso va al bersaglio scelto (Canc lo toglie, Esc spegne MIDI).
- * Spento, i controlli mappati muovono i loro bersagli: dei CC arrivati insieme si applica solo
- * l'ultimo valore di ciascuno, e una corsa è un solo passo di annullamento. Le porte da cui
- * arriva il MIDI le apre ControlSurfaces, solo se servono. */
+/* Any controller's MIDI on macros, parameters and the mixer (see model/midi-map).
+ * With "MIDI" on the moved control goes to the chosen target (Del removes it, Esc turns MIDI off).
+ * Off, mapped controls move their targets: of CCs arriving together only the last
+ * value of each is applied, and a sweep is a single undo step. The ports the MIDI
+ * comes from are opened by ControlSurfaces, only if needed. */
 import type { ControlSurfaces } from '../control/control-surfaces';
 import { encodeMidiTarget, midiLabel, midiTargetsOf, type MidiControl } from '../model/midi-map';
 import { springTargets, type MacroTarget } from '../store/key-edits';
@@ -12,21 +12,21 @@ import type { ProjectStore } from '../store/project-store';
 import { ownedByField } from '../ui/keymap';
 import type { UiState } from '../ui/ui-state';
 
-/** I CC arrivati in questo tempo si applicano insieme (un fader ne manda decine al secondo). */
+/** CCs arriving within this time are applied together (a fader sends dozens per second). */
 const FLUSH_MS = 15;
-/** Dopo quanto un controllo fermo chiude il suo passo di annullamento. */
+/** After how long a still control closes its undo step. */
 const MERGE_IDLE_MS = 400;
 
 const controlKey = (c: MidiControl) => `${c.type}:${c.channel}:${c.number}`;
 
 export class MidiMapper {
-  /** Gli ultimi valori dei CC arrivati, per controllo, in attesa di applicarli. */
+  /** The latest values of the CCs that arrived, per control, waiting to be applied. */
   private readonly pending = new Map<string, { readonly control: MidiControl; readonly value: number }>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
-  /** L'ultima cosa detta con MIDI acceso: un fader manda decine di messaggi, si dice una volta. */
+  /** The last thing said with MIDI on: a fader sends dozens of messages, it's said once. */
   private said = '';
-  /** Le molle che ogni nota accesa tiene: spenta la nota, tornano. */
+  /** The springs each held note holds: when the note is released, they return. */
   private readonly springs = new Map<string, MacroTarget[]>();
 
   constructor(
@@ -38,7 +38,7 @@ export class MidiMapper {
   ) {
     surfaces.onMidi(data => this.receive(data));
     addEventListener('keydown', e => this.key(e), true);
-    // le porte si aprono quando si mappa o se il progetto ha mappature
+    // the ports open when mapping or if the project has mappings
     const listen = () => { surfaces.listening = ui.midiMapping || store.project.midiMap.length > 0; };
     store.onChange(listen);
     ui.onChange(() => {
@@ -48,7 +48,7 @@ export class MidiMapper {
     listen();
   }
 
-  /** Un messaggio MIDI: CC, nota accesa, nota spenta (gli altri non si mappano). */
+  /** A MIDI message: CC, note on, note off (the others aren't mapped). */
   receive(data: ArrayLike<number>): void {
     const [status, number, value = 0] = Array.from(data);
     if (status === undefined || status >= 0xf0 || number === undefined) return;
@@ -113,14 +113,14 @@ export class MidiMapper {
     }
   }
 
-  /** Con MIDI acceso: il controllo mosso per il bersaglio scelto. */
+  /** With MIDI on: the moved control for the chosen target. */
   private learn(control: MidiControl): void {
     const target = this.ui.midiTarget;
-    if (!target) return this.tell(`MIDI: ${midiLabel(control)} è arrivato. Prima clicca una macro, un parametro o un controllo del mixer.`);
+    if (!target) return this.tell(`MIDI: ${midiLabel(control)} arrived. First click a macro, a parameter or a mixer control.`);
     this.run(() => {
       this.store.apply(setMidi(target, control));
       const others = midiTargetsOf(this.store.project.midiMap, control).length - 1;
-      this.tell(`Mappato su ${midiLabel(control)}${others ? ` (muove anche ${others === 1 ? 'un altro controllo' : `altri ${others} controlli`})` : ''}. Canc lo toglie, Esc spegne MIDI.`,
+      this.tell(`Mapped to ${midiLabel(control)}${others ? ` (it also moves ${others === 1 ? 'another control' : `${others} other controls`})` : ''}. Del removes it, Esc turns MIDI off.`,
         `${encodeMidiTarget(target)}=${controlKey(control)}`);
     });
   }
@@ -131,7 +131,7 @@ export class MidiMapper {
     this.say(text);
   }
 
-  /** Con MIDI acceso: Esc lo spegne, Canc toglie il controllo al bersaglio scelto. */
+  /** With MIDI on: Esc turns it off, Del removes the control from the chosen target. */
   private key(e: KeyboardEvent): void {
     if (!this.ui.midiMapping || e.ctrlKey || e.metaKey || e.altKey || ownedByField(e.target as HTMLElement | null, e)) return;
     if (e.key === 'Escape') {
@@ -146,6 +146,6 @@ export class MidiMapper {
     e.stopPropagation();
     this.run(() => this.store.apply(setMidi(target, null)));
     this.said = '';
-    this.say('Controllo MIDI tolto.');
+    this.say('MIDI control removed.');
   }
 }

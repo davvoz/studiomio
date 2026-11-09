@@ -1,27 +1,27 @@
-/* "Fuori dal corpo": techno da rave buio a 140 BPM in Sol frigio (Sol minore con il La
- * bemolle). Niente melodie: il pezzo lo portano il groove e i bassi che si muovono, come nella
- * neuro di Noisia portata in quattro quarti.
+/* "Fuori dal corpo": dark rave techno at 140 BPM in G phrygian (G minor with the A
+ * flat). No melodies: the piece is carried by the groove and the moving basses, like
+ * Noisia's neuro brought into four-four.
  *
- *   Cassa       una cassa distorta in Sol, corta e tagliata come da un clipper, con le sue
- *               pause e i colpi fantasma a fine frase;
- *   Rullante    rullante e clap sul due e sul quattro, i fantasmi in levare con lo swing;
- *   Piatti      sedicesimi con lo swing, aperti in levare, ride nel secondo drop, tutti in un
- *               flanger lento che li fa girare;
- *   Percussioni tic secchi, metalli e tom sincopati su due battute, con l'eco;
- *   Reese       il basso: Neuro con tre dente di sega scordati, il formante che lo fa parlare
- *               (le vocali seguono l'LFO e l'inviluppo di ogni nota), fold e distorsione, il
- *               sub pulito sotto; un riff a domanda e risposta che lascia buchi…
- *   Neuro       …riempiti dagli stacchi: fette dei loop reese della libreria, tutte in Sol, che
- *               si tagliano a vicenda (choke) come gli edit di Noisia;
- *   Ringhio     il secondo basso, per il secondo drop: FM e LFO in terzine, più cattivo;
- *   Vuoto       il bordone che dissocia: un cluster Sol–Re–La bemolle che ondeggia di
- *               intonazione (mal di mare), nel phaser e in una coda lunghissima;
- *   Atmosfere, Voci, FX  i rumori, le frasi spezzate nel riverbero, le salite e gli impatti.
+ *   Cassa       a distorted kick in G, short and cut as if by a clipper, with its
+ *               pauses and ghost hits at the end of the phrase;
+ *   Rullante    snare and clap on two and four, the ghosts on the offbeat with swing;
+ *   Piatti      sixteenths with swing, open on the offbeat, ride in the second drop, all in a
+ *               slow flanger that makes them spin;
+ *   Percussioni dry ticks, metals and syncopated toms over two bars, with echo;
+ *   Reese       the bass: Neuro with three detuned saws, the formant that makes it talk
+ *               (the vowels follow the LFO and each note's envelope), fold and distortion, the
+ *               clean sub underneath; a call-and-response riff that leaves holes…
+ *   Neuro       …filled by the stabs: slices of the library's reese loops, all in G, that
+ *               cut each other (choke) like Noisia's edits;
+ *   Ringhio     the second bass, for the second drop: FM and LFO in triplets, nastier;
+ *   Vuoto       the dissociating drone: a G–D–A flat cluster wobbling in
+ *               pitch (seasickness), in the phaser and in a very long tail;
+ *   Atmosfere, Voci, FX  the noises, the broken phrases in the reverb, the risers and impacts.
  *
- * Intro, groove, salita, drop, vuoto (il break), salita, secondo drop, outro. La pompa del
- * sidechain è fatta con le modulazioni di volume; il movimento lento dei bassi con le
- * modulazioni delle clip (vocale, cutoff, fold, trasporto). Il montaggio è in live-builder.ts;
- * i file, in scripts/build-fuori-live.ts. */
+ * Intro, groove, rise, drop, void (the break), rise, second drop, outro. The sidechain
+ * pump is done with volume modulations; the slow movement of the basses with the
+ * clip modulations (vowel, cutoff, fold, transpose). The assembly is in live-builder.ts;
+ * the files, in scripts/build-fuori-live.ts. */
 import type { Beats } from '../core/music-time';
 import { DETECTOR } from '../devices/effects/compressor/compressor';
 import { PHASER_MODE } from '../devices/effects/phaser/phaser';
@@ -42,7 +42,7 @@ import { acid, BAR, chop, curve, duck, repeat, roll, steps, STEP, swing } from '
 
 export const FUORI_LIVE_BPM = 140;
 
-/** I suoni che il live usa, per ruolo (chi costruisce il progetto dà il file di ognuno). */
+/** The sounds the live uses, by role (whoever builds the project gives the file for each). */
 export const FUORI_LIVE_SOUNDS = [
   'kick', 'snare', 'clap', 'snareGhost', 'snareRoll',
   'hatClosed', 'hatShort', 'hatOpen', 'ride', 'hatNoise',
@@ -57,18 +57,18 @@ export type FuoriLiveSound = (typeof FUORI_LIVE_SOUNDS)[number];
 
 type TrackKey = 'kick' | 'snare' | 'hats' | 'perc' | 'reese' | 'chops' | 'growl' | 'drone' | 'atmos' | 'vox' | 'fx';
 
-/** Lo swing dei sedicesimi in levare (piatti, percussioni, fantasmi): in sedicesimi. */
+/** The swing of the offbeat sixteenths (cymbals, percussion, ghosts): in sixteenths. */
 const SWING = 0.14;
 
 // ------------------------------------------------------------------ i kit
 
-/** Le fette dei loop reese: tutte in Sol, si tagliano a vicenda (choke 2). */
+/** The slices of the reese loops: all in G, they cut each other (choke 2). */
 const slice = (sound: FuoriLiveSound, decay: number, extra: Partial<PadSound<FuoriLiveSound>> = {}): PadSound<FuoriLiveSound> =>
   ({ sound, decay, choke: 2, ...extra });
 
 const KITS = {
-  // il corpo è la cassa sintetica in Sol (un seno che scende e decade in fretta: lascia
-  // spazio al basso), l'attacco è quello distorto del campione, senza i suoi bassi piatti
+  // the body is the synthetic kick in G (a sine that falls and decays quickly: it leaves
+  // room for the bass), the attack is the sample's distorted one, without its flat lows
   kick: [
     { model: 'kick', tune: -1, decay: 0.34, tone: 55, snap: 60, level: -4 },
     { sound: 'kick', decay: 0.08, tone: 62, level: 3 },
@@ -94,7 +94,7 @@ const KITS = {
     { sound: 'metal2', decay: 0.12, level: -5, pan: -28 },
     { sound: 'top', decay: 0.05, level: -6, pan: 15 },
     { sound: 'strange', level: -4, pan: -8 },
-    // il tom in Sol, più giù e asciutto
+    // the tom in G, lower and dry
     { sound: 'tom', decay: 0.3, tune: -3, level: -5, pan: -15 },
     { sound: 'trik', decay: 0.35, level: -6, pan: 18 },
   ],
@@ -125,14 +125,14 @@ const KITS = {
     { sound: 'robotoid', level: -1 },
     { sound: 'voxDel', level: 2 },
     { sound: 'chtulu', at: 0.08, level: -3 },
-    // le frasi spezzate di "terrible cicle", ognuna dal suo inizio
+    // the broken phrases of "terrible cicle", each from its start
     { sound: 'cicle', at: 1.26, decay: 1.15, level: 4 },
     { sound: 'cicle', at: 5.04, decay: 1.5, level: 4 },
     { sound: 'cicle', at: 11.02, decay: 2.55, level: 4 },
     { sound: 'omg', at: 0.02, decay: 1.5, level: 2 },
     { sound: 'cicle', at: 3.62, decay: 0.2, level: 4, choke: 3 },
     { sound: 'cicle', at: 14.2, decay: 1.96, level: 4 },
-    // il robot giù di una quinta: demoniaco
+    // the robot down a fifth: demonic
     { sound: 'robotize', tune: -5, level: 1 },
   ],
   fx: [
@@ -154,10 +154,10 @@ const ATM = { tension: 0, hell: 1, deepNoise: 2, tank: 3, strangeDrone: 4, ambie
 const VOX = { robotize: 0, robotoid: 1, voxDel: 2, chtulu: 3, cicleA: 4, cicleB: 5, cicleC: 6, omg: 7, stutter: 8, cicleE: 9, demon: 10 } as const;
 const FX = { riser: 0, riserLow: 1, riserNoise: 2, fall: 3, impact: 4, reverseNoise: 5, glitch: 6, crash: 7 } as const;
 
-// ------------------------------------------------------------------ i suoni dei synth
+// ------------------------------------------------------------------ the synth sounds
 
-/** Il basso principale: reese che parla. L'inviluppo di ogni nota apre il filtro e sposta la
- *  vocale ("ua"), l'LFO in quarti la fa ondeggiare, un S&H morbido sporca il fold. */
+/** The main bass: a talking reese. Each note's envelope opens the filter and moves the
+ *  vowel ("ua"), the quarter-note LFO makes it wobble, a soft S&H dirties the fold. */
 const REESE: ParamValues = {
   unison: 3, detune: 20, oscA: 0, oscB: 0, oscBFine: -14, mix: 50,
   fm: 8, fmRatio: 1, fold: 18,
@@ -175,8 +175,8 @@ const REESE: ParamValues = {
   volume: -4,
 };
 
-/** Il ringhio del secondo drop: FM al doppio, fold, un LFO in terzine contro i quarti della
- *  cassa (il groove storto) su FM e vocale. */
+/** The growl of the second drop: FM at double, fold, a triplet LFO against the kick's
+ *  quarters (the crooked groove) on FM and vowel. */
 const GROWL: ParamValues = {
   unison: 2, detune: 12, oscA: 0, oscB: 1, oscBSemi: -12, oscBFine: 0, mix: 40,
   fm: 25, fmRatio: 3, fold: 25,
@@ -194,7 +194,7 @@ const GROWL: ParamValues = {
   volume: -5,
 };
 
-/** Il bordone: un pad scuro di 5 copie scordate che ondeggia d'intonazione, lento. */
+/** The drone: a dark pad of 5 detuned copies wobbling in pitch, slowly. */
 const DRONE: ParamValues = {
   oscA: 0, oscB: 0, oscBSemi: 0, oscBFine: 9, mix: 50, unison: 5, detune: 30, spread: 100,
   voiceMode: VOICE_MODE.poly, cutoff: 1100, resonance: 12, filterEnv: 15, keyTrack: 0,
@@ -205,7 +205,7 @@ const DRONE: ParamValues = {
 
 // ------------------------------------------------------------------ le parti
 
-/** Battute di un pad, una stringa per battuta. */
+/** Bars of a pad, one string per bar. */
 const phrase = (pad: number, barsOf: readonly string[], from: Beats = 0): Note[] =>
   barsOf.flatMap((b, k) => steps(pad, b, from + k * BAR));
 
@@ -218,12 +218,12 @@ const K = {
   half: 'X... .... X... ....',
   rest: '.... .... .... ....',
 };
-/** Sedici battute di cassa da drop: un colpo fantasma a 4 e 12, una pausa a 8, la spinta a 16. */
+/** Sixteen bars of drop kick: a ghost hit at 4 and 12, a pause at 8, the push at 16. */
 const KICK_DROP = [K.straight, K.straight, K.straight, K.push, K.straight, K.straight, K.straight, K.skip,
   K.straight, K.straight, K.straight, K.push, K.straight, K.straight, K.straight, K.ghost];
 
 const BACKBEAT = '.... X... .... X...';
-/** I fantasmi del rullante: due battute diverse, con lo swing. */
+/** The snare ghosts: two different bars, with swing. */
 const GHOSTS = ['.... ..o. .o.. ...o', '..o. .... .o.. o..o'];
 
 const backbeat = (count: number, fills: Readonly<Record<number, string>> = {}): Note[] =>
@@ -233,7 +233,7 @@ const backbeat = (count: number, fills: Readonly<Record<number, string>> = {}): 
   ]).flat();
 const ghosts = (count: number): Note[] => swing(Array.from({ length: count }, (_, k) => steps(SN.ghost, GHOSTS[k % 2], k * BAR)).flat(), SWING);
 
-/** I piatti di una battuta: chiusi a sedicesimi, aperti in levare, rumore sparso. */
+/** The cymbals of one bar: closed sixteenths, open on the offbeat, scattered noise. */
 const HATS = {
   closed: 'xoxo xoxo xoxo xoxo',
   closedFill: 'xoxo xoxo xxxx XXXX',
@@ -249,8 +249,8 @@ const hats = (count: number, opts: { open?: boolean; ride?: boolean; sparse?: bo
   ...phrase(HAT.noise, Array(count).fill(HATS.noise)),
 ], SWING);
 
-/** Le percussioni: un giro di due battute sincopato (tic, metalli, tom) e, ogni quattro, il
- *  colpo strano a fine frase. */
+/** The percussion: a syncopated two-bar loop (ticks, metals, toms) and, every four, the
+ *  odd hit at the end of the phrase. */
 const PERC_LOOP = [
   ...steps(PERC.tick, '..x. ...x ..x. x... ..x. ...x .x.. ..x.'),
   ...steps(PERC.tick2, '.o.. .o.. ...o .... .o.. .... ...o .o..'),
@@ -268,7 +268,7 @@ const perc = (count: number, opts: { full?: boolean; light?: boolean } = {}): No
   ] : []),
 ], SWING);
 
-/** Il rullante della salita: quarti, ottavi, sedicesimi, trentaduesimi, che crescono. */
+/** The snare of the rise: quarters, eighths, sixteenths, thirty-seconds, growing. */
 const snareBuild = (from: Beats): Note[] => [
   ...roll(SN.roll, from, 16, 1, [60, 80]),
   ...roll(SN.roll, from + 16, 16, 0.5, [80, 100]),
@@ -276,9 +276,9 @@ const snareBuild = (from: Beats): Note[] => [
   ...roll(SN.roll, from + 28, 16, 0.125, [110, 127]),
 ];
 
-// --- i bassi (una parola per sedicesimo, come una 303: "-" tiene, "~" scivola)
+// --- the basses (one word per sixteenth, like a 303: "-" holds, "~" slides)
 
-/** Il basso che rotola: tre sedicesimi dopo ogni cassa. */
+/** The rolling bass: three sixteenths after each kick. */
 const ROLLING = acid([
   '. g1 G1 g1 . g1 G1 g1 . g1 G1 g1 . g1 G1 g1',
   '. g1 G1 g1 . g1 G1 g1 . g1 G1 g1 . bb1 G1 f1',
@@ -286,7 +286,7 @@ const ROLLING = acid([
   '. g1 G1 g1 . g1 G1 g1 . ab1 Ab1 ab1 . ab1 G2 g1',
 ].join(' '));
 
-/** Il riff del drop: domanda (la battuta dispari) e buco per la risposta degli stacchi. */
+/** The drop riff: call (the odd bar) and a hole for the stabs' response. */
 const RIFF_A = acid([
   '. G1 - - | . . g1 . | . Bb1~ G1 - | . g2 . g1',
   '. . . . | . . . . | . G1~ Ab1 - | G1 . f1 .',
@@ -298,7 +298,7 @@ const RIFF_A = acid([
   '. G1 . G1 | . G1 G1 . | Ab1~ G1~ F1~ G1 | - - - -',
 ].join(' '));
 
-/** La risposta: le fette dei loop reese nei buchi del riff. */
+/** The response: the reese loop slices in the riff's holes. */
 const CHOPS_A = chop([
   '. . . . | . . . . | . . . . | . . . .',
   '. 2 . . | 0 . 3 3 | . . . . | . . . .',
@@ -310,7 +310,7 @@ const CHOPS_A = chop([
   '. . . . | . . . . | . . . . | . . . .',
 ].join(' '));
 
-/** Il secondo drop: il ringhio, più sincopato, con il tritono (Re bemolle) che minaccia. */
+/** The second drop: the growl, more syncopated, with the threatening tritone (D flat). */
 const RIFF_B = acid([
   '. G1 - . | . G1 . G1 | - . Ab1 - | . . G1 .',
   '. . G2 . | G1 - . . | . Db2~ C2~ Bb1 | - G1 . .',
@@ -333,7 +333,7 @@ const CHOPS_B = chop([
   '. 1 . 2 | . 0 . 6 | 3 . 3 . | . . . .',
 ].join(' '));
 
-/** Note tenute e legate (si sovrappongono un poco: Neuro in Legato scivola senza ripartire). */
+/** Held, tied notes (they overlap a little: Neuro in Legato slides without retriggering). */
 function held(...parts: (readonly [pitch: number, bars: number])[]): Note[] {
   let at = 0;
   return parts.map(([pitch, n], i) => {
@@ -344,29 +344,29 @@ function held(...parts: (readonly [pitch: number, bars: number])[]): Note[] {
 }
 const G1 = 31, AB1 = 32, F1 = 29, C2 = 36, DB2 = 37, G2 = 43, D3 = 50, AB3 = 56, EB4 = 63;
 
-/** Un accordo tenuto per tutta la clip. */
+/** A chord held for the whole clip. */
 const chord = (pitches: readonly number[], length: Beats, velocity = 90): Note[] =>
   pitches.map(pitch => ({ pitch, start: 0, duration: length - 0.5, velocity }));
 
-/** Un colpo solo di un pad. */
+/** A single hit of a pad. */
 const hit = (pad: number, at: Beats, velocity = 110): Note => ({ pitch: padNote(pad), start: at, duration: STEP, velocity });
 
 // ------------------------------------------------------------------ pompa e modulazioni
 
-/** Dove colpisce la cassa (i colpi pieni, non i fantasmi). */
+/** Where the kick hits (the full hits, not the ghosts). */
 const kickHits = (kick: readonly Note[]): Beats[] => kick.filter(n => n.velocity >= 100).map(n => n.start);
-/** La pompa: giù sulla cassa, su prima della prossima. */
+/** The pump: down on the kick, up before the next one. */
 const pump = (kick: readonly Note[], depth: number, release: Beats): ModSpec => ({ target: VOLUME, points: duck(kickHits(kick), depth, release) });
-/** La pompa che sale (o scende) di livello lungo la clip: ogni punto è scalato da `level`. */
+/** The pump rising (or falling) in level along the clip: each point is scaled by `level`. */
 const pumpScaled = (kick: readonly Note[], depth: number, release: Beats, level: (beat: Beats) => number): ModSpec =>
   ({ target: VOLUME, points: duck(kickHits(kick), depth, release).map(p => ({ ...p, value: p.value * level(p.beat) })) });
 
 const mod = (param: string, points: EnvelopePoint[]): ModSpec => ({ target: instrumentParam(param), points });
-/** Un'onda lenta tra `a` e `b` lungo `length` battiti, `cycles` volte (per la vocale). */
+/** A slow wave between `a` and `b` over `length` beats, `cycles` times (for the vowel). */
 const sway = (length: Beats, cycles: number, a: number, b: number): EnvelopePoint[] =>
   Array.from({ length: cycles * 4 + 1 }, (_, k) => ({ beat: (k * length) / (cycles * 4), value: k % 4 === 0 ? a : k % 4 === 2 ? b : (a + b) / 2 }));
 
-// ------------------------------------------------------------------ le tracce
+// ------------------------------------------------------------------ the tracks
 
 const TRACKS: readonly TrackSpec<FuoriLiveSound, TrackKey>[] = [
   {
@@ -374,7 +374,7 @@ const TRACKS: readonly TrackSpec<FuoriLiveSound, TrackKey>[] = [
     effects: [
       lowCut(28),
       compressor('Punch', { threshold: -10, ratio: 3, attack: 12, release: 40, auto: 0 }),
-      // tagliata come da un clipper: picchi giù, corpo su
+      // cut as if by a clipper: peaks down, body up
       limiter('Taglio cassa', { gain: 8, ceiling: -4, release: 12, lookahead: 0.5, truePeak: 0 }),
     ],
   },
@@ -388,7 +388,7 @@ const TRACKS: readonly TrackSpec<FuoriLiveSound, TrackKey>[] = [
   },
   {
     key: 'hats', name: 'Piatti', volumeDb: -4, kit: KITS.hats,
-    effects: [lowCut(450), phaser('Hat metallici', { mode: PHASER_MODE.flanger, delay: 0.8, division: TEMPO_RATE['8 battute'], depth: 90, feedback: 70, mix: 35 })],
+    effects: [lowCut(450), phaser('Hat metallici', { mode: PHASER_MODE.flanger, delay: 0.8, division: TEMPO_RATE['8 bars'], depth: 90, feedback: 70, mix: 35 })],
   },
   {
     key: 'perc', name: 'Percussioni', volumeDb: -7, kit: KITS.perc,
@@ -401,7 +401,7 @@ const TRACKS: readonly TrackSpec<FuoriLiveSound, TrackKey>[] = [
   {
     key: 'reese', name: 'Reese', volumeDb: -3, neuro: REESE,
     effects: [
-      phaser('Gira', { stages: 2, center: 1100, division: TEMPO_RATE['1 battuta'], depth: 60, feedback: 45, stereo: 100, mix: 35 }),
+      phaser('Gira', { stages: 2, center: 1100, division: TEMPO_RATE['1 bar'], depth: 60, feedback: 45, stereo: 100, mix: 35 }),
       multiband('Denso', { depth: 40, time: 30, xLow: 140 }),
     ],
   },
@@ -420,7 +420,7 @@ const TRACKS: readonly TrackSpec<FuoriLiveSound, TrackKey>[] = [
     key: 'drone', name: 'Vuoto', volumeDb: -10, analog: DRONE,
     effects: [
       lowCut(140),
-      phaser('Phaser lento', { stages: 3, center: 700, division: TEMPO_RATE['4 battute'], depth: 80, feedback: 55, mix: 50 }),
+      phaser('Phaser lento', { stages: 3, center: 700, division: TEMPO_RATE['4 bars'], depth: 80, feedback: 55, mix: 50 }),
       reverb('Coda infinita', { size: 100, decay: 12, predelay: 0, damping: 4000, lowCut: 200, mix: 45 }),
     ],
   },
@@ -447,7 +447,7 @@ const TRACKS: readonly TrackSpec<FuoriLiveSound, TrackKey>[] = [
 
 const len = (bars: number): Beats => bars * BAR;
 
-/** La cassa di ogni scena (serve anche alla pompa). */
+/** Each scene's kick (the pump needs it too). */
 const KICK = {
   intro: phrase(0, [...Array(7).fill(K.straight), K.ghost, ...Array(7).fill(K.straight), K.push]),
   groove: phrase(0, [...Array(7).fill(K.straight), K.skip, ...Array(7).fill(K.straight), K.ghost]),
@@ -457,7 +457,7 @@ const KICK = {
   outro: phrase(0, [...Array(7).fill(K.straight), K.ghost, ...Array(7).fill(K.straight), 'X... .... .... ....']),
 };
 
-/** La clip della cassa: ogni colpo suona il corpo (pad 1) e l'attacco (pad 2) insieme. */
+/** The kick clip: each hit plays the body (pad 1) and the attack (pad 2) together. */
 const kickClip = (name: string, notes: readonly Note[], length: Beats): ClipSpec =>
   clip(name, [...notes, ...notes.map(n => ({ ...n, pitch: padNote(1) }))], length);
 
@@ -482,7 +482,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       snare: clip('Clap e fantasmi', [...backbeat(16).filter(n => n.pitch === padNote(SN.clap) || n.start >= len(8)), ...ghosts(16).filter(n => n.start >= len(8))], len(16)),
       hats: clip('Piatti', hats(16), len(16)),
       perc: clip('Perc', perc(16), len(16)),
-      // il basso entra chiuso e si apre in sedici battute
+      // the bass comes in closed and opens over sixteen bars
       reese: clip('Rotola', repeat(ROLLING, len(4), 4), len(16), [
         pumpScaled(KICK.groove, 0.25, 0.3, () => 0.8),
         mod('cutoff', curve([0, -0.32], [len(12), -0.12], [len(16), -0.06])),
@@ -502,7 +502,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       snare: clip('Rullo', snareBuild(0), len(8)),
       hats: clip('Piatti', hats(8, { open: true }), len(8), [{ target: VOLUME, points: curve([0, 0.8], [len(7), 1], [len(8), 0.5]) }]),
       perc: clip('Perc', perc(8), len(8)),
-      // il basso si apre, il fold cresce, e nell'ultima battuta una nota sola sale di un'ottava
+      // the bass opens, the fold grows, and in the last bar a single note rises an octave
       reese: clip('Si apre', [...repeat(ROLLING, len(4), 2).filter(n => n.start < len(7)), { pitch: G1, start: len(7), duration: BAR - 0.25, velocity: 120 }], len(8), [
         pumpScaled(KICK.build, 0.3, 0.3, () => 0.7),
         mod('cutoff', curve([0, -0.2], [len(7), 0.05])),
@@ -539,8 +539,8 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
     name: 'Vuoto', bars: 16,
     clips: {
       perc: clip('Tic lontani', perc(16, { light: true }).filter(n => n.start % len(4) >= len(2)), len(16), [{ target: VOLUME, points: curve([0, 0.7]) }]),
-      // un reese solo che respira: note lunghe legate, la vocale che va e viene, e alla fine
-      // una picchiata di un'ottava
+      // a lone reese breathing: long tied notes, the vowel coming and going, and at the end
+      // an octave dive
       reese: clip('Respiro', held([G1, 4], [AB1, 2], [F1, 2], [G1, 4], [DB2, 2], [C2, 2]), len(16), [
         mod('cutoff', curve([0, -0.22], [len(4), -0.08], [len(8), -0.18], [len(12), -0.04], [len(16), -0.14])),
         mod('vowel', sway(len(16), 2, -0.2, 0.5)),
@@ -561,7 +561,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       snare: clip('Rullo', snareBuild(0), len(8)),
       hats: clip('Piatti', hats(8, { sparse: true }), len(8)),
       perc: clip('Perc', perc(8), len(8)),
-      // il basso rotola a sedicesimi e sale di un'ottava nelle ultime due battute
+      // the bass rolls in sixteenths and rises an octave in the last two bars
       reese: clip('Corre', acid(Array(8).fill('. g1 G1 g1 . g1 G1 g1 . g1 G1 g1 . g1 G1 g1').join(' ')), len(8), [
         pumpScaled(KICK.build2, 0.3, 0.3, () => 0.7),
         mod('cutoff', curve([0, -0.2], [len(8), 0.15])),
@@ -600,7 +600,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       snare: clip('Clap', backbeat(8).filter(n => n.pitch === padNote(SN.clap)), len(16)),
       hats: clip('Piatti', hats(16), len(16), [{ target: VOLUME, points: curve([0, 1], [len(12), 0.8], [len(16), 0.4]) }]),
       perc: clip('Tic', perc(16, { light: true }), len(16)),
-      // il basso si richiude e se ne va
+      // the bass closes again and leaves
       reese: clip('Si chiude', repeat(ROLLING, len(4), 3), len(16), [
         pump(KICK.outro, 0.25, 0.3),
         mod('cutoff', curve([0, -0.05], [len(12), -0.4])),
@@ -631,10 +631,10 @@ export const FUORI_LIVE: LiveSpec<FuoriLiveSound, TrackKey> = {
   arrangement: [0, 1, 2, 3, 4, 5, 6, 7],
 };
 
-/** Le clip di una scena, per chi le vuole controllare. */
+/** A scene's clips, for whoever wants to check them. */
 export const fuoriScene = (name: string): Partial<Record<TrackKey, ClipSpec>> | undefined => SCENES.find(s => s.name === name)?.clips;
 
-/** Costruisce il live nel progetto (vuoto) dello store. */
+/** Builds the live in the store's (empty) project. */
 export function buildFuoriLive(store: ProjectStore, sounds: Readonly<Record<FuoriLiveSound, SampleRef>>): void {
   buildLive(store, FUORI_LIVE, sounds);
 }

@@ -1,15 +1,15 @@
-/* Il suono del Reverse. L'ingresso va sempre sul nastro; a `u` campioni dall'inizio di un pezzo
- * la testina legge `2u` campioni indietro, quindi va all'indietro: all'inizio del pezzo legge il
- * suono appena passato, alla fine l'inizio del pezzo prima. A ogni pezzo nuovo (e a ogni salto
- * del trasporto) la testina torna avanti sfumando. I pezzi cadono sulla battuta, da fermo
- * girano liberi al tempo del progetto. Gira nell'AudioWorklet; qui niente Web Audio. */
+/* The Reverse's sound. The input always goes onto the tape; `u` samples from the start of a piece
+ * the head reads `2u` samples back, so it goes backwards: at the start of the piece it reads the
+ * sound just passed, at the end the start of the previous piece. At each new piece (and at each transport
+ * jump) the head returns forward with a fade. The pieces fall on the bar, when stopped they
+ * run free at the project's tempo. Runs in the AudioWorklet; no Web Audio here. */
 import type { EffectCore, TransportFollower, TransportPosition } from '../../dsp/core';
 import { LfoClock } from '../../dsp/lfo';
 import { TapeBuffer, TapeReader } from '../../dsp/tape-buffer';
 import { MIN_BPM } from '../../../core/music-time';
 import { MAX_REVERSE_BEATS, REVERSE_LENGTHS } from './reverse';
 
-/** La sfumatura tra un pezzo e l'altro e all'accensione, in secondi. */
+/** The fade between one piece and the next and when switching on, in seconds. */
 const FADE = 0.005;
 
 export class ReverseCore implements EffectCore, TransportFollower {
@@ -20,7 +20,7 @@ export class ReverseCore implements EffectCore, TransportFollower {
   private readonly fadeStep: number;
   private transport: TransportPosition | null = null;
   private bpm = 120;
-  /** Quanto si sente il suono al contrario (0..1), e quanto si vorrebbe. */
+  /** How much the reversed sound is heard (0..1), and how much is wanted. */
   private amount = 1;
   private fresh = true;
   private on = true;
@@ -59,7 +59,7 @@ export class ReverseCore implements EffectCore, TransportFollower {
     const bpm = pos?.bpm ?? this.bpm;
     const beats = Math.min(MAX_REVERSE_BEATS, this.beats || this.bars * (pos?.beatsPerBar ?? 4));
     const slice = (beats * 60 * this.sampleRate) / bpm;
-    // il nastro deve ricordare due pezzi (si cambia solo con un tempo o un pezzo nuovi)
+    // the tape must remember two pieces (it changes only with a new tempo or piece)
     tape.ensure(2 * slice + 4 * FADE * this.sampleRate + (60 * this.sampleRate) / Math.max(MIN_BPM, bpm));
     clock.start({ beats, hz: 0 }, pos, this.bpm);
     const target = this.on ? 1 : 0, mix = this.mix;
@@ -69,7 +69,7 @@ export class ReverseCore implements EffectCore, TransportFollower {
       tape.write(xL, xR);
       const cycles = clock.cycles, u = (cycles - Math.floor(cycles)) * slice;
       const head = tape.written - 1 - 2 * u;
-      // la testina va indietro di un campione alla volta: se non è lì, è un pezzo nuovo o un salto
+      // the head goes back one sample at a time: if it isn't there, it's a new piece or a jump
       if (Math.abs(head - reader.pos) > 1.5) reader.jump(head, -1);
       else reader.pos = head;
       reader.read(tape, -1, wet);

@@ -1,8 +1,8 @@
-/* Il pannello del Gate: sopra la fila degli step, sotto le manopole. Ogni step è una barra alta
- * quanto il suo livello e larga quanto resta aperto (Gate), spostata dallo swing; i quarti si
- * riconoscono dallo sfondo. Clic su uno step: lo apre o lo chiude; trascinare in verticale ne
- * sceglie il livello, e passando sugli altri li disegna allo stesso modo. Tasto destro: tutti
- * aperti o chiusi, inverti, casuale, sposta. */
+/* The Gate's panel: above the row of steps, below the knobs. Each step is a bar as tall
+ * as its level and as wide as it stays open (Gate), shifted by the swing; the quarters are
+ * recognized by the background. Click on a step: opens or closes it; dragging vertically
+ * chooses its level, and passing over the others draws them the same way. Right click: all
+ * open or closed, invert, random, shift. */
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import { MAX_STEPS, STEP_RATES, stepParam } from '../../../devices/effects/gate/gate';
 import type { DeviceSettings, ParamValues } from '../../../model/device';
@@ -13,14 +13,14 @@ import type { DeviceDisplay, DisplayContext } from '../displays';
 import { ACCENT, BACKGROUND, drag, fit, GRID } from '../prisma/canvas';
 
 const PAD = 4;
-/** Di quanti pixel ci si deve muovere perché un clic diventi un trascinamento. */
+/** How many pixels you have to move for a click to become a drag. */
 const DRAG_START = 3;
 const MAX_SWING_DELAY = 0.5;
 
 export class GateDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'gate-display' });
   private readonly canvas = el<HTMLCanvasElement>('canvas', {
-    className: 'gate-steps', title: 'Clic: apri o chiudi uno step · trascina: il livello (anche su più step) · tasto destro: altri comandi',
+    className: 'gate-steps', title: 'Click: open or close a step · drag: the level (also over several steps) · right click: more commands',
   });
   private readonly controls = new Map<string, { control: ParamControl; spec: NonNullable<ReturnType<typeof paramSpec>> }>();
   private values: Record<string, number>;
@@ -70,12 +70,12 @@ export class GateDisplay implements DeviceDisplay {
     return Array.from({ length: this.length }, (_, i) => this.values[stepParam(i)]);
   }
 
-  /** Cambia i livelli degli step (dal primo); `final` chiude il passo di annullamento. */
+  /** Changes the steps' levels (from the first); `final` closes the undo step. */
   private write(levels: readonly number[], final: boolean): void {
     this.ctx.setParams(Object.fromEntries(levels.map((v, i) => [stepParam(i), Math.round(Math.max(0, Math.min(100, v)))])), final);
   }
 
-  /** Lo step sotto il punto x del canvas e il livello che corrisponde all'altezza y. */
+  /** The step under point x of the canvas and the level corresponding to height y. */
   private at(e: PointerEvent): { step: number; level: number } {
     const r = this.canvas.getBoundingClientRect(), w = r.width - 2 * PAD, h = r.height - 2 * PAD;
     const step = Math.max(0, Math.min(this.length - 1, Math.floor(((e.clientX - r.left - PAD) / w) * this.length)));
@@ -92,7 +92,7 @@ export class GateDisplay implements DeviceDisplay {
       if (!painting && Math.hypot(dx, dy) < DRAG_START) return;
       painting = true;
       const { step, level } = this.at(m);
-      // dal primo step toccato fino a quello sotto il puntatore, tutti allo stesso livello
+      // from the first step touched up to the one under the pointer, all at the same level
       const levels = this.levels(), from = Math.min(start.step, step), to = Math.max(start.step, step);
       for (let i = from; i <= to; i++) levels[i] = level;
       this.write(levels, false);
@@ -110,13 +110,13 @@ export class GateDisplay implements DeviceDisplay {
   private menu(): MenuItem[] {
     const levels = this.levels(), n = levels.length;
     return [
-      { label: 'Tutti aperti', run: () => this.write(levels.map(() => 100), true) },
-      { label: 'Tutti chiusi', run: () => this.write(levels.map(() => 0), true) },
-      { label: 'Inverti', run: () => this.write(levels.map(v => 100 - v), true) },
-      { label: 'Casuale', run: () => this.write(levels.map(() => (Math.random() < 0.5 ? 100 : 0)), true) },
+      { label: 'All open', run: () => this.write(levels.map(() => 100), true) },
+      { label: 'All closed', run: () => this.write(levels.map(() => 0), true) },
+      { label: 'Invert', run: () => this.write(levels.map(v => 100 - v), true) },
+      { label: 'Random', run: () => this.write(levels.map(() => (Math.random() < 0.5 ? 100 : 0)), true) },
       SEPARATOR,
-      { label: 'Sposta a sinistra', run: () => this.write(levels.map((_, i) => levels[(i + 1) % n]), true) },
-      { label: 'Sposta a destra', run: () => this.write(levels.map((_, i) => levels[(i - 1 + n) % n]), true) },
+      { label: 'Shift left', run: () => this.write(levels.map((_, i) => levels[(i + 1) % n]), true) },
+      { label: 'Shift right', run: () => this.write(levels.map((_, i) => levels[(i - 1 + n) % n]), true) },
     ];
   }
 
@@ -136,14 +136,14 @@ export class GateDisplay implements DeviceDisplay {
     const split = 1 + (v.swing / 100) * MAX_SWING_DELAY, gate = v.gate / 100;
     g.fillStyle = BACKGROUND;
     g.fillRect(0, 0, W, H);
-    // un quarto sì e uno no un po' più chiaro
+    // every other quarter a bit lighter
     for (let s = 0; s < n; s += perBeat) {
       if ((s / perBeat) % 2) continue;
       g.fillStyle = GRID;
       g.fillRect(PAD + s * cell, PAD, Math.min(perBeat, n - s) * cell, h);
     }
     for (let i = 0; i < n; i++) {
-      // dove comincia e quanto dura lo step con lo swing (come in dsp/steps.ts)
+      // where the step starts and how long it lasts with the swing (as in dsp/steps.ts)
       const paired = (i | 1) < n;
       const start = !paired || i % 2 === 0 ? i : i - 1 + split;
       const length = !paired ? 1 : i % 2 === 0 ? split : 2 - split;

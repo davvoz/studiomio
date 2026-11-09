@@ -24,12 +24,12 @@ export interface ClipEditorDeps {
   readonly store: ProjectStore;
   readonly engine: PlaybackEngine;
   readonly peaks: PeakStore;
-  /** Battiti (in campioni) seguendo il tempo dato: il beat tracking dei worker DSP. */
+  /** Beats (in samples) following the given tempo: the DSP workers' beat tracking. */
   readonly trackBeats: (sample: SampleRef, bpm: number) => Promise<number[]>;
-  /** Il tratto [from, to] (secondi) di un sample come file nuovo del progetto, caricato nel motore. */
+  /** The stretch [from, to] (seconds) of a sample as a new project file, loaded in the engine. */
   readonly cropSample: (sample: SampleRef, from: Seconds, to: Seconds) => Promise<SampleRef>;
   readonly say: (text: string) => void;
-  /** Gli appunti dell'app (per le curve di modulazione). */
+  /** The app's clipboard (for the modulation curves). */
   readonly clipboard: Clipboard;
 }
 
@@ -39,9 +39,9 @@ interface Target {
   readonly sample: SampleRef;
 }
 
-/** Editor di una clip audio (il WarpMio di studiomio): forma d'onda sull'asse dei battiti
- *  della clip, warp marker, regione, loop e pannello delle opzioni. Modifica la clip posata
- *  attraverso lo store, quindi ogni modifica si annulla e si sente nella timeline. */
+/** Editor of an audio clip (studiomio's WarpMio): waveform on the clip's beat axis,
+ *  warp markers, region, loop and options panel. It changes the placed clip
+ *  through the store, so every change can be undone and is heard in the timeline. */
 export class ClipEditor implements EditorHost {
   readonly element = Object.assign(document.createElement('section'), { className: 'clip-editor', hidden: true, tabIndex: -1 });
   private readonly surface = new Surface('editor-canvas');
@@ -55,7 +55,7 @@ export class ClipEditor implements EditorHost {
   private dirty = true;
   private fitPending = false;
 
-  /** La riga delle modulazioni (per mostrare un parametro dal suo menu). */
+  /** The modulation row (to show a parameter from its menu). */
   get modulation(): ModulationEditor {
     return this.mods;
   }
@@ -85,7 +85,7 @@ export class ClipEditor implements EditorHost {
       chain: () => { const t = editor.target()?.found.track ?? null; return t && trackChain(t); },
       layout: visible => editor.element.classList.toggle('with-lane', visible),
     });
-    // subito sotto nome e informazioni: le opzioni del warp sono lunghe e lo nasconderebbero
+    // right below name and info: the warp options are long and would hide it
     this.panel.element.children[1].after(this.mods.controls);
     const wrap = Object.assign(document.createElement('div'), { className: 'editor-canvas-wrap' });
     wrap.append(this.surface.canvas);
@@ -105,7 +105,7 @@ export class ClipEditor implements EditorHost {
     return this.ref !== null;
   }
 
-  /** Apre la clip (sulla timeline o in uno slot); restituisce false se non è una clip audio. */
+  /** Opens the clip (on the timeline or in a slot); returns false if it isn't an audio clip. */
   open(ref: ClipRef): boolean {
     this.ref = ref;
     if (!this.target()) {
@@ -143,7 +143,7 @@ export class ClipEditor implements EditorHost {
     return t ? sampleDuration(t.sample) : 0;
   }
 
-  /** I transienti dell'analisi nei secondi della clip (specchiati se è al contrario). */
+  /** The analysis's transients in the clip's seconds (mirrored if it's reversed). */
   transients(): readonly Seconds[] {
     const t = this.target();
     return t ? clipTimes(t.clip, t.sample.analysis?.transients ?? [], sampleDuration(t.sample)) : [];
@@ -183,12 +183,12 @@ export class ClipEditor implements EditorHost {
     this.dirty = true;
   }
 
-  // ---------------------------------------------------------------- comandi
+  // ---------------------------------------------------------------- commands
 
   private autoWarp(): void {
     const t = this.target();
     const a = t?.sample.analysis;
-    if (!t || !a) return this.deps.say('Il sample non è stato analizzato.');
+    if (!t || !a) return this.deps.say('The sample hasn\'t been analysed.');
     this.commit('Auto-Warp', c => c.withMarkers(autoWarp(a.tempo, this.transients(), sampleDuration(t.sample))).withWarp({ enabled: true }));
     this.deps.say(`Auto-Warp: ${a.tempo.toFixed(2)} BPM.`);
   }
@@ -196,30 +196,30 @@ export class ClipEditor implements EditorHost {
   private async followTempo(): Promise<void> {
     const t = this.target();
     const a = t?.sample.analysis;
-    if (!t || !a) return this.deps.say('Il sample non è stato analizzato.');
+    if (!t || !a) return this.deps.say('The sample hasn\'t been analysed.');
     const sr = t.sample.sampleRate, duration = sampleDuration(t.sample);
     const beats = clipTimes(t.clip, (await this.deps.trackBeats(t.sample, a.tempo)).map(i => i / sr), duration);
     const markers = followTempo(beats, clipTimes(t.clip, a.transients, duration), a.tempo, duration, this.deps.store.project.signature.beatsPerBar);
-    if (!markers) return this.deps.say('Non ho trovato abbastanza battiti: prova Auto-Warp.');
-    this.commit('Segui tempo', c => c.withMarkers(markers).withWarp({ enabled: true }));
-    this.deps.say(`Segui tempo: ${markers.length} marker.`);
+    if (!markers) return this.deps.say('Couldn\'t find enough beats: try Auto-Warp.');
+    this.commit('Follow tempo', c => c.withMarkers(markers).withWarp({ enabled: true }));
+    this.deps.say(`Follow tempo: ${markers.length} markers.`);
   }
 
   private quantize(): void {
     const step = Math.min(1, gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10));
-    this.commit('Quantizza warp marker', c => c.withMarkers(c.warp.markers.quantized(step)));
+    this.commit('Quantize warp markers', c => c.withMarkers(c.warp.markers.quantized(step)));
   }
 
-  /** Crop: il loop (o la regione) diventa un file a sé e la clip suona solo quello. */
+  /** Crop: the loop (or the region) becomes a file of its own and the clip plays only that. */
   private async crop(): Promise<void> {
     const t = this.target(), ref = this.ref;
     if (!t || !ref) return;
     const crop = t.clip.cropped(sampleDuration(t.sample), this.deps.store.project.tempo);
-    if (!crop) return this.deps.say('Crop: la parte da tenere è fuori dal sample.');
+    if (!crop) return this.deps.say('Crop: the part to keep is outside the sample.');
     try {
       const sample = await this.deps.cropSample(t.sample, crop.fileStart, crop.fileEnd);
-      // il file nuovo intanto è pronto, ma la clip potrebbe essere cambiata (o sparita) nel frattempo
-      if (findClip(this.deps.store.project, ref)?.clip !== t.clip) return this.deps.say('Crop annullato: la clip è cambiata nel frattempo.');
+      // the new file is ready meanwhile, but the clip may have changed (or disappeared) in the meantime
+      if (findClip(this.deps.store.project, ref)?.clip !== t.clip) return this.deps.say('Crop cancelled: the clip changed in the meantime.');
       this.deps.store.apply(cropClipAt(ref, sample, crop.clip(sample.id)));
       this.selected = -1;
       if (this.ref === ref) this.fit();
@@ -229,7 +229,7 @@ export class ClipEditor implements EditorHost {
     }
   }
 
-  // ---------------------------------------------------------------- stato
+  // ---------------------------------------------------------------- state
 
   private target(): Target | null {
     const p = this.deps.store.project;
@@ -239,7 +239,7 @@ export class ClipEditor implements EditorHost {
     return sample ? { clip: found.clip, found, sample } : null;
   }
 
-  /** Allinea pannello e disegno al progetto; chiude se la clip non esiste più. */
+  /** Aligns panel and drawing with the project; closes if the clip no longer exists. */
   private sync(): void {
     if (!this.isOpen) return;
     const t = this.target();
@@ -250,7 +250,7 @@ export class ClipEditor implements EditorHost {
     this.invalidate();
   }
 
-  /** Inquadra il sample e la regione. */
+  /** Frames the sample and the region. */
   private fit(): void {
     const t = this.target();
     if (!t || this.surface.width < 10) return;
@@ -261,7 +261,7 @@ export class ClipEditor implements EditorHost {
     this.fitPending = false;
   }
 
-  // ---------------------------------------------------------------- disegno e input
+  // ---------------------------------------------------------------- drawing and input
 
   private readonly frame = () => {
     const engine = this.deps.engine;
@@ -326,7 +326,7 @@ export class ClipEditor implements EditorHost {
     });
     el.addEventListener('pointercancel', () => { this.gesture?.cancel(); this.gesture = null; });
     el.addEventListener('pointerleave', () => { if (this.hover !== null) { this.hover = null; this.invalidate(); } });
-    // doppio clic nella striscia o sulla forma d'onda: un warp marker in quel punto
+    // double click in the strip or on the waveform: a warp marker at that point
     el.addEventListener('dblclick', e => {
       const p = this.pointer(e, el);
       if (p.y >= LAYOUT.ruler) this.addMarkerAt(p.x);
@@ -347,7 +347,7 @@ export class ClipEditor implements EditorHost {
       if (e.ctrlKey || e.metaKey) this.setAxis(a.zoomed(a.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x));
       else this.setAxis(a.scrolled(a.startBeat + (e.shiftKey || !e.deltaX ? e.deltaY : e.deltaX) / a.pxPerBeat));
     }, { passive: false });
-    // tasti dell'editor: hanno la precedenza su quelli della timeline
+    // the editor's keys: they take priority over the timeline's
     this.element.addEventListener('keydown', e => {
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return;
       if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
@@ -364,18 +364,18 @@ export class ClipEditor implements EditorHost {
     const clip = this.clip();
     if (clip && i >= 0 && clip.warp.markers.canRemove(i)) {
       this.selected = -1;
-      this.commit('Elimina warp marker', c => c.withMarkers(c.warp.markers.without(i)));
-    } else this.deps.say('Servono almeno due warp marker: usa "Azzera" per ripartire da un tempo costante.');
+      this.commit('Delete warp marker', c => c.withMarkers(c.warp.markers.without(i)));
+    } else this.deps.say('At least two warp markers are needed: use "Reset" to restart from a constant tempo.');
   }
 
-  /** Un warp marker nel punto x (se il warp è attivo e x cade nel sample). */
+  /** A warp marker at point x (if warp is active and x falls in the sample). */
   private addMarkerAt(x: number): void {
     const clip = this.clip();
     if (!clip?.warp.enabled) return;
     const t = clip.warp.markers.timeOf(this._axis.xToBeat(x));
     if (t < 0 || t > this.duration()) return;
     const { markers, index } = clip.warp.markers.withMarkerAt(t);
-    if (markers !== clip.warp.markers) this.commit('Aggiungi warp marker', c => c.withMarkers(markers));
+    if (markers !== clip.warp.markers) this.commit('Add warp marker', c => c.withMarkers(markers));
     this.selectMarker(index);
   }
 
@@ -383,24 +383,24 @@ export class ClipEditor implements EditorHost {
     const warp = clip.warp.enabled;
     const tools: MenuItem[] = [
       { label: 'Auto-Warp', disabled: !this.target()?.sample.analysis, run: () => this.autoWarp() },
-      { label: 'Segui tempo', disabled: !this.target()?.sample.analysis, run: () => void this.followTempo() },
-      { label: 'Quantizza i warp marker', disabled: !warp, run: () => this.quantize() },
-      { label: 'Azzera i warp marker', disabled: !warp, run: () => this.commit('Azzera warp marker', c => c.withMarkers(c.warp.markers.cleared(this.duration()))) },
+      { label: 'Follow tempo', disabled: !this.target()?.sample.analysis, run: () => void this.followTempo() },
+      { label: 'Quantize the warp markers', disabled: !warp, run: () => this.quantize() },
+      { label: 'Reset the warp markers', disabled: !warp, run: () => this.commit('Reset warp markers', c => c.withMarkers(c.warp.markers.cleared(this.duration()))) },
       SEPARATOR,
-      { label: warp ? 'Spegni il warp' : 'Accendi il warp', run: () => this.commit(warp ? 'Warp spento' : 'Warp attivo', c => c.withWarp({ enabled: !warp })) },
-      { label: clip.reversed ? 'Togli il reverse' : 'Reverse', run: () => this.commit(clip.reversed ? 'Reverse spento' : 'Reverse', c => c.withReversed(!clip.reversed, this.duration())) },
-      { label: clip.loop.enabled ? 'Crop sul loop' : 'Crop sulla regione', run: () => void this.crop() },
+      { label: warp ? 'Turn warp off' : 'Turn warp on', run: () => this.commit(warp ? 'Warp off' : 'Warp on', c => c.withWarp({ enabled: !warp })) },
+      { label: clip.reversed ? 'Remove reverse' : 'Reverse', run: () => this.commit(clip.reversed ? 'Reverse off' : 'Reverse', c => c.withReversed(!clip.reversed, this.duration())) },
+      { label: clip.loop.enabled ? 'Crop to loop' : 'Crop to region', run: () => void this.crop() },
     ];
     if (hit.kind === 'marker') {
       const i = hit.index;
       return [
-        { label: '1.1.1 qui', run: () => this.commit('Imposta 1.1.1', c => c.withMarkers(c.warp.markers.withOrigin(c.warp.markers.markers[i].t))) },
-        { label: 'Elimina warp marker', shortcut: KEY.delete, disabled: !clip.warp.markers.canRemove(i), run: () => this.deleteSelectedMarker() },
+        { label: '1.1.1 here', run: () => this.commit('Set 1.1.1', c => c.withMarkers(c.warp.markers.withOrigin(c.warp.markers.markers[i].t))) },
+        { label: 'Delete warp marker', shortcut: KEY.delete, disabled: !clip.warp.markers.canRemove(i), run: () => this.deleteSelectedMarker() },
         SEPARATOR,
         ...tools,
       ];
     }
-    const here: MenuItem[] = p.y >= LAYOUT.ruler && warp ? [{ label: 'Aggiungi warp marker qui', shortcut: 'doppio clic', run: () => this.addMarkerAt(p.x) }, SEPARATOR] : [];
+    const here: MenuItem[] = p.y >= LAYOUT.ruler && warp ? [{ label: 'Add warp marker here', shortcut: 'double click', run: () => this.addMarkerAt(p.x) }, SEPARATOR] : [];
     return [...here, ...tools];
   }
 }

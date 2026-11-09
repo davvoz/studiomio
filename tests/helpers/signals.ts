@@ -1,4 +1,4 @@
-/** Segnali di prova deterministici. */
+/** Deterministic test signals. */
 export { drumLoop } from '../../src/demo/demo-loop';
 
 export const SR = 44100;

@@ -1,14 +1,14 @@
-/* Strumenti di warp automatici (Auto-Warp, Segui tempo): funzioni pure che producono una
- * nuova mappa di warp, come i comandi omonimi di WarpMio. */
+/* Automatic warp tools (Auto-Warp, Follow tempo): pure functions producing a
+ * new warp map, like WarpMio's commands of the same name. */
 import type { Beats, Seconds } from '../core/music-time';
 import { WarpMarkers, type WarpMarker } from './warp-markers';
 
-/** Dove mettere 1.1.1: l'inizio del sample o uno dei primi transienti (nei primi 2 s o nel
- *  primo 30%), scegliendo quello su cui si allineano alla griglia del tempo più transienti.
- *  A parità vince il più presto. Un colpo proprio all'inizio del file non viene rilevato come
- *  transiente (non c'è niente prima): lo si conta come se ci fosse, perché i loop di solito
- *  partono da un colpo; un sample che inizia con del silenzio ha comunque molti più
- *  transienti allineati sul suo primo colpo vero. */
+/** Where to put 1.1.1: the start of the sample or one of the first transients (in the first 2 s or in the
+ *  first 30%), choosing the one on which the most transients align with the tempo grid.
+ *  On a tie the earliest wins. A hit right at the start of the file isn't detected as a
+ *  transient (there's nothing before it): it's counted as if it were there, because loops usually
+ *  start with a hit; a sample starting with silence still has many more
+ *  transients aligned on its first real hit. */
 export function firstHit(transients: readonly Seconds[], duration: Seconds, tempo: number): Seconds {
   const period = 60 / tempo, tolerance = 0.03;
   const hits = transients.some(t => t < 0.02) ? transients : [0, ...transients];
@@ -25,14 +25,14 @@ export function firstHit(transients: readonly Seconds[], duration: Seconds, temp
   return best;
 }
 
-/** Tempo costante sul tempo rilevato, con 1.1.1 sul primo colpo. */
+/** Constant tempo on the detected tempo, with 1.1.1 on the first hit. */
 export function autoWarp(tempo: number, transients: readonly Seconds[], duration: Seconds): WarpMarkers {
   return WarpMarkers.straight(tempo, duration, firstHit(transients, duration, tempo));
 }
 
-/** Tempo variabile da un beat tracking (registrazioni dal vivo): un marker sul primo battito
- *  di ogni battuta e sull'ultimo, ciascuno agganciato al transiente più vicino entro 35 ms.
- *  Restituisce null se i battiti trovati sono troppo pochi. */
+/** Variable tempo from beat tracking (live recordings): a marker on the first beat
+ *  of each bar and on the last one, each snapped to the nearest transient within 35 ms.
+ *  Returns null if too few beats were found. */
 export function followTempo(
   beats: readonly Seconds[], transients: readonly Seconds[], tempo: number, duration: Seconds, beatsPerBar: Beats,
 ): WarpMarkers | null {
@@ -55,5 +55,5 @@ export function followTempo(
   return WarpMarkers.of(ms, tempo);
 }
 
-/** Interpreta il sample a tempo doppio (×2) o dimezzato (:2). */
+/** Interprets the sample at double (×2) or half (:2) tempo. */
 export const scaleTempo = (markers: WarpMarkers, factor: number): WarpMarkers => markers.withGlobalBpm(markers.globalBpm * factor);

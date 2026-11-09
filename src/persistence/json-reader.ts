@@ -3,7 +3,7 @@ export type JsonObject = { [key: string]: Json };
 
 const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-/** File di progetto non valido; `path` indica dove (es. "tracks[2].arrangement[0].start"). */
+/** Invalid project file; `path` says where (e.g. "tracks[2].arrangement[0].start"). */
 export class ProjectFormatError extends Error {
   constructor(readonly path: string, message: string) {
     super(path ? `${path}: ${message}` : message);
@@ -11,8 +11,8 @@ export class ProjectFormatError extends Error {
   }
 }
 
-/** Lettura validata di un valore JSON: ogni accesso controlla il tipo e, se sbaglia,
- *  lancia un errore con il percorso del campo. */
+/** Validated reading of a JSON value: each access checks the type and, if it's wrong,
+ *  throws an error with the field's path. */
 export class JsonReader {
   constructor(private readonly value: unknown, readonly path = '') {}
 
@@ -20,7 +20,7 @@ export class JsonReader {
     try {
       return new JsonReader(JSON.parse(text));
     } catch (e) {
-      throw new ProjectFormatError('', `JSON non valido (${e instanceof Error ? e.message : e})`);
+      throw new ProjectFormatError('', `invalid JSON (${e instanceof Error ? e.message : e})`);
     }
   }
 
@@ -37,63 +37,63 @@ export class JsonReader {
   }
 
   get(key: string): JsonReader {
-    if (!this.isObject()) this.fail('atteso un oggetto');
+    if (!this.isObject()) this.fail('expected an object');
     return new JsonReader((this.value as Record<string, unknown>)[key], this.path ? `${this.path}.${key}` : key);
   }
 
   num(key: string): number {
-    return this.expect(key, isNumber, 'atteso un numero');
+    return this.expect(key, isNumber, 'expected a number');
   }
 
   int(key: string): number {
-    return this.expect(key, (v): v is number => isNumber(v) && Number.isInteger(v), 'atteso un intero');
+    return this.expect(key, (v): v is number => isNumber(v) && Number.isInteger(v), 'expected an integer');
   }
 
   str(key: string): string {
-    return this.expect(key, (v): v is string => typeof v === 'string', 'attesa una stringa');
+    return this.expect(key, (v): v is string => typeof v === 'string', 'expected a string');
   }
 
   bool(key: string): boolean {
-    return this.expect(key, (v): v is boolean => typeof v === 'boolean', 'atteso vero/falso');
+    return this.expect(key, (v): v is boolean => typeof v === 'boolean', 'expected true/false');
   }
 
-  /** Uno dei valori ammessi. */
+  /** One of the allowed values. */
   oneOf<T extends string>(key: string, allowed: readonly T[]): T {
-    return this.expect(key, (v): v is T => allowed.includes(v as T), `atteso uno tra ${allowed.join(', ')}`);
+    return this.expect(key, (v): v is T => allowed.includes(v as T), `expected one of ${allowed.join(', ')}`);
   }
 
   array(key: string): JsonReader[] {
     const r = this.get(key);
-    return r.expectSelf(Array.isArray, 'atteso un elenco').map((v, i) => new JsonReader(v, `${r.path}[${i}]`));
+    return r.expectSelf(Array.isArray, 'expected a list').map((v, i) => new JsonReader(v, `${r.path}[${i}]`));
   }
 
-  /** Elenco di numeri lungo `length` (es. [secondi, battito]). */
+  /** A list of `length` numbers (e.g. [seconds, beat]). */
   tuple(length: number): number[] {
     return this.expectSelf((v): v is number[] => Array.isArray(v) && v.length === length && v.every(isNumber),
-      `attesi ${length} numeri`);
+      `expected ${length} numbers`);
   }
 
   numbers(key: string): number[] {
     return this.array(key).map(r => r.asNumber());
   }
 
-  /** null oppure il valore letto da `read`. */
+  /** null or the value read by `read`. */
   nullable<T>(key: string, read: (r: JsonReader) => T): T | null {
     const r = this.get(key);
     return r.value === null || r.value === undefined ? null : read(r);
   }
 
   asNumber(): number {
-    return this.expectSelf(isNumber, 'atteso un numero');
+    return this.expectSelf(isNumber, 'expected a number');
   }
 
   asString(): string {
-    return this.expectSelf((v): v is string => typeof v === 'string', 'attesa una stringa');
+    return this.expectSelf((v): v is string => typeof v === 'string', 'expected a string');
   }
 
-  /** Le chiavi di un oggetto. */
+  /** An object's keys. */
   keys(): string[] {
-    if (!this.isObject()) this.fail('atteso un oggetto');
+    if (!this.isObject()) this.fail('expected an object');
     return Object.keys(this.value as object);
   }
 

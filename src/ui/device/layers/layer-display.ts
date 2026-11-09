@@ -1,9 +1,9 @@
-/* Il pannello degli strumenti a strati (il Kick, lo Snare). A sinistra il colpo com'è: la forma
- * d'onda calcolata con lo stesso motore che suona (con i sample caricati) e, sopra, la curva
- * dell'intonazione che cade fino alla nota; un clic lo suona. A destra le schede degli strati
- * nell'ordine in cui si sentono, poi la nota e l'uscita. Gli strati che possono suonare un sample
- * hanno la scelta del sample: un file audio (o un sample del browser) lasciato sulla loro scheda
- * ci diventa il loro sample. Ogni strumento dice com'è fatto il suo pannello (LayerLayout). */
+/* The panel of the layered instruments (the Kick, the Snare). On the left the hit as it is: the
+ * waveform computed with the same engine that plays (with the loaded samples) and, above, the curve
+ * of the pitch falling to the note; a click plays it. On the right the layer tabs
+ * in the order they're heard, then the note and the output. The layers that can play a sample
+ * have the sample choice: an audio file (or a browser sample) dropped on their tab
+ * becomes their sample. Each instrument says what its panel is like (LayerLayout). */
 import type { SampleId } from '../../../core/id';
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import type { InstrumentCore, SampleData, SamplePlayer } from '../../../devices/dsp/core';
@@ -14,20 +14,20 @@ import { el } from '../../dom';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext } from '../displays';
 
-/** I file che si possono lasciare su una scheda. */
+/** The files that can be dropped on a tab. */
 const isAudio = (f: File) => f.type.startsWith('audio/') || /\.(wav|aiff?|flac|mp3|ogg|m4a)$/i.test(f.name);
 
 export interface LayerCard {
   readonly title: string;
-  /** La scelta della sorgente (o l'interruttore), nell'intestazione della scheda. */
+  /** The choice of the source (or the switch), in the tab's header. */
   readonly source?: string;
-  /** Il posto del sample, per gli strati che possono suonarne uno. */
+  /** The sample's slot, for the layers that can play one. */
   readonly slot?: string;
   readonly params: readonly string[];
 }
 
-/** Uno strato che può suonare un sample: il suo posto, il parametro della sorgente con il valore
- *  "Sample", e i tempi da allungare (dati i valori) perché il sample si senta. */
+/** A layer that can play a sample: its slot, the source parameter with the
+ *  "Sample" value, and the times to lengthen (given the values) so the sample is heard. */
 export interface SampleLayer {
   readonly slot: string;
   readonly source: string;
@@ -35,35 +35,35 @@ export interface SampleLayer {
   readonly times?: (values: Readonly<Record<string, number>>) => ParamValues;
 }
 
-/** L'intonazione da disegnare: dove arriva (Hz) e dov'è a `t` secondi. */
+/** The pitch to draw: where it arrives (Hz) and where it is at `t` seconds. */
 export interface PitchCurve {
   readonly base: number;
   at(t: number): number;
 }
 
 export interface LayerLayout {
-  /** Il nome dello strumento, per i messaggi. */
+  /** The instrument's name, for the messages. */
   readonly name: string;
   readonly cards: readonly LayerCard[];
   readonly samples: readonly SampleLayer[];
-  /** I controlli che, quando non contano (dipendono dalla sorgente), si tolgono invece di attenuarsi. */
+  /** The controls that, when they don't count (they depend on the source), are removed instead of dimmed. */
   readonly swapped: ReadonlySet<string>;
-  /** Le scelte che stanno meglio in un menu. */
+  /** The choices that sit better in a menu. */
   readonly menus: ReadonlySet<string>;
-  /** I parametri che, cambiati, fanno sentire il colpo. */
+  /** The parameters that, changed, make the hit heard. */
   readonly audition: ReadonlySet<string>;
-  /** La nota che suona il colpo di prova. */
+  /** The note the test hit plays. */
   readonly rootNote: number;
-  /** La scala delle frequenze della curva dell'intonazione. */
+  /** The frequency scale of the pitch curve. */
   readonly lowHz: number;
   readonly highHz: number;
-  /** Il motore che calcola il colpo da disegnare. */
+  /** The engine computing the hit to draw. */
   core(sampleRate: number): InstrumentCore & SamplePlayer;
-  /** Quanto dura il colpo da disegnare (in secondi). */
+  /** How long the hit to draw lasts (in seconds). */
   seconds(values: Readonly<Record<string, number>>): number;
-  /** La curva dell'intonazione del corpo, o null se il corpo non ne ha una (un sample). */
+  /** The body's pitch curve, or null if the body doesn't have one (a sample). */
   pitch(values: Readonly<Record<string, number>>): PitchCurve | null;
-  /** In alto a destra, sul colpo. */
+  /** At the top right, on the hit. */
   hint(values: Readonly<Record<string, number>>): string;
 }
 
@@ -71,7 +71,7 @@ const AUDITION_VELOCITY = 120;
 const ACCENT = '#ff9d2e';
 const CURVE = '#7fb6ff';
 
-/** Un canvas nitido, ridimensionato al suo posto. */
+/** A sharp canvas, resized to its place. */
 function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
   const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
   if (!w || !h) return null;
@@ -83,16 +83,16 @@ function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
 
 export class LayerDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'lay' });
-  private readonly wave = el<HTMLCanvasElement>('canvas', { className: 'lay-wave', title: 'Il colpo: forma d\'onda e intonazione (clic: suona)' });
+  private readonly wave = el<HTMLCanvasElement>('canvas', { className: 'lay-wave', title: 'The hit: waveform and pitch (click: play)' });
   private readonly controls = new Map<string, { control: ParamControl; spec: ParamSpec }>();
   private readonly sampleRows = new Map<string, { row: HTMLElement; choice: HTMLSelectElement }>();
   private values: Record<string, number>;
   private params: ParamValues | null = null;
   private enabled = true;
   private dirty = true;
-  /** I sample con cui è stato disegnato il colpo: se cambiano (caricati dopo), si ridisegna. */
+  /** The samples the hit was drawn with: if they change (loaded later), it's redrawn. */
   private drawnWith: (SampleData | undefined)[] = [];
-  /** Il colpo calcolato e quanto dura il disegno. */
+  /** The computed hit and how long the drawing lasts. */
   private rendered: Float32Array = new Float32Array(0);
   private seconds = 1;
   private shown = false;
@@ -126,7 +126,7 @@ export class LayerDisplay implements DeviceDisplay {
       row.hidden = this.values[layer.source] !== layer.sample || !this.ctx.samples;
       if (!row.hidden) {
         const all = this.ctx.samples?.list() ?? [];
-        choice.replaceChildren(el('option', { value: '', textContent: '— nessun sample —' }),
+        choice.replaceChildren(el('option', { value: '', textContent: '— no sample —' }),
           ...all.map(s => el('option', { value: s.id, textContent: s.name })));
         choice.value = sampleAt(settings, slot) ?? '';
       }
@@ -142,7 +142,7 @@ export class LayerDisplay implements DeviceDisplay {
     return this.layout.samples.find(x => x.slot === slot)!;
   }
 
-  // ---------------------------------------------------------------- schede
+  // ---------------------------------------------------------------- tabs
 
   private card(c: LayerCard): HTMLElement {
     const head = el('div', { className: 'lay-card-head' }, el('span', { className: 'lay-card-title', textContent: c.title }));
@@ -162,8 +162,8 @@ export class LayerDisplay implements DeviceDisplay {
     return control.element;
   }
 
-  /** Un parametro cambiato. Scegliendo un sample come sorgente, i tempi si allungano quanto basta
-   *  a sentirlo (un sample dura più di un click). */
+  /** A changed parameter. Choosing a sample as the source, the times lengthen as much as needed
+   *  to hear it (a sample lasts longer than a click). */
   private set(id: string, v: number, final: boolean): void {
     const layer = this.layout.samples.find(x => x.source === id);
     const times = layer && v === layer.sample ? layer.times?.(this.values) ?? {} : {};
@@ -171,13 +171,13 @@ export class LayerDisplay implements DeviceDisplay {
     if (final && this.layout.audition.has(id)) this.audition();
   }
 
-  /** Il sample dello strato: scelto tra quelli del progetto o caricato dal disco. */
+  /** The layer's sample: chosen among the project's or loaded from disk. */
   private sampleRow(slot: string): HTMLElement {
-    const choice = el<HTMLSelectElement>('select', { className: 'lay-sample', title: 'Il sample (tra quelli del progetto)' });
+    const choice = el<HTMLSelectElement>('select', { className: 'lay-sample', title: 'The sample (among the project\'s)' });
     choice.onchange = () => {
       this.assign(slot, (choice.value || null) as SampleId | null);
     };
-    const load = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Carica…', title: 'Carica un file audio (o trascinalo sulla scheda)' });
+    const load = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Load…', title: 'Load an audio file (or drag it onto the tab)' });
     load.onclick = () => {
       const input = el<HTMLInputElement>('input', { type: 'file', accept: 'audio/*' });
       input.onchange = () => { const f = input.files?.[0]; if (f) void this.load(slot, f); };
@@ -188,7 +188,7 @@ export class LayerDisplay implements DeviceDisplay {
     return row;
   }
 
-  /** La sorgente dello strato diventa Sample (con i tempi per sentirlo), se non lo era già. */
+  /** The layer's source becomes Sample (with the times to hear it), if it wasn't already. */
   private asSample(slot: string): ParamValues {
     const layer = this.layer(slot);
     return this.values[layer.source] === layer.sample ? {} : { [layer.source]: layer.sample, ...layer.times?.(this.values) };
@@ -204,11 +204,11 @@ export class LayerDisplay implements DeviceDisplay {
       await this.ctx.samples?.load(slot, file, this.asSample(slot));
       this.audition();
     } catch (err) {
-      console.warn(`${this.layout.name}: impossibile caricare "${file.name}"`, err);
+      console.warn(`${this.layout.name}: can't load "${file.name}"`, err);
     }
   }
 
-  /** Un file audio o un sample del browser lasciato sulla scheda diventa il sample dello strato. */
+  /** An audio file or a browser sample dropped on the tab becomes the layer's sample. */
   private acceptSamples(card: HTMLElement, slot: string): void {
     if (!this.ctx.samples) return;
     const files = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
@@ -235,7 +235,7 @@ export class LayerDisplay implements DeviceDisplay {
     }, { accept: item => item.payload?.kind === 'sample' || item.payload?.kind === 'file' });
   }
 
-  // ---------------------------------------------------------------- il colpo
+  // ---------------------------------------------------------------- the hit
 
   private readonly frame = (): void => {
     if (this.element.isConnected) this.shown = true;
@@ -251,7 +251,7 @@ export class LayerDisplay implements DeviceDisplay {
     this.paint();
   };
 
-  /** Il colpo, calcolato con il motore vero (a frequenza ridotta: per disegnarlo basta). */
+  /** The hit, computed with the real engine (at reduced rate: enough to draw it). */
   private renderHit(audio: (SampleData | undefined)[]): void {
     const rate = 24000, seconds = this.layout.seconds(this.values), n = Math.round(seconds * rate);
     const core = this.layout.core(rate);
@@ -272,7 +272,7 @@ export class LayerDisplay implements DeviceDisplay {
     const w = this.wave.clientWidth, h = this.wave.clientHeight, v = this.values, mid = h * 0.58, amp = h * 0.4;
     g.fillStyle = '#15181c';
     g.fillRect(0, 0, w, h);
-    // il tempo: una riga ogni 50, 100 o 250 ms
+    // the time: a line every 50, 100 or 250 ms
     const step = this.seconds > 1.2 ? 0.25 : this.seconds > 0.5 ? 0.1 : 0.05;
     g.font = '10px system-ui, sans-serif';
     for (let t = step; t < this.seconds; t += step) {
@@ -284,7 +284,7 @@ export class LayerDisplay implements DeviceDisplay {
     }
     g.strokeStyle = 'rgba(255,255,255,0.12)';
     g.beginPath(); g.moveTo(0, mid + 0.5); g.lineTo(w, mid + 0.5); g.stroke();
-    // la forma d'onda: minimo e massimo per colonna
+    // the waveform: minimum and maximum per column
     const x = this.rendered, per = x.length / w;
     let top = 1e-9;
     for (const s of x) top = Math.max(top, Math.abs(s));
@@ -299,7 +299,7 @@ export class LayerDisplay implements DeviceDisplay {
       }
       g.fillRect(c, mid - hi * scale, 1, Math.max(1, (hi - lo) * scale));
     }
-    // l'intonazione del corpo: dall'alto fino alla nota, su una scala di ottave
+    // the body's pitch: from the top down to the note, on an octave scale
     const yOf = (hz: number) => h - 14 - ((Math.log2(hz / lowHz) / Math.log2(highHz / lowHz)) * (h - 26));
     const pitch = this.layout.pitch(v);
     if (pitch) {
@@ -321,7 +321,7 @@ export class LayerDisplay implements DeviceDisplay {
       g.setLineDash([]);
     }
     g.globalAlpha = 1;
-    // la nota, in alto
+    // the note, at the top
     const note = paramSpec(this.ctx.type, 'note');
     const name = note?.kind === 'choice' ? note.options[v.note] : '';
     g.fillStyle = 'rgba(255,255,255,0.75)';

@@ -25,19 +25,19 @@ describe('Prestabiliti', () => {
   const track = (p: Project, name: string) => p.tracks.find(t => t.name === name) as MidiTrack;
   const SCENES = ['Intro', 'Groove', 'Monologo', 'Tensione', 'Drop', 'Prigioniera', 'Libera', 'Drop 2', 'Catena', 'Outro'];
 
-  it('otto tracce (una pagina dell\'APC40) e dieci scene (due pagine), al tempo della voce', () => {
+  it('eight tracks (one APC40 page) and ten scenes (two pages), at the voice\'s tempo', () => {
     const p = build();
     expect(p.tempo.bpm).toBe(PRESTABILITI_LIVE_BPM);
     expect(p.tracks.map(t => t.name)).toEqual(['Cassa', 'Rumble', 'Acido', 'Robot', 'Clap', 'Piatti', 'Perc & FX', 'Voce']);
     expect(p.scenes.map(s => s.name)).toEqual(SCENES);
     expect(Math.max(...p.tracks.map(t => t.arrangementEnd))).toBe(184 * 4);
-    // ogni sezione parte su un multiplo di otto battute
+    // each section starts on a multiple of eight bars
     const starts = [...new Set(p.tracks.flatMap(t => t.arrangement.map(pl => pl.start)))].sort((a, b) => a - b);
     for (const s of starts) expect(s % 32).toBe(0);
     expect(p.masterEffects.map(e => e.type)).toEqual(['eq', 'compressor', 'clipper', 'stereo', 'limiter']);
   });
 
-  it('nel break niente cassa, rumble né clap: il fondo lo tiene il Robotoid', () => {
+  it('in the break no kick, rumble or clap: the Robotoid holds the bottom', () => {
     const p = build();
     const breakdown = SCENES.indexOf('Prigioniera');
     for (const name of ['Cassa', 'Rumble', 'Clap']) expect(track(p, name).slots[breakdown], name).toBeNull();
@@ -46,7 +46,7 @@ describe('Prestabiliti', () => {
     expect(robot.notes.every(n => n.pitch <= padNote(3))).toBe(true);
   });
 
-  it('il rumble suona i colpi della cassa ed è zero sul colpo; acido e robot pompano', () => {
+  it('the rumble plays the kick\'s hits and is zero on the hit; acid and robot pump', () => {
     const p = build();
     const drop = SCENES.indexOf('Drop');
     const kick = track(p, 'Cassa').slots[drop] as MidiClip;
@@ -63,20 +63,20 @@ describe('Prestabiliti', () => {
     }
   });
 
-  it('l\'acido è in Fa frigio con il tritono del motivo dello sketch, e suona in Legato', () => {
+  it('the acid is in F phrygian with the sketch motif\'s tritone, and plays in Legato', () => {
     const p = build();
-    const SCALE = new Set([5, 6, 8, 10, 11, 0, 1, 3]); // Fa Solb Lab Sib Si Do Reb Mib
+    const SCALE = new Set([5, 6, 8, 10, 11, 0, 1, 3]); // F Gb Ab Bb B C Db Eb
     const acid = track(p, 'Acido');
     expect(acid.instrument.params.voiceMode).toBe(2);
     for (const c of acid.clips as MidiClip[]) {
       for (const n of c.notes) expect(SCALE.has(n.pitch % 12), `${c.name} ${n.pitch}`).toBe(true);
     }
-    // il motivo: tonica, seconda bemolle, tritono
+    // the motif: root, flat second, tritone
     const motif = acid.slots[SCENES.indexOf('Groove')] as MidiClip;
     expect([...new Set(motif.notes.map(n => n.pitch % 12))].sort((a, b) => a - b)).toEqual([5, 6, 8, 11]);
   });
 
-  it('il kit delle percussioni è quello dello sketch: il rim giù di nove semitoni e gli One_Shot', () => {
+  it('the percussion kit is the sketch\'s: the rim down nine semitones and the One_Shots', () => {
     const p = build();
     const perc = track(p, 'Perc & FX');
     expect(perc.instrument.params[padParam(0, 'model')]).toBe(MODEL.rim);
@@ -84,11 +84,11 @@ describe('Prestabiliti', () => {
     expect(perc.instrument.params[padParam(1, 'decay')]).toBe(0.066);
     expect(perc.instrument.params[padParam(2, 'decay')]).toBe(0.087);
     expect(perc.instrument.params[padParam(3, 'decay')]).toBe(0.79);
-    // la cassa dello sketch, un semitono giù (da Fa# a Fa)
+    // the sketch's kick, a semitone down (from F# to F)
     expect(track(p, 'Cassa').instrument.params[padParam(0, 'tune')]).toBe(-1);
   });
 
-  it('ogni frase della voce parte dal suo punto del file ed è chiusa dal taglio prima della prossima', () => {
+  it('each phrase of the voice starts from its point of the file and is closed by the cut before the next', () => {
     const p = build();
     const vox = track(p, 'Voce');
     const phrases = Object.values(PRESTABILITI_PHRASES);
@@ -96,7 +96,7 @@ describe('Prestabiliti', () => {
     expect(vox.instrument.params[padParam(15, 'choke')]).toBe(1);
     phrases.forEach((ph, i) => {
       expect(vox.instrument.params[padParam(i, 'choke')]).toBe(1);
-      // l'inizio in percento del file (lungo 61 s nel test)
+      // the start in percent of the file (61 s long in the test)
       expect(vox.instrument.params[padParam(i, 'start')]).toBeCloseTo((ph.at / 61) * 100, 2);
     });
     const beat = 60 / PRESTABILITI_LIVE_BPM;
@@ -105,7 +105,7 @@ describe('Prestabiliti', () => {
       notes.forEach((n, k) => {
         const i = n.pitch - padNote(0);
         if (i >= phrases.length) return;
-        // dopo una frase viene il suo taglio, alla sua fine, prima di ogni altra frase
+        // after a phrase comes its cut, at its end, before any other phrase
         const next = notes[k + 1];
         expect(next?.pitch, c.name).toBe(CUT);
         expect(next.start - n.start, c.name).toBeCloseTo(phrases[i].length / beat + 0.1, 5);
@@ -113,7 +113,7 @@ describe('Prestabiliti', () => {
     }
   });
 
-  it('le clip stanno nel giro e gli effetti modulati esistono; si salva e si riapre uguale', () => {
+  it('the clips sit in the loop and the modulated effects exist; it saves and reopens the same', () => {
     const p = build();
     for (const t of p.tracks as MidiTrack[]) {
       const effects = new Set(t.effects.map(e => e.id));

@@ -1,11 +1,11 @@
-/* I modulatori della catena (LFO e Inviluppo, vedi devices/modulators) nel motore. Per ogni
- * traccia (e per il master) un ChainModulators calcola, finestra per finestra come le curve delle
- * clip, il valore di ogni modulatore su una griglia fitta e lo programma in anticipo con scalini
- * e rampe sulle destinazioni: parametri dei dispositivi, macro, volume e pan. Ogni destinazione
- * ha il suo canale, così le modulazioni si sommano a quelle delle curve invece di prenderne il
- * posto. Gli inviluppi (e gli LFO che ripartono) sentono le note delle clip della traccia, che
- * qui si leggono come le legge il player. I parametri dei modulatori stessi si possono muovere
- * con le curve e con altri modulatori: arrivano qui e se ne tiene conto punto per punto. */
+/* The chain's modulators (LFO and Envelope, see devices/modulators) in the engine. For each
+ * track (and for the master) a ChainModulators computes, window by window like the clip
+ * curves, the value of each modulator on a dense grid and schedules it in advance with steps
+ * and ramps on the targets: device parameters, macros, volume and pan. Each target
+ * has its own channel, so the modulations add to the curves' instead of taking their
+ * place. The envelopes (and the restarting LFOs) hear the notes of the track's clips, which
+ * here are read as the player reads them. The modulators' own parameters can be moved
+ * with the curves and with other modulators: they arrive here and are taken into account point by point. */
 import type { DeviceId } from '../core/id';
 import { paramSpec, resolveParams, type DeviceType } from '../devices/device-type';
 import { pointsOf, type LfoPoint } from '../devices/instruments/prisma/shapes';
@@ -26,23 +26,23 @@ import { placementSegments, type Segment } from './segments';
 import type { Program } from './session';
 import { piecesInWindow } from './track-content';
 
-/** Dove va la destinazione di un modulatore, nel suo canale. */
+/** Where a modulator's target goes, in its channel. */
 export type ModSinkOf = (target: ModTarget, channel: string) => ModSink | null;
 
-/** Il canale della destinazione `slot` (da 0) del modulatore `id`. */
+/** The channel of target `slot` (from 0) of modulator `id`. */
 export const modChannel = (id: DeviceId, slot: number): string => `${id}/${slot}`;
 
-/** La griglia: un punto ogni tanto (secondi), fitta per gli LFO veloci, rada per quelli lenti. */
+/** The grid: a point every so often (seconds), dense for fast LFOs, sparse for slow ones. */
 const LFO_STEP_MIN = 0.003, LFO_STEP_MAX = 0.03, LFO_STEPS_PER_CYCLE = 48;
 const ENV_STEP = 0.004;
-/** Sotto questa differenza due punti di fila valgono uguali (un tratto fermo: niente messaggi). */
+/** Below this difference two points in a row count as equal (a still stretch: no messages). */
 const FLAT = 1e-5;
 const EPS = 1e-9;
-/** Le partenze passate che si tengono (per i livelli da cui ripartono le successive). */
+/** The past starts that are kept (for the levels the following ones restart from). */
 const KEEP_TRIGGERS = 8;
 
-/** Il valore che arriva alla destinazione per uno spostamento `x` della manopola: il volume è un
- *  guadagno (al quadrato, come il fader si sente) che non supera quello del fader. */
+/** The value reaching the target for a knob offset `x`: the volume is a
+ *  gain (squared, as the fader is heard) that doesn't exceed the fader's. */
 function sinkValue(target: ModTarget, x: number): number {
   if (target.kind === 'mixer' && target.param === 'volume') {
     const g = Math.max(0, Math.min(1, 1 + x));
@@ -53,28 +53,28 @@ function sinkValue(target: ModTarget, x: number): number {
 
 const neutralOf = (target: ModTarget) => (target.kind === 'mixer' && target.param === 'volume' ? 1 : 0);
 
-/** Una nota della traccia, in secondi del contesto. */
+/** A note of the track, in context seconds. */
 interface Hit {
   readonly on: number;
   readonly off: number;
   readonly velocity: number;
 }
 
-/** Una partenza: quando, quanto forte e, per gli inviluppi, la sua curva. */
+/** A start: when, how loud and, for the envelopes, its curve. */
 interface Trigger extends Hit {
   readonly env: EnvTrigger | null;
-  /** Per le forme casuali degli LFO che ripartono: ogni partenza ha i suoi valori. */
+  /** For the random shapes of the restarting LFOs: each start has its own values. */
   readonly seed: number;
 }
 
-/** Un modulatore della catena, con le modulazioni che arrivano ai suoi parametri. */
+/** A modulator of the chain, with the modulations reaching its parameters. */
 class Modulator {
   settings: EffectSettings;
   values: Record<string, number>;
   points: LfoPoint[];
   readonly type: DeviceType;
   triggers: Trigger[] = [];
-  /** Le modulazioni dei suoi parametri (curve, macro, altri modulatori), per canale. */
+  /** The modulations of its parameters (curves, macros, other modulators), per channel. */
   private readonly lines = new Map<string, { readonly param: string; readonly line: ModTimeline }>();
   readonly modulation: DeviceModulation = {
     sink: (param, channel) => {
@@ -111,7 +111,7 @@ class Modulator {
     return this.type === ENVELOPE_DEVICE;
   }
 
-  /** Il parametro all'istante `t`: la manopola più le modulazioni che gli arrivano. */
+  /** The parameter at instant `t`: the knob plus the modulations reaching it. */
   param(id: string, t: number): number {
     const base = this.values[id];
     if (!this.lines.size) return base;
@@ -122,7 +122,7 @@ class Modulator {
     return paramFromUnit(spec, paramToUnit(spec, base) + offset);
   }
 
-  /** Ciò che è passato si dimentica (le modulazioni dei parametri, le partenze vecchie). */
+  /** What's past is forgotten (the parameters' modulations, the old starts). */
   forget(now: number): void {
     for (const [key, { line }] of this.lines) {
       const v = line.valueAt(now);
@@ -132,18 +132,18 @@ class Modulator {
     if (past > KEEP_TRIGGERS) this.triggers.splice(0, past - KEEP_TRIGGERS);
   }
 
-  /** L'ultima partenza entro `t`. */
+  /** The last start within `t`. */
   triggerAt(t: number): Trigger | null {
     for (let i = this.triggers.length - 1; i >= 0; i--) if (this.triggers[i].on <= t) return this.triggers[i];
     return null;
   }
 
-  /** Le partenze di ciò che suona da `at` in poi si dimenticano (riprogrammazione). */
+  /** The starts of what plays from `at` on are forgotten (rescheduling). */
   dropFrom(at: number): void {
     this.triggers = this.triggers.filter(g => g.on < at);
   }
 
-  /** I tempi dell'inviluppo all'istante `t`. */
+  /** The envelope's times at instant `t`. */
   envTimes(t: number): EnvTimes {
     const p = (id: string) => this.param(id, t);
     return {
@@ -152,11 +152,11 @@ class Modulator {
     };
   }
 
-  /** Aggiunge le partenze `hits` (in ordine). */
+  /** Adds the starts `hits` (in order). */
   addTriggers(hits: readonly Hit[]): void {
     for (const h of hits) {
       const last = this.triggers[this.triggers.length - 1];
-      // dopo una riprogrammazione le partenze arrivano di nuovo: quelle già viste non si ripetono
+      // after a rescheduling the starts arrive again: those already seen aren't repeated
       if (last && h.on < last.on + EPS) continue;
       let env: EnvTrigger | null = null;
       if (this.isEnvelope) {
@@ -171,20 +171,20 @@ class Modulator {
   }
 }
 
-/** Cosa i modulatori di una catena devono sapere della finestra: dove sono i battiti e quanto
- *  dura un battito. */
+/** What a chain's modulators must know about the window: where the beats are and how long
+ *  a beat lasts. */
 interface Grid {
   readonly w: ScheduleWindow;
   readonly secondsPerBeat: number;
 }
 
-/** I modulatori di una catena (traccia o master): una sorgente dello scheduler. */
+/** The modulators of a chain (track or master): a scheduler source. */
 export class ChainModulators implements ScheduledSource {
   private readonly mods = new Map<DeviceId, Modulator>();
   private order: readonly DeviceId[] = [];
   private track: Track | null = null;
   private readonly segments = new WeakMap<Placement, Segment[]>();
-  /** Le destinazioni già toccate, per riportarle neutre. */
+  /** The targets already touched, to bring them back to neutral. */
   private readonly touched = new Map<string, { readonly target: ModTarget; readonly sink: ModSink }>();
   private stale = false;
 
@@ -194,8 +194,8 @@ export class ChainModulators implements ScheduledSource {
     private readonly programs: () => readonly Program[] = () => [],
   ) {}
 
-  /** I modulatori della catena `effects` (la traccia, per le note); vero se è cambiato qualcosa
-   *  che si sente (allora va riprogrammato). */
+  /** The modulators of the chain `effects` (the track, for the notes); true if something
+   *  audible changed (then it has to be rescheduled). */
   update(effects: readonly EffectSettings[], track: Track | null): boolean {
     this.track = track;
     let changed = false;
@@ -225,12 +225,12 @@ export class ChainModulators implements ScheduledSource {
     return changed;
   }
 
-  /** Vero se nella catena c'è almeno un modulatore. */
+  /** True if the chain has at least one modulator. */
   get active(): boolean {
     return this.order.length > 0;
   }
 
-  /** Le modulazioni dei parametri del modulatore `id` (le curve che lo muovono), se è qui. */
+  /** The modulations of the parameters of modulator `id` (the curves moving it), if it's here. */
   modulation(id: DeviceId): DeviceModulation | undefined {
     return this.mods.get(id)?.modulation;
   }
@@ -239,7 +239,7 @@ export class ChainModulators implements ScheduledSource {
     if (w.to - w.from <= EPS) return;
     const t0 = w.timeAt(w.from), t1 = w.timeAt(w.to);
     if (this.stale) {
-      // tutti neutri dall'inizio della finestra: quelli che suonano ancora prendono subito il posto
+      // all neutral from the start of the window: those still playing take their place right away
       this.stale = false;
       for (const { target, sink } of this.touched.values()) sink.set(neutralOf(target), t0);
     }
@@ -259,8 +259,8 @@ export class ChainModulators implements ScheduledSource {
     }
   }
 
-  /** Riprogrammazione: ciò che era programmato si dimentica, il valore di adesso resta finché
-   *  le finestre nuove non lo riprendono. */
+  /** Rescheduling: what was scheduled is forgotten, the current value stays until
+   *  the new windows pick it up again. */
   stopAll(): void {
     this.retake(this.now());
   }
@@ -271,7 +271,7 @@ export class ChainModulators implements ScheduledSource {
     this.stale = this.touched.size > 0;
   }
 
-  /** Trasporto fermo: tutto neutro da subito. */
+  /** Transport stopped: everything neutral right away. */
   reset(): void {
     const t = this.now();
     for (const { target, sink } of this.touched.values()) {
@@ -283,7 +283,7 @@ export class ChainModulators implements ScheduledSource {
     this.stale = false;
   }
 
-  /** Il modulatore `m` nella finestra: i suoi valori sulla griglia, poi a ogni destinazione. */
+  /** Modulator `m` in the window: its values on the grid, then to each target. */
   private play(m: Modulator, grid: Grid): void {
     const { w } = grid;
     const t0 = w.timeAt(w.from), t1 = w.timeAt(w.to);
@@ -310,7 +310,7 @@ export class ChainModulators implements ScheduledSource {
     return sink;
   }
 
-  /** Le note che partono nella finestra, dalle clip della traccia (come le suona il player). */
+  /** The notes starting in the window, from the track's clips (as the player plays them). */
   private notes(w: ScheduleWindow): Hit[] {
     const track = this.track;
     if (!(track instanceof MidiTrack)) return [];
@@ -334,8 +334,8 @@ export class ChainModulators implements ScheduledSource {
   }
 }
 
-/** Le partenze a tempo di un inviluppo nella finestra: una a ogni divisione della battuta,
- *  tenuta per `gate` della divisione. */
+/** An envelope's synced starts in the window: one at every division of the bar,
+ *  held for `gate` of the division. */
 function tempoHits(m: Modulator, w: ScheduleWindow): Hit[] {
   const div = TEMPO_RATES[m.values.division]?.[1] ?? 1;
   const out: Hit[] = [];
@@ -347,26 +347,26 @@ function tempoHits(m: Modulator, w: ScheduleWindow): Hit[] {
   return out;
 }
 
-/** L'inviluppo all'istante `t` (0…1): l'ultima partenza, o niente. */
+/** The envelope at instant `t` (0…1): the last start, or nothing. */
 function envAt(m: Modulator, t: number): number {
   const g = m.triggerAt(t);
   return g?.env ? envValue(g.env, t) : 0;
 }
 
-/** Quanti battiti dura un giro dell'LFO a tempo (null se va in Hz). */
+/** How many beats a cycle of the synced LFO lasts (null if it runs in Hz). */
 const lfoBeats = (m: Modulator): number | null =>
   (m.values.sync === SYNC.tempo ? TEMPO_RATES[m.values.division]?.[1] ?? 1 : null);
 
-/** L'LFO all'istante `t` (0…1). Libero: a tempo si aggancia alla battuta, in Hz all'orologio del
- *  contesto. Con le note riparte a ogni nota, dopo il ritardo, e sale in `rise` secondi; "una
- *  volta" fa un giro e resta sull'ultimo valore. */
+/** The LFO at instant `t` (0…1). Free: synced it locks to the bar, in Hz to the
+ *  context's clock. With the notes it restarts at every note, after the delay, and rises in `rise` seconds; "once"
+ *  does one cycle and stays on the last value. */
 function lfoAt(m: Modulator, grid: Grid, t: number): number {
   const beats = lfoBeats(m), phase = m.param('phase', t) / 360, shape = m.values.l1Shape;
   const trig = m.values.trig;
   const cyclesIn = (seconds: number) => (beats !== null ? seconds / (beats * grid.secondsPerBeat) : seconds * m.param('rate', t));
   const g = trig === LFO_TRIG.free ? null : m.triggerAt(t);
   if (!g) {
-    // libero, o prima della prima nota: gira da solo
+    // free, or before the first note: it runs by itself
     const w = grid.w;
     const cycles = beats !== null ? (w.from + (t - w.timeAt(w.from)) / grid.secondsPerBeat) / beats : t * m.param('rate', t);
     return lfoUnit(shape, m.points, cycles + phase);
@@ -380,7 +380,7 @@ function lfoAt(m: Modulator, grid: Grid, t: number): number {
   return fade * lfoUnit(shape, m.points, cycles + phase, g.seed);
 }
 
-/** La griglia di un LFO in [t0, t1]: un punto ogni 1/48 di giro (tra 3 e 30 ms). */
+/** An LFO's grid in [t0, t1]: a point every 1/48 of a cycle (between 3 and 30 ms). */
 function lfoGrid(m: Modulator, grid: Grid, t0: number, t1: number): number[] {
   const beats = lfoBeats(m);
   const period = beats !== null ? beats * grid.secondsPerBeat : 1 / Math.max(1e-3, m.param('rate', t0));
@@ -391,8 +391,8 @@ function lfoGrid(m: Modulator, grid: Grid, t0: number, t1: number): number[] {
   return out;
 }
 
-/** La griglia di un inviluppo in [t0, t1]: un punto ogni 4 ms, più gli spigoli di ogni partenza
- *  (inizio, fine dell'attacco e dell'hold, rilascio), così niente si smussa. */
+/** An envelope's grid in [t0, t1]: a point every 4 ms, plus the corners of each start
+ *  (start, end of the attack and of the hold, release), so nothing gets smoothed. */
 function envGrid(m: Modulator, t0: number, t1: number): number[] {
   const out: number[] = [];
   for (let t = t0; t < t1 - EPS; t += ENV_STEP) out.push(t);
@@ -405,8 +405,8 @@ function envGrid(m: Modulator, t0: number, t1: number): number[] {
   return out.sort((a, b) => a - b);
 }
 
-/** I valori `values` agli istanti `times` sulla destinazione: uno scalino al primo, poi rampe;
- *  i tratti fermi non mandano niente (solo il punto dove finiscono). */
+/** The values `values` at the instants `times` on the target: a step at the first, then ramps;
+ *  the still stretches send nothing (only the point where they end). */
 function emit(sink: ModSink, times: readonly number[], values: readonly number[]): void {
   sink.set(values[0], times[0]);
   let prevT = times[0], prevV = values[0], held = false;

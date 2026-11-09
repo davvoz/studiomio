@@ -6,8 +6,8 @@ import type { StretcherTable } from './stretch/stretcher';
 import { WarpRenderer, defaultStretchers, type WarpJob } from './stretch/warp-renderer';
 import type { AudioData } from './types';
 
-/** Motore DSP di un thread: tiene i sample caricati e li elabora. Non sa nulla di worker
- *  o messaggi, così si usa uguale nei test, in un worker o nel thread principale. */
+/** A thread's DSP engine: keeps the loaded samples and processes them. It knows nothing of workers
+ *  or messages, so it's used the same way in tests, in a worker or in the main thread. */
 export class DspEngine {
   private readonly sources = new Map<string, AudioData>();
   private stretchers: StretcherTable;
@@ -20,14 +20,14 @@ export class DspEngine {
     this.implementations = Object.fromEntries(Object.keys(stretchers).map(m => [m, 'js'])) as Record<keyof StretcherTable, string>;
   }
 
-  /** Sostituisce alcuni algoritmi (es. con le versioni WebAssembly). */
+  /** Replaces some algorithms (e.g. with the WebAssembly versions). */
   override(stretchers: Partial<StretcherTable>, implementation: string): void {
     this.stretchers = { ...this.stretchers, ...stretchers };
     this.renderer = new WarpRenderer(this.stretchers);
     for (const mode of Object.keys(stretchers) as (keyof StretcherTable)[]) this.implementations[mode] = implementation;
   }
 
-  /** Quale implementazione usa ogni modalità di warp. */
+  /** Which implementation each warp mode uses. */
   get info(): Readonly<Record<keyof StretcherTable, string>> {
     return { ...this.implementations };
   }
@@ -48,7 +48,7 @@ export class DspEngine {
     return analyzeAudio(this.source(sourceId), sensitivity);
   }
 
-  /** Posizioni dei battiti (in campioni) seguendo il tempo `bpm` (beat tracking). */
+  /** Beat positions (in samples) following the tempo `bpm` (beat tracking). */
   trackBeats(sourceId: string, bpm: number): number[] {
     const { channels, sampleRate } = this.source(sourceId);
     return trackBeats(onsetEnvelope(mixMono(channels), sampleRate), bpm);
@@ -56,7 +56,7 @@ export class DspEngine {
 
   private source(id: string): AudioData {
     const s = this.sources.get(id);
-    if (!s) throw new Error(`sample "${id}" non caricato`);
+    if (!s) throw new Error(`sample "${id}" not loaded`);
     return s;
   }
 }

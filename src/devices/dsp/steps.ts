@@ -1,21 +1,21 @@
-/* Dove si trova uno step sequencer: dato quanti step sono passati dall'inizio del pattern, quale
- * step suona e quanto ne è passato, con lo swing (gli step dispari partono in ritardo e quelli
- * pari si allungano altrettanto: a 2/3 è una terzina). La posizione la dà un LfoClock con un
- * giro lungo quanto il pattern, così gli step cadono sulla battuta. Puro: niente Web Audio. */
+/* Where a step sequencer is: given how many steps have passed since the start of the pattern, which
+ * step plays and how much of it has passed, with swing (the odd steps start late and the
+ * even ones lengthen by as much: at 2/3 it's a triplet). The position is given by an LfoClock with a
+ * cycle as long as the pattern, so the steps fall on the bar. Pure: no Web Audio. */
 
-/** Lo swing più forte: gli step dispari partono mezzo step dopo. */
+/** The strongest swing: the odd steps start half a step later. */
 const MAX_SWING_DELAY = 0.5;
 
 export class StepPosition {
-  /** Lo step che suona (0..length−1). */
+  /** The playing step (0..length−1). */
   index = 0;
-  /** Quanto ne è passato, da 0 (l'inizio) a 1 (la fine). */
+  /** How much of it has passed, from 0 (the start) to 1 (the end). */
   t = 0;
 
-  /** `pos` in step dall'inizio del pattern (0..length), `swing` 0..1. */
+  /** `pos` in steps from the start of the pattern (0..length), `swing` 0..1. */
   locate(pos: number, length: number, swing: number): void {
     const pair = Math.floor(pos / 2) * 2, u = pos - pair;
-    // l'ultimo step di un pattern dispari non ha il compagno: niente swing
+    // the last step of an odd pattern has no partner: no swing
     if (pair + 1 >= length) {
       this.index = Math.min(length - 1, pair);
       this.t = Math.min(1, u);

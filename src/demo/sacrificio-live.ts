@@ -1,21 +1,21 @@
-/* "Sacrificio": techno dura e scura a 150 BPM in La frigio (La minore con il Si bemolle). Intro,
- * drop, bridge, drop modificato, outro.
+/* "Sacrificio": hard dark techno at 150 BPM in A phrygian (A minor with the B flat). Intro,
+ * drop, bridge, modified drop, outro.
  *
- * Il suono di oggi, fatto con i pezzi di studiomio e i sample dell'utente:
- *   Cassa     una cassa industriale tutta distorta, portata in La;
- *   Rumble    la stessa cassa dentro un riverbero tutto bagnato, poi distorta e chiusa da un
- *             passa-basso, e schiacciata a ogni colpo dalla pompa: il rombo che riempie tra una
- *             cassa e l'altra (come si fa davvero, non con un synth);
- *   Lead      il gancio: un supersaw (Analog con 7 copie scordate e aperte) che suona un riff
- *             in La frigio, spinto dalla Multibanda;
- *   Stab      gli accordi corti in levare del drop modificato, supersaw anche loro;
- *   Accordi   lo strato lungo: La minore, Si bemolle, Sol minore, La minore (i–♭II–vii–i);
- *   Cori      il bordone "atmos" in La minore, il coro alzato di due semitoni (La con il Si
- *             bemolle sopra), il mostro nel vuoto;
- *   Voci      gli stacchi parlati ("kill", "sacrifice", "ho visto qualcosa dentro di lei") e i
- *             sussurri, lanciati nel riverbero.
- * La pompa del sidechain è fatta con le modulazioni di volume; il master è EQ, Multibanda
- * leggera, Compressore colla e Limiter. Il montaggio è in live-builder.ts; i file, in
+ * Today's sound, made with studiomio's pieces and the user's samples:
+ *   Cassa     a fully distorted industrial kick, brought to A;
+ *   Rumble    the same kick inside a fully wet reverb, then distorted and closed by a
+ *             low-pass, and squashed at every hit by the pump: the rumble filling between one
+ *             kick and the next (as it's really done, not with a synth);
+ *   Lead      the hook: a supersaw (Analog with 7 detuned, open copies) playing a riff
+ *             in A phrygian, pushed by the Multiband;
+ *   Stab      the short offbeat chords of the modified drop, supersaws too;
+ *   Accordi   the long layer: A minor, B flat, G minor, A minor (i–♭II–vii–i);
+ *   Cori      the "atmos" drone in A minor, the choir raised two semitones (A with the B
+ *             flat above), the monster in the void;
+ *   Voci      the spoken stabs ("kill", "sacrifice", "ho visto qualcosa dentro di lei") and the
+ *             whispers, thrown into the reverb.
+ * The sidechain pump is done with volume modulations; the master is EQ, light
+ * Multiband, glue Compressor and Limiter. The assembly is in live-builder.ts; the files, in
  * scripts/build-sacrificio-live.ts. */
 import type { Beats } from '../core/music-time';
 import { DETECTOR } from '../devices/effects/compressor/compressor';
@@ -34,7 +34,7 @@ import { acid, BAR, bars, curve, duck, repeat, roll, steps } from './patterns';
 
 export const SACRIFICIO_LIVE_BPM = 150;
 
-/** I suoni che il live usa, per ruolo (chi costruisce il progetto dà il file di ognuno). */
+/** The sounds the live uses, by role (whoever builds the project gives the file for each). */
 export const SACRIFICIO_LIVE_SOUNDS = [
   'kick', 'kickAlt', 'clap', 'clapLayer', 'hatOpen', 'hatClosed', 'ride', 'hatMetal',
   'metalHit', 'strangeHit', 'plingHit', 'metalShot',
@@ -50,7 +50,7 @@ type TrackKey = 'kick' | 'rumble' | 'clap' | 'hats' | 'perc' | 'lead' | 'stab' |
 // ------------------------------------------------------------------ i kit
 
 const KITS = {
-  // la cassa è un La#1 distorto: un semitono giù, in La
+  // the kick is a distorted A#1: a semitone down, in A
   kick: [{ sound: 'kick', tune: -1, decay: 0.3 }, { sound: 'kickAlt', decay: 0.28, level: -1 }],
   rumble: [{ sound: 'kick', tune: -1, decay: 0.34 }],
   clap: [
@@ -83,7 +83,7 @@ const KITS = {
     { sound: 'whisper2', level: 2 },
     { sound: 'darkness', level: 0 },
     { sound: 'openFire', level: 6 },
-    // "kill" corto, per gli stutter
+    // short "kill", for the stutters
     { sound: 'kill', decay: 0.12, level: -1 },
   ],
   fx: [
@@ -103,16 +103,16 @@ const CHOIR = { atmos: 0, choir: 1, monster: 2 } as const;
 const VOX = { kill: 0, sacrifice: 1, dentro: 2, whisper: 3, whisper2: 4, darkness: 5, openFire: 6, killShort: 7 } as const;
 const FX = { impact: 0, riser: 1, reverseNoise: 2, down: 3, downDisto: 4, obscure: 5 } as const;
 
-// ------------------------------------------------------------------ i suoni di Analog
+// ------------------------------------------------------------------ the Analog sounds
 
 const ANALOG_SOUNDS = {
-  // il gancio: supersaw con l'ottava sopra, filtro che si apre a ogni nota
+  // the hook: supersaw with the octave above, filter opening at every note
   lead: {
     oscA: 0, oscB: 0, oscBSemi: 12, oscBFine: 0, mix: 35, unison: 7, detune: 28, spread: 85, voiceMode: VOICE_MODE.poly,
     cutoff: 1800, resonance: 25, filterEnv: 45, fDecay: 0.25, fSustain: 30, keyTrack: 50,
     attack: 0.002, decay: 0.3, sustain: 70, release: 0.15, velocity: 30, volume: 2,
   },
-  // gli stab: corti, larghissimi, l'ottava sotto per il corpo
+  // the stabs: short, very wide, the octave below for the body
   stab: {
     oscA: 0, oscB: 0, oscBSemi: -12, oscBFine: 0, mix: 40, unison: 7, detune: 35, spread: 100, voiceMode: VOICE_MODE.poly,
     cutoff: 3000, resonance: 15, filterEnv: 40, fDecay: 0.12, fSustain: 10, keyTrack: 30,
@@ -128,7 +128,7 @@ const ANALOG_SOUNDS = {
 
 // ------------------------------------------------------------------ tracce ed effetti
 
-/** Il filtro del rumble: via sotto 35 Hz e sopra 220 (resta il rombo, non il riverbero). */
+/** The rumble's filter: away below 35 Hz and above 220 (the rumble stays, not the reverb). */
 const RUMBLE_FILTER = { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: 35, [bandParam(7, 'on')]: 1, [bandParam(7, 'freq')]: 220 };
 
 const TRACKS: readonly TrackSpec<SacrificioLiveSound, TrackKey>[] = [
@@ -136,7 +136,7 @@ const TRACKS: readonly TrackSpec<SacrificioLiveSound, TrackKey>[] = [
     key: 'kick', name: 'Cassa', volumeDb: -7, kit: KITS.kick,
     effects: [
       compressor('Punch', { threshold: -12, ratio: 3, attack: 15, release: 50, auto: 0 }),
-      // la cassa si taglia da sola (come un clipper): picchi giù, corpo su, e il master respira
+      // the kick clips itself (like a clipper): peaks down, body up, and the master breathes
       limiter('Taglio cassa', { gain: 6, ceiling: -3, release: 15, lookahead: 0.5, truePeak: 0 }),
     ],
   },
@@ -190,41 +190,41 @@ const TRACKS: readonly TrackSpec<SacrificioLiveSound, TrackKey>[] = [
 
 // ------------------------------------------------------------------ le parti
 
-/** Le note dello strato e degli stab (MIDI): La minore, Si bemolle, Sol minore, La minore. */
+/** The notes of the layer and the stabs (MIDI): A minor, B flat, G minor, A minor. */
 const PROGRESSION: readonly (readonly number[])[] = [[57, 60, 64], [58, 62, 65], [55, 58, 62], [57, 60, 64]];
 
-/** Le note di un riff supersaw un po' più lunghe del gate della 303: corpo, non staccato. */
+/** The notes of a supersaw riff a bit longer than the 303's gate: body, not staccato. */
 const legato = (notes: readonly Note[]): Note[] => notes.map(n => ({ ...n, duration: n.duration + 0.1 }));
 
-/** Il gancio: due battute in La frigio, ripetute (la seconda volta chiude in basso). */
+/** The hook: two bars in A phrygian, repeated (the second time it closes low). */
 const HOOK = legato(acid(`
   a4 . a4 c5    . a4 bb4 .    a4 . g4 .    e4 - f4 - |
   a4 . a4 c5    . a4 bb4 .    d5 - c5 -    bb4 - g4 - |
   a4 . a4 c5    . a4 bb4 .    a4 . g4 .    e4 - f4 - |
   a4 . a4 c5    . a4 bb4 .    g4 - f4 -    e4 - - -`));
-/** Il gancio del drop modificato: un'ottava sopra nelle battute pari, più tirato. */
+/** The modified drop's hook: an octave up in the even bars, tighter. */
 const HOOK_HIGH = legato(acid(`
   a4 . a4 c5    . a4 bb4 .    a4 . g4 .    e4 - f4 - |
   a5 . a5 c6    . a5 bb5 .    d6 - c6 -    bb5 - g5 - |
   a4 . a4 c5    . a4 bb4 .    a4 . g4 .    e4 - f4 - |
   a5 . a5 c6    . a5 bb5 .    g5 - a5 -    bb5 - c6 -`));
-/** Il gancio lento del bridge: le stesse note, in ottavi e lunghe. */
+/** The bridge's slow hook: the same notes, in long eighths. */
 const HOOK_SLOW = acid(`
   a4 - - -   - - - -   c5 - - -   bb4 - - - |
   a4 - - -   - - - -   g4 - - -   f4 - - - |
   a4 - - -   - - - -   c5 - - -   d5 - - - |
   e5 - - -   - - - -   - - - -    - - - -`);
 
-/** Lo strato: un accordo per battuta, lungo. */
+/** The layer: one long chord per bar. */
 const CHORDS: Note[] = PROGRESSION.flatMap((c, k) => c.map(pitch => ({ pitch, start: k * BAR, duration: BAR, velocity: 90 })));
-/** Gli stab: gli accordi un'ottava sopra in levare, corti (il passo "ta" del drop modificato). */
+/** The stabs: the chords an octave up on the offbeat, short (the "ta" step of the modified drop). */
 const STABS: Note[] = PROGRESSION.flatMap((c, k) => [0.5, 1.5, 2.5, 3.5].flatMap(off =>
   c.map(pitch => ({ pitch: pitch + 12, start: k * BAR + off, duration: 0.2, velocity: off === 3.5 ? 110 : 96 }))));
 
 const PARTS = {
   kick: bars(0, 'X...x...x...x...', 4, 'X...x...x...x.x.'),
   kickMod: [...bars(0, 'X...x...x...x...', 4, 'X...x...x.x.x.xx'), ...bars(1, '..............o.', 4, '................')],
-  /** La cassa della salita: sei battute in quarti, poi ottavi, poi sedicesimi. */
+  /** The rise's kick: six bars in quarters, then eighths, then sixteenths. */
   kickBuild: [...bars(0, 'x...x...x...x...', 6), ...steps(0, 'x.x.x.x.x.x.x.x.', 24), ...steps(0, 'xxxxxxxxxxxxxxxx', 28)],
   clap: [...bars(CLAP.main, '....X.......X...', 4), ...bars(CLAP.layer, '....x.......x...', 4)],
   hats: [...bars(HATS.open, '..X...X...X...X.', 4), ...bars(HATS.closed, 'xo.oxo.oxo.oxo.o', 4)],
@@ -232,13 +232,13 @@ const PARTS = {
   hatsFull: [...bars(HATS.open, '..X...X...X...X.', 4), ...bars(HATS.closed, 'xo.oxo.oxo.oxo.o', 4), ...bars(HATS.ride, 'x.x.x.x.x.x.x.x.', 4), ...steps(HATS.metal, 'x', 12)],
   perc: [...bars(PERC.metal, '......x.........', 4), ...bars(PERC.strange, '...x......x..x..', 4), ...steps(PERC.pling, '..........x.....', 12)],
   percFull: [...bars(PERC.metal, '......x.......x.', 4), ...bars(PERC.strange, '...x......x..x..', 4), ...bars(PERC.shot, 'x...............', 4, '........x.......')],
-  /** Il rullo della salita: ottavi, sedicesimi, trentaduesimi. */
+  /** The rise's roll: eighths, sixteenths, thirty-seconds. */
   clapRoll: [...roll(CLAP.roll, 0, 16, 0.5, [70, 90]), ...roll(CLAP.roll, 8, 16, 0.25, [90, 110]), ...roll(CLAP.roll, 12, 32, 0.125, [105, 127])],
 };
 
-/** Le casse di una clip lunga `length` (una a battito, per la pompa). */
+/** The kicks of a clip `length` long (one per beat, for the pump). */
 const beats = (length: Beats) => Array.from({ length }, (_, k) => k);
-/** La pompa: giù sulla cassa, su prima della prossima. */
+/** The pump: down on the kick, up before the next one. */
 const pump = (length: Beats, depth: number, release: Beats): ModSpec => ({ target: VOLUME, points: duck(beats(length), depth, release) });
 const CUTOFF = instrumentParam('cutoff');
 
@@ -246,7 +246,7 @@ const CUTOFF = instrumentParam('cutoff');
 
 const C = {
   kick: clip('Cassa', PARTS.kick, 16),
-  // il rumble: la stessa cassa; la pompa lo spegne sul colpo e lo fa risalire nel battito
+  // the rumble: the same kick; the pump silences it on the hit and brings it back up within the beat
   rumble: clip('Rumble', PARTS.kick, 16, [pump(16, 0, 0.9)]),
   clap: clip('Clap', PARTS.clap, 16),
   hats: clip('Piatti', PARTS.hats, 16),
@@ -262,14 +262,14 @@ const C = {
 const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Intro', bars: 16, clips: {
-      // la cassa dell'intro due dB sotto: il drop deve entrare
+      // the intro kick two dB lower: the drop must come in
       kick: clip('Cassa intro', PARTS.kick, 16, [{ target: VOLUME, points: curve([0, 0.8]) }]),
       hats: clip('Piatti intro', PARTS.hatsIntro, 16), perc: C.perc,
-      // il rumble entra a metà e cresce: il drop deve arrivare più grosso
+      // the rumble comes in halfway and grows: the drop must arrive bigger
       rumble: clip('Rumble che cresce', repeat(PARTS.kick, 16, 4), 64, [{ target: VOLUME, points: duck(beats(64), 0, 0.9).map(p => ({ ...p, value: p.value * (0.55 + 0.3 * (p.beat / 64)) })) }]),
       choir: clip('Bordone', [...steps(CHOIR.atmos, 'x'), ...steps(CHOIR.atmos, 'x', 16), ...steps(CHOIR.atmos, 'x', 32), ...steps(CHOIR.atmos, 'x', 48)], 64),
       vox: clip('Ho visto', [...steps(VOX.dentro, 'x', 0), ...steps(VOX.whisper, 'x', 24), ...steps(VOX.dentro, 'x', 32), ...steps(VOX.whisper2, 'x', 56)], 64),
-      // il gancio arriva chiuso nelle seconde otto battute e si apre
+      // the hook arrives closed in the second eight bars and opens
       lead: clip('Gancio chiuso', repeat(HOOK, 16, 4).filter(n => n.start >= 32), 64, [{ target: CUTOFF, points: curve([32, -0.35], [64, -0.1]) }, pump(64, 0.7, 0.4)]),
       fx: clip('Discesa', steps(FX.down, 'x', 0), 64),
     },
@@ -291,7 +291,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   },
   {
     name: 'Bridge', bars: 8, clips: {
-      // niente cassa: il bordone, il coro, lo strato lungo e il gancio lento nel riverbero
+      // no kick: the drone, the choir, the long layer and the slow hook in the reverb
       choir: clip('Coro e bordone', [...steps(CHOIR.atmos, 'x'), ...steps(CHOIR.choir, 'x'), ...steps(CHOIR.atmos, 'x', 16), ...steps(CHOIR.monster, 'x', 24)], 32),
       chords: clip('Accordi aperti', repeat(CHORDS, 16, 2), 32, [{ target: CUTOFF, points: curve([0, 0], [32, 0.15]) }]),
       lead: clip('Gancio lento', repeat(HOOK_SLOW, 16, 2), 32, [{ target: CUTOFF, points: curve([0, -0.2], [32, 0.05]) }]),
@@ -302,13 +302,13 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   },
   {
     name: 'Salita', bars: 8, clips: {
-      // la cassa torna, accelera; il rullo e il rumore al contrario portano al drop
+      // the kick comes back, speeds up; the roll and the reversed noise lead to the drop
       kick: clip('Cassa che sale', PARTS.kickBuild, 32),
       clap: clip('Rullo', PARTS.clapRoll, 16, [{ target: instrumentParam('p3tune'), points: curve([0, 0], [16, 0.25]) }]),
       hats: clip('Piatti intro', PARTS.hatsIntro, 16),
       chords: clip('Accordi', repeat(CHORDS, 16, 2), 32, [{ target: CUTOFF, points: curve([0, 0.1], [32, 0.3]) }]),
       lead: clip('Gancio che si apre', repeat(HOOK, 16, 2), 32, [{ target: CUTOFF, points: curve([0, -0.3], [32, 0.08]) }]),
-      // il riser dura 3,4 battute: parte in modo da finire sul drop; il rumore al contrario nelle ultime due
+      // the riser lasts 3.4 bars: it starts so as to end on the drop; the reversed noise in the last two
       fx: clip('Salita', [...steps(FX.riser, 'x', 18.25), ...steps(FX.reverseNoise, 'x', 26)], 32),
       vox: clip('Open fire', steps(VOX.openFire, 'X', 30), 32),
     },
@@ -324,7 +324,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Drop modificato +', bars: 16, clips: {
       kick: clip('Cassa modificata', PARTS.kickMod, 16), clap: C.clap, hats: C.hatsFull, perc: C.percFull,
-      // il rumble più sporco: il Drive sale lungo il giro
+      // the dirtier rumble: the Drive rises along the loop
       rumble: clip('Rumble sporco', PARTS.kick, 16, [pump(16, 0, 0.9), { target: effectParam(1, 'drive'), points: curve([0, 0.05], [16, 0.2]) }]),
       lead: clip('Gancio alto', HOOK_HIGH, 16, [pump(16, 0.7, 0.4)]), stab: C.stabs, chords: C.chords,
       choir: clip('Coro', steps(CHOIR.choir, 'x'), 32, [pump(32, 0.6, 0.6)]),
@@ -356,11 +356,11 @@ export const SACRIFICIO_LIVE: LiveSpec<SacrificioLiveSound, TrackKey> = {
   },
   tracks: TRACKS,
   scenes: SCENES,
-  // intro, drop, bridge (con la sua salita), drop modificato, outro
+  // intro, drop, bridge (with its rise), modified drop, outro
   arrangement: [0, 1, 2, 3, 4, 5, 6, 7],
 };
 
-/** Costruisce il live nel progetto (vuoto) dello store. */
+/** Builds the live in the store's (empty) project. */
 export function buildSacrificioLive(store: ProjectStore, sounds: Readonly<Record<SacrificioLiveSound, SampleRef>>): void {
   buildLive(store, SACRIFICIO_LIVE, sounds);
 }

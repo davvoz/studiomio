@@ -1,9 +1,9 @@
-/* Costruisce "Rave illegale" (src/demo/rave-live.ts) come cartella di progetto studiomio:
- *   node scripts/run.mjs scripts/build-rave-live.ts <cartella dei suoni> <cartella del progetto>
- * I file sono quelli della libreria dell'utente, del liveset "brehho23" e di "brehho23 rave",
- * relativi a <cartella dei suoni> (la cartella Musica). Per sentirlo e misurarlo senza browser:
- * scripts/render-project.ts sulla cartella creata. Per cambiare un suono basta cambiare il suo
- * file qui e rilanciare lo script. */
+/* Builds "Rave illegale" (src/demo/rave-live.ts) as a studiomio project folder:
+ *   node scripts/run.mjs scripts/build-rave-live.ts <sounds folder> <project folder>
+ * The files are those of the user's library, of the "brehho23" liveset and of "brehho23 rave",
+ * relative to <sounds folder> (the Music folder). To hear and measure it without a browser:
+ * scripts/render-project.ts on the created folder. To change a sound just change its
+ * file here and run the script again. */
 import { buildRaveLive, type RaveLiveSound } from '../src/demo/rave-live';
 import { buildLiveFolder } from './live-folder';
 
@@ -59,7 +59,7 @@ const FILES: Readonly<Record<RaveLiveSound, string>> = {
   metalDelay: `${ZEBRA}/nuovo percussive/metal delay.wav`,
   sciabola: `${ZEBRA}/nuovo fx/sciabola one shot.wav`,
   revMetal: `${ZEBRA}/nuovo fx/right rev metallic.wav`,
-  // tamburi (il kit delle percussioni di brehho23)
+  // drums (the brehho23 percussion kit)
   shot09: `${BREHHO}/One_Shot_09.wav`,
   tom: `${BREHHO}/frt tom.wav`,
   tom2: `${BREHHO}/frt tom2.wav`,
@@ -125,6 +125,6 @@ const FILES: Readonly<Record<RaveLiveSound, string>> = {
 };
 
 export async function main([soundsDir, projectDir]: string[]): Promise<void> {
-  if (!soundsDir || !projectDir) throw new Error('uso: build-rave-live.ts <cartella dei suoni> <cartella del progetto>');
+  if (!soundsDir || !projectDir) throw new Error('usage: build-rave-live.ts <sounds folder> <project folder>');
   await buildLiveFolder(FILES, soundsDir, projectDir, buildRaveLive);
 }

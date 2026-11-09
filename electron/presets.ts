@@ -1,6 +1,6 @@
-// I preset dell'utente come file: uno per preset, in una cartella per dispositivo sotto
-// Documenti\studiomio\Preset. Chi è il preset (tipo e nome) è scritto nel file, non nel suo
-// nome: l'utente può spostare, rinominare o copiare i file, anche da un altro computer.
+// The user's presets as files: one per preset, in a folder per device under
+// Documents\studiomio\Preset. Who the preset is (type and name) is written in the file, not in its
+// name: the user can move, rename or copy the files, even from another computer.
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
@@ -15,35 +15,35 @@ interface PresetFile extends StoredPreset {
   readonly path: string;
 }
 
-/** Tutti i preset nella cartella (e sotto); i file che non sono preset si saltano. */
+/** All the presets in the folder (and below); files that aren't presets are skipped. */
 export async function loadPresets(root: string): Promise<StoredPreset[]> {
   return (await scan(root)).map(({ type, name, params }) => ({ type, name, params }));
 }
 
-/** Scrive il preset: sopra il suo file se c'è già (stesso tipo e nome), se no in un file nuovo
- *  nella cartella `folder`. */
+/** Writes the preset: over its file if it already exists (same type and name), otherwise in a new file
+ *  in the folder `folder`. */
 export async function savePreset(root: string, folder: string, preset: StoredPreset): Promise<void> {
   const existing = (await scan(root)).find(f => f.type === preset.type && f.name === preset.name);
   const path = existing?.path ?? await freePath(join(root, safeName(folder)), safeName(preset.name));
   await writeJson(path, { studiomio: 'preset', version: 1, type: preset.type, name: preset.name, params: preset.params });
 }
 
-/** Scrive un file JSON: prima un file a parte, poi lo scambio, così un'interruzione non lascia
- *  un file a metà. */
+/** Writes a JSON file: first a separate file, then the swap, so an interruption doesn't leave
+ *  a half-written file. */
 export async function writeJson(path: string, body: unknown): Promise<void> {
   const temp = `${path}.tmp`;
   await writeFile(temp, `${JSON.stringify(body, null, 2)}\n`, 'utf8');
   await rename(temp, path);
 }
 
-/** Elimina i file del preset (tipo e nome). */
+/** Deletes the preset's files (type and name). */
 export async function removePreset(root: string, type: string, name: string): Promise<void> {
   for (const f of await scan(root)) {
     if (f.type === type && f.name === name) await rm(f.path, { force: true });
   }
 }
 
-/** Un nome valido come nome di file in Windows (e altrove). */
+/** A name valid as a file name on Windows (and elsewhere). */
 export function safeName(name: string): string {
   let s = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 100).trim().replace(/[. ]+$/, '');
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(s)) s = `_${s}`;
@@ -52,13 +52,13 @@ export function safeName(name: string): string {
 
 const scan = (root: string): Promise<PresetFile[]> => scanJson(root, parse);
 
-/** I file JSON nella cartella (e sotto) che `parse` riconosce; gli altri si saltano. */
+/** The JSON files in the folder (and below) that `parse` recognizes; the others are skipped. */
 export async function scanJson<T>(root: string, parse: (raw: unknown, path: string) => T | null): Promise<T[]> {
   let entries: string[];
   try {
     entries = await readdir(root, { recursive: true });
   } catch {
-    return []; // la cartella non c'è ancora
+    return []; // the folder doesn't exist yet
   }
   const files = await Promise.all(entries.filter(e => e.toLowerCase().endsWith('.json')).map(async (e): Promise<T | null> => {
     const path = join(root, e);
@@ -79,12 +79,12 @@ function parse(raw: unknown, path: string): PresetFile | null {
   return { type, name, params: values, path };
 }
 
-/** `dir\base.json`, o `base (2).json`… se c'è già un file con quel nome. */
+/** `dir\base.json`, or `base (2).json`… if a file with that name already exists. */
 export async function freePath(dir: string, base: string): Promise<string> {
   await mkdir(dir, { recursive: true });
   for (let n = 1; ; n++) {
     const path = resolve(dir, n === 1 ? `${base}.json` : `${base} (${n}).json`);
-    if (!path.startsWith(resolve(dir) + sep)) throw new Error('nome del file non valido');
+    if (!path.startsWith(resolve(dir) + sep)) throw new Error('invalid file name');
     if (!existsSync(path)) return path;
   }
 }

@@ -2,7 +2,7 @@ import { pvFftSize } from '../stretch/phase-vocoder';
 import type { SettingsOf, StretchInput, StretcherTable, TimeStretcher } from '../stretch/stretcher';
 import init, { pv_stretch } from './pkg/studiomio_dsp';
 
-/** Firma della funzione esportata dal crate Rust (`crates/dsp/src/lib.rs`). */
+/** Signature of the function exported by the Rust crate (`crates/dsp/src/lib.rs`). */
 export type PvStretchFn = typeof pv_stretch;
 
 const toPlanar = (channels: readonly Float32Array[]): Float32Array => {
@@ -16,8 +16,8 @@ const fromPlanar = (planar: Float32Array, count: number): Float32Array[] => {
   return Array.from({ length: count }, (_, i) => planar.slice(i * len, (i + 1) * len));
 };
 
-/** Modalità Complex calcolata in WebAssembly: stessi ingressi e stesso risultato della
- *  versione TypeScript, che resta il riferimento nei test. */
+/** Complex mode computed in WebAssembly: same inputs and same result as the
+ *  TypeScript version, which stays the reference in the tests. */
 export class WasmComplexStretcher implements TimeStretcher<SettingsOf<'complex'>> {
   readonly shiftsPitch = false;
 
@@ -33,7 +33,7 @@ export class WasmComplexStretcher implements TimeStretcher<SettingsOf<'complex'>
   }
 }
 
-/** Inizializza il modulo WebAssembly e restituisce gli algoritmi che sostituisce. */
+/** Initializes the WebAssembly module and returns the algorithms it replaces. */
 export async function loadWasmStretchers(): Promise<Partial<StretcherTable>> {
   await init();
   return { complex: new WasmComplexStretcher(pv_stretch) };

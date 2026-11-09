@@ -1,6 +1,6 @@
-// Le novità di un aggiornamento come testo per la finestra di dialogo. electron-updater le
-// prende dal feed delle release di GitHub, in HTML: una stringa, o una per versione con
-// autoUpdater.fullChangelog (le versioni tra quella installata e la nuova).
+// An update's release notes as text for the dialog. electron-updater takes them
+// from the GitHub releases feed, in HTML: one string, or one per version with
+// autoUpdater.fullChangelog (the versions between the installed one and the new one).
 
 export type ReleaseNotes =
   | string
@@ -8,10 +8,10 @@ export type ReleaseNotes =
   | null
   | undefined;
 
-/** Oltre queste righe la finestra diventa troppo alta: il resto è nelle release su GitHub. */
+/** Beyond these lines the dialog gets too tall: the rest is in the releases on GitHub. */
 const MAX_LINES = 20;
 
-/** Il testo delle novità, vuoto se non ce ne sono; con più versioni ognuna ha il suo titolo. */
+/** The text of the notes, empty if there are none; with several versions each has its own title. */
 export function releaseNotesText(notes: ReleaseNotes): string {
   if (!notes) return '';
   const versions = typeof notes === 'string'
@@ -25,7 +25,7 @@ export function releaseNotesText(notes: ReleaseNotes): string {
   return lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), '…'].join('\n') : lines.join('\n');
 }
 
-/** Dall'HTML delle release (titoli, paragrafi, elenchi) a righe di testo con i punti elenco. */
+/** From the releases' HTML (titles, paragraphs, lists) to lines of text with bullet points. */
 export function htmlToText(html: string): string {
   const lines = html
     .replace(/<li[^>]*>/gi, '\n• ')
@@ -37,7 +37,7 @@ export function htmlToText(html: string): string {
     .split('\n')
     .map(line => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
-  // in un elenco "largo" il testo della voce è in un <p>: il punto resta da solo su una riga
+    // in a "loose" list the item's text is in a <p>: the bullet stays alone on a line
   return lines.reduce<string[]>((out, line) => {
     if (out.at(-1) === '•') out[out.length - 1] = `• ${line}`;
     else out.push(line);

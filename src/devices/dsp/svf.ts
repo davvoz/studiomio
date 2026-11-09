@@ -1,10 +1,10 @@
-/** Uscite del filtro, nell'ordine dei tipi (Low-pass, Band-pass, High-pass). */
+/** Filter outputs, in the order of the types (Low-pass, Band-pass, High-pass). */
 const OUTPUTS: readonly ((low: number, band: number, high: number) => number)[] = [
   l => l, (_l, b) => b, (_l, _b, h) => h,
 ];
 
-/** Filtro a variabili di stato (topologia TPT di Zavalishin e Simper): stabile anche con il
- *  cutoff che cambia di continuo, dà passa-basso, passa-banda e passa-alto insieme. */
+/** State-variable filter (Zavalishin and Simper's TPT topology): stable even with the
+ *  cutoff changing continuously, it gives low-pass, band-pass and high-pass together. */
 export class Svf {
   private ic1 = 0;
   private ic2 = 0;
@@ -16,7 +16,7 @@ export class Svf {
 
   constructor(private readonly sampleRate: number) {}
 
-  /** `resonance` 0..1 (vicino a 1 quasi autooscilla), `type` indice in OUTPUTS. */
+  /** `resonance` 0..1 (near 1 it almost self-oscillates), `type` index into OUTPUTS. */
   set(cutoff: number, resonance: number, type: number): void {
     const fc = Math.max(10, Math.min(cutoff, this.sampleRate * 0.45));
     const g = Math.tan((Math.PI * fc) / this.sampleRate);

@@ -12,18 +12,18 @@ import type { MapPoint } from '../src/dsp/time-map';
 import { loadLegacyDsp, type LegacyDsp } from './helpers/legacy';
 import { drumLoop, maxAbsDiff, SR } from './helpers/signals';
 
-// Calcolati subito: servono già quando vitest raccoglie i casi di test.
+// Computed right away: they're already needed when vitest collects the test cases.
 const legacy: LegacyDsp = loadLegacyDsp();
 const src = drumLoop(1, 120);
 const transients = detectTransients(mixMono(src), onsetEnvelope(mixMono(src), SR), 0.5);
 
-/** Warp da 120 a 128 BPM con un marker spostato a metà: un caso non banale. */
+/** Warp from 120 to 128 BPM with a marker moved halfway: a non-trivial case. */
 function warpPoints(len: number): MapPoint[] {
   const ratio = 120 / 128, mid = len / 2;
   return [[0, 0], [mid * ratio * 1.05, mid], [len * ratio, len]];
 }
 
-/** Lo stesso lavoro nel formato del vecchio WarpMio. */
+/** The same job in the old WarpMio's format. */
 function legacyJob(job: WarpJob): unknown {
   const s = job.settings;
   const opts: Record<string, unknown> = {};
@@ -44,11 +44,11 @@ const cases = (): [string, StretchSettings][] => [
   ['beats, loop pingpong', { mode: 'beats', slices: transients, loopMode: 'pingpong', envelope: 100 }],
   ['tones', { mode: 'tones', grainMs: 50 }],
   ['texture', { mode: 'texture', grainMs: 80, flux: 0.2 }],
-  ['complex, reset sui transienti', { mode: 'complex', fftSize: 4096, transients }],
-  ['complex, senza reset', { mode: 'complex', fftSize: 2048, transients: null }],
+  ['complex, reset on transients', { mode: 'complex', fftSize: 4096, transients }],
+  ['complex, without reset', { mode: 'complex', fftSize: 2048, transients: null }],
 ];
 
-describe('warp: TypeScript uguale al WarpMio originale', () => {
+describe('warp: TypeScript equal to the original WarpMio', () => {
   for (const transpose of [0, 3, -5.25]) {
     it.each(cases())(`%s (transpose ${transpose})`, (_, settings) => {
       const points = warpPoints(src[0].length);
@@ -57,16 +57,16 @@ describe('warp: TypeScript uguale al WarpMio originale', () => {
       const ref = legacy.render(src, SR, legacyJob(job));
       expect(ours.length).toBe(ref.length);
       expect(ours[0].length).toBe(ref[0].length);
-      // Complex usa una formula equivalente ma più veloce (rotazione col fasore invece di
-      // atan2/sin/cos): differisce solo per errori di arrotondamento. Le altre sono identiche.
+      // Complex uses an equivalent but faster formula (rotation with the phasor instead of
+      // atan2/sin/cos): it differs only by rounding errors. The others are identical.
       if (settings.mode === 'complex') expect(maxAbsDiff(ours, ref)).toBeLessThan(1e-5);
       else expect(maxAbsDiff(ours, ref)).toBe(0);
     });
   }
 });
 
-describe('analisi: TypeScript identico al WarpMio originale', () => {
-  it('onset, transienti, tempo e beat tracking', () => {
+describe('analysis: TypeScript identical to the original WarpMio', () => {
+  it('onset, transients, tempo and beat tracking', () => {
     const loop = drumLoop(4, 97);
     const mono = mixMono(loop);
     const ours = onsetEnvelope(mono, SR);
@@ -82,11 +82,11 @@ describe('analisi: TypeScript identico al WarpMio originale', () => {
   });
 });
 
-describe('file: TypeScript identico al WarpMio originale', () => {
+describe('file: TypeScript identical to the original WarpMio', () => {
   afterEach(() => vi.useRealTimers());
 
   it.each([16, 24, 32] as const)('WAV a %i bit', bits => {
-    const loud = src.map(c => c.map(v => v * 1.7)); // anche campioni oltre ±1
+    const loud = src.map(c => c.map(v => v * 1.7)); // also samples beyond ±1
     expect(new Uint8Array(encodeWav(loud, SR, bits))).toEqual(new Uint8Array(legacy.encodeWav(loud, SR, bits)));
   });
 
@@ -94,8 +94,8 @@ describe('file: TypeScript identico al WarpMio originale', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 13, 10, 30, 12));
     const files = [
-      { name: 'uno.wav', data: new Uint8Array(encodeWav(src, SR, 16)) },
-      { name: 'àèì.txt', data: new TextEncoder().encode('ciao') },
+      { name: 'one.wav', data: new Uint8Array(encodeWav(src, SR, 16)) },
+      { name: 'àèì.txt', data: new TextEncoder().encode('hello') },
     ];
     expect(makeZip(files)).toEqual(legacy.makeZip(files));
   });

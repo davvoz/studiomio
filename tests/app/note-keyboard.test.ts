@@ -24,13 +24,13 @@ function rig(bases: Partial<Record<TrackId, number>> = {}) {
 }
 
 describe('NoteKeyboard', () => {
-  it('la fila di mezzo sono i tasti bianchi, quella sopra i neri, come in Live', () => {
+  it('the middle row is the white keys, the one above the black ones, as in Live', () => {
     const { keys, log } = rig();
     for (const code of ['KeyA', 'KeyW', 'KeyS', 'KeyJ', 'KeyK', 'Quote']) keys.down(code, [A]);
     expect(log).toEqual([60, 61, 62, 71, 72, 77].map(p => `on a ${p} 100`));
   });
 
-  it('il rilascio spegne la nota partita, anche se intanto è cambiata l\'ottava', () => {
+  it('the release turns off the started note, even if the octave changed meanwhile', () => {
     const { keys, log } = rig();
     keys.down('KeyA', [A]);
     keys.down('KeyX', [A]);
@@ -39,23 +39,23 @@ describe('NoteKeyboard', () => {
     expect(log).toEqual(['on a 60 100', 'off a 60', 'on a 72 100']);
   });
 
-  it('Z X cambiano ottava, C V la velocity, entro i limiti, e lo dicono', () => {
+  it('Z X change octave, C V the velocity, within the limits, and say so', () => {
     const { keys, log, said } = rig();
     for (let i = 0; i < 9; i++) keys.down('KeyV', [A]);
     keys.down('KeyZ', [A]);
     keys.down('KeyA', [A]);
     expect(log).toEqual(['on a 48 127']);
-    expect(said.at(-1)).toBe('Tastiera: ottava -1, velocity 127.');
+    expect(said.at(-1)).toBe('Keyboard: octave -1, velocity 127.');
   });
 
-  it('suona tutte le tracce accese, ognuna dalla sua nota di base', () => {
+  it('plays all the armed tracks, each from its base note', () => {
     const { keys, log } = rig({ [B]: 36 });
     keys.down('KeyS', [A, B]);
     keys.up('KeyS');
     expect(log).toEqual(['on a 62 100', 'on b 38 100', 'off a 62', 'off b 38']);
   });
 
-  it('le note fuori dalla gamma MIDI non partono', () => {
+  it('notes outside the MIDI range don\'t start', () => {
     const { keys, log } = rig({ [A]: 0 });
     keys.down('KeyZ', [A]);
     keys.down('KeyA', [A]);
@@ -63,7 +63,7 @@ describe('NoteKeyboard', () => {
     expect(log).toEqual([]);
   });
 
-  it('spegne le note delle tracce che non ascoltano più, le altre restano', () => {
+  it('turns off the notes of the tracks no longer listening, the others stay', () => {
     const { keys, log } = rig();
     keys.down('KeyA', [A, B]);
     keys.keepTracks(new Set([B]));
@@ -71,7 +71,7 @@ describe('NoteKeyboard', () => {
     expect(log).toEqual(['on a 60 100', 'on b 60 100', 'off a 60', 'off b 60']);
   });
 
-  it('releaseAll spegne tutto una volta sola', () => {
+  it('releaseAll turns everything off once', () => {
     const { keys, log } = rig();
     keys.down('KeyA', [A]);
     keys.down('KeyD', [A]);
@@ -81,10 +81,10 @@ describe('NoteKeyboard', () => {
   });
 });
 
-describe('la tastiera accesa e i tasti mappati', () => {
+describe('the armed keyboard and the mapped keys', () => {
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  /** La finestra con i due ascoltatori nell'ordine di app/app: A è mappato su una macro, Q anche. */
+  /** The window with the two listeners in app/app's order: A is mapped to a macro, Q too. */
   function windowRig(on: boolean) {
     const listeners: ((e: KeyboardEvent) => void)[] = [];
     vi.stubGlobal('HTMLElement', class {});
@@ -109,21 +109,21 @@ describe('la tastiera accesa e i tasti mappati', () => {
     return { press, store, log };
   }
 
-  it('accesa, un tasto delle note suona anche se è mappato e non muove la macro', () => {
+  it('armed, a note key plays even if it\'s mapped and doesn\'t move the macro', () => {
     const { press, store, log } = windowRig(true);
     press('KeyA');
     expect(log).toEqual(['on a 60 100']);
     expect(store.apply).not.toHaveBeenCalled();
   });
 
-  it('accesa, un tasto mappato fuori dalle note muove la sua macro', () => {
+  it('armed, a mapped key outside the notes moves its macro', () => {
     const { press, store, log } = windowRig(true);
     press('KeyQ');
     expect(log).toEqual([]);
     expect(store.apply).toHaveBeenCalled();
   });
 
-  it('spenta, il tasto torna alla sua macro', () => {
+  it('disarmed, the key goes back to its macro', () => {
     const { press, store, log } = windowRig(false);
     press('KeyA');
     expect(log).toEqual([]);
@@ -132,14 +132,14 @@ describe('la tastiera accesa e i tasti mappati', () => {
 });
 
 describe('keyboardBase', () => {
-  it('un sintetizzatore parte dal Do centrale, una drum machine dal suo primo pad', () => {
+  it('a synth starts from middle C, a drum machine from its first pad', () => {
     const r = setup({ midi: 1 });
     expect(keyboardBase(r.store.project, r.track(0))).toBe(60);
     r.store.apply(loadInstrument(r.track(0), DRUMS.type, DRUMS.label, DRUMS.presets[1]));
     expect(keyboardBase(r.store.project, r.track(0))).toBe(36);
   });
 
-  it('una traccia che non c\'è parte dal Do centrale', () => {
+  it('a track that doesn\'t exist starts from middle C', () => {
     expect(keyboardBase({ track: () => undefined } as unknown as Project, A)).toBe(60);
   });
 });

@@ -6,7 +6,7 @@
   --muted: #9aa0aa;
   --accent: #ff9d2e;
   --master-curve: #5ec8e5;
-  /* il valore che una curva fa sentire su manopole e scelte */
+  /* the value a curve makes heard on knobs and choices */
   --auto: #ff5c6c;
   --line: #2c3138;
   --header-w: 210px;
@@ -20,11 +20,11 @@
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); overflow: hidden; }
 #app { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100%; }
-/* sotto le barre: il browser a sinistra, poi le viste con l'area in basso */
+/* below the bars: the browser on the left, then the views with the area at the bottom */
 .workspace { display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
 .work { display: grid; grid-template-rows: minmax(120px, 1fr) auto; min-height: 0; min-width: 0; }
-/* ognuno nella sua colonna: con il browser nascosto la prima resta vuota (larga 0) e non ci
-   scivola dentro l'area di lavoro */
+/* each in its own column: with the browser hidden the first stays empty (0 wide) and the
+   work area doesn't slide into it */
 .workspace > .browser { grid-column: 1; }
 .workspace > .work { grid-column: 2; }
 
@@ -37,7 +37,7 @@ button:disabled { opacity: .4; cursor: default; }
 button:not(:disabled):hover { border-color: var(--accent); }
 button.on { background: var(--accent); color: #141414; border-color: var(--accent); }
 
-/* ---------------------------------------------------------------- barra dei menu */
+/* ---------------------------------------------------------------- menu bar */
 .menubar {
   display: flex; align-items: center; gap: 1px; height: 28px; padding: 0 6px;
   background: var(--bg); border-bottom: 1px solid var(--line); user-select: none;
@@ -51,7 +51,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .menubar .aside { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .menubar .surface { font-size: 11.5px; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 10px; padding: 0 8px; }
 
-/* ---------------------------------------------------------------- barra di controllo */
+/* ---------------------------------------------------------------- control bar */
 .transport {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
   padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line);
@@ -74,11 +74,11 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
   padding: 0 21px 0 calc(12px + var(--depth, 0) * 12px); border-bottom: 1px solid #0006; position: relative;
 }
 .header::before { content: ''; position: absolute; left: calc(var(--depth, 0) * 12px); top: 2px; bottom: 3px; width: 5px; background: var(--color); border-radius: 0 3px 3px 0; }
-/* gruppi: il gruppo ha lo sfondo nel suo colore; le sue tracce rientrano, con il suo colore a sinistra */
+/* groups: the group has the background in its colour; its tracks are indented, with its colour on the left */
 .header.group { background: color-mix(in srgb, var(--color) 9%, var(--panel)); }
 .header.in-group { border-left: 3px solid var(--group-color); }
 .header .fold { padding: 0 2px; border: none; background: none; color: var(--text); font-size: 12px; line-height: 1; cursor: pointer; }
-/* la traccia scelta: sfondo nel suo colore, come la sua corsia sulla timeline */
+/* the chosen track: background in its colour, like its lane on the timeline */
 .header.selected { background: color-mix(in srgb, var(--color) 18%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color) 55%, transparent); }
 .header.selected::before { width: 7px; }
 .header .top { display: flex; align-items: center; gap: 6px; }
@@ -90,7 +90,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .header .controls input[type=range] { flex: 1; min-width: 0; padding: 0; accent-color: var(--accent); }
 
 .arrangement-body { display: grid; grid-template-rows: var(--ruler-h) 1fr var(--hscroll-h); min-width: 0; min-height: 0; }
-/* la barra sotto la timeline: il cursore è il tratto che si vede, trascinandolo la vista scorre */
+/* the bar under the timeline: the thumb is the visible stretch, dragging it scrolls the view */
 .timeline-scroll { position: relative; background: var(--panel); border-top: 1px solid var(--line); touch-action: none; cursor: default; }
 .timeline-scroll .thumb { position: absolute; left: 0; top: 2px; bottom: 2px; border-radius: 4px; background: #4a515c; }
 .timeline-scroll:hover .thumb { background: #5a626e; }
@@ -100,14 +100,14 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .lanes-wrap .overlay { touch-action: none; }
 .ruler-wrap .ruler { touch-action: none; }
 
-/* ---------------------------------------------------------------- editor della clip */
+/* ---------------------------------------------------------------- clip editor */
 .clip-editor { display: grid; grid-template-columns: 250px 1fr; grid-template-rows: minmax(0, 1fr) auto; height: min(var(--editor-h, 300px), calc(100vh - 220px)); border-top: 2px solid var(--accent); background: var(--panel); outline: none; position: relative; }
 .clip-editor.with-lane { height: min(calc(var(--editor-h, 300px) + var(--lane-h, 128px)), calc(100vh - 220px)); }
-/* il bordo in alto: trascinandolo l'editor diventa più alto o più basso */
+/* the top edge: dragging it makes the editor taller or shorter */
 .editor-resize { position: absolute; left: 0; right: 0; top: -6px; height: 9px; z-index: 3; cursor: ns-resize; touch-action: none; }
 .editor-resize:hover, .editor-resize.dragging { background: linear-gradient(transparent 4px, var(--accent) 4px, var(--accent) 6px, transparent 6px); }
 .clip-editor > .clip-panel { grid-row: 1 / -1; }
-/* modulazioni: menu nel pannello, corsia sotto l'editor (nel piano roll accanto c'è il nome) */
+/* modulations: menu in the panel, lane under the editor (in the piano roll the name is beside it) */
 .mod-controls { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
 .mod-head { display: flex; align-items: center; gap: 4px; }
 .mod-head span { margin-right: auto; font-weight: 600; font-size: 12px; }
@@ -117,7 +117,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .mod-lane canvas { position: absolute; left: 0; top: 0; display: block; touch-action: none; outline: none; }
 .mod-lane-grip { position: absolute; left: 0; right: 0; top: 0; height: 5px; cursor: ns-resize; touch-action: none; }
 .mod-lane-grip:hover { background: #fff2; }
-/* le forme pronte, sopra la curva */
+/* the ready-made shapes, above the curve */
 .mod-shapes { position: absolute; top: 8px; right: 8px; z-index: 2; max-width: calc(100% - 16px); display: flex; flex-wrap: wrap; align-items: center; gap: 3px 4px; padding: 3px 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 2px 6px #0006; font-size: 11px; color: var(--muted); }
 .mod-shapes[hidden] { display: none; }
 .mod-shape-buttons { display: flex; gap: 1px; }
@@ -159,39 +159,39 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .header .instrument:hover { border-color: var(--accent); }
 .clip-panel .help { line-height: 1.5; margin-top: 4px; }
 
-/* ---------------------------------------------------------------- dispositivi (strumento ed effetti) */
+/* ---------------------------------------------------------------- devices (instrument and effects) */
 .bottom { min-width: 0; }
 .device-view { height: min(var(--device-h, 372px), calc(100vh - 220px)); min-height: 372px; position: relative; min-width: 0; border-top: 2px solid var(--accent); background: var(--panel); display: flex; flex-direction: column; outline: none; }
 .device-view[hidden] { display: none; }
-/* ridotta all'intestazione (trascinata in giù oltre l'altezza minima): dal bordo si riapre */
+/* reduced to the header (dragged down past the minimum height): it reopens from the edge */
 .device-view.folded { height: auto; min-height: 0; }
 .device-view.folded > .device-chain { display: none; }
 .device-head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .device-head [hidden] { display: none; }
 .device-title { font-weight: 600; margin-right: auto; padding-left: 9px; border-left: 4px solid var(--color, var(--accent)); }
 .device-head .close { padding: 2px 9px; }
-/* la catena scorre solo in orizzontale, come in Live: ogni dispositivo è disegnato per stare
- * nell'altezza della vista (anche con la barra di scorrimento sotto) ed è alto quanto la catena.
- * Lo spazio della barra c'è sempre: l'altezza non cambia quando compare, e il grafico del
- * compressore, che è largo quanto è alto, non la farebbe comparire e sparire all'infinito */
+/* the chain scrolls only horizontally, as in Live: every device is drawn to fit
+ * in the view's height (even with the scrollbar below) and is as tall as the chain.
+ * The bar's space is always there: the height doesn't change when it appears, and the
+ * compressor's graph, which is as wide as it is tall, wouldn't make it appear and disappear forever */
 .device-chain {
   display: flex; gap: 10px; padding: 8px 10px; overflow: scroll hidden; flex: 1; min-height: 0; align-items: flex-start;
 }
-/* niente frecce: con la barra sempre al suo posto si vedrebbero anche senza niente da scorrere */
+/* no arrows: with the bar always in place they would show even with nothing to scroll */
 .device-chain::-webkit-scrollbar { height: 10px; }
 .device-chain::-webkit-scrollbar-thumb { background: #3a4048; border-radius: 5px; }
 .device-chain > * { min-height: 100%; }
-/* i disegni prendono le misure dal CSS, mai dalla loro risoluzione: questa è le misure × devicePixelRatio
- * e, con lo schermo scalato (125%, 150%), farebbe allargare il canvas a ogni ridisegno, all'infinito.
- * contain toglie le misure della risoluzione; aspect-ratio le proporzioni che gli attributi width e
- * height danno da soli (con l'altezza fissa, anche quelle allargherebbero il canvas) */
+/* drawings take their size from CSS, never from their resolution: that is the size × devicePixelRatio
+ * and, with a scaled screen (125%, 150%), would make the canvas grow at every redraw, forever.
+ * contain removes the resolution's size; aspect-ratio the proportions that the width and
+ * height attributes give by themselves (with a fixed height, those too would widen the canvas) */
 .device-chain canvas { contain: size; aspect-ratio: auto; }
 .device-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #1f2328; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px 8px; transition: border-color .12s; }
 .device-panel:hover { border-color: #3a4048; }
 .device-panel.controlled { border-color: #4c88ff; box-shadow: 0 0 0 1px #4c88ff; }
 .device-panel.off .device-sections, .device-panel.off .device-name { opacity: .35; }
 .device-panel.off .device-panel-head { background: #212429; }
-/* compresso: una striscia verticale con il nome, come in Live */
+/* collapsed: a vertical strip with the name, as in Live */
 .device-panel.folded { width: 36px; padding: 0; }
 .device-panel.folded .device-sections { display: none; }
 .device-panel.folded .device-panel-head { flex: 1; flex-direction: column; gap: 6px; margin: 0; padding: 5px 0; border: 0; border-radius: 7px; }
@@ -213,7 +213,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-panel-head .mini { padding: 0 7px; font-size: 12px; line-height: 1.6; }
 .device-panel-head .power { color: var(--muted); }
 .device-panel:not(.off) .power { background: var(--accent); color: #141414; border-color: var(--accent); }
-/* le schede vanno a capo nella larghezza che DevicePanel.fitRows calcola, per stare nell'altezza */
+/* the tabs wrap within the width that DevicePanel.fitRows computes, to fit the height */
 .device-sections { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; }
 .device-section { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 4px 9px 5px; flex: none; }
 .device-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 3px; }
@@ -223,20 +223,20 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-panel.selected, .rack-panel.selected { border-color: var(--accent); }
 .device-panel.selected .device-name, .rack-panel.selected .device-name { background: var(--accent); color: #141414; }
 
-/* rack: il pannello delle macro e i suoi dispositivi in una cornice */
+/* rack: the macro panel and its devices in a frame */
 .rack { --macro: #b48cff; flex: none; display: flex; gap: 8px; padding: 5px; border: 1px solid #3d3650; border-radius: 10px; background: #1a1820; }
 .rack-panel { flex: none; display: flex; flex-direction: column; gap: 6px; background: #221f2b; border: 1px solid #3d3650; border-radius: 8px; padding: 0 8px 8px; }
 .rack-panel .device-panel-head { background: #2a2636; border-color: #3d3650; }
 .rack-panel.controlled { border-color: #4c88ff; box-shadow: 0 0 0 1px #4c88ff; }
 .rack-panel .map.on { background: var(--macro); border-color: var(--macro); color: #141414; }
-/* un rack dentro un altro: una cornice più chiara dentro quella del rack intorno */
+/* a rack inside another: a lighter frame inside the surrounding rack's */
 .rack .rack { background: #211e29; border-color: #4a4160; }
 .rack .rack .rack { background: #282432; }
 .rack-body { display: flex; gap: 10px; min-height: 0; flex: 1; }
 .rack-macros { display: grid; grid-template-columns: repeat(4, auto); gap: 6px 4px; align-content: start; }
 .rack-macros .knob-value { stroke: var(--macro); }
 .rack-macros .macro:not(.used) .knob-label { opacity: .6; }
-/* le macro interruttore (quadrate) e pulsante (tonde): grandi quanto una manopola */
+/* toggle (square) and button (round) macros: as big as a knob */
 .macro-switch { width: 62px; display: flex; flex-direction: column; align-items: center; user-select: none; }
 .macro-key { width: 34px; height: 34px; margin: 3px 0 4px; padding: 0; border-radius: 6px; background: #2c2836; border: 2px solid #4a4360; touch-action: none; }
 .macro-key.button { border-radius: 50%; }
@@ -250,7 +250,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .macro-spring .rename { width: 70px; font-size: 10px; padding: 0 2px; }
 .rack.mapping .macro { cursor: pointer; border-radius: 6px; }
 .rack.mapping .macro.chosen { background: color-mix(in srgb, var(--macro) 28%, transparent); outline: 1px solid var(--macro); }
-/* `contain: size`: la lista lunga scorre al suo posto, non allunga il rack */
+/* `contain: size`: the long list scrolls in place, it doesn't lengthen the rack */
 .rack-mappings { display: flex; flex-direction: column; gap: 4px; width: 300px; overflow-y: auto; font-size: 12px; contain: size; }
 .rack-mappings-head { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--macro); }
 .rack-mapping { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 2px; background: var(--panel-2); border-radius: 6px; padding: 2px 6px; }
@@ -259,7 +259,7 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .rack-mapping .knob-face { width: 30px; height: 30px; }
 .rack-folded { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 8px; font-size: 12px; }
 
-/* parametri mappati su una macro: li muove la macro, non la mano */
+/* parameters mapped to a macro: the macro moves them, not the hand */
 [data-param].mapped { position: relative; cursor: default; }
 [data-param].mapped .knob-value { stroke: var(--macro, #b48cff); }
 [data-param].mapped .knob-face, [data-param].mapped .choice-buttons, [data-param].mapped select { opacity: .55; }
@@ -270,8 +270,8 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-panel.mappable [data-param], .rack-panel.mappable .macro { outline: 1px dashed color-mix(in srgb, var(--macro) 60%, transparent); border-radius: 6px; cursor: pointer; }
 .device-panel.mappable [data-param].chosen, .rack-panel.mappable .macro.chosen { outline: 1px solid var(--macro); background: color-mix(in srgb, var(--macro) 20%, transparent); }
 
-/* la tastiera del computer (KEY): il tasto di un controllo in alto a sinistra; con KEY acceso si
- * vedono i controlli che si possono mappare e quello che aspetta il tasto */
+/* the computer keyboard (KEY): a control's key at the top left; with KEY on you
+ * see the controls that can be mapped and the one waiting for the key */
 :root { --keys: #ffd447; }
 .transport .key-map.on { background: var(--keys); border-color: var(--keys); }
 [data-param][data-key] { position: relative; }
@@ -282,9 +282,9 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 .device-view.key-mapping [data-param]:not(.mapped) { position: relative; outline: 1px dashed color-mix(in srgb, var(--keys) 60%, transparent); border-radius: 6px; cursor: pointer; }
 .device-view.key-mapping [data-param].key-chosen { outline: 2px solid var(--keys); background: color-mix(in srgb, var(--keys) 22%, transparent); }
 
-/* il MIDI (MIDI): il controllo MIDI di un controllo in alto a destra (sui pulsanti una riga sotto,
- * il nome solo con MIDI acceso); con MIDI acceso si vedono i controlli che si possono mappare e
- * quello che aspetta il controllo. Un cursore non mostra il nome: lo porta il suo involucro */
+/* MIDI (MIDI): a control's MIDI control at the top right (on buttons one line below,
+ * the name only with MIDI on); with MIDI on you see the controls that can be mapped and the
+ * one waiting for the control. A slider doesn't show the name: its wrapper carries it */
 :root { --midi: #5cc8ff; }
 .transport .midi-map.on { background: var(--midi); border-color: var(--midi); }
 .midi-slot { position: relative; display: flex; align-items: center; min-width: 0; }
@@ -302,7 +302,7 @@ body.midi-mapping [data-midi-target]:not(.mapped) { outline: 1px dashed color-mi
 body.midi-mapping [data-midi-target].midi-chosen { outline: 2px solid var(--midi); background: color-mix(in srgb, var(--midi) 22%, transparent); }
 .inactive { opacity: .3; }
 .choice select { font-size: 12px; padding: 2px 4px; margin-top: 8px; }
-/* largo uguale con qualunque nome di traccia: i nomi lunghi finiscono con … */
+/* same width with any track name: long names end with … */
 .sidechain-choice select { width: 132px; text-overflow: ellipsis; }
 .header .controls .fx { padding: 1px 6px; font-size: 11px; }
 .header .controls .keyboard { padding: 1px 4px; }
@@ -319,14 +319,14 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .knob.automated .knob-pointer { stroke: var(--auto); }
 .knob.automated .knob-readout, select.automated { color: var(--auto); }
 .choice { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 6px; }
-/* da tre opzioni (al massimo quattro, poi è un menu) i pulsanti vanno su due colonne: una scelta
- * non è mai più alta di una manopola */
+/* from three options (at most four, then it's a menu) the buttons go on two columns: a choice
+ * is never taller than a knob */
 .choice-buttons { display: grid; gap: 2px; }
 .choice-buttons:has(> :nth-child(3)) { grid-template-columns: repeat(2, auto); }
 .choice-buttons button { padding: 1px 8px; font-size: 11px; border-radius: 3px; min-width: 70px; }
 .choice-buttons button.heard { box-shadow: inset 0 0 0 2px var(--auto); }
 
-/* ---------------------------------------------------------------- menu contestuale */
+/* ---------------------------------------------------------------- context menu */
 .context-menu {
   position: fixed; z-index: 100; min-width: 210px; padding: 4px; outline: none;
   background: #23272e; border: 1px solid #3a3f47; border-radius: 7px; box-shadow: 0 8px 28px #000a;
@@ -351,7 +351,7 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .context-menu .swatch:hover, .context-menu .swatch:focus { outline: 2px solid #fff; outline-offset: 1px; }
 .context-menu .swatch.current { box-shadow: inset 0 0 0 2px #101214; outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* ---------------------------------------------------------------- finestre di dialogo */
+/* ---------------------------------------------------------------- dialog windows */
 .dialog { padding: 0; border: 1px solid #3a3f47; border-radius: 9px; background: #23272e; color: var(--text); box-shadow: 0 16px 48px #000c; max-width: min(560px, calc(100vw - 32px)); }
 .dialog::backdrop { background: #0008; }
 .dialog-body { padding: 18px 22px 14px; max-height: calc(100vh - 64px); overflow-y: auto; }
@@ -368,7 +368,7 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .definitions td { padding: 3px 0; }
 .definitions td.key { text-align: right; padding-left: 24px; font: 11.5px ui-monospace, monospace; color: var(--muted); white-space: nowrap; }
 
-/* ---------------------------------------------------------------- barra di stato */
+/* ---------------------------------------------------------------- status bar */
 .status { display: flex; gap: 12px; padding: 5px 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); min-height: 26px; }
 .status-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status .version { font-size: 10.5px; opacity: .6; align-self: center; user-select: text; }
@@ -379,7 +379,7 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .master-header .track-name { cursor: inherit; }
 .master-lane { height: 52px; border-top: 2px solid var(--line); background: var(--panel); cursor: pointer; }
 .master-lane:hover { background: var(--panel-2); }
-/* l'automazione del master: menu a sinistra, la corsia con la curva sotto la timeline */
+/* master automation: menu on the left, the lane with the curve under the timeline */
 .master-header .controls .auto { position: relative; }
 .master-header .controls .auto.has:not(.on)::after {
   content: ''; position: absolute; right: -2px; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: var(--master-curve);
@@ -391,7 +391,7 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .master-auto-hint { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-size: 12px; }
 .master-auto-header[hidden], .master-auto-lane[hidden], .master-auto-hint[hidden] { display: none; }
 
-/* ---------------------------------------------------------------- misuratori di livello */
+/* ---------------------------------------------------------------- level meters */
 .level-meter { position: absolute; right: 5px; top: 6px; height: calc(100% - 12px); width: 10px; border-radius: 2px; cursor: pointer; }
 .peak-readout {
   margin-left: auto; min-width: 46px; padding: 0 5px; font: 600 11px/1.5 ui-monospace, monospace; text-align: right;
@@ -400,8 +400,8 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .peak-readout.clip { color: #fff; background: #d33; }
 
 /* ---------------------------------------------------------------- EQ */
-/* i pannelli grafici (EQ, Drive) riempiono l'altezza del dispositivo: il grafico prende lo
- * spazio che resta sopra i controlli, nella catena come dentro un rack */
+/* graphic panels (EQ, Drive) fill the device's height: the graph takes the
+ * space left above the controls, in the chain as inside a rack */
 .device-sections:has(> .eq-display, > .drive-display, > .gate-display, > .dynamics-display) { flex: 1 0 auto; flex-wrap: nowrap; }
 .eq-display { display: flex; flex-direction: column; gap: 6px; }
 .eq-graph { display: block; width: 600px; flex: 1 1 0; min-height: 120px; border-radius: 6px; border: 1px solid var(--line); cursor: crosshair; touch-action: none; }
@@ -448,19 +448,19 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .session-head.in-group { box-shadow: inset 0 -2px 0 var(--group-color); }
 .session-head.bus { background: color-mix(in srgb, var(--color) 10%, var(--panel)); font-style: italic; }
 .bus-lane { background: color-mix(in srgb, var(--color, #888) 4%, var(--bg)); border-radius: 3px; }
-/* un bus compresso: la colonna stretta con il nome in verticale, il mixer con livello, mute e solo */
+/* a collapsed bus: the narrow column with the vertical name, the mixer with level, mute and solo */
 .session-head.bus.folded { padding: 5px 0; text-align: center; }
 .session-head.bus.folded .fold { padding: 0; }
 .session-head.bus.folded .session-track-name { display: none; }
 .bus-lane.folded { display: flex; justify-content: center; padding-top: 8px; cursor: pointer; }
 .bus-lane-name { writing-mode: vertical-rl; white-space: nowrap; overflow: hidden; font-size: 11.5px; font-style: italic; font-weight: 600; color: var(--muted); }
 .bus-lane.folded:hover .bus-lane-name { color: var(--text); }
-/* i bus restano fermi accanto al master; l'ombra copre lo spazio tra le colonne */
+/* buses stay still next to the master; the shadow covers the space between the columns */
 .bus-pinned { position: sticky; right: var(--bus-right); box-shadow: -2px 0 0 var(--bg); }
 .session-head.bus-pinned, .strip.bus-pinned { z-index: 3; }
 .bus-lane.bus-pinned { z-index: 1; }
 .session-head .fold { padding: 0 4px 0 0; border: none; background: none; color: var(--text); font-size: 11px; cursor: pointer; }
-/* lo slot di un gruppo: ▶ lancia la riga delle sue tracce */
+/* a group's slot: ▶ launches the row of its tracks */
 .slot.group-slot { background: color-mix(in srgb, var(--color) 10%, #16181b); }
 .slot.group-slot.has-clips { background: color-mix(in srgb, var(--color) 32%, #16181b); }
 .master-head { --color: var(--text); right: 0; z-index: 3; }
@@ -507,11 +507,11 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .session-ring { z-index: 1; margin: -2px; border: 2px solid #e5484d; border-radius: 4px; pointer-events: none; box-shadow: 0 0 0 1px #0008; }
 @keyframes session-blink { 50% { background: #3ec46d; color: #0c1a10; } }
 
-/* il mixer in fondo alla session */
+/* the mixer at the bottom of the session */
 .strip {
   position: sticky; bottom: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 5px 4px 6px; background: var(--panel); border-top: 3px solid var(--color, var(--line));
-  /* in basso: i fader restano allineati anche se una striscia ha più manopole (le mandate) */
+  /* at the bottom: the faders stay aligned even if a strip has more knobs (the sends) */
   justify-content: flex-end;
 }
 .master-strip { right: 0; z-index: 4; --color: var(--text); }
@@ -521,8 +521,8 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .strip .knob { width: 54px; margin: -4px 0 -2px; }
 .strip .knob .knob-face { width: 28px; height: 28px; }
 .strip .knob .knob-label { display: none; }
-/* le mandate: tre per riga e al massimo due righe (con tanti bus si scorre qui dentro), così il
-   mixer non copre le scene */
+/* the sends: three per row and at most two rows (with many buses you scroll in here), so the
+   mixer doesn't cover the scenes */
 .strip-sends {
   display: grid; grid-template-columns: repeat(3, 34px); gap: 2px; justify-content: center; align-self: stretch;
   max-height: 72px; overflow: hidden auto; scrollbar-width: thin;
@@ -530,7 +530,7 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .strip-sends:empty { display: none; }
 .strip-sends .knob { width: 34px; margin: 0; }
 .strip-sends .knob .knob-face { width: 22px; height: 22px; }
-/* sotto la manopola il nome del bus; il valore solo mentre la si gira */
+/* under the knob the bus name; the value only while turning it */
 .strip-sends .knob .knob-readout { display: none; font-size: 9.5px; }
 .strip-sends .knob .knob-label { display: block; max-width: 100%; margin-top: 0; font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; }
 .strip-sends .knob.active .knob-readout { display: block; }
@@ -552,8 +552,8 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .back-to-arrangement.lit { background: #e5a33a; color: #141414; border-color: #e5a33a; }
 .back-to-arrangement { min-width: 34px; }
 
-/* Drum Machine: griglia dei pad e controlli del pad scelto */
-/* l'editor del pad non va a capo: il pannello si allarga quanto serve invece di farlo uscire */
+/* Drum Machine: pad grid and controls of the chosen pad */
+/* the pad editor doesn't wrap: the panel widens as needed instead of letting it overflow */
 .drum-display { display: flex; gap: 10px; align-items: flex-start; }
 .drum-pads { display: grid; grid-template-columns: repeat(4, 76px); grid-auto-rows: 52px; gap: 4px; flex: none; }
 .drum-pad {
@@ -573,7 +573,7 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drum-pad-title { font-weight: 600; font-size: 12px; white-space: nowrap; }
 .drum-model { font-size: 12px; padding: 1px 4px; }
 .drum-inner-preset { font-size: 12px; padding: 1px 4px; }
-/* il pannello dello strumento di un pad, accanto ai controlli del pad */
+/* the instrument panel of a pad, next to the pad's controls */
 .drum-inner { flex: none; align-self: stretch; display: flex; border-left: 1px solid var(--line); padding-left: 10px; }
 .drum-inner[hidden] { display: none; }
 .drum-hint { font-size: 11px; white-space: nowrap; }
@@ -582,9 +582,9 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drum-sample { font-size: 12px; padding: 1px 4px; max-width: 180px; }
 .drum-controls { display: flex; align-items: flex-start; gap: 2px; }
 
-/* Drive: curva, spettro, forme, controlli */
-/* il grafico alto quanto il pannello e accanto le schede su due righe, sidechain compreso (che è
- * fuori dal display): per questo display e controlli non fanno scatola, stanno tutti nella griglia */
+/* Drive: curve, spectrum, shapes, controls */
+/* the graph as tall as the panel and next to it the tabs on two rows, sidechain included (which is
+ * outside the display): that's why display and controls don't form a box, they all sit in the grid */
 .device-sections:has(> .dynamics-display) { display: grid; grid-template-columns: auto auto auto; grid-template-rows: 1fr 1fr; align-content: stretch; }
 .dynamics-display, .dynamics-controls { display: contents; }
 .dynamics-graph { display: block; grid-row: 1 / -1; align-self: stretch; width: 176px; min-height: 90px; border-radius: 6px; border: 1px solid var(--line); cursor: ew-resize; touch-action: none; }
@@ -598,11 +598,11 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .drive-shape { display: flex; align-items: center; gap: 5px; padding: 2px 8px 2px 4px; font-size: 11.5px; color: var(--muted); }
 .drive-shape.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); color: var(--text); border-color: var(--accent); }
 .drive-shape-icon { width: 26px; height: 18px; display: block; }
-/* Wavetable: le sezioni su due righe come un synth grande, gli oscillatori alti quanto due */
+/* Wavetable: the sections on two rows like a big synth, the oscillators as tall as two */
 .wt-display { display: grid; grid-auto-flow: column; grid-template-rows: auto auto; justify-content: start; align-items: start; gap: 6px; }
 .wt-osc { grid-row: span 2; align-self: stretch; display: flex; flex-direction: column; }
 .wt-view { display: block; width: 100%; min-width: 300px; flex: 1 1 0; height: 0; min-height: 80px; margin: 2px 0 5px; border-radius: 6px; border: 1px solid var(--line); cursor: ns-resize; touch-action: none; }
-/* Prisma: pagine, fonti da trascinare, schede, anelli delle modulazioni, matrice */
+/* Prisma: pages, draggable sources, tabs, modulation rings, matrix */
 .prisma { display: flex; flex-direction: column; gap: 5px; }
 .prisma [hidden] { display: none !important; }
 .prisma-tabs, .prisma-subtabs { display: flex; gap: 2px; }
@@ -668,7 +668,7 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .prisma-slider-fill { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .prisma-slider-fill.negative { background: color-mix(in srgb, #4cb8ff 55%, transparent); }
 .prisma-slider-text { position: relative; text-align: center; font: 10.5px/18px ui-monospace, monospace; color: var(--text); pointer-events: none; white-space: nowrap; }
-/* Modulatori (LFO, Inviluppo): i pezzi di Prisma, le destinazioni, i controlli che muovono */
+/* Modulators (LFO, Envelope): Prisma's pieces, the targets, the controls they move */
 .modulator .prisma-lfo { min-width: 360px; height: 86px; }
 .modulator .prisma-env { min-width: 380px; height: 76px; }
 .mod-links { display: flex; flex-direction: column; gap: 2px; }
@@ -678,9 +678,9 @@ input[type=range].vertical { writing-mode: vertical-lr; direction: rtl; width: 2
 .mod-target > .knob-label { color: #4cb8ff; }
 .mod-target > .knob-label::before { content: '∿ '; }
 body.dragging-modulator, body.dragging-modulator * { cursor: grabbing !important; }
-/* Sampler: forma d'onda e inviluppi in alto, le schede sotto, l'LFO a destra */
-/* il Sampler riempie l'altezza del pannello: la riga in alto (forma d'onda, inviluppi) prende
- * quella che resta sopra le schede dei controlli */
+/* Sampler: waveform and envelopes at the top, the tabs below, the LFO on the right */
+/* the Sampler fills the panel's height: the top row (waveform, envelopes) takes
+ * what's left above the control tabs */
 .device-sections:has(> .smp) { flex: 1 1 auto; flex-wrap: nowrap; }
 .smp { display: flex; gap: 6px; align-items: stretch; }
 .smp [hidden] { display: none !important; }
@@ -702,12 +702,12 @@ body.dragging-modulator, body.dragging-modulator * { cursor: grabbing !important
 .smp .knob { width: 46px; }
 .smp .knob-face { width: 30px; height: 30px; overflow: visible; }
 
-/* gli strumenti a strati (Kick, Snare): a sinistra il colpo (forma d'onda e intonazione), a destra le schede degli strati */
+/* layered instruments (Kick, Snare): on the left the hit (waveform and tuning), on the right the layer tabs */
 .device-sections:has(> .lay) { flex: 1 1 auto; flex-wrap: nowrap; }
 .lay { display: flex; gap: 6px; align-items: stretch; }
 .lay [hidden] { display: none !important; }
 .lay-left { position: relative; width: 270px; min-height: 140px; flex: none; }
-/* il canvas prende la misura della colonna, senza imporla (cambiando i suoi pixel non la allunga) */
+/* the canvas takes the column's size without imposing it (changing its pixels doesn't stretch it) */
 .lay-wave { position: absolute; inset: 0; width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; box-sizing: border-box; }
 .lay-cards { display: flex; gap: 6px; align-items: stretch; }
 .lay-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px 4px; display: flex; flex-direction: column; gap: 4px; }
@@ -719,13 +719,13 @@ body.dragging-modulator, body.dragging-modulator * { cursor: grabbing !important
 .lay-card-head .choice select { margin-top: 0; font-size: 11.5px; padding: 0 2px; }
 .lay-sample-row { display: flex; align-items: center; gap: 4px; }
 .lay-sample { font-size: 12px; padding: 1px 4px; max-width: 150px; }
-/* i controlli in colonne di tre, che si allungano verso destra */
+/* the controls in columns of three, extending to the right */
 .lay-knobs { display: grid; grid-template-rows: repeat(3, auto); grid-auto-flow: column; gap: 1px 2px; align-content: start; justify-content: start; }
 .lay .knob { width: 56px; }
 .lay .knob-face { width: 30px; height: 30px; overflow: visible; }
 .lay-knobs .choice select { max-width: 110px; }
 
-/* Hat e Piatti: i pezzi come pad e il colpo del pezzo scelto, poi i suoi controlli e quelli di tutti */
+/* Hat and Cymbals: the pieces as pads and the chosen piece's hit, then its controls and the shared ones */
 .device-sections:has(> .cym) { flex: 1 1 auto; flex-wrap: nowrap; }
 .cym { display: flex; gap: 6px; align-items: stretch; }
 .cym [hidden] { display: none !important; }
@@ -741,9 +741,9 @@ body.dragging-modulator, body.dragging-modulator * { cursor: grabbing !important
 .cym-pad.hit { animation: drum-hit .3s ease-out; }
 .cym-pad-name { font-size: 11px; line-height: 1.15; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .cym-pad-note { font: 10px ui-monospace, monospace; color: var(--muted); white-space: nowrap; }
-/* un pezzo che suona un sample: un pallino rosa accanto alla nota */
+/* a piece that plays a sample: a pink dot next to the note */
 .cym-pad.sample .cym-pad-note::after { content: ' ●'; color: #ef6fa6; }
-/* il canvas prende la misura del suo posto, senza imporla */
+/* the canvas takes the size of its place without imposing it */
 .cym-wave-box { position: relative; flex: 1; min-height: 90px; }
 .cym-wave { position: absolute; inset: 0; width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; box-sizing: border-box; }
 .cym-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px 4px; display: flex; flex-direction: column; gap: 4px; }
@@ -771,7 +771,7 @@ body.dragging-modulator, body.dragging-modulator * { cursor: grabbing !important
 .smp-env-card { width: 400px; flex: none; }
 .smp-link { padding: 0 7px; font-size: 11.5px; color: var(--muted); }
 .smp-link.on { background: var(--accent); color: #141414; border-color: var(--accent); }
-/* il disegno a sinistra, alto quanto la scheda; le manopole a destra, su due file */
+/* the drawing on the left, as tall as the tab; the knobs on the right, in two rows */
 .smp-env-body { display: flex; gap: 6px; flex: 1 1 auto; min-height: 0; }
 .smp-env-box { position: relative; flex: 1 1 0; min-width: 0; min-height: 60px; }
 .smp-env-card .smp-knobs { display: grid; grid-template-columns: repeat(3, auto); align-content: center; gap: 2px 0; }
@@ -828,14 +828,14 @@ button.browser-add { margin-top: 6px; color: var(--muted); font-size: 11.5px; }
 .browser-preview-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 button.browser-preview-toggle { flex: none; padding: 0 6px; font-size: 12px; line-height: 1.6; }
 .browser-wave { display: block; width: 100%; height: 34px; border-radius: 3px; background: var(--bg); }
-/* il bordo destro: trascinandolo il browser si allarga o si stringe */
+/* the right edge: dragging it widens or narrows the browser */
 .browser-resize { position: absolute; top: 0; bottom: 0; right: -4px; width: 7px; z-index: 4; cursor: ew-resize; touch-action: none; }
 .browser-resize:hover, .browser-resize.dragging { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); }
-/* dove si può lasciare una voce trascinata dal browser */
+/* where an item dragged from the browser can be dropped */
 .lanes-wrap.browser-drop, .header-scroll.browser-drop, .device-view.browser-drop, .master-header.browser-drop { box-shadow: inset 0 0 0 2px var(--accent); }
 .session-head.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
 
-/* una traccia trascinata per spostarla: si attenua, la linea mostra dove andrà */
+/* a track dragged to move it: it fades, the line shows where it will go */
 .track-drop-line { position: fixed; z-index: 60; background: var(--accent); border-radius: 1px; pointer-events: none; box-shadow: 0 0 0 1px #0008; }
 body.track-dragging { user-select: none; }
 body.track-dragging, body.track-dragging * { cursor: grabbing !important; }

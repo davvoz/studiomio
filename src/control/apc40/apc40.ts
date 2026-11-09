@@ -1,10 +1,10 @@
-/* L'APC40 mkII sulla session, come in Live: la griglia 8×5 lancia le clip del riquadro rosso
- * (le frecce lo spostano), i pulsanti di scena lanciano le righe, sotto ci sono stop, selezione,
- * mute (activator) e solo di ogni traccia, i fader e il master; le manopole in alto fanno il pan,
- * le 8 manopole "Device Control" muovono i parametri del dispositivo scelto (la "mano blu"),
- * a banchi di 8. I LED li decide il programma, a ogni giro: colore delle clip, verde per quella
- * che suona, lampeggio per quella in coda (lo fa il controller); si manda solo ciò che cambia.
- * Il controller non conosce Web MIDI: riceve i messaggi con `receive` e manda con `out`. */
+/* The APC40 mkII on the session, as in Live: the 8×5 grid launches the clips of the red box
+ * (the arrows move it), the scene buttons launch the rows, below are stop, select,
+ * mute (activator) and solo of each track, the faders and the master; the top knobs do pan,
+ * the 8 "Device Control" knobs move the parameters of the chosen device (the "blue hand"),
+ * in banks of 8. The LEDs are decided by the program, every round: clip colour, green for the one
+ * playing, blinking for the queued one (the controller does it); only what changes is sent.
+ * The controller doesn't know Web MIDI: it receives messages with `receive` and sends with `out`. */
 import type { DeviceId, TrackId } from '../../core/id';
 import { MASTER } from '../../model/project';
 import { slotRef, type ClipRef } from '../../store/clip-ref';
@@ -19,24 +19,24 @@ import {
 
 export { INSTRUMENT_KEY, type DetailView, type SurfaceEngine, type SurfaceHost } from '../session-surface';
 
-/** Messaggi al massimo per giro: l'APC40 mkII elabora il MIDI lentamente, a raffiche si
- *  blocca. Ciò che avanza parte al giro dopo. */
+/** At most this many messages per round: the APC40 mkII processes MIDI slowly, in bursts it
+ *  hangs. What's left goes in the next round. */
 const MAX_SEND = 32;
-/** Quanto si aspetta ogni risposta dell'avvio (identità, challenge) prima di andare avanti lo stesso. */
+/** How long each startup reply (identity, challenge) is awaited before going on anyway. */
 const HANDSHAKE_MS = 1000;
-/** Live manda la challenge due dei suoi giri (100 ms) dopo la presentazione. */
+/** Live sends the challenge two of its rounds (100 ms) after the introduction. */
 const CHALLENGE_DELAY_MS = 200;
-/** Dopo quanto si rimandano gli anelli delle manopole Device a un dispositivo appena scelto: il
- *  controller può perdere quelli mandati subito (si spengono, finché il valore non cambia). */
+/** After how long the Device knob rings are resent to a newly chosen device: the
+ *  controller may lose the ones sent right away (they go dark until the value changes). */
 const RINGS_AGAIN_MS = 250;
 
-/** L'avvio, come in Live: si chiede l'identità, ci si presenta, si fa la challenge, poi si lavora. */
+/** The startup, as in Live: ask for the identity, introduce ourselves, do the challenge, then work. */
 type Phase = 'identity' | 'challenge' | 'ready';
 
 const NOT_YET: Readonly<Record<number, string>> = {
-  [NOTE.recordArm]: 'Record arm', [NOTE.record]: 'La registrazione', [NOTE.session]: 'La registrazione nella session',
-  [NOTE.crossfadeAssign]: 'Il crossfader', [NOTE.sends]: 'Le mandate', [NOTE.user]: 'Il modo User',
-  [NOTE.nudgeMinus]: 'Il nudge', [NOTE.nudgePlus]: 'Il nudge',
+  [NOTE.recordArm]: 'Record arm', [NOTE.record]: 'Recording', [NOTE.session]: 'Session recording',
+  [NOTE.crossfadeAssign]: 'Il crossfader', [NOTE.sends]: 'The sends', [NOTE.user]: 'The User mode',
+  [NOTE.nudgeMinus]: 'The nudge', [NOTE.nudgePlus]: 'The nudge',
 };
 
 export class Apc40 extends SessionSurface {
@@ -47,19 +47,19 @@ export class Apc40 extends SessionSurface {
   protected readonly maxSend = MAX_SEND;
   private tempoSteps = 0;
   private bankMode = false;
-  /** Spento: alle manopole non si manda niente (né valori né tipo dell'anello). Per capire se
-   *  un controller si blocca per i messaggi delle manopole. */
+  /** Off: nothing is sent to the knobs (neither values nor ring type). To find out whether
+   *  a controller hangs because of the knob messages. */
   knobFeedback = true;
   private phase: Phase = 'identity';
   private phaseAt = 0;
   private challengeSent = false;
-  /** Il device ID del controller, dalla sua risposta d'identità (Live fa lo stesso). */
+  /** The controller's device ID, from its identity reply (Live does the same). */
   private device = 0;
-  /** Il dispositivo (e banco) delle manopole Device l'ultima volta, e quando rimandarne gli anelli. */
+  /** The Device knobs' device (and bank) last time, and when to resend its rings. */
   private ringsOf = '';
   private ringsAgainAt = Infinity;
 
-  /** Il controller è appena stato collegato: gli si chiede chi è (vedi `handshake`). */
+  /** The controller has just been connected: it's asked who it is (see `handshake`). */
   start(): void {
     this.stopped = false;
     this.sent.clear();
@@ -74,8 +74,8 @@ export class Apc40 extends SessionSurface {
     return this.phase === 'ready';
   }
 
-  /** Avanza l'avvio: presentazione (Ableton mode) col device ID avuto, challenge, poi i LED. Se
-   *  una risposta non arriva si va avanti lo stesso. */
+  /** Advances the startup: introduction (Ableton mode) with the obtained device ID, challenge, then the LEDs. If
+   *  a reply doesn't arrive it goes on anyway. */
   protected handshake(data: ArrayLike<number> | null): void {
     const now = this.now();
     if (this.phase === 'identity') {
@@ -105,7 +105,7 @@ export class Apc40 extends SessionSurface {
     this.refresh();
   }
 
-  /** Il controller se ne va (o l'app si chiude): LED spenti e di nuovo in modo generico. */
+  /** The controller goes away (or the app closes): LEDs off and back to generic mode. */
   stop(): void {
     this.stopped = true;
     this.darken();
@@ -119,7 +119,7 @@ export class Apc40 extends SessionSurface {
     return kind !== 0x80 && kind !== 0x90;
   }
 
-  // ---------------------------------------------------------------- pulsanti
+  // ---------------------------------------------------------------- buttons
 
   private press(note: number, channel: number): void {
     const { engine } = this.host;
@@ -154,21 +154,21 @@ export class Apc40 extends SessionSurface {
       case NOTE.detailView: return this.toggleDetail();
     }
     const missing = NOT_YET[note];
-    if (missing) this.host.say(`APC40: ${missing} non c'è ancora in studiomio.`);
+    if (missing) this.host.say(`APC40: ${missing} isn't in studiomio yet.`);
   }
 
   private release(note: number): void {
     if (note === NOTE.shift) this.shift = false;
-    // scelta una traccia (o il master), gli anelli si rimandano anche dopo il rilascio
+    // once a track (or the master) is chosen, the rings are resent also after release
     if (note === NOTE.trackSelect || note === NOTE.master) this.ringsAgainAt = this.now() + RINGS_AGAIN_MS;
   }
 
-  /** Con Shift (o con Bank acceso) le frecce spostano il riquadro di una pagina intera. */
+  /** With Shift (or with Bank on) the arrows move the box by a whole page. */
   private step(page: number): number {
     return this.shift || this.bankMode ? page : 1;
   }
 
-  // ---------------------------------------------------------------- dispositivi
+  // ---------------------------------------------------------------- devices
 
   private moveBank(delta: number): void {
     const c = this.controlled();
@@ -184,27 +184,27 @@ export class Apc40 extends SessionSurface {
   private toggleLock(): void {
     const c = this.controlled();
     this.locked = this.locked || !c ? null : { owner: c.owner, device: c.device.key };
-    if (c) this.host.say(this.locked ? `APC40: manopole bloccate su ${c.device.type.label}.` : 'APC40: le manopole seguono la traccia scelta.');
+    if (c) this.host.say(this.locked ? `APC40: knobs locked on ${c.device.type.label}.` : 'APC40: the knobs follow the chosen track.');
   }
 
-  /** Clip/Device View: dai dispositivi alla clip della traccia scelta, e viceversa. */
+  /** Clip/Device View: from the devices to the chosen track's clip, and vice versa. */
   private toggleClipDevice(): void {
     const owner = this.selectedOwner;
     if (!owner) return;
     if (this.host.detail !== 'devices' || owner === MASTER) return this.host.openDevices(owner);
     const ref = this.clipToShow(owner);
     if (ref) this.host.openClip(ref);
-    else this.host.say('APC40: la traccia non ha clip nella session.');
+    else this.host.say('APC40: the track has no clips in the session.');
   }
 
-  /** Detail View: mostra o nasconde l'area in basso. */
+  /** Detail View: shows or hides the bottom area. */
   private toggleDetail(): void {
     if (this.host.detail) return this.host.closeDetail();
     const owner = this.selectedOwner ?? this.project.tracks[0]?.id;
     if (owner) this.host.openDevices(owner);
   }
 
-  /** La clip da aprire: quella che suona, o la prima nel riquadro, o la prima della traccia. */
+  /** The clip to open: the playing one, or the first in the box, or the track's first. */
   private clipToShow(id: TrackId): ClipRef | null {
     const track = this.project.track(id);
     if (!track) return null;
@@ -216,7 +216,7 @@ export class Apc40 extends SessionSurface {
     return clip ? slotRef(id, clip.id) : null;
   }
 
-  // ---------------------------------------------------------------- controlli continui
+  // ---------------------------------------------------------------- continuous controls
 
   private control(cc: number, channel: number, value: number): void {
     if (cc === CC.tempo) {
@@ -242,7 +242,7 @@ export class Apc40 extends SessionSurface {
       this.touch(ccKey(cc), value);
       this.turnParam(cc - CC.deviceKnob, value / 127);
     }
-    // crossfader e livello del cue: studiomio non li ha ancora
+    // crossfader and cue level: studiomio doesn't have them yet
   }
 
   // ---------------------------------------------------------------- LED
@@ -260,24 +260,24 @@ export class Apc40 extends SessionSurface {
     const p = this.project;
     const ring = this.ring;
     const leds = new Map<string, number>();
-    // acceso = 127 come in Live; i lampeggi li fa il controller (niente traffico a tempo da qui)
+    // on = 127 as in Live; the blinking is done by the controller (no timed traffic from here)
     const note = (n: number, v: number | boolean, channel = 0) => leds.set(noteKey(n, channel), typeof v === 'boolean' ? (v ? ON : 0) : v);
     const tracks = this.ringTracks();
 
-    // la griglia
+    // the grid
     for (let row = 0; row < SCENES; row++) {
       for (let col = 0; col < TRACKS; col++) {
         note(padNote(col, row), this.shift ? overviewColor(this.blockLight(col, row)) : padColor(this.slotLight(tracks[col], ring.scene + row)));
       }
     }
-    // scene (pulsanti RGB): verdi fisse se suona una loro clip (come le clip), lampeggiano se
-    // qualcosa della riga è in coda; se no del colore della scena (bianche se non ne ha), spente
-    // se la riga è vuota
+    // scenes (RGB buttons): steady green if one of their clips plays (like the clips), blinking if
+    // something in the row is queued; otherwise the scene's colour (white if it has none), off
+    // if the row is empty
     for (let i = 0; i < SCENES; i++) {
       const s = this.sceneLight(i);
       note(NOTE.sceneLaunch + i, s === 'queued' ? TRIGGERED(COLOR.green) : s === 'playing' ? COLOR.green : s === 'off' ? COLOR.off : s.color ? paletteIndex(s.color) : COLOR.white);
     }
-    // per traccia
+    // per track
     tracks.forEach((t, c) => {
       const stop = this.stopLight(t);
       note(NOTE.clipStop, stop === 'queued' ? STOP_LED.blink : stop === 'playing' ? STOP_LED.on : STOP_LED.off, c);
@@ -289,7 +289,7 @@ export class Apc40 extends SessionSurface {
     });
     note(NOTE.master, this.masterSelected);
     note(NOTE.stopAllClips, p.tracks.some(t => engine.sessionState(t).playing));
-    // trasporto e navigazione
+    // transport and navigation
     note(NOTE.play, engine.playing);
     note(NOTE.metronome, engine.metronomeOn);
     note(NOTE.record, false);
@@ -302,12 +302,12 @@ export class Apc40 extends SessionSurface {
     note(NOTE.pan, true);
     note(NOTE.sends, false);
     note(NOTE.user, false);
-    // manopole sopra le tracce: il pan
+    // knobs above the tracks: the pan
     tracks.forEach((t, c) => {
       leds.set(ccKey(CC.trackRing + c), t ? RING.pan : RING.off);
       leds.set(ccKey(CC.trackKnob + c), t ? panToKnob(t.mixer.pan) : 0);
     });
-    // il dispositivo controllato
+    // the controlled device
     const dev = this.controlled();
     ui.setControlledDevice(dev ? { owner: dev.owner, device: dev.device.key } : null);
     this.ringsAgain(dev ? `${dev.owner}/${dev.device.key}/${dev.bank}` : '');
@@ -327,9 +327,9 @@ export class Apc40 extends SessionSurface {
     return leds;
   }
 
-  /** Cambiato il dispositivo delle manopole (`shown`), poco dopo i suoi anelli (tipo e valore) si
-   *  rimandano tutti, anche quelli che non sono cambiati: l'APC40 può aver perso i primi, e un
-   *  anello perso resterebbe spento finché il suo valore non cambia. */
+  /** When the knobs' device changes (`shown`), shortly after all its rings (type and value) are
+   *  resent, even those that didn't change: the APC40 may have lost the first ones, and a
+   *  lost ring would stay dark until its value changes. */
   private ringsAgain(shown: string): void {
     if (shown !== this.ringsOf) {
       this.ringsOf = shown;
@@ -344,16 +344,16 @@ export class Apc40 extends SessionSurface {
   }
 }
 
-/** Il pad di uno slot, come in Live: quella che suona è verde fisso, quella in coda lampeggia
- *  verde, le altre clip hanno il loro colore, gli slot vuoti sono spenti. */
+/** A slot's pad, as in Live: the playing one is steady green, the queued one blinks
+ *  green, the other clips have their colour, empty slots are off. */
 function padColor(light: SlotLight): number {
   if (light === 'queued') return TRIGGERED(COLOR.green);
   if (light === 'playing') return COLOR.green;
   return light === 'off' ? COLOR.off : paletteIndex(light.clip);
 }
 
-/** Shift tenuto: la mappa dei blocchi. Bianco dov'è il riquadro, verde se qualcosa suona,
- *  ambra se ci sono clip, appena acceso se è vuoto. */
+/** Shift held: the block map. White where the box is, green if something plays,
+ *  amber if there are clips, dimly lit if it's empty. */
 function overviewColor(light: BlockLight): number {
   switch (light) {
     case 'off': return COLOR.off;

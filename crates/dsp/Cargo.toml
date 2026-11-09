@@ -2,7 +2,7 @@
 name = "studiomio-dsp"
 version = "0.1.0"
 edition = "2021"
-description = "Motore DSP di studiomio (WebAssembly)"
+description = "studiomio's DSP engine (WebAssembly)"
 publish = false
 
 [lib]

@@ -9,7 +9,7 @@ type TestProtocol = {
   fail: { req: null; res: never };
 };
 
-/** Worker finto nello stesso thread: due porte collegate, messaggi asincroni come quelli veri. */
+/** Fake worker in the same thread: two connected ports, asynchronous messages like the real ones. */
 class FakeWorker implements PooledWorker {
   onmessage: ((ev: MessageEvent) => unknown) | null = null;
   readonly inside: MessagePortLike;
@@ -44,7 +44,7 @@ function makePool(size: number) {
       set: ({ value: v }) => ((value = v), null),
       get: () => ({ worker: n, value }),
       slow: ({ ms, tag }) => new Promise(r => setTimeout(() => r(tag), ms)),
-      fail: () => { throw new Error('rotto'); },
+      fail: () => { throw new Error('broken'); },
     });
     workers.push(w);
     return w;
@@ -53,51 +53,51 @@ function makePool(size: number) {
 }
 
 describe('WorkerPool', () => {
-  it('divide i compiti tra i worker liberi', async () => {
+  it('splits the tasks among the free workers', async () => {
     const { pool } = makePool(3);
     const started = Date.now();
     const out = await Promise.all([1, 2, 3].map(i => pool.call('slow', { ms: 60, tag: `t${i}` })));
     expect(out).toEqual(['t1', 't2', 't3']);
-    expect(Date.now() - started).toBeLessThan(150); // in parallelo, non 180 ms in fila
+    expect(Date.now() - started).toBeLessThan(150); // in parallel, not 180 ms in a row
   });
 
-  it('mette in coda i compiti oltre il numero di worker', async () => {
+  it('queues the tasks beyond the number of workers', async () => {
     const { pool } = makePool(2);
     const out = await Promise.all(['a', 'b', 'c', 'd', 'e'].map(tag => pool.call('slow', { ms: 5, tag })));
     expect(out).toEqual(['a', 'b', 'c', 'd', 'e']);
   });
 
-  it('broadcast arriva a tutti prima dei compiti successivi', async () => {
+  it('broadcast reaches all before the following tasks', async () => {
     const { pool } = makePool(3);
-    void pool.call('slow', { ms: 20, tag: 'occupato' });
+    void pool.call('slow', { ms: 20, tag: 'busy' });
     await pool.broadcast('set', { value: 42 });
     const res = await Promise.all([0, 1, 2].map(() => pool.call('get', null)));
     expect(res.map(r => r.value)).toEqual([42, 42, 42]);
     expect(new Set(res.map(r => r.worker)).size).toBe(3);
   });
 
-  it('un compito con la stessa chiave sostituisce quello in coda e scarta quello in corso', async () => {
+  it('a task with the same key replaces the queued one and discards the running one', async () => {
     const { pool } = makePool(1);
-    const running = pool.call('slow', { ms: 30, tag: 'primo' }, { key: 'clip1' });
-    const queued = pool.call('slow', { ms: 5, tag: 'secondo' }, { key: 'clip1' });
-    const latest = pool.call('slow', { ms: 5, tag: 'terzo' }, { key: 'clip1' });
+    const running = pool.call('slow', { ms: 30, tag: 'first' }, { key: 'clip1' });
+    const queued = pool.call('slow', { ms: 5, tag: 'second' }, { key: 'clip1' });
+    const latest = pool.call('slow', { ms: 5, tag: 'third' }, { key: 'clip1' });
     await expect(running).rejects.toBeInstanceOf(SupersededError);
     await expect(queued).rejects.toBeInstanceOf(SupersededError);
-    await expect(latest).resolves.toBe('terzo');
+    await expect(latest).resolves.toBe('third');
   });
 
-  it('gli errori del worker arrivano al chiamante e il pool continua a funzionare', async () => {
+  it('the worker\'s errors reach the caller and the pool keeps working', async () => {
     const { pool } = makePool(1);
-    await expect(pool.call('fail', null)).rejects.toThrow('rotto');
+    await expect(pool.call('fail', null)).rejects.toThrow('broken');
     await expect(pool.call('slow', { ms: 1, tag: 'ok' })).resolves.toBe('ok');
   });
 
-  it('dispose chiude i worker e rifiuta i compiti', async () => {
+  it('dispose closes the workers and rejects the tasks', async () => {
     const { pool, workers } = makePool(2);
     const pending = pool.call('slow', { ms: 50, tag: 'x' });
     pool.dispose();
-    await expect(pending).rejects.toThrow('chiuso');
-    await expect(pool.call('get', null)).rejects.toThrow('chiuso');
+    await expect(pending).rejects.toThrow('closed');
+    await expect(pool.call('get', null)).rejects.toThrow('closed');
     expect(workers.every(w => w.terminated)).toBe(true);
   });
 });

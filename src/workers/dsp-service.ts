@@ -4,8 +4,8 @@ import type { AudioData } from '../dsp/types';
 import type { DspProtocol } from './dsp-protocol';
 import { WorkerPool, type WorkerFactory } from './worker-pool';
 
-/** Copia i canali in memoria condivisa, se la pagina lo permette (cross-origin isolated):
- *  così tutti i worker leggono lo stesso sample senza duplicarlo. */
+/** Copies the channels into shared memory, if the page allows it (cross-origin isolated):
+ *  so all the workers read the same sample without duplicating it. */
 export function toSharedChannels(channels: readonly Float32Array[]): Float32Array[] {
   if (typeof SharedArrayBuffer === 'undefined' || !globalThis.crossOriginIsolated) return channels.map(c => c.slice());
   return channels.map(c => {
@@ -18,7 +18,7 @@ export function toSharedChannels(channels: readonly Float32Array[]): Float32Arra
 const browserWorker: WorkerFactory = () =>
   new Worker(new URL('./dsp.worker.ts', import.meta.url), { type: 'module', name: 'dsp' });
 
-/** Facciata del DSP per il resto dell'app: tutto il lavoro pesante gira nei worker. */
+/** DSP facade for the rest of the app: all the heavy work runs in the workers. */
 export class DspService {
   private readonly pool: WorkerPool<DspProtocol>;
 
@@ -26,7 +26,7 @@ export class DspService {
     this.pool = new WorkerPool<DspProtocol>(factory, size);
   }
 
-  /** Un worker per core, lasciandone uno all'interfaccia e all'audio (al massimo 8). */
+  /** One worker per core, leaving one to the interface and the audio (at most 8). */
   static defaultSize(): number {
     const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
     return Math.max(1, Math.min(8, cores - 1));
@@ -44,8 +44,8 @@ export class DspService {
     await this.pool.broadcast('dropSource', { sourceId });
   }
 
-  /** `key` identifica chi chiede il render (es. l'id della clip): una nuova richiesta con la
-   *  stessa chiave sostituisce quella vecchia, che viene rifiutata con SupersededError. */
+  /** `key` identifies who asks for the render (e.g. the clip's id): a new request with the
+   *  same key replaces the old one, which is rejected with SupersededError. */
   renderWarp(sourceId: string, job: WarpJob, key?: string): Promise<Float32Array[]> {
     return this.pool.call('renderWarp', { sourceId, job }, { key });
   }
@@ -54,7 +54,7 @@ export class DspService {
     return this.pool.call('analyze', { sourceId, sensitivity });
   }
 
-  /** Battiti (in campioni) trovati seguendo il tempo `bpm`. */
+  /** Beats (in samples) found following the tempo `bpm`. */
   trackBeats(sourceId: string, bpm: number): Promise<number[]> {
     return this.pool.call('trackBeats', { sourceId, bpm });
   }

@@ -1,35 +1,35 @@
-/* Il suono del Limiter, con anticipo di L campioni:
+/* The Limiter's sound, with a lookahead of L samples:
  *
- *   1. guadagno richiesto r[n] = min(1, tetto / picco[n]): il picco dei due canali, e se chiesto
- *      quello ricostruito tra i campioni (true peak), misurato su una copia sovracampionata 4×;
- *   2. il minimo di r sugli ultimi L+1 campioni (finestra scorrevole, coda monotona);
- *   3. il rilascio: il guadagno scende subito, risale con la costante di rilascio;
- *   4. una media mobile lunga L: la discesa diventa una rampa che finisce proprio sul picco;
- *   5. il suono ritardato (di L, più il ritardo della misura sovracampionata) × quel guadagno,
- *      e per sicurezza un taglio al tetto.
+ *   1. requested gain r[n] = min(1, ceiling / peak[n]): the peak of the two channels, and if requested
+ *      the one rebuilt between samples (true peak), measured on a 4× oversampled copy;
+ *   2. the minimum of r over the last L+1 samples (sliding window, monotonic queue);
+ *   3. the release: the gain drops right away, rises with the release constant;
+ *   4. a moving average L long: the drop becomes a ramp ending right on the peak;
+ *   5. the delayed sound (by L, plus the delay of the oversampled measurement) × that gain,
+ *      and for safety a clip at the ceiling.
  *
- * Ogni valore della media viene da campioni che coprono il picco ritardato, quindi il guadagno
- * applicato non supera mai quello richiesto: nessun picco oltre il tetto. Gira nell'AudioWorklet;
- * qui niente Web Audio, così si prova anche in Node. */
+ * Each value of the average comes from samples covering the delayed peak, so the applied gain
+ * never exceeds the requested one: no peak above the ceiling. Runs in the AudioWorklet;
+ * no Web Audio here, so it's also tested in Node. */
 import { dbToGain, type EffectCore } from '../../dsp/core';
 import { Oversampler } from '../../dsp/oversampler';
 import { MAX_LOOKAHEAD_MS } from './limiter';
 
 const SMOOTH = 0.02;
-/** Sovracampionamento della misura dei picchi tra i campioni. */
+/** Oversampling of the inter-sample peak measurement. */
 const TRUE_PEAK_FACTOR = 4;
 
 export class LimiterCore implements EffectCore {
   private readonly size: number;
-  /** Il suono in attesa e i guadagni richiesti, in anelli lunghi `size`. */
+  /** The waiting sound and the requested gains, in rings `size` long. */
   private readonly delayL: Float32Array;
   private readonly delayR: Float32Array;
   private readonly wanted: Float32Array;
-  /** Coda monotona per il minimo scorrevole: posizioni (assolute) dei candidati. */
+  /** Monotonic queue for the sliding minimum: (absolute) positions of the candidates. */
   private readonly queue: Int32Array;
   private head = 0;
   private tail = 0;
-  /** La media mobile: gli ultimi L valori e la loro somma. */
+  /** The moving average: the last L values and their sum. */
   private readonly boxBuf: Float64Array;
   private boxSum = 0;
   private count = 0;
@@ -41,21 +41,21 @@ export class LimiterCore implements EffectCore {
   private targetGain = 1;
   private truePeak = true;
   private readonly smoothK: number;
-  /** La misura tra i campioni: copie sovracampionate, il loro ritardo (intero, in campioni) e
-   *  il picco del campione prima (ogni picco vale per due posizioni: copre il resto frazionario). */
+  /** The inter-sample measurement: oversampled copies, their delay (integer, in samples) and
+   *  the previous sample's peak (each peak counts for two positions: it covers the fractional remainder). */
   private readonly osL = new Oversampler(TRUE_PEAK_FACTOR);
   private readonly osR = new Oversampler(TRUE_PEAK_FACTOR);
   private readonly measureDelay: number;
   private lastPeak = 0;
   private scratchL = new Float32Array(128);
   private scratchR = new Float32Array(128);
-  /** Prima del primo blocco il guadagno non scorre: parte da quello giusto. */
+  /** Before the first block the gain doesn't glide: it starts from the right one. */
   private fresh = true;
-  /** Il guadagno più basso dall'ultima lettura (per i misuratori e i test). */
+  /** The lowest gain since the last read (for the meters and the tests). */
   private minGain = 1;
 
   constructor(private readonly sampleRate: number) {
-    // il ramo che sale da solo ritarda metà del giro su e giù
+    // the branch rising alone delays half of the round trip up and down
     this.measureDelay = Math.floor(this.osL.latency / 2);
     this.size = Math.ceil((MAX_LOOKAHEAD_MS / 1000) * sampleRate) + this.measureDelay + 8;
     this.delayL = new Float32Array(this.size);
@@ -68,12 +68,12 @@ export class LimiterCore implements EffectCore {
     this.resetBox();
   }
 
-  /** Ritardo dell'effetto in campioni. */
+  /** The effect's delay in samples. */
   get latency(): number {
     return this.lookahead + (this.truePeak ? this.measureDelay : 0);
   }
 
-  /** La riduzione più forte dall'ultima lettura, in dB (la lettura la azzera). */
+  /** The strongest reduction since the last read, in dB (reading resets it). */
   takeReduction(): number {
     const db = -20 * Math.log10(Math.max(this.minGain, 1e-6));
     this.minGain = 1;
@@ -114,7 +114,7 @@ export class LimiterCore implements EffectCore {
     const delay = L + (truePeak ? this.measureDelay : 0);
     let { head, tail, boxSum, count, released, lastPeak, minGain } = this;
     for (let i = 0; i < n; i++) {
-      // 1. il picco: dei campioni, o dei quattro sovracampionati che coprono questo intervallo
+      // 1. the peak: of the samples, or of the four oversampled ones covering this interval
       let peak = 0;
       if (truePeak) {
         for (let j = i * F, end = j + F; j < end; j++) {
@@ -131,21 +131,21 @@ export class LimiterCore implements EffectCore {
       delayL[at] = xl[i];
       delayR[at] = xr[i];
       wanted[at] = want;
-      // 2. minimo scorrevole sugli ultimi L+1 (la coda tiene i candidati in ordine crescente)
+      // 2. sliding minimum over the last L+1 (the queue keeps the candidates in increasing order)
       while (tail > head && wanted[queue[(tail - 1) % size] % size] >= want) tail--;
       queue[tail % size] = count;
       tail++;
       while (queue[head % size] < count - L) head++;
       const min = wanted[queue[head % size] % size];
-      // 3. giù subito, su con il rilascio
+      // 3. down right away, up with the release
       released = min < released ? min : released + (min - released) * releaseK;
-      // 4. media mobile lunga L
+      // 4. long moving average L
       const slot = count % L;
       boxSum += released - boxBuf[slot];
       boxBuf[slot] = released;
       const g = boxSum / L;
       if (g < minGain) minGain = g;
-      // 5. il suono di `delay` campioni fa
+      // 5. the sound from `delay` samples ago
       const from = (count - delay + size) % size;
       let yl = delayL[from] * g, yr = delayR[from] * g;
       if (yl > ceiling) yl = ceiling; else if (yl < -ceiling) yl = -ceiling;
@@ -154,8 +154,8 @@ export class LimiterCore implements EffectCore {
       outR[i] = yr;
       count++;
     }
-    // gli indici assoluti restano piccoli: campioni e posizioni nella coda si spostano di
-    // multipli di `size` e di L (gli anelli e la media non se ne accorgono)
+    // the absolute indices stay small: samples and queue positions shift by
+    // multiples of `size` and of L (the rings and the average don't notice)
     if (count > 1 << 30) {
       const step = size * L, shift = Math.floor((count - 2 * size) / step) * step;
       for (let k = head; k < tail; k++) queue[k % size] -= shift;

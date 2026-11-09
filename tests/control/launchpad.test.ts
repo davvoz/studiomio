@@ -21,7 +21,7 @@ import { UiState } from '../../src/ui/ui-state';
 
 const model = (id: ModelId) => MODELS.find(m => m.id === id)!;
 
-/** La risposta d'identità di un Novation della famiglia data. */
+/** The identity reply of a Novation of the given family. */
 const identityReply = (id: ModelId) => [0xf0, 0x7e, 0x00, 0x06, 0x02, 0x00, 0x20, 0x29, ...model(id).family, 0x00, 0x00, 0x00, 0x01, 0x06, 0x02, 0xf7];
 
 class FakeEngine implements SurfaceEngine {
@@ -39,7 +39,7 @@ class FakeEngine implements SurfaceEngine {
   }
 }
 
-/** Un Launchpad del modello dato con `tracks` tracce MIDI e `scenes` scene; una clip rossa in ogni slot (t, s) di `clips`. */
+/** A Launchpad of the given model with `tracks` MIDI tracks and `scenes` scenes; a red clip in each slot (t, s) of `clips`. */
 function rig(id: ModelId, opts: { tracks?: number; scenes?: number; clips?: readonly (readonly [number, number])[] } = {}) {
   const ids = sequentialIds();
   const store = new ProjectStore(Project.empty('t', ids, opts.scenes ?? 16), ids);
@@ -75,7 +75,7 @@ function rig(id: ModelId, opts: { tracks?: number; scenes?: number; clips?: read
     lp.receive([0x90, padNote(col, row), 0]);
   };
   const cc = (n: number, value: number, channel = 0) => lp.receive([0xb0 | channel, n, value]);
-  /** Un pulsante (CC), premuto e lasciato. */
+  /** A button (CC), pressed and released. */
   const button = (n: number) => { cc(n, 127); cc(n, 0); };
   const pressScene = (row: number) => {
     if (m.sceneKind === 'cc') return button(sceneButton(row));
@@ -88,7 +88,7 @@ function rig(id: ModelId, opts: { tracks?: number; scenes?: number; clips?: read
       lp.tick();
     }
   };
-  /** L'ultimo stato di un LED (nota o CC): il colore fisso, e l'animazione se c'è. */
+  /** The last state of a LED (note or CC): the steady colour, and the animation if any. */
   const led = (kind: 'note' | 'cc', n: number) => {
     settle();
     const status = kind === 'note' ? 0x90 : 0xb0;
@@ -96,12 +96,12 @@ function rig(id: ModelId, opts: { tracks?: number; scenes?: number; clips?: read
     if (!last) return undefined;
     const [msg, i] = last;
     const channel = msg[0] & 0x0f;
-    // un'animazione è il colore fisso sul canale 1 seguito dal suo canale
+    // an animation is the steady colour on channel 1 followed by its channel
     if (channel === 0) return { color: msg[2], anim: 'fixed' as const };
     return { color: msg[2], anim: channel === 1 ? ('blink' as const) : ('pulse' as const), base: out[i - 1]?.[2] };
   };
   const sysex = () => out.filter(x => x[0] === 0xf0);
-  /** I SysEx che cambiano layout. */
+  /** The SysEx that change layout. */
   const layouts = () => sysex().filter(x => x[6] === (id === 'mk2' ? 0x22 : 0x00));
   return {
     store, ui, engine, lp, out, said, start, pressPad, pressScene, button, cc, led, settle, sysex, layouts, t, m,
@@ -109,8 +109,8 @@ function rig(id: ModelId, opts: { tracks?: number; scenes?: number; clips?: read
   };
 }
 
-describe('protocollo dei Launchpad', () => {
-  it('griglia: la riga in alto è 81..88, quella in basso 11..18; le scene 89 … 19', () => {
+describe('Launchpad protocol', () => {
+  it('grid: the top row is 81..88, the bottom one 11..18; the scenes 89 … 19', () => {
     expect(padNote(0, 0)).toBe(81);
     expect(padNote(7, 7)).toBe(18);
     for (let row = 0; row < 8; row++) {
@@ -124,7 +124,7 @@ describe('protocollo dei Launchpad', () => {
     expect(sceneAt(109)).toBeNull();
   });
 
-  it('il modello dal nome delle porte, su Windows e altrove', () => {
+  it('the model from the port names, on Windows and elsewhere', () => {
     expect(modelOfPort('LPX MIDI')?.id).toBe('x');
     expect(modelOfPort('MIDIIN2 (LPX MIDI)')?.id).toBe('x');
     expect(modelOfPort('Launchpad X LPX DAW Out')?.id).toBe('x');
@@ -135,7 +135,7 @@ describe('protocollo dei Launchpad', () => {
     expect(modelOfPort('APC40 mkII')).toBeNull();
   });
 
-  it("la porta DAW: col nome che lo dice, o l'interfaccia giusta per il modello", () => {
+  it("the DAW port: with the name saying so, or the right interface for the model", () => {
     const ports = (...names: string[]) => names.map(name => ({ name }));
     expect(portInterface('MIDIOUT3 (LPProMK3 MIDI)')).toBe(3);
     expect(portInterface('LPX MIDI')).toBe(1);
@@ -144,11 +144,11 @@ describe('protocollo dei Launchpad', () => {
     expect(dawPort(ports('LPProMK3 MIDI', 'MIDIOUT2 (LPProMK3 MIDI)', 'MIDIOUT3 (LPProMK3 MIDI)'), model('pro'))?.name).toBe('MIDIOUT3 (LPProMK3 MIDI)');
     expect(dawPort(ports('Launchpad X LPX MIDI Out', 'Launchpad X LPX DAW Out'), model('x'))?.name).toBe('Launchpad X LPX DAW Out');
     expect(dawPort(ports('Launchpad MK2'), model('mk2'))?.name).toBe('Launchpad MK2');
-    // scelta a mano
+    // chosen by hand
     expect(dawPort(ports('LPX MIDI', 'MIDIOUT2 (LPX MIDI)'), model('x'), 1)?.name).toBe('LPX MIDI');
   });
 
-  it('i SysEx dei layout e della DAW mode, modello per modello', () => {
+  it('the SysEx of the layouts and of DAW mode, model by model', () => {
     expect(dawMode(model('x'), true)).toEqual([0xf0, 0x00, 0x20, 0x29, 0x02, 0x0c, 0x10, 0x01, 0xf7]);
     expect(dawMode(model('mini'), false)).toEqual([0xf0, 0x00, 0x20, 0x29, 0x02, 0x0d, 0x10, 0x00, 0xf7]);
     expect(layoutMessage(model('x'), 'session')).toEqual([0xf0, 0x00, 0x20, 0x29, 0x02, 0x0c, 0x00, 0x00, 0xf7]);
@@ -158,7 +158,7 @@ describe('protocollo dei Launchpad', () => {
     expect(layoutMessage(model('mk2'), 'pan')).toEqual([0xf0, 0x00, 0x20, 0x29, 0x02, 0x18, 0x22, 0x05, 0xf7]);
   });
 
-  it('i fader: pagina, orientamento, e per ognuno indice, polarità, CC, colore', () => {
+  it('the faders: page, orientation, and for each index, polarity, CC, colour', () => {
     const colors = [21, 21, 21, 0, 0, 0, 0, 0];
     const x = faderSetup(model('x'), 0, { horizontal: false, bipolar: false, colors });
     expect(x.slice(0, 9)).toEqual([0xf0, 0x00, 0x20, 0x29, 0x02, 0x0c, 0x01, 0x00, 0x00]);
@@ -169,19 +169,19 @@ describe('protocollo dei Launchpad', () => {
     expect(pro.slice(9, 13)).toEqual([0, 1, 8, 21]);
   });
 
-  it("la risposta d'identità dice la famiglia", () => {
+  it("the identity reply says the family", () => {
     expect(identityFamily(identityReply('x'))).toEqual([0x03, 0x01]);
     expect(identityFamily([0xf0, 0x7e, 0x00, 0x06, 0x02, 0x47, 0x29, 0, 0, 0, 0xf7])).toBeNull();
   });
 });
 
-describe('Launchpad X sulla session', () => {
-  it("all'avvio, come Live: identità, DAW mode, layout Session, riquadro 8×8 e i LED", () => {
+describe('Launchpad X on the session', () => {
+  it("at startup, as Live: identity, DAW mode, Session layout, 8×8 box and the LEDs", () => {
     const r = rig('x', { clips: [[0, 0]] });
     r.lp.start();
     expect(r.out).toEqual([[...IDENTITY_REQUEST]]);
     r.pressPad(0, 0);
-    expect(r.engine.calls).toEqual([]); // niente prima dell'avvio
+    expect(r.engine.calls).toEqual([]); // nothing before the startup
     r.lp.receive(identityReply('x'));
     expect(r.out[1]).toEqual(dawMode(r.m, true));
     expect(r.out[2]).toEqual(layoutMessage(r.m, 'session'));
@@ -191,7 +191,7 @@ describe('Launchpad X sulla session', () => {
     expect(r.led('cc', sceneButton(0))).toEqual({ color: COLOR.green, anim: 'fixed' });
   });
 
-  it("se non risponde all'identità si va avanti lo stesso", () => {
+  it("if it doesn't answer the identity it goes on anyway", () => {
     const r = rig('x');
     r.lp.start();
     r.advance(1100);
@@ -200,11 +200,11 @@ describe('Launchpad X sulla session', () => {
     expect(r.out[1]).toEqual(dawMode(r.m, true));
   });
 
-  it('i pad lanciano le clip, le scene le righe; la clip che suona pulsa, quella in coda lampeggia', () => {
+  it('the pads launch the clips, the scenes the rows; the playing clip pulses, the queued one blinks', () => {
     const r = rig('x', { clips: [[0, 0], [1, 2]] });
     r.start();
     r.pressPad(0, 0);
-    r.pressPad(2, 1); // slot vuoto: ferma la traccia (come un clic)
+    r.pressPad(2, 1); // empty slot: stops the track (like a click)
     r.pressScene(2);
     expect(r.engine.calls).toEqual([`slot ${r.t(0)} 0`, `slot ${r.t(2)} 1`, 'scene 2']);
     r.engine.states.set(r.t(0), { playing: { slot: 0, clip: 'c' } as never, queued: null, followsArrangement: false });
@@ -214,63 +214,63 @@ describe('Launchpad X sulla session', () => {
     expect(r.led('cc', sceneButton(2))).toMatchObject({ color: COLOR.green, anim: 'blink' });
   });
 
-  it('frecce: il riquadro si sposta di uno e resta dentro il progetto', () => {
+  it('arrows: the box moves by one and stays inside the project', () => {
     const r = rig('x', { tracks: 10, scenes: 12 });
     r.start();
     r.button(r.m.buttons.right!);
     r.button(r.m.buttons.down!);
     expect(r.ui.sessionRing).toMatchObject({ track: 1, scene: 1 });
     for (let i = 0; i < 5; i++) r.button(r.m.buttons.right!);
-    expect(r.ui.sessionRing).toMatchObject({ track: 2 }); // 10 tracce, 8 colonne
+    expect(r.ui.sessionRing).toMatchObject({ track: 2 }); // 10 tracks, 8 columns
     expect(r.led('cc', r.m.buttons.right!)?.color).toBe(COLOR.off);
     expect(r.led('cc', r.m.buttons.left!)?.color).toBe(COLOR.whiteHalf);
   });
 
-  it('doppio clic su Session: la mappa dei blocchi; un pad ci porta il riquadro, Session la chiude', () => {
+  it('double click on Session: the block map; a pad brings the box there, Session closes it', () => {
     const r = rig('x', { tracks: 10, scenes: 20, clips: [[9, 17]] });
     r.start();
     r.button(r.m.buttons.session!);
     r.advance(100);
     r.button(r.m.buttons.session!);
-    expect(r.led('note', padNote(0, 0))?.color).toBe(COLOR.offWhite); // il riquadro
-    expect(r.led('note', padNote(1, 2))?.color).toBe(COLOR.lightBlueHalf); // un blocco con clip
-    expect(r.led('note', padNote(2, 0))?.color).toBe(COLOR.off); // fuori dal progetto
+    expect(r.led('note', padNote(0, 0))?.color).toBe(COLOR.offWhite); // the box
+    expect(r.led('note', padNote(1, 2))?.color).toBe(COLOR.lightBlueHalf); // a block with clips
+    expect(r.led('note', padNote(2, 0))?.color).toBe(COLOR.off); // outside the project
     r.pressPad(1, 2);
-    expect(r.ui.sessionRing).toMatchObject({ track: 2, scene: 12 }); // rientra: 10 tracce, 20 scene
+    expect(r.ui.sessionRing).toMatchObject({ track: 2, scene: 12 }); // it comes back in: 10 tracks, 20 scenes
     r.advance(1000);
     r.button(r.m.buttons.session!);
-    expect(r.led('note', padNote(7, 5))).toMatchObject({ color: paletteIndex('#ff0000') }); // traccia 10, scena 18
+    expect(r.led('note', padNote(7, 5))).toMatchObject({ color: paletteIndex('#ff0000') }); // track 10, scene 18
   });
 
-  it('Session apre il mixer: Volume mette i fader sulla griglia e muovono il volume', () => {
+  it('Session opens the mixer: Volume puts the faders on the grid and they move the volume', () => {
     const r = rig('x');
     r.start();
     r.button(r.m.buttons.session!);
-    expect(r.led('cc', sceneButton(0))?.color).toBe(COLOR.whiteHalf); // Volume, non scelto
-    expect(r.led('cc', sceneButton(2))?.color).toBe(COLOR.off); // le mandate non ci sono
+    expect(r.led('cc', sceneButton(0))?.color).toBe(COLOR.whiteHalf); // Volume, not chosen
+    expect(r.led('cc', sceneButton(2))?.color).toBe(COLOR.off); // the sends aren't there
     const before = r.sysex().length;
     r.pressScene(0);
     const sent = r.sysex().slice(before);
     expect(sent[0].slice(0, 9)).toEqual([0xf0, 0x00, 0x20, 0x29, 0x02, 0x0c, 0x01, 0x00, 0x00]);
     expect(sent[1]).toEqual(layoutMessage(r.m, 'volume'));
     expect(r.led('cc', sceneButton(0))?.color).toBe(COLOR.green);
-    // il fader della traccia 2: valore e colore sul canale 5 e 6
+    // track 2's fader: value and colour on channels 5 and 6
     r.settle();
     expect(r.out.filter(m => m[0] === 0xb4 && m[1] === 22).at(-1)?.[2]).toBe(dbToFader(0));
     expect(r.out.filter(m => m[0] === 0xb5 && m[1] === 22).at(-1)?.[2]).toBe(COLOR.green);
-    expect(r.out.filter(m => m[0] === 0xb5 && m[1] === 25).at(-1)?.[2]).toBe(COLOR.off); // non c'è la traccia
+    expect(r.out.filter(m => m[0] === 0xb5 && m[1] === 25).at(-1)?.[2]).toBe(COLOR.off); // the track isn't there
     r.cc(22, 40, 4);
     r.cc(22, 60, 4);
     r.lp.tick();
     expect(r.store.project.tracks[1].mixer.volumeDb).toBe(faderToDb(60));
     r.store.undo();
-    expect(r.store.project.tracks[1].mixer.volumeDb).toBe(0); // una corsa, un annullamento
-    // di nuovo Volume: la griglia torna alla Session
+    expect(r.store.project.tracks[1].mixer.volumeDb).toBe(0); // one sweep, one undo
+    // Volume again: the grid goes back to Session
     r.pressScene(0);
     expect(r.layouts().at(-1)).toEqual(layoutMessage(r.m, 'session'));
   });
 
-  it("mixer: Mute mette i mute sull'ultima riga, gialli se la traccia suona", () => {
+  it("mixer: Mute puts the mutes on the last row, yellow if the track plays", () => {
     const r = rig('x', { clips: [[0, 7]] });
     r.start();
     r.button(r.m.buttons.session!);
@@ -280,26 +280,26 @@ describe('Launchpad X sulla session', () => {
     r.pressPad(1, 7);
     expect(r.store.project.tracks[1].mixer.mute).toBe(true);
     expect(r.led('note', padNote(1, 7))?.color).toBe(COLOR.yellowHalf);
-    expect(r.engine.calls).toEqual([]); // l'ultima riga non lancia
+    expect(r.engine.calls).toEqual([]); // the last row doesn't launch
     r.pressPad(0, 6);
-    expect(r.engine.calls).toEqual([`slot ${r.t(0)} 6`]); // le altre sì
+    expect(r.engine.calls).toEqual([`slot ${r.t(0)} 6`]); // the others do
   });
 
-  it('un layout del controller (Note, Custom): la griglia non lancia; Session torna alla Session', () => {
+  it('a controller layout (Note, Custom): the grid doesn\'t launch; Session goes back to Session', () => {
     const r = rig('x', { clips: [[0, 0]] });
     r.start();
     r.lp.receive([0xf0, 0x00, 0x20, 0x29, 0x02, 0x0c, 0x00, 0x01, 0xf7]);
     r.pressPad(0, 0);
     expect(r.engine.calls).toEqual([]);
     r.button(r.m.buttons.note!);
-    expect(r.said.at(-1)).toMatch(/Note non c'è ancora/);
+    expect(r.said.at(-1)).toMatch(/Note mode isn't in studiomio yet/);
     r.button(r.m.buttons.session!);
     expect(r.layouts().at(-1)).toEqual(layoutMessage(r.m, 'session'));
     r.pressPad(0, 0);
     expect(r.engine.calls).toEqual([`slot ${r.t(0)} 0`]);
   });
 
-  it('scollegandolo: LED spenti e fuori dalla DAW mode', () => {
+  it('disconnecting it: LEDs off and out of DAW mode', () => {
     const r = rig('x', { clips: [[0, 0]] });
     r.start();
     r.settle();
@@ -310,14 +310,14 @@ describe('Launchpad X sulla session', () => {
 });
 
 describe('Launchpad Mini MK3', () => {
-  it("Stop Solo Mute fa girare i modi dell'ultima riga; le altre scene lanciano", () => {
+  it("Stop Solo Mute cycles the last row's modes; the other scenes launch", () => {
     const r = rig('mini', { clips: [[0, 0]] });
     r.start();
     expect(r.led('cc', sceneButton(7))?.color).toBe(COLOR.whiteHalf);
     r.pressScene(7);
     expect(r.led('cc', sceneButton(7))?.color).toBe(COLOR.red);
     r.engine.states.set(r.t(0), { playing: { slot: 0, clip: 'c' } as never, queued: null, followsArrangement: false });
-    expect(r.led('note', padNote(0, 7))?.color).toBe(COLOR.red); // suona: si può fermare
+    expect(r.led('note', padNote(0, 7))?.color).toBe(COLOR.red); // it plays: it can be stopped
     expect(r.led('note', padNote(1, 7))?.color).toBe(COLOR.redHalf);
     r.pressPad(0, 7);
     expect(r.engine.calls).toEqual([`stop ${r.t(0)}`]);
@@ -326,14 +326,14 @@ describe('Launchpad Mini MK3', () => {
     expect(r.store.project.tracks[2].mixer.solo).toBe(true);
     r.pressScene(7);
     r.pressScene(7);
-    expect(r.led('cc', sceneButton(7))?.color).toBe(COLOR.whiteHalf); // di nuovo il lancio
+    expect(r.led('cc', sceneButton(7))?.color).toBe(COLOR.whiteHalf); // launching again
     r.pressScene(3);
     expect(r.engine.calls.at(-1)).toBe('scene 3');
   });
 });
 
 describe('Launchpad Pro MK3', () => {
-  it('la riga sotto la griglia sceglie la traccia, o fa mute, solo, stop', () => {
+  it('the row under the grid chooses the track, or does mute, solo, stop', () => {
     const r = rig('pro');
     r.start();
     r.button(102);
@@ -343,12 +343,12 @@ describe('Launchpad Pro MK3', () => {
     r.button(r.m.buttons.mute!);
     r.button(101);
     expect(r.store.project.tracks[0].mixer.mute).toBe(true);
-    r.button(r.m.buttons.mute!); // di nuovo: si torna a scegliere
+    r.button(r.m.buttons.mute!); // again: back to choosing
     r.button(103);
     expect(r.ui.track).toBe(r.t(2));
   });
 
-  it('Device: i fader muovono i parametri del dispositivo, le scene scelgono il banco, ◂ ▸ il dispositivo', () => {
+  it('Device: the faders move the device\'s parameters, the scenes choose the bank, ◂ ▸ the device', () => {
     const r = rig('pro');
     r.start();
     r.button(101);
@@ -357,7 +357,7 @@ describe('Launchpad Pro MK3', () => {
     const track = r.store.project.tracks[0] as MidiTrack;
     const type = instrumentType(track.instrument.type)!;
     const spec = paramsOf(type)[0];
-    r.cc(24, 127, 4); // pagina 3, primo fader
+    r.cc(24, 127, 4); // page 3, first fader
     r.lp.tick();
     const now = resolveParams(type, (r.store.project.tracks[0] as MidiTrack).instrument.params)[spec.id];
     expect(now).toBe(paramFromUnit(spec, 1));
@@ -368,7 +368,7 @@ describe('Launchpad Pro MK3', () => {
     expect(r.ui.controlledDevice).toBeNull();
   });
 
-  it('Shift: annulla, metronomo; Play suona', () => {
+  it('Shift: undo, metronome; Play plays', () => {
     const r = rig('pro');
     r.start();
     r.button(r.m.buttons.mute!);
@@ -385,19 +385,19 @@ describe('Launchpad Pro MK3', () => {
     expect(r.led('cc', r.m.buttons.play!)?.color).toBe(COLOR.green);
   });
 
-  it('Session tenuto: la mappa dei blocchi, finché lo si tiene', () => {
+  it('Session held: the block map, while it\'s held', () => {
     const r = rig('pro', { tracks: 12 });
     r.start();
     r.cc(r.m.buttons.session!, 127);
     r.pressPad(1, 0);
     r.cc(r.m.buttons.session!, 0);
-    expect(r.ui.sessionRing).toMatchObject({ track: 4 }); // 12 tracce: l'ultimo riquadro parte dalla 5
+    expect(r.ui.sessionRing).toMatchObject({ track: 4 }); // 12 tracks: the last box starts from the 5th
     expect(r.engine.calls).toEqual([]);
   });
 });
 
 describe('Launchpad MK2', () => {
-  it("all'avvio: identità, challenge come Live, layout Session; le scene sono note", () => {
+  it("at startup: identity, challenge as Live, Session layout; the scenes are notes", () => {
     const r = rig('mk2', { clips: [[0, 0]] });
     r.lp.start();
     r.lp.receive(identityReply('mk2'));
@@ -411,7 +411,7 @@ describe('Launchpad MK2', () => {
     expect(r.engine.calls).toEqual(['scene 0']);
   });
 
-  it('Mixer: righe di stop, mute, solo; Volume mette i fader, con colore e posizione', () => {
+  it('Mixer: rows of stop, mute, solo; Volume puts the faders, with colour and position', () => {
     const r = rig('mk2');
     r.start();
     r.button(r.m.buttons.mixer!);
@@ -419,7 +419,7 @@ describe('Launchpad MK2', () => {
     expect(r.store.project.tracks[0].mixer.mute).toBe(true);
     r.pressPad(1, 4);
     expect(r.engine.calls).toEqual([`stop ${r.t(1)}`]);
-    r.pressScene(5); // toglie il mute a tutte
+    r.pressScene(5); // removes the mute from all
     expect(r.store.project.tracks[0].mixer.mute).toBe(false);
     r.pressScene(0);
     const faders = r.sysex().filter(m => m[6] === 0x2b);
@@ -429,7 +429,7 @@ describe('Launchpad MK2', () => {
     expect(r.store.project.tracks[0].mixer.volumeDb).toBe(faderToDb(30));
   });
 
-  it('scollegandolo: il messaggio con cui Live se ne va', () => {
+  it('disconnecting it: the message Live leaves with', () => {
     const r = rig('mk2');
     r.start();
     r.lp.stop();

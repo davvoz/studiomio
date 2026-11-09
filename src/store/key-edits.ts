@@ -1,8 +1,8 @@
-/* La tastiera del computer sulle macro e sui parametri: dare un tasto a un bersaglio e premerlo.
- * Una macro interruttore cambia a ogni pressione; una pulsante è accesa finché il tasto è giù
- * (un cambio che si disfa da solo: `holdKey`); una manopola salta da un capo all'altro. Un
- * parametro fa lo stesso: un interruttore o un menu passa alla scelta dopo, una manopola va dal
- * minimo al massimo e ritorno (come in Live). */
+/* The computer keyboard on macros and parameters: giving a key to a target and pressing it.
+ * A toggle macro changes at every press; a button is on while the key is down
+ * (a change that undoes itself: `holdKey`); a knob jumps from one end to the other. A
+ * parameter does the same: a switch or a menu goes to the next choice, a knob goes from the
+ * minimum to the maximum and back (as in Live). */
 import { clampParam, paramToUnit } from '../devices/params';
 import { deviceAt, mappingSpec } from '../devices/rack-params';
 import { keyOf, targetsOf, withKey, type KeyTarget } from '../model/key-map';
@@ -13,30 +13,30 @@ import { setEffectParam, setInstrumentParam } from './edits';
 import { edit, type Edit, type EditContext } from './project-store';
 import { setMacro } from './rack-edits';
 
-/** Dà un tasto a un bersaglio (null: lo toglie). */
+/** Gives a key to a target (null: removes it). */
 export const setKey = (target: KeyTarget, key: string | null): Edit =>
-  edit(key ? 'Mappa sul tasto' : 'Togli il tasto', p => {
-    if (!p.hasKeyTarget(target)) throw new RangeError('il bersaglio del tasto non c\'è');
+  edit(key ? 'Map to key' : 'Remove the key', p => {
+    if (!p.hasKeyTarget(target)) throw new RangeError('the key\'s target doesn\'t exist');
     return keyOf(p.keyMap, target) === key ? p : p.updatingKeyMap(map => withKey(map, target, key));
   });
 
-/** Il tasto premuto: interruttori, manopole e parametri cambiano (un passo di annullamento). Le
- *  macro pulsante sono di `holdKey`. */
+/** The pressed key: toggles, knobs and parameters change (one undo step). The
+ *  button macros belong to `holdKey`. */
 export const pressKey = (key: string): Edit =>
-  edit('Tasto', (p, ctx) => {
+  edit('Key', (p, ctx) => {
     for (const t of targetsOf(p.keyMap, key)) p = press(p, ctx, t);
     return p;
   });
 
-/** Il tasto giù o su per le macro pulsante (accese solo mentre lo si tiene) e molla (giù la
- *  tira fino al capo lontano dal riposo; lasciata, la riporta la molla). */
+/** The key down or up for the button macros (on only while held) and spring macros (down
+ *  pulls it to the end far from rest; released, the spring brings it back). */
 export const holdKey = (key: string, down: boolean): Edit =>
-  edit('Tasto', (p, ctx) => {
+  edit('Key', (p, ctx) => {
     for (const t of targetsOf(p.keyMap, key)) p = hold(p, ctx, t, down);
     return p;
   });
 
-/** Una macro pulsante o molla tenuta o lasciata (da un tasto o da una nota MIDI). */
+/** A button or spring macro held or released (by a key or by a MIDI note). */
 export function hold(p: Project, ctx: EditContext, t: KeyTarget, down: boolean): Project {
   const m = macroAt(p, t);
   if (t.kind !== 'macro' || !m) return p;
@@ -46,7 +46,7 @@ export function hold(p: Project, ctx: EditContext, t: KeyTarget, down: boolean):
   return p;
 }
 
-/** Le macro molla dei bersagli: chi le tiene (un tasto, una nota) lo dice alla molla. */
+/** The targets' spring macros: whoever holds them (a key, a note) tells the spring. */
 export type MacroTarget = Extract<KeyTarget, { kind: 'macro' }>;
 
 export const springTargets = (p: Project, targets: readonly { readonly kind: string }[]): MacroTarget[] =>
@@ -58,14 +58,14 @@ export const springTargets = (p: Project, targets: readonly { readonly kind: str
 export const macroAt = (p: Project, t: KeyTarget): Macro | undefined =>
   (t.kind === 'macro' ? findRack(p.racksOf(t.owner), t.rack)?.macros[t.index] : undefined);
 
-/** Un tasto (o una nota MIDI) premuto su un bersaglio. */
+/** A key (or a MIDI note) pressed on a target. */
 export function press(p: Project, ctx: EditContext, t: KeyTarget): Project {
   if (t.kind === 'macro') {
     const m = macroAt(p, t);
     if (!m || macroMode(m) === 'button' || macroMode(m) === 'spring') return p;
     return setMacro(t.owner, t.rack, t.index, m.value >= MACRO_MAX / 2 ? 0 : MACRO_MAX).apply(p, ctx);
   }
-  // un parametro mappato su una macro lo muove la macro
+  // a parameter mapped to a macro is moved by the macro
   if (macroOf(p.racksOf(t.owner), t.device, t.param)) return p;
   const spec = mappingSpec(p, t.owner, t);
   if (!spec) return p;

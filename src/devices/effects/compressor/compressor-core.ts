@@ -1,24 +1,24 @@
-/* Il suono del Compressore. Feed-forward, i due canali legati (lo stesso guadagno a entrambi,
- * così l'immagine stereo non si sposta):
+/* The Compressor's sound. Feed-forward, the two channels linked (the same gain to both,
+ * so the stereo image doesn't shift):
  *
- *   ingresso ─┬──────────────────────────── × guadagno ─┬─ mix con il dry → uscita
- *             └─ passa-alto → livello (picco o RMS) → dB → curva → riduzione levigata ─┘
+ *   input ─┬──────────────────────────── × gain ─┬─ mix with the dry → output
+ *          └─ high-pass → level (peak or RMS) → dB → curve → smoothed reduction ─┘
  *
- * Con il sidechain il rilevatore (la riga di sotto) ascolta la chiave, un'altra traccia, invece
- * dell'ingresso; senza, la chiave è l'ingresso stesso e i conti sono gli stessi di sempre.
+ * With the sidechain the detector (the bottom row) listens to the key, another track, instead
+ * of the input; without, the key is the input itself and the maths is the same as always.
  *
- * La riduzione si leviga in dB. Prima il rilascio: tiene il picco tra una semionda e l'altra,
- * così su un suono fermo si arriva alla riduzione che la curva promette, qualunque siano attacco
- * e rilascio. Poi l'attacco: sale verso quel valore con il suo tempo; in discesa non aggiunge
- * niente, altrimenti un attacco lento allungherebbe anche il rilascio.
- * Gira nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
+ * The reduction is smoothed in dB. First the release: it holds the peak between one half-wave and the next,
+ * so on a steady sound it reaches the reduction the curve promises, whatever the attack
+ * and release. Then the attack: it rises towards that value with its own time; going down it adds
+ * nothing, otherwise a slow attack would lengthen the release too.
+ * Runs in the AudioWorklet; no Web Audio here, so it's also tested in Node. */
 import { dbToGain, type DynamicsMeter, type EffectCore, type KeyedEffect } from '../../dsp/core';
 import { DETECTOR } from './compressor';
 import { autoMakeup, curveDb, type Curve } from './compressor-math';
 
-/** Finestra dell'RMS. */
+/** RMS window. */
 const RMS_TIME = 0.01;
-/** Tempo con cui guadagno d'uscita e mix seguono le manopole. */
+/** Time with which output gain and mix follow the knobs. */
 const SMOOTH = 0.02;
 const LOG_TO_DB = 20 / Math.LN10;
 
@@ -31,13 +31,13 @@ export class CompressorCore implements EffectCore, KeyedEffect, DynamicsMeter {
   private rmsK = 0;
   private rms = false;
   private hpK = 0;
-  /** Stato: filtri del rilevatore, livello RMS, riduzione attuale (dB, positiva). */
+  /** State: detector filters, RMS level, current reduction (dB, positive). */
   private hpL = 0;
   private hpR = 0;
   private prevL = 0;
   private prevR = 0;
   private power = 0;
-  /** La riduzione voluta, con il rilascio (dB). */
+  /** The target reduction, with the release (dB). */
   private held = 0;
   private reduction = 0;
   private makeup = 1;
@@ -45,14 +45,14 @@ export class CompressorCore implements EffectCore, KeyedEffect, DynamicsMeter {
   private targetMakeup = 1;
   private targetMix = 1;
   private readonly smoothK: number;
-  /** Prima del primo blocco i valori non scorrono: partono da quelli giusti. */
+  /** Before the first block the values don't glide: they start from the right ones. */
   private fresh = true;
-  /** Il suono che il rilevatore ascolta (null: l'ingresso). */
+  /** The sound the detector listens to (null: the input). */
   private keyL: Float32Array | null = null;
   private keyR: Float32Array | null = null;
-  /** La riduzione più forte dall'ultima lettura (per i misuratori e i test). */
+  /** The strongest reduction since the last read (for the meters and the tests). */
   maxReduction = 0;
-  /** Il livello più forte sentito dal rilevatore dall'ultima lettura (dB). */
+  /** The loudest level heard by the detector since the last read (dB). */
   private maxLevel = -120;
 
   constructor(private readonly sampleRate: number) {
@@ -99,7 +99,7 @@ export class CompressorCore implements EffectCore, KeyedEffect, DynamicsMeter {
     let maxReduction = this.maxReduction;
     for (let i = 0; i < n; i++) {
       const l = inL[i], r = inR[i], kl = keyL[i], kr = keyR[i];
-      // passa-alto a un polo sul rilevatore (non sul suono)
+      // one-pole high-pass on the detector (not on the sound)
       hpL = hpK * (hpL + kl - prevL);
       hpR = hpK * (hpR + kr - prevR);
       prevL = kl;

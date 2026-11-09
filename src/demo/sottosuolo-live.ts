@@ -1,31 +1,31 @@
-/* "Sottosuolo": techno underground scura e ipnotica a 133 BPM in Sol# frigio (Sol# minore con
- * il La naturale: il secondo grado abbassato che non risolve mai). Il pezzo lo porta il groove
- * del basso e della cassa, non una melodia: come nei magazzini, conta quello che si sente sotto
- * i piedi.
+/* "Sottosuolo": dark, hypnotic underground techno at 133 BPM in G# phrygian (G# minor with
+ * the natural A: the lowered second degree that never resolves). The piece is carried by the groove
+ * of the bass and the kick, not a melody: as in the warehouses, what counts is what you feel under
+ * your feet.
  *
- *   Cassa       due strati: il corpo pulito di una cassa già in Sol# (un seno che scende, con
- *               il suo click) e la grana di una cassa industriale tenuta solo sopra i 230 Hz;
- *               il Clipper le toglie i picchi dell'attacco e lascia il corpo;
- *   Rumble      la cassa distorta in un riverbero tutto bagnato e mono, poi saturata e chiusa
- *               sotto i 200 Hz: il rombo che rotola tra un colpo e l'altro, schiacciato dalla
- *               pompa a ogni colpo (il sub del pezzo);
- *   Basso       Neuro senza sub: un ringhio medio-basso a sedicesimi tra i colpi della cassa,
- *               chiuso nell'intro, che si apre con il filtro;
- *   Sequenza    il gancio: Analog a una voce, dente di sega con la sua ottava sotto, un giro a
- *               passi di tre sedicesimi che scivola contro il quattro quarti (ipnosi), nel
- *               delay puntato;
- *   Stab        accordi minori con la nona bemolle, corti, nella coda lunga: il colore del
- *               break e del secondo drop;
- *   Bordone     due seghe scordate su Sol# e Re#, lente, sotto le atmosfere;
- *   Piatti, Ride, Clap, Percussioni  sedicesimi con lo swing leggero, la ride metallica dei
- *               drop, il clap con la coda scura, tom intonati in Sol# a gruppi di tre;
- *   Atmosfere, Voci, FX  il bordone campionato in Sol#, il coro del break, i sussurri e
- *               "darkness", le salite e gli impatti.
+ *   Cassa       two layers: the clean body of a kick already in G# (a falling sine, with
+ *               its click) and the grain of an industrial kick kept only above 230 Hz;
+ *               the Clipper removes the attack's peaks and leaves the body;
+ *   Rumble      the distorted kick in a fully wet mono reverb, then saturated and closed
+ *               below 200 Hz: the rumble rolling between one hit and the next, squashed by the
+ *               pump at every hit (the piece's sub);
+ *   Basso       Neuro without sub: a mid-low growl in sixteenths between the kick's hits,
+ *               closed in the intro, opening with the filter;
+ *   Sequenza    the hook: monophonic Analog, a saw with its octave below, a loop in
+ *               steps of three sixteenths sliding against the four-four (hypnosis), in the
+ *               dotted delay;
+ *   Stab        minor chords with the flat ninth, short, in the long tail: the colour of the
+ *               break and the second drop;
+ *   Bordone     two detuned saws on G# and D#, slow, under the atmospheres;
+ *   Piatti, Ride, Clap, Percussioni  sixteenths with light swing, the metallic ride of the
+ *               drops, the clap with the dark tail, toms tuned in G# in groups of three;
+ *   Atmosfere, Voci, FX  the sampled drone in G#, the break's choir, the whispers and
+ *               "darkness", the risers and the impacts.
  *
- * Intro e groove (32 battute per chi mixa), tensione, drop, pausa, salita, secondo drop, dopo,
- * outro e fine (16 battute di sola batteria). La pompa del sidechain è fatta con le modulazioni
- * di volume; filtri e salite con le modulazioni delle clip. Il master: EQ, colla, Clipper,
- * bassi mono, Limiter con i picchi tra i campioni. Il montaggio è in live-builder.ts; i file, in
+ * Intro and groove (32 bars for whoever mixes), tension, drop, pause, rise, second drop, after,
+ * outro and end (16 bars of drums only). The sidechain pump is done with volume
+ * modulations; filters and risers with clip modulations. The master: EQ, glue, Clipper,
+ * mono bass, Limiter with inter-sample peaks. The assembly is in live-builder.ts; the files, in
  * scripts/build-sottosuolo-live.ts. */
 import type { Beats } from '../core/music-time';
 import { DETECTOR } from '../devices/effects/compressor/compressor';
@@ -48,7 +48,7 @@ import { acid, BAR, curve, duck, repeat, roll, steps, STEP, swing } from './patt
 
 export const SOTTOSUOLO_LIVE_BPM = 133;
 
-/** I suoni che il live usa, per ruolo (chi costruisce il progetto dà il file di ognuno). */
+/** The sounds the live uses, by role (whoever builds the project gives the file for each). */
 export const SOTTOSUOLO_LIVE_SOUNDS = [
   'kickBody', 'kickGrit', 'kickRumble',
   'clap', 'snare', 'ghost',
@@ -63,22 +63,22 @@ export type SottosuoloLiveSound = (typeof SOTTOSUOLO_LIVE_SOUNDS)[number];
 
 type TrackKey = 'kick' | 'rumble' | 'bass' | 'seq' | 'stab' | 'pad' | 'hats' | 'ride' | 'clap' | 'perc' | 'atmos' | 'vox' | 'fx';
 
-/** Lo swing dei sedicesimi in levare: leggero, la techno resta dritta ma respira. */
+/** The swing of the offbeat sixteenths: light, techno stays straight but breathes. */
 const SWING = 0.09;
 
 const SPB = 60 / SOTTOSUOLO_LIVE_BPM;
-/** Battiti di un suono lungo `seconds` (per far finire una salita sul drop). */
+/** Beats of a sound `seconds` long (to make a riser end on the drop). */
 const beatsOf = (seconds: number): Beats => seconds / SPB;
 
 // ------------------------------------------------------------------ i kit
 
 const KITS = {
-  // il corpo pieno e intonato, poi la grana: la cassa industriale solo sopra i 230 Hz, corta
+  // the full, tuned body, then the grain: the industrial kick only above 230 Hz, short
   kick: [
     { sound: 'kickBody', decay: 0.28, level: 0 },
     { sound: 'kickGrit', decay: 0.08, tone: 72, snap: 25, level: -9 },
   ],
-  // la sorgente del rumble: la cassa distorta, intera (il riverbero ne fa la coda)
+  // the rumble's source: the distorted kick, whole (the reverb makes its tail)
   rumble: [
     { sound: 'kickRumble', decay: 0.4, level: 0 },
   ],
@@ -96,7 +96,7 @@ const KITS = {
   ride: [
     { sound: 'ride', decay: 0.9, tone: 58, level: 0, pan: -8 },
   ],
-  // i tom portati in Sol# (frt tom è un Fa, frt tom2 un La#), i tic secchi e i metalli
+  // the toms brought to G# (frt tom is an F, frt tom2 an A#), the dry ticks and the metals
   perc: [
     { sound: 'tom', tune: 3, decay: 0.28, level: -2, pan: -18 },
     { sound: 'tom2', tune: -2, decay: 0.22, level: -4, pan: 20 },
@@ -106,7 +106,7 @@ const KITS = {
     { sound: 'wood', tune: -1, decay: 0.18, tone: 58, level: -8, pan: -26 },
     { sound: 'hitMetal', decay: 0.12, tone: 66, level: -12, pan: 32 },
   ],
-  // il bordone in Sol#: ogni colpo prende un altro pezzo del file (non si ripete mai uguale)
+  // the drone in G#: each hit takes another piece of the file (it never repeats the same)
   atmos: [
     { sound: 'drone', decay: 8, start: 0, level: -2 },
     { sound: 'drone', decay: 8, start: 18, level: -2 },
@@ -122,7 +122,7 @@ const KITS = {
     { sound: 'whisper', level: -2 },
     { sound: 'whisper2', level: -2 },
     { sound: 'devil', decay: 6, level: -6 },
-    // "darkness" giù di una quinta: il demone
+    // "darkness" down a fifth: the demon
     { sound: 'darkness', tune: -7, level: 1 },
   ],
   fx: [
@@ -142,11 +142,11 @@ const ATM = { drone: 0, choir: 4, choirB: 5, dark: 6, air: 7 } as const;
 const VOX = { darkness: 0, whisper: 1, whisper2: 2, devil: 3, demon: 4 } as const;
 const FX = { riser: 0, reverse: 1, impact: 2, down: 3, crash: 4, fall: 5 } as const;
 
-// ------------------------------------------------------------------ i suoni dei synth
+// ------------------------------------------------------------------ the synth sounds
 
-/** Il basso: Neuro senza sub (il sub è del rumble), due seghe una sull'altra un'ottava sotto,
- *  LP 24 chiuso con la sua saturazione; l'inviluppo di ogni nota apre il filtro (il "tok") e
- *  sposta un poco la vocale: ogni sedicesimo parla. */
+/** The bass: Neuro without sub (the sub belongs to the rumble), two saws stacked an octave below,
+ *  closed LP 24 with its saturation; each note's envelope opens the filter (the "tok") and
+ *  moves the vowel a little: every sixteenth talks. */
 const BASS: ParamValues = {
   unison: 1, oscA: 0, oscB: 1, oscBSemi: -12, oscBFine: 0, mix: 40,
   fm: 6, fmRatio: 1, fold: 8,
@@ -159,13 +159,13 @@ const BASS: ParamValues = {
   envDest: MOD_DEST.cutoff, envAmount: 42, envDest2: MOD_DEST.vowel, envAmount2: 18,
   lfo1Shape: LFO_SHAPE.smoothRandom, lfo1Rate: TEMPO_RATE['1/16'], lfo1Retrig: 1,
   lfo1Dest: MOD_DEST.cutoff, lfo1Amount: 8, lfo1Dest2: MOD_DEST.fold, lfo1Amount2: 10,
-  lfo2Shape: LFO_SHAPE.sine, lfo2Rate: TEMPO_RATE['2 battute'], lfo2Retrig: 1,
+  lfo2Shape: LFO_SHAPE.sine, lfo2Rate: TEMPO_RATE['2 bars'], lfo2Retrig: 1,
   lfo2Dest: MOD_DEST.vowel, lfo2Amount: 20,
   volume: 0,
 };
 
-/** Il gancio: una voce, sega con l'ottava sotto, filtro risonante che l'inviluppo apre a ogni
- *  nota (un pluck scuro), accento sulle note forti. */
+/** The hook: monophonic, saw with the octave below, resonant filter the envelope opens at every
+ *  note (a dark pluck), accent on the strong notes. */
 const SEQ: ParamValues = {
   oscA: 0, oscB: 0, oscBSemi: -12, oscBFine: 6, mix: 45, unison: 3, detune: 14, spread: 60,
   voiceMode: VOICE_MODE.mono, glide: 0, accent: 45,
@@ -175,7 +175,7 @@ const SEQ: ParamValues = {
   lfoWave: 0, lfoRate: 0.11, lfoPitch: 0, lfoCutoff: 6, velocity: 40, volume: -2,
 };
 
-/** Gli stab: accordi corti di sette copie scordate, il filtro che si chiude in fretta. */
+/** The stabs: short chords of seven detuned copies, the filter closing quickly. */
 const STAB: ParamValues = {
   oscA: 0, oscB: 1, oscBSemi: 0, oscBFine: 9, mix: 35, unison: 5, detune: 22, spread: 90,
   voiceMode: VOICE_MODE.poly, filterType: 0, cutoff: 1300, resonance: 25, filterEnv: 40, keyTrack: 20,
@@ -184,7 +184,7 @@ const STAB: ParamValues = {
   lfoWave: 0, lfoRate: 0.2, lfoPitch: 0, lfoCutoff: 0, velocity: 30, volume: -12,
 };
 
-/** Il bordone: seghe scordate lente, chiuso, con un'onda d'intonazione appena percepibile. */
+/** The drone: slow detuned saws, closed, with a barely perceptible pitch wave. */
 const PAD: ParamValues = {
   oscA: 0, oscB: 0, oscBSemi: 0, oscBFine: 11, mix: 50, unison: 5, detune: 28, spread: 100,
   voiceMode: VOICE_MODE.poly, cutoff: 820, resonance: 18, filterEnv: 12, keyTrack: 0,
@@ -197,18 +197,18 @@ const PAD: ParamValues = {
 
 const len = (bars: number): Beats => bars * BAR;
 
-/** Battute di un pad, una stringa per battuta. */
+/** Bars of a pad, one string per bar. */
 const phrase = (pad: number, barsOf: readonly string[], from: Beats = 0): Note[] =>
   barsOf.flatMap((b, k) => steps(pad, b, from + k * BAR));
 
-/** Un colpo solo di un pad. */
+/** A single hit of a pad. */
 const hit = (pad: number, at: Beats, velocity = 110): Note => ({ pitch: padNote(pad), start: at, duration: STEP, velocity });
 
 /** Un accordo tenuto. */
 const chord = (pitches: readonly number[], from: Beats, length: Beats, velocity = 90): Note[] =>
   pitches.map(pitch => ({ pitch, start: from, duration: length, velocity }));
 
-// --- la cassa (le stringhe sono battute a sedicesimi: X accento, x colpo, o leggero)
+// --- the kick (the strings are bars of sixteenths: X accent, x hit, o soft)
 const K = {
   four: 'X... X... X... X...',
   push: 'X... X... X... X..x',
@@ -218,7 +218,7 @@ const K = {
   one: 'X... .... .... ....',
   rest: '.... .... .... ....',
 };
-/** Sedici battute di cassa: la spinta in levare a fine frase, il buco prima del giro nuovo. */
+/** Sixteen bars of kick: the offbeat push at the end of the phrase, the hole before the new loop. */
 const KICK16 = [K.four, K.four, K.four, K.push, K.four, K.four, K.four, K.skip, K.four, K.four, K.four, K.push, K.four, K.four, K.four, K.roll];
 const kickBars = (count: number, last: string = K.roll): string[] =>
   Array.from({ length: count }, (_, k) => (k === count - 1 ? last : KICK16[k % 16]));
@@ -226,7 +226,7 @@ const kickBars = (count: number, last: string = K.roll): string[] =>
 const KICK = {
   intro: phrase(0, kickBars(16, K.push)),
   groove: phrase(0, kickBars(16)),
-  // le ultime due battute senza cassa: il vuoto prima del drop
+  // the last two bars without kick: the void before the drop
   tension: phrase(0, [...kickBars(14, K.four), K.rest, K.rest]),
   drop: phrase(0, kickBars(32, K.skip)),
   climb: phrase(0, [K.half, K.half, K.half, K.half, K.four, K.four, K.roll, K.rest]),
@@ -236,19 +236,19 @@ const KICK = {
   end: phrase(0, [...kickBars(15, K.four), K.one]),
 };
 
-/** La clip della cassa: ogni colpo suona il corpo (pad 1) e la grana (pad 2) insieme. */
+/** The kick clip: each hit plays the body (pad 1) and the grain (pad 2) together. */
 const kickClip = (name: string, notes: readonly Note[], length: Beats): ClipSpec =>
   clip(name, [...notes, ...notes.map(n => ({ ...n, pitch: padNote(1) }))], length);
 
-/** Dove colpisce la cassa (i colpi pieni). */
+/** Where the kick hits (the full hits). */
 const kickHits = (kick: readonly Note[]): Beats[] => kick.filter(n => n.velocity >= 100).map(n => n.start);
 
-// --- la pompa: il volume giù sulla cassa e su prima della prossima
+// --- the pump: the volume down on the kick and up before the next one
 const pump = (kick: readonly Note[], depth: number, release: Beats, level = 1): ModSpec =>
   ({ target: VOLUME, points: duck(kickHits(kick), depth, release).map(p => ({ ...p, value: p.value * level })) });
 
-/** La pompa del rumble: zero sul colpo (la cassa è sola), pieno sul levare dell'ottavo, poi
- *  respira prima del colpo dopo: "boom – rrr – (fiato)". */
+/** The rumble's pump: zero on the hit (the kick is alone), full on the eighth's offbeat, then
+ *  it breathes before the next hit: "boom – rrr – (breath)". */
 const rumblePump = (kick: readonly Note[], level = 1): ModSpec => ({
   target: VOLUME,
   points: kickHits(kick).sort((a, b) => a - b).flatMap(h => [
@@ -257,13 +257,13 @@ const rumblePump = (kick: readonly Note[], level = 1): ModSpec => ({
   ]),
 });
 
-/** Il rumble suona dove suona la cassa: è la sua coda. */
+/** The rumble plays where the kick plays: it's its tail. */
 const rumbleClip = (name: string, kick: readonly Note[], length: Beats, level = 1, extra: ModSpec[] = []): ClipSpec =>
   clip(name, kick.filter(n => n.velocity >= 100), length, [rumblePump(kick, level), ...extra]);
 
 const mod = (param: string, points: EnvelopePoint[]): ModSpec => ({ target: instrumentParam(param), points });
 
-// --- clap e rullante: il due e il quattro, con il rullante sotto e i fantasmi
+// --- clap and snare: two and four, with the snare underneath and the ghosts
 const BACK = '.... X... .... X...';
 const GHOSTS = ['.... .... .... ..o.', '.... ...o .... ....', '.... .... ..o. ...o', '.... ...o .... .o..'];
 function claps(count: number, opts: { snare?: boolean; ghosts?: boolean; fills?: Readonly<Record<number, string>>; from?: number } = {}): Note[] {
@@ -278,7 +278,7 @@ function claps(count: number, opts: { snare?: boolean; ghosts?: boolean; fills?:
   }).flat();
 }
 
-// --- i piatti: chiusi a sedicesimi (il levare dell'ottavo è dell'aperto), il tamburello sparso
+// --- the cymbals: closed sixteenths (the eighth's offbeat belongs to the open one), scattered tambourine
 const HATS = {
   offbeat: '..x. ..x. ..x. ..x.',
   closed: 'xo.o xo.o xo.o xo.o',
@@ -297,12 +297,12 @@ function hats(count: number, opts: HatOpts): Note[] {
   ], SWING);
 }
 
-/** La ride: ottavi con il levare più leggero, o solo quarti. */
+/** The ride: eighths with a lighter offbeat, or quarters only. */
 const rides = (count: number, eighths = true): Note[] =>
   swing(phrase(0, Array(count).fill(eighths ? 'x.o. x.o. x.o. x.o.' : 'x... x... x... x...')), SWING);
 
-// --- le percussioni: i tom a gruppi di tre sedicesimi su due battute (contro il quattro), tic
-// sincopati, metalli a fine frase
+// --- the percussion: the toms in groups of three sixteenths over two bars (against the four), syncopated
+// ticks, metals at the end of the phrase
 const TOMS = 'X..x ..x. .x.. X..x ..x. .x.. x..x ....';
 const PERC_LOOP = [
   ...steps(PERC.tom, TOMS),
@@ -322,7 +322,7 @@ function perc(count: number, opts: { light?: boolean; full?: boolean } = {}): No
   ], SWING);
 }
 
-// --- il basso: sedicesimi tra i colpi della cassa (mai sul battere)
+// --- the bass: sixteenths between the kick's hits (never on the downbeat)
 const BASS_A = acid([
   '. g#1 G#1 . | . g#1 . G#1 | . g#1 G#1 . | . a1 g#1 .',
   '. g#1 G#1 . | . g#1 . D#2 | . g#1 G#1 . | . b1 . g#1',
@@ -332,22 +332,22 @@ const BASS_B = acid([
   '. g#1 G#1 . | . g#1 . D#2 | . e2 D#2 . | . b1 A1 g#1',
 ].join(' '));
 
-// --- la sequenza: passi di tre sedicesimi, due battute
+// --- the sequence: steps of three sixteenths, two bars
 const SEQ_A = acid([
   'G#2 - . g#2 - . A2 - . g#2 - . D#3 . g#2 -',
   'G#2 - . g#2 - . B2 - . g#2 - . A2 . g#2 G#3',
 ].join(' '));
-/** Nel secondo drop sale: le note forti un'ottava su, la risposta che cade sul La. */
+/** In the second drop it rises: the strong notes an octave up, the response falling on A. */
 const SEQ_B = acid([
   'G#3 - . g#2 - . A3 - . g#2 - . D#3 . g#3 -',
   'G#2 - . g#3 - . B3 - . g#2 - . A3 . A2 G#3',
 ].join(' '));
 
-// --- gli stab: Sol# minore con il La sopra (la nona bemolle), in levare
+// --- the stabs: G# minor with the A above (the flat ninth), on the offbeat
 const G3 = 56, B3 = 59, DS4 = 63, A4 = 69, GS2 = 44, DS3 = 51, A3 = 57, E3 = 52;
 const STAB_CHORD = [G3, B3, DS4, A4];
 const STAB_LOW = [E3, G3, B3, DS4];
-/** Quattro battute di stab: in levare, l'ultimo sull'accordo di Mi (il sesto grado). */
+/** Four bars of stabs: on the offbeat, the last on the E chord (the sixth degree). */
 const stabPhrase = (from: Beats): Note[] => [
   ...chord(STAB_CHORD, from + 1.5, 0.25, 100),
   ...chord(STAB_CHORD, from + len(1) + 2.75, 0.25, 85),
@@ -356,16 +356,16 @@ const stabPhrase = (from: Beats): Note[] => [
 ];
 const stabs = (count: number): Note[] => Array.from({ length: count / 4 }, (_, k) => stabPhrase(k * len(4))).flat();
 
-// ------------------------------------------------------------------ gli effetti
+// ------------------------------------------------------------------ the effects
 
-/** I tipi di banda dell'EQ che servono qui (valori del parametro "type"). */
+/** The EQ band types needed here (values of the "type" parameter). */
 const BELL = 2, HIGH_SHELF = 4;
 
-/** Un EQ: un passa-alto (24 dB) a `low` Hz e, se c'è, un passa-basso a `high`; poi le bande
- *  date (campane, o il tipo indicato). */
+/** An EQ: a high-pass (24 dB) at `low` Hz and, if given, a low-pass at `high`; then the given
+ *  bands (bells, or the stated type). */
 function eqOf(name: string, low: number, high: number | null, bands: readonly (readonly [freq: number, gain: number, q: number, type?: number])[] = []): EffectSpec {
   const p: Record<string, number> = { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: low, [bandParam(0, 'slope')]: 1 };
-  // le bande 2..7 del preset Init sono accese ma piatte: le uso per le campane
+  // bands 2..7 of the Init preset are on but flat: I use them for the bells
   bands.forEach(([freq, gain, q, type = BELL], i) => Object.assign(p, {
     [bandParam(i + 1, 'type')]: type, [bandParam(i + 1, 'freq')]: freq, [bandParam(i + 1, 'gain')]: gain, [bandParam(i + 1, 'q')]: q,
   }));
@@ -373,13 +373,13 @@ function eqOf(name: string, low: number, high: number | null, bands: readonly (r
   return eq(name, p);
 }
 
-// ------------------------------------------------------------------ le tracce
+// ------------------------------------------------------------------ the tracks
 
 const TRACKS: readonly TrackSpec<SottosuoloLiveSound, TrackKey>[] = [
   {
     key: 'kick', name: 'Cassa', volumeDb: -6, kit: KITS.kick,
     effects: [
-      // il seno a 52 Hz giù, il colpo a 90 Hz su: il basso della cassa si allarga
+      // the sine at 52 Hz down, the hit at 90 Hz up: the kick's low end widens
       eqOf('Cassa', 28, null, [[52, -6, 1.4], [90, 4, 1.1], [250, -3, 1.2], [4500, 2, 0.8]]),
       clipper('Cassa', { drive: 4, ceiling: -3, knee: 20 }),
       stereo('Mono', { width: 0 }),
@@ -398,8 +398,8 @@ const TRACKS: readonly TrackSpec<SottosuoloLiveSound, TrackKey>[] = [
     key: 'bass', name: 'Basso', volumeDb: -2, neuro: BASS,
     effects: [
       eqOf('Basso', 62, null, [[380, -2.5, 1.4], [900, 2.5, 1.2]]),
-      // il primo mezzo periodo della sega, con il filtro appena aperto, fa una punta di 16 dB
-      // sopra il corpo: il clipper morbido la toglie e lascia il ringhio
+      // the first half period of the saw, with the filter barely open, makes a 16 dB spike
+      // above the body: the soft clipper removes it and leaves the growl
       clipper('Punte', { ceiling: -8, knee: 50, output: 4 }),
       compressor('Basso', { threshold: -16, ratio: 4, knee: 6, attack: 3, release: 60, scHp: 60, auto: 0, makeup: 3 }),
       stereo('Basso mono', { monoFreq: 220 }),
@@ -409,7 +409,7 @@ const TRACKS: readonly TrackSpec<SottosuoloLiveSound, TrackKey>[] = [
     key: 'seq', name: 'Sequenza', volumeDb: 0, analog: SEQ,
     effects: [
       drive('Calda', { shape: SHAPE.tube, drive: 10, bias: 20, low: 40, split: 150, tone: 9000 }),
-      // gli accenti aprono il filtro risonante: il compressore veloce li tiene nel corpo
+      // the accents open the resonant filter: the fast compressor keeps them in the body
       compressor('Accenti', { threshold: -20, ratio: 4, knee: 6, attack: 1, release: 70, auto: 0, makeup: 4 }),
       clipper('Punte', { ceiling: -9, knee: 50, output: 3 }),
       eqOf('Sequenza', 160, 9000, [[260, -2.5, 1.2], [420, -2, 1], [2500, 2, 1]]),
@@ -475,12 +475,12 @@ const TRACKS: readonly TrackSpec<SottosuoloLiveSound, TrackKey>[] = [
 
 // ------------------------------------------------------------------ le scene
 
-/** Il bordone campionato: un colpo ogni quattro battute, ogni volta da un altro punto del file
- *  (il cambio cade sulla cassa, sotto la pompa). */
+/** The sampled drone: one hit every four bars, each time from another point of the file
+ *  (the change falls on the kick, under the pump). */
 const drone = (count: number, from = 0): Note[] =>
   Array.from({ length: count / 4 }, (_, k) => hit(ATM.drone + ((k + from) % 4), len(4 * k), 100));
 
-/** Una salita che finisce esattamente su `end` (battiti), lunga `seconds`. */
+/** A riser ending exactly on `end` (beats), `seconds` long. */
 const riserTo = (pad: number, end: Beats, seconds: number): Note => hit(pad, Math.max(0, end - beatsOf(seconds)), 110);
 
 const RISER_S = 10.971, REVERSE_S = 5.486;
@@ -505,7 +505,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       clap: clip('Clap', claps(16, { from: 8 }), len(16)),
       hats: clip('Piatti', hats(16, { closed: true, offbeat: true }), len(16)),
       perc: clip('Perc', perc(16), len(16)),
-      // il basso entra chiuso e si apre in sedici battute
+      // the bass comes in closed and opens over sixteen bars
       bass: clip('Rotola', repeat(BASS_A, len(2), 8), len(16), [
         pump(KICK.groove, 0.35, 0.35),
         mod('cutoff', curve([0, -0.28], [len(16), -0.1])),
@@ -525,7 +525,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       ride: clip('Ride', rides(8, false).map(n => ({ ...n, start: n.start + len(8) })), len(16), [{ target: VOLUME, points: curve([len(8), 0.6], [len(16), 0.9]) }]),
       perc: clip('Perc', perc(16), len(16)),
       bass: clip('Rotola', repeat(BASS_A, len(2), 7), len(16), [pump(KICK.tension, 0.35, 0.35), mod('cutoff', curve([0, -0.1], [len(14), 0]))]),
-      // il gancio entra chiuso: il filtro si apre lungo la sezione
+      // the hook comes in closed: the filter opens along the section
       seq: clip('Gancio chiuso', repeat(SEQ_A, len(2), 8), len(16), [
         pump(KICK.tension, 0.5, 0.4),
         mod('cutoff', curve([0, -0.3], [len(16), -0.08])),
@@ -559,8 +559,8 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Pausa', bars: 16,
     clips: {
-      // niente cassa: restano il tamburello, il coro, gli stab nella cattedrale e il gancio che
-      // respira da solo, chiuso
+      // no kick: what's left is the tambourine, the choir, the stabs in the cathedral and the hook
+      // breathing alone, closed
       hats: clip('Tamburello', hats(16, { tamb: true }).filter(n => n.start >= len(8)), len(16)),
       perc: clip('Tic lontani', perc(16, { light: true }).filter(n => n.start >= len(4)), len(16), [{ target: VOLUME, points: curve([0, 0.6], [len(16), 0.9]) }]),
       seq: clip('Gancio solo', repeat(SEQ_A, len(2), 8), len(16), [
@@ -581,7 +581,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       clap: clip('Clap che corre', [...claps(4), ...roll(CL.clap, len(4), 8, 0.5, [70, 95]), ...roll(CL.clap, len(6), 8, 0.25, [90, 120])], len(8)),
       hats: clip('Piatti', hats(8, { closed: true }), len(8), [{ target: VOLUME, points: curve([0, 0.7], [len(8), 1]) }]),
       perc: clip('Perc', perc(8), len(8)),
-      // il basso torna chiuso e si apre tutto in otto battute
+      // the bass comes back closed and opens all the way in eight bars
       bass: clip('Si apre', repeat(BASS_A, len(2), 4).filter(n => n.start < len(7)), len(8), [
         pump(KICK.climb, 0.35, 0.35),
         mod('cutoff', curve([0, -0.3], [len(7), 0.05])),
@@ -626,7 +626,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       ride: clip('Ride', rides(16, false), len(16), [{ target: VOLUME, points: curve([0, 0.9], [len(16), 0.5]) }]),
       perc: clip('Perc piene', perc(16, { full: true }), len(16)),
       bass: clip('Rotola', repeat(BASS_B, len(2), 8), len(16), [pump(KICK.after, 0.35, 0.35), mod('cutoff', curve([0, 0], [len(16), -0.15]))]),
-      // il gancio si richiude e se ne va
+      // the hook closes again and leaves
       seq: clip('Gancio che si chiude', repeat(SEQ_A, len(2), 8), len(16), [
         pump(KICK.after, 0.5, 0.4),
         mod('cutoff', curve([0, 0], [len(16), -0.35])),
@@ -679,10 +679,10 @@ export const SOTTOSUOLO_LIVE: LiveSpec<SottosuoloLiveSound, TrackKey> = {
   arrangement: SCENES.map((_, i) => i),
 };
 
-/** Le clip di una scena, per chi le vuole controllare. */
+/** A scene's clips, for whoever wants to check them. */
 export const sottosuoloScene = (name: string): Partial<Record<TrackKey, ClipSpec>> | undefined => SCENES.find(s => s.name === name)?.clips;
 
-/** Costruisce il live nel progetto (vuoto) dello store. */
+/** Builds the live in the store's (empty) project. */
 export function buildSottosuoloLive(store: ProjectStore, sounds: Readonly<Record<SottosuoloLiveSound, SampleRef>>): void {
   buildLive(store, SOTTOSUOLO_LIVE, sounds);
 }

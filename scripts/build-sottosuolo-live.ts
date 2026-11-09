@@ -1,7 +1,7 @@
-/* Costruisce "Sottosuolo" (src/demo/sottosuolo-live.ts) come cartella di progetto studiomio:
- *   node scripts/run.mjs scripts/build-sottosuolo-live.ts <cartella dei suoni> <cartella del progetto>
- * I file sono quelli della libreria dell'utente, relativi a <cartella dei suoni>. Per sentirlo e
- * misurarlo senza browser: scripts/render-project.ts sulla cartella creata. */
+/* Builds "Sottosuolo" (src/demo/sottosuolo-live.ts) as a studiomio project folder:
+ *   node scripts/run.mjs scripts/build-sottosuolo-live.ts <sounds folder> <project folder>
+ * The files are those of the user's library, relative to <sounds folder>. To hear and
+ * measure it without a browser: scripts/render-project.ts on the created folder. */
 import { buildSottosuoloLive, type SottosuoloLiveSound } from '../src/demo/sottosuolo-live';
 import { buildLiveFolder } from './live-folder';
 
@@ -45,6 +45,6 @@ const FILES: Readonly<Record<SottosuoloLiveSound, string>> = {
 };
 
 export async function main([soundsDir, projectDir]: string[]): Promise<void> {
-  if (!soundsDir || !projectDir) throw new Error('uso: build-sottosuolo-live.ts <cartella dei suoni> <cartella del progetto>');
+  if (!soundsDir || !projectDir) throw new Error('usage: build-sottosuolo-live.ts <sounds folder> <project folder>');
   await buildLiveFolder(FILES, soundsDir, projectDir, buildSottosuoloLive);
 }

@@ -1,81 +1,81 @@
-/** Il motore di uno strumento, eseguito nell'AudioWorklet: riceve note e parametri e somma
- *  il suo suono nei buffer d'uscita. Un tipo di strumento nuovo implementa questa interfaccia
- *  e si registra in worklet/cores.ts. Non sa nulla di tempi assoluti: le note arrivano
- *  esattamente al campione giusto, divise dal processore. */
+/** An instrument's engine, run in the AudioWorklet: it receives notes and parameters and adds
+ *  its sound into the output buffers. A new instrument type implements this interface
+ *  and registers in worklet/cores.ts. It knows nothing of absolute times: the notes arrive
+ *  exactly at the right sample, split by the processor. */
 export interface InstrumentCore {
   setParams(params: Readonly<Record<string, number>>): void;
-  /** `id` identifica la nota per il suo noteOff (più note della stessa altezza possono sovrapporsi). */
+  /** `id` identifies the note for its noteOff (several notes of the same pitch can overlap). */
   noteOn(id: number, pitch: number, velocity: number): void;
   noteOff(id: number): void;
-  /** Spegne tutto in pochi millisecondi (stop, salto del cursore). */
+  /** Turns everything off in a few milliseconds (stop, cursor jump). */
   silence(): void;
-  /** Somma l'uscita nei campioni [from, to) dei due canali. */
+  /** Adds the output into samples [from, to) of the two channels. */
   render(left: Float32Array, right: Float32Array, from: number, to: number): void;
-  /** Il tempo del progetto, per chi ha modulazioni a tempo (LFO sincronizzati). */
+  /** The project's tempo, for whoever has tempo-synced modulations (synced LFOs). */
   setTempo?(bpm: number): void;
-  /** Per chi suona un sample: dove leggono le voci che suonano (frazioni del sample; con più
-   *  sample, l'indice del sample più la frazione), scritte in `out`; restituisce quante sono.
-   *  L'interfaccia le disegna sulla forma d'onda. */
+  /** For whoever plays a sample: where the playing voices read (fractions of the sample; with several
+   *  samples, the sample's index plus the fraction), written into `out`; returns how many there are.
+   *  The interface draws them on the waveform. */
   playheads?(out: Float32Array): number;
 }
 
 export type CoreFactory = (sampleRate: number) => InstrumentCore;
 
-/** Un sample caricato in un dispositivo (es. su un pad): i campioni e la loro frequenza. */
+/** A sample loaded into a device (e.g. on a pad): the samples and their rate. */
 export interface SampleData {
   readonly sampleRate: number;
   readonly channels: readonly Float32Array[];
 }
 
-/** Un motore che suona sample: li riceve per posto (null = posto vuoto). */
+/** An engine that plays samples: it receives them by slot (null = empty slot). */
 export interface SamplePlayer {
   setSample(slot: string, sample: SampleData | null): void;
 }
 
 export const playsSamples = (core: object): core is SamplePlayer => typeof (core as Partial<SamplePlayer>).setSample === 'function';
 
-/** Il motore di un effetto, eseguito nell'AudioWorklet: trasforma l'ingresso nell'uscita un
- *  blocco alla volta. Lo spegnimento (bypass) lo gestisce il processore, non l'effetto. */
+/** An effect's engine, run in the AudioWorklet: turns the input into the output one
+ *  block at a time. Turning it off (bypass) is handled by the processor, not the effect. */
 export interface EffectCore {
   setParams(params: Readonly<Record<string, number>>): void;
-  /** Il tempo del progetto, per gli effetti a tempo. */
+  /** The project's tempo, for tempo-synced effects. */
   setTempo(bpm: number): void;
-  /** Elabora `n` campioni: legge gli ingressi e scrive (sovrascrive) le uscite. */
+  /** Processes `n` samples: reads the inputs and writes (overwrites) the outputs. */
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void;
 }
 
 export type EffectFactory = (sampleRate: number) => EffectCore;
 
-/** Un effetto di dinamica (compressore, gate): dice al suo pannello cosa sta facendo. */
+/** A dynamics effect (compressor, gate): tells its panel what it's doing. */
 export interface DynamicsMeter {
-  /** Scrive in `out` il livello più forte sentito dal rilevatore (dB) e la riduzione più forte
-   *  (dB, positiva) dall'ultima lettura. */
+  /** Writes into `out` the loudest level heard by the detector (dB) and the strongest reduction
+   *  (dB, positive) since the last read. */
   readDynamics(out: Float32Array): void;
 }
 
 export const metersDynamics = (core: object): core is DynamicsMeter => typeof (core as Partial<DynamicsMeter>).readDynamics === 'function';
 
-/** Dove si trova il trasporto all'inizio di un blocco: il battito della timeline (in quarti) e
- *  il tempo con cui avanza. */
+/** Where the transport is at the start of a block: the timeline beat (in quarters) and
+ *  the tempo it advances at. */
 export interface TransportPosition {
   readonly beat: number;
   readonly bpm: number;
   readonly beatsPerBar: number;
 }
 
-/** Un effetto che segue la battuta (es. il Beat Repeat). */
+/** An effect that follows the bar (e.g. the Beat Repeat). */
 export interface TransportFollower {
-  /** La posizione del trasporto all'inizio del prossimo `process`; null se è fermo. */
+  /** The transport position at the start of the next `process`; null if it's stopped. */
   setTransport(position: TransportPosition | null): void;
 }
 
 export const followsTransport = (core: object): core is TransportFollower =>
   typeof (core as Partial<TransportFollower>).setTransport === 'function';
 
-/** Un effetto con il rilevatore che può ascoltare un altro suono (sidechain). */
+/** An effect with a detector that can listen to another sound (sidechain). */
 export interface KeyedEffect {
-  /** Il suono che il rilevatore ascolta nel prossimo `process` (stessa lunghezza dell'ingresso);
-   *  null: torna ad ascoltare l'ingresso. */
+  /** The sound the detector listens to in the next `process` (same length as the input);
+   *  null: goes back to listening to the input. */
   setKey(left: Float32Array | null, right: Float32Array | null): void;
 }
 

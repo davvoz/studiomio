@@ -12,37 +12,37 @@ const files = async () => (await readdir(root, { recursive: true })).map(f => f.
 
 const rack = (name: string, mix = 30) => ({ name, instrument: null, effects: [{ type: 'delay', params: { mix } }], macros: [] });
 
-describe('rack dell\'utente come file', () => {
-  it('cartella che non c\'è ancora: nessun rack', async () => {
+describe('user racks as files', () => {
+  it('folder that doesn\'t exist yet: no racks', async () => {
     expect(await loadRacks(root)).toEqual([]);
   });
 
-  it('un file per rack, leggibile a mano', async () => {
-    await saveRack(root, rack('Basso sporco'));
-    expect(await files()).toEqual(['Basso sporco.json']);
-    const body = JSON.parse(await readFile(join(root, 'Basso sporco.json'), 'utf8'));
-    expect(body).toEqual({ studiomio: 'rack', version: 1, ...rack('Basso sporco') });
-    expect(await loadRacks(root)).toEqual([rack('Basso sporco')]);
+  it('one file per rack, readable by hand', async () => {
+    await saveRack(root, rack('Dirty bass'));
+    expect(await files()).toEqual(['Dirty bass.json']);
+    const body = JSON.parse(await readFile(join(root, 'Dirty bass.json'), 'utf8'));
+    expect(body).toEqual({ studiomio: 'rack', version: 1, ...rack('Dirty bass') });
+    expect(await loadRacks(root)).toEqual([rack('Dirty bass')]);
   });
 
-  it('salvare di nuovo lo stesso rack scrive sul suo file, anche se l\'utente lo ha spostato; si elimina', async () => {
-    await saveRack(root, rack('Eco'));
-    await mkdir(join(root, 'Miei'), { recursive: true });
-    await rename(join(root, 'Eco.json'), join(root, 'Miei', 'eco preferito.json'));
-    await saveRack(root, rack('Eco', 80));
-    expect(await files()).toEqual(['Miei/eco preferito.json']);
-    expect(await loadRacks(root)).toEqual([rack('Eco', 80)]);
-    await removeRack(root, 'Eco');
+  it('saving the same rack again writes to its file, even if the user moved it; it\'s deleted', async () => {
+    await saveRack(root, rack('Echo'));
+    await mkdir(join(root, 'Mine'), { recursive: true });
+    await rename(join(root, 'Echo.json'), join(root, 'Mine', 'favourite echo.json'));
+    await saveRack(root, rack('Echo', 80));
+    expect(await files()).toEqual(['Mine/favourite echo.json']);
+    expect(await loadRacks(root)).toEqual([rack('Echo', 80)]);
+    await removeRack(root, 'Echo');
     expect(await files()).toEqual([]);
   });
 
-  it('i file che non sono rack si saltano; i nomi strani diventano nomi di file validi', async () => {
+  it('the files that aren\'t racks are skipped; odd names become valid file names', async () => {
     await mkdir(root, { recursive: true });
     await writeFile(join(root, 'preset.json'), JSON.stringify({ studiomio: 'preset', name: 'X', type: 'delay', params: {} }));
-    await writeFile(join(root, 'rotto.json'), '{');
+    await writeFile(join(root, 'broken.json'), '{');
     await saveRack(root, rack('a/b'));
     await saveRack(root, rack('a:b'));
-    expect(await files()).toEqual(['a_b (2).json', 'a_b.json', 'preset.json', 'rotto.json']);
+    expect(await files()).toEqual(['a_b (2).json', 'a_b.json', 'broken.json', 'preset.json']);
     expect((await loadRacks(root)).map(r => r.name).sort()).toEqual(['a/b', 'a:b']);
   });
 });

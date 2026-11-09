@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { paramSpec, resolveParams } from '../../src/devices/device-type';
 import { followsTransport } from '../../src/devices/dsp/core';
 import {
-  ACIDO, ACIDO_FX, CASSETTA, DUB, FACTORY_RACKS, FADE_TO_GREY, FRENCH_TOUCH, HOOVER, JUMP, LEVARE, MACCHINA, MURO, NEBBIA, NUOVA_ONDA,
-  OSSIGENO, RINGHIO, TORNADO, TRECENTOTRE, BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE,
-  HAT_IN_MOVIMENTO, WOBBLE, POMPA, CANCELLO, ACIDO_VIVO, SIRENA, COLPO,
+  ACID, ACID_FX, CASSETTE, DUB, FACTORY_RACKS, FADE_TO_GREY, FRENCH_TOUCH, HOOVER, JUMP, OFFBEAT, MACHINE, WALL, FOG, NEW_WAVE,
+  OXYGEN, GROWL, TORNADO, THREE_OH_THREE, RAVE_DRUMS, DUB_DRUMS, BROKEN_DRUMS, INDUSTRIAL_DRUMS, KICK_RACK, SNARE_RACK,
+  MOVING_HATS, WOBBLE, PUMP_RACK, GATED, LIVELY_ACID, SIREN_RACK, HIT,
 } from '../../src/devices/factory-racks';
 import { isModulatorType } from '../../src/devices/modulators/modulators';
 import type { RackPreset } from '../../src/model/rack-preset';
@@ -22,7 +22,7 @@ import { setup } from '../helpers/fixtures';
 const SR = 48000, BLOCK = 128, BPM = 120;
 const BPS = BPM / 60 / SR;
 
-/** Un Audio Effect Rack (il Tornado) su una traccia audio nuova. */
+/** An Audio Effect Rack (the Tornado) on a new audio track. */
 function tornado(preset: RackPreset = TORNADO) {
   const s = setup();
   s.store.apply(loadRack(null, preset));
@@ -30,13 +30,13 @@ function tornado(preset: RackPreset = TORNADO) {
   return { ...s, track, rack: track().racks[0].id, macro: (i: number, v: number) => s.store.apply(setMacro(track().id, track().racks[0].id, i, v)) };
 }
 
-/** Un rumore uguale a ogni giro, sui due canali diversi. */
+/** A noise equal at every round, different on the two channels. */
 function noise(seed: number) {
   let x = seed;
   return () => ((x = (x * 1103515245 + 12345) >>> 0) / 0xffffffff - 0.5) * 0.8;
 }
 
-/** Fa suonare la catena con il trasporto che va da 0: l'uscita sinistra e destra, e l'ingresso. */
+/** Plays the chain with the transport running from 0: the left and right output, and the input. */
 function play(effects: readonly EffectSettings[], frames: number) {
   const cores = effects.map(e => {
     const core = EFFECT_CORES[e.type](SR);
@@ -67,8 +67,8 @@ function play(effects: readonly EffectSettings[], frames: number) {
 const maxDiff = (a: Float32Array, b: Float32Array) => a.reduce((m, x, i) => Math.max(m, Math.abs(x - b[i])), 0);
 const peakOf = (x: Float32Array) => x.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
 
-/** Lo scarto più piccolo tra l'uscita e l'ingresso ritardato di 0…64 campioni (la latenza dei
- *  dispositivi con l'oversampling, che ritardano anche il suono asciutto), e quel ritardo. */
+/** The smallest gap between the output and the input delayed by 0…64 samples (the latency of the
+ *  devices with oversampling, which also delay the dry sound), and that delay. */
 function delayedDiff(out: Float32Array, input: Float32Array): { diff: number; lag: number } {
   let best = { diff: Infinity, lag: 0 };
   for (let lag = 0; lag <= 64; lag++) {
@@ -79,25 +79,25 @@ function delayedDiff(out: Float32Array, input: Float32Array): { diff: number; la
   return best;
 }
 
-describe('rack di fabbrica', () => {
-  it('sono rack validi: ogni parametro esiste, ogni mappatura resta dentro la corsa del suo parametro', () => {
+describe('factory racks', () => {
+  it('they\'re valid racks: every parameter exists, every mapping stays within its parameter\'s travel', () => {
     expect(FACTORY_RACKS.map(r => r.name)).toEqual([
-      'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassetta', 'Muro', 'Acido FX', 'Macchina', 'Salsiccia',
-      'Acido', 'Nebbia', 'Ringhio', 'Nuova onda', 'Ossigeno', 'Hoover', 'Jump', 'Levare', '303',
-      'Wobble', 'Pompa', 'Cancello', 'Acido vivo', 'Sirena', 'Colpo',
-      'Batteria rave', 'Batteria dub', 'Batteria rotta', 'Batteria industriale', 'Cassa', 'Rullante', 'Hat in movimento',
+      'Tornado', 'Fade to Grey', 'Dub', 'French Touch', 'Cassette', 'Wall', 'Acid FX', 'Machine', 'Salsiccia',
+      'Acid', 'Fog', 'Growl', 'New wave', 'Oxygen', 'Hoover', 'Jump', 'Offbeat', '303',
+      'Wobble', 'Pump', 'Gated', 'Lively acid', 'Siren', 'Hit',
+      'Rave drums', 'Dub drums', 'Broken drums', 'Industrial drums', 'Kick', 'Snare', 'Moving hats',
     ]);
     for (const rack of FACTORY_RACKS) {
       expect(rack.macros).toHaveLength(MACRO_COUNT);
-      // da un file si rileggerebbe uguale
+      // from a file it would be read back the same
       expect(rackPresetFrom(JSON.parse(JSON.stringify(rack)))).toEqual(rack);
-      // i dispositivi per posto: lo strumento, se c'è, è il primo
+      // the devices by position: the instrument, if there is one, is the first
       const types = [...(rack.instrument ? [instrumentType(rack.instrument.type)!] : []), ...rack.effects.map(e => effectType(e.type)!)];
       expect(types.every(t => t)).toBe(true);
       [...(rack.instrument ? [rack.instrument] : []), ...rack.effects].forEach((d, i) => {
         for (const id of Object.keys(d.params)) expect(paramSpec(types[i], id), `${rack.name}: ${d.type}.${id}`).toBeDefined();
       });
-      // le destinazioni dei modulatori: un parametro a manopola di un dispositivo del rack, o il mixer
+      // the modulators' targets: a knob parameter of a device of the rack, or the mixer
       for (const e of rack.effects) {
         expect(!!e.targets, `${rack.name}: ${e.type}`).toBe(isModulatorType(e.type));
         for (const t of e.targets ?? []) {
@@ -119,34 +119,34 @@ describe('rack di fabbrica', () => {
     }
   });
 
-  it('Salsiccia: la catena del master di Cripta, con una manopola per idea', () => {
+  it('Salsiccia: the master chain of Cripta, with one knob per idea', () => {
     const salsiccia = FACTORY_RACKS.find(r => r.name === 'Salsiccia')!;
     expect(salsiccia.instrument).toBeNull();
     expect(salsiccia.effects.map(e => e.type)).toEqual(['compressor', 'drive', 'multiband', 'eq', 'clipper']);
     expect(salsiccia.macros.map(m => [m.name, m.value])).toEqual([
-      ['Grasso', 55], ['Colore', 64], ['Spinta', 45], ['Corpo', 0], ['Aria', 0], ['Pompa', 55], ['Clip', 0], ['Volume', 106],
+      ['Fat', 55], ['Colour', 64], ['Push', 45], ['Body', 0], ['Air', 0], ['Pump', 55], ['Clip', 0], ['Volume', 106],
     ]);
   });
 
-  it('Tornado: otto effetti, una macro ciascuno', () => {
+  it('Tornado: eight effects, one macro each', () => {
     const t = tornado();
     const track = t.track();
     expect(track.effects.map(e => e.type)).toEqual(['beatRepeat', 'reverse', 'gate', 'redux', 'autoFilter', 'chorus', 'autoPan', 'tapeStop']);
     const rack = track.racks[0];
     expect(rack.name).toBe('Tornado');
     expect(rack.devices).toEqual(track.effects.map(e => e.id));
-    expect(rack.macros.map(m => m.name)).toEqual(['Stutter', 'Reverse', 'Gate', 'Lo-fi', 'Filtro', 'Flanger', 'Pan', 'Stop']);
+    expect(rack.macros.map(m => m.name)).toEqual(['Stutter', 'Reverse', 'Gate', 'Lo-fi', 'Filter', 'Flanger', 'Pan', 'Stop']);
     rack.macros.forEach((m, i) => expect(m.mappings.every(x => x.device === track.effects[i].id)).toBe(true));
     expect(rack.macros[7].mode).toBe('button');
   });
 
-  it('Tornado con le macro a 0: il suono passa com\'è', () => {
+  it('Tornado with the macros at 0: the sound passes as it is', () => {
     const { inL, inR, outL, outR } = play(tornado().track().effects, SR * 4);
     expect(maxDiff(outL, inL)).toBeLessThan(1e-6);
     expect(maxDiff(outR, inR)).toBeLessThan(1e-6);
   });
 
-  it('Tornado: ogni macro a fondo corsa, da sola, cambia il suono', () => {
+  it('Tornado: each macro at full travel, alone, changes the sound', () => {
     for (let i = 0; i < MACRO_COUNT; i++) {
       const t = tornado();
       t.macro(i, MACRO_MAX);
@@ -155,14 +155,14 @@ describe('rack di fabbrica', () => {
     }
   });
 
-  for (const preset of [FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO, ACIDO_FX, MACCHINA]) {
-    it(`${preset.name}: con le macro a 0 il suono passa com'è`, () => {
+  for (const preset of [FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTE, WALL, ACID_FX, MACHINE]) {
+    it(`${preset.name}: with the macros at 0 the sound passes as it is`, () => {
       const t = tornado(preset);
       for (let i = 0; i < MACRO_COUNT; i++) t.macro(i, 0);
       const effects = t.track().effects;
       const { outL, outR } = play(effects, SR * 4);
-      // il Drive a Dry/Wet 0 lascia il suono asciutto, passato però per il suo sovracampionamento
-      // (che lo sposta di una frazione di campione): il confronto è con quello
+      // the Drive at Dry/Wet 0 leaves the sound dry, though passed through its oversampling
+      // (which shifts it by a fraction of a sample): the comparison is with that
       const dry = play(effects.filter(e => e.type === 'drive'), SR * 4);
       const l = delayedDiff(outL, dry.outL), r = delayedDiff(outR, dry.outR);
       expect(l.diff).toBeLessThan(1e-4);
@@ -170,20 +170,20 @@ describe('rack di fabbrica', () => {
       expect(r.diff).toBeLessThan(1e-4);
     });
 
-    it(`${preset.name}: con le macro dove partono e tutte a 127 cambia il suono e non esplode`, () => {
-      // Fade to Grey parte con Fade a 0 e Macchina con tutto a 0: il suono è com'è finché non li si gira
-      for (const value of [FADE_TO_GREY, MACCHINA].includes(preset) ? [MACRO_MAX] : [null, MACRO_MAX]) {
+    it(`${preset.name}: with the macros where they start and all at 127 the sound changes and doesn't explode`, () => {
+      // Fade to Grey starts with Fade at 0 and Macchina with everything at 0: the sound is as it is until they're turned
+      for (const value of [FADE_TO_GREY, MACHINE].includes(preset) ? [MACRO_MAX] : [null, MACRO_MAX]) {
         const t = tornado(preset);
         if (value !== null) for (let i = 0; i < MACRO_COUNT; i++) t.macro(i, value);
         const { inL, outL, outR } = play(t.track().effects, SR * 4);
         const peak = Math.max(peakOf(outL), peakOf(outR));
-        expect(Number.isFinite(peak) && peak < 2, `${preset.name}, macro ${value ?? 'di partenza'}: ${peak}`).toBe(true);
-        expect(delayedDiff(outL, inL).diff, `${preset.name}, macro ${value ?? 'di partenza'}`).toBeGreaterThan(0.05);
+        expect(Number.isFinite(peak) && peak < 2, `${preset.name}, macro ${value ?? 'at start'}: ${peak}`).toBe(true);
+        expect(delayedDiff(outL, inL).diff, `${preset.name}, macro ${value ?? 'at start'}`).toBeGreaterThan(0.05);
       }
     });
   }
 
-  it('Fade to Grey: a fondo corsa il suono si spegne in una scia più bassa e più stretta', () => {
+  it('Fade to Grey: at full travel the sound dies out in a lower and narrower trail', () => {
     const t = tornado(FADE_TO_GREY);
     t.macro(0, MACRO_MAX);
     const { inL, inR, outL, outR } = play(t.track().effects, SR * 4);
@@ -193,25 +193,25 @@ describe('rack di fabbrica', () => {
     expect(side(outL, outR) / rms(outL)).toBeLessThan(side(inL, inR) / rms(inL));
   });
 
-  it('i modulatori dei rack, messi su una traccia, muovono i dispositivi appena creati', () => {
+  it('the racks\' modulators, put on a track, move the just-created devices', () => {
     const s = setup();
-    s.store.apply(loadRack(null, POMPA));
+    s.store.apply(loadRack(null, PUMP_RACK));
     const track = s.store.project.tracks[0] as MidiTrack;
     const [pump, drift] = track.effects;
     expect(pump.targets).toEqual([{ kind: 'mixer', param: 'volume' }]);
     expect(pump.params.a1).toBe(-95);
     expect(drift.targets).toEqual([{ kind: 'device', device: INSTRUMENT_DEVICE, param: 'cutoff' }, { kind: 'mixer', param: 'pan' }]);
-    // e le macro muovono i modulatori
+    // and the macros move the modulators
     const pumpMacro = track.racks[0].macros[0];
     expect(pumpMacro.mappings).toEqual([expect.objectContaining({ device: pump.id, param: 'depth' })]);
   });
 
   for (const preset of [
-    ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE,
-    WOBBLE, POMPA, CANCELLO, ACIDO_VIVO, SIRENA, COLPO,
-    BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE, HAT_IN_MOVIMENTO,
+    ACID, FOG, GROWL, NEW_WAVE, OXYGEN, HOOVER, JUMP, OFFBEAT, THREE_OH_THREE,
+    WOBBLE, PUMP_RACK, GATED, LIVELY_ACID, SIREN_RACK, HIT,
+    RAVE_DRUMS, DUB_DRUMS, BROKEN_DRUMS, INDUSTRIAL_DRUMS, KICK_RACK, SNARE_RACK, MOVING_HATS,
   ]) {
-    it(`${preset.name}: lo strumento e gli effetti in un Instrument Rack, le macro dove partono`, () => {
+    it(`${preset.name}: the instrument and the effects in an Instrument Rack, the macros where they start`, () => {
       const s = setup();
       s.store.apply(loadRack(null, preset));
       const track = s.store.project.tracks[0] as MidiTrack;
@@ -224,7 +224,7 @@ describe('rack di fabbrica', () => {
       expect(rack.macros.every(m => m.name && m.mappings.length)).toBe(true);
     });
 
-    it(`${preset.name}: suona, sotto 0 dBFS, con le macro dove partono, tutte a 0 e tutte a 127`, () => {
+    it(`${preset.name}: plays, below 0 dBFS, with the macros where they start, all at 0 and all at 127`, () => {
       for (const value of [null, 0, MACRO_MAX]) {
         const s = setup();
         s.store.apply(loadRack(null, preset));
@@ -232,27 +232,27 @@ describe('rack di fabbrica', () => {
         if (value !== null) for (let i = 0; i < MACRO_COUNT; i++) s.store.apply(setMacro(owner, s.store.project.tracks[0].racks[0].id, i, value));
         const track = s.store.project.tracks[0] as MidiTrack;
         const peak = playNotes(track.instrument, track.effects, SR * 3);
-        expect(peak, `${preset.name}, macro ${value ?? 'di partenza'}`).toBeGreaterThan(0.01);
-        expect(peak, `${preset.name}, macro ${value ?? 'di partenza'}`).toBeLessThan(1);
+        expect(peak, `${preset.name}, macro ${value ?? 'at start'}`).toBeGreaterThan(0.01);
+        expect(peak, `${preset.name}, macro ${value ?? 'at start'}`).toBeLessThan(1);
       }
     });
   }
 });
 
-/** Lo strumento suona un giro di note (una ogni ottavo, la-do-mi-sol in basso) e passa per gli
- *  effetti: il picco dell'uscita (NaN se qualcosa non è un numero). */
+/** The instrument plays a loop of notes (one every eighth, A-C-E-G low) and goes through the
+ *  effects: the output's peak (NaN if something isn't a number). */
 function playNotes(instrument: DeviceSettings, effects: readonly EffectSettings[], frames: number): number {
   const synth = INSTRUMENT_CORES[instrument.type](SR);
   synth.setTempo?.(BPM);
   synth.setParams(resolveParams(instrumentType(instrument.type)!, instrument.params));
-  // i modulatori non toccano il suono (qui, senza il motore, stanno fermi)
+  // the modulators don't touch the sound (here, without the engine, they stay still)
   const cores = effects.filter(e => !isModulatorType(e.type)).map(e => {
     const core = EFFECT_CORES[e.type](SR);
     core.setTempo(BPM);
     core.setParams(resolveParams(effectType(e.type)!, e.params));
     return core;
   });
-  // la batteria sulle note dei pad (cassa, hat chiuso, rullante, hat aperto), il resto un accordo in arpeggio
+  // the drums on the pads' notes (kick, closed hat, snare, open hat), the rest an arpeggiated chord
   const drums = ['drums', 'kick', 'snare', 'cymbals'].includes(instrument.type);
   const EIGHTH = SR / 4, PITCHES = drums ? [36, 42, 38, 46] : [45, 48, 52, 55];
   let aL = new Float32Array(BLOCK), aR = new Float32Array(BLOCK), bL = new Float32Array(BLOCK), bR = new Float32Array(BLOCK);

@@ -7,7 +7,7 @@ import { NoteQueue } from '../../src/devices/worklet/note-queue';
 
 const SR = 48000, BLOCK = 128;
 
-/** Fa suonare `core` per `frames` campioni, a blocchi come l'AudioWorklet. */
+/** Plays `core` for `frames` samples, in blocks like the AudioWorklet. */
 function run(core: NeuroCore, queue: NoteQueue, frames: number): { left: Float32Array; right: Float32Array } {
   const left = new Float32Array(frames), right = new Float32Array(frames);
   for (let f = 0; f < frames; f += BLOCK) {
@@ -32,7 +32,7 @@ const rms = (x: Float32Array, from = 0, to = x.length) => {
   return Math.sqrt(s / Math.max(1, to - from));
 };
 
-/** L'ampiezza della componente a `hz` (DFT su una finestra di Hann). */
+/** The amplitude of the component at `hz` (DFT over a Hann window). */
 function amplitudeAt(x: Float32Array, hz: number, from: number, length: number): number {
   let re = 0, im = 0, w = 0;
   for (let i = 0; i < length; i++) {
@@ -44,17 +44,17 @@ function amplitudeAt(x: Float32Array, hz: number, from: number, length: number):
   return (2 * Math.hypot(re, im)) / w;
 }
 
-/** Il corpo nudo: un dente di sega, filtro aperto, niente sub né colori. */
+/** The bare body: a saw, open filter, no sub or colours. */
 const BARE = { unison: 1, mix: 0, cutoff: 20000, resonance: 0, drive: 0, keyTrack: 0, sub: 0, crossover: 40, velocity: 0, volume: 0, release: 0.01 };
 
 describe('Neuro', () => {
-  it('i parametri hanno tutti un predefinito valido', () => {
+  it('the parameters all have a valid default', () => {
     const r = resolveParams(NEURO, {});
     expect(Object.keys(r)).toHaveLength(paramsOf(NEURO).length);
     expect(new Set(paramsOf(NEURO).map(p => p.id)).size).toBe(paramsOf(NEURO).length);
   });
 
-  it('suona la nota giusta', () => {
+  it('plays the right note', () => {
     const { core, queue } = synth({ ...BARE });
     queue.add(45, 100, 0, SR);
     const { left } = run(core, queue, SR / 2);
@@ -64,36 +64,36 @@ describe('Neuro', () => {
     expect(amplitudeAt(left, f * 1.5, 4800, 9600)).toBeLessThan(fundamental * 0.05);
   });
 
-  it('il sub è un seno pulito e il corpo resta sopra il taglio', () => {
-    const pitch = 31, f = midiToHz(pitch); // Sol 1, 49 Hz
+  it('the sub is a clean sine and the body stays above the cut', () => {
+    const pitch = 31, f = midiToHz(pitch); // G1, 49 Hz
     const body = (crossover: number) => {
       const { core, queue } = synth({ ...BARE, crossover });
       queue.add(pitch, 100, 0, SR);
       return run(core, queue, SR).left;
     };
     const open = amplitudeAt(body(40), f, 9600, 28800), cut = amplitudeAt(body(160), f, 9600, 28800);
-    expect(cut / open).toBeLessThan(0.05); // più di 26 dB sotto il taglio
+    expect(cut / open).toBeLessThan(0.05); // more than 26 dB below the cut
 
     const { core, queue } = synth({ ...BARE, mix: 0, sub: 100, crossover: 400, cutoff: 20 });
     queue.add(pitch, 100, 0, SR);
     const { left } = run(core, queue, SR);
     const s = amplitudeAt(left, f, 9600, 28800);
     expect(s).toBeGreaterThan(0.5);
-    expect(amplitudeAt(left, 2 * f, 9600, 28800)).toBeLessThan(s * 0.01); // niente armoniche
+    expect(amplitudeAt(left, 2 * f, 9600, 28800)).toBeLessThan(s * 0.01); // no harmonics
   });
 
-  it("l'LFO va a tempo: un volume a quadra da 1/4 a 120 BPM apre e chiude ogni mezzo secondo", () => {
+  it("the LFO is synced: a 1/4 square on the volume at 120 BPM opens and closes every half second", () => {
     const { core, queue } = synth({ ...BARE, lfo1Shape: LFO_SHAPE.square, lfo1Rate: LFO_RATE['1/4'], lfo1Dest: MOD_DEST.volume, lfo1Amount: 100 });
     queue.add(45, 100, 0, 2 * SR);
     const { left } = run(core, queue, 2 * SR);
-    const half = SR / 4; // mezzo giro: 0.25 s
+    const half = SR / 4; // half a cycle: 0.25 s
     for (let k = 0; k < 4; k++) {
       const on = rms(left, k * 2 * half + 600, (k * 2 + 1) * half - 600);
       const off = rms(left, (k * 2 + 1) * half + 600, (k * 2 + 2) * half - 600);
       expect(on).toBeGreaterThan(0.2);
       expect(off).toBeLessThan(on * 0.01);
     }
-    // a 60 BPM lo stesso LFO va lento la metà
+    // at 60 BPM the same LFO goes half as fast
     const slow = synth({ ...BARE, lfo1Shape: LFO_SHAPE.square, lfo1Rate: LFO_RATE['1/4'], lfo1Dest: MOD_DEST.volume, lfo1Amount: 100 }, 60);
     slow.queue.add(45, 100, 0, 2 * SR);
     const s = run(slow.core, slow.queue, 2 * SR).left;
@@ -101,18 +101,18 @@ describe('Neuro', () => {
     expect(rms(s, 2 * half + 600, 4 * half - 600)).toBeLessThan(0.01);
   });
 
-  it('in Legato le note sovrapposte scivolano senza ripartire', () => {
+  it('in Legato overlapping notes slide without restarting', () => {
     const { core, queue } = synth({ ...BARE, voiceMode: NEURO_MODE.legato, glide: 30, attack: 0.2, sustain: 100 });
     queue.add(45, 100, 0, SR / 2 + 100);
     queue.add(57, 100, SR / 2, SR);
     const { left } = run(core, queue, SR);
-    // l'attacco lento non riparte: il livello resta pieno attraverso il cambio di nota
+    // the slow attack doesn't restart: the level stays full through the note change
     expect(rms(left, SR / 2 - 2400, SR / 2)).toBeGreaterThan(0.4);
     expect(rms(left, SR / 2, SR / 2 + 2400)).toBeGreaterThan(0.4);
     expect(amplitudeAt(left, midiToHz(57), SR / 2 + 7200, 9600)).toBeGreaterThan(0.3);
   });
 
-  it('il formante fa le vocali: la A ha il primo formante alto, la I basso', () => {
+  it('the formant makes the vowels: the A has a high first formant, the I a low one', () => {
     const vowel = (v: number) => {
       const { core, queue } = synth({ ...BARE, formant: 100, vowel: v });
       queue.add(43, 100, 0, SR);
@@ -125,7 +125,7 @@ describe('Neuro', () => {
     expect(a.f780 / a.f290).toBeGreaterThan(2 * (i.f780 / i.f290));
   });
 
-  it("l'unison apre lo stereo; da sola la copia è al centro", () => {
+  it("the unison spreads the stereo; alone the copy is in the centre", () => {
     const wide = synth({ ...BARE, unison: 5, detune: 30, spread: 100 });
     wide.queue.add(45, 100, 0, SR);
     const w = run(wide.core, wide.queue, SR / 2);
@@ -139,7 +139,7 @@ describe('Neuro', () => {
     expect(m.left).toEqual(m.right);
   });
 
-  it('i preset suonano senza esplodere e finiscono dopo il rilascio', () => {
+  it('the presets play without exploding and end after the release', () => {
     for (const preset of NEURO.presets) {
       const { core, queue } = synth(preset.params);
       queue.add(31, 127, 0, SR / 2);
@@ -156,8 +156,8 @@ describe('Neuro', () => {
     }
   });
 
-  it('costa poco: dieci secondi del preset più pesante in meno di un secondo', () => {
-    const { core, queue } = synth({ ...NEURO.presets.find(p => p.name === 'Neuro ringhio')!.params, unison: 7, formant: 100 });
+  it('it costs little: ten seconds of the heaviest preset in less than a second', () => {
+    const { core, queue } = synth({ ...NEURO.presets.find(p => p.name === 'Neuro growl')!.params, unison: 7, formant: 100 });
     queue.add(31, 100, 0, 10 * SR);
     const t = performance.now();
     run(core, queue, 10 * SR);

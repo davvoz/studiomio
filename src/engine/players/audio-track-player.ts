@@ -9,12 +9,12 @@ import { fadeGainAt, piecesInWindow, type Piece } from '../track-content';
 import { CLIP_TRANSPOSE, steppedRuns } from '../../model/envelope';
 import { ActiveNodes, stopQuietly, type PlayerContext, type TrackPlayer } from './track-player';
 
-/** Dissolvenza agli estremi di ogni tratto: evita i clic su tagli e giri di loop. */
+/** Fade at the ends of each stretch: avoids clicks on cuts and loop rounds. */
 const FADE = 0.002;
 
 const EPS = 1e-9;
 
-/** Suona le clip audio della traccia (timeline e session): un nodo di lettura per ogni tratto continuo. */
+/** Plays the track's audio clips (timeline and session): one playback node for each continuous stretch. */
 export class AudioTrackPlayer implements TrackPlayer {
   private track: AudioTrack;
   private readonly segments = new WeakMap<Placement, Segment[]>();
@@ -64,8 +64,8 @@ export class AudioTrackPlayer implements TrackPlayer {
     return s;
   }
 
-  /** Un tratto; con la curva del transpose, un pezzo per ogni semitono che tocca (si passa da
-   *  uno all'altro con le dissolvenze anti-clic). */
+  /** A stretch; with the transpose curve, a piece for each semitone it touches (going from
+   *  one to the other with the anti-click fades). */
   private play(piece: Piece<AudioClip>, w: ScheduleWindow): void {
     const curve = piece.clip.envelope(CLIP_TRANSPOSE)?.points;
     if (!curve?.length) return this.playRun(piece, w, 0);
@@ -78,16 +78,16 @@ export class AudioTrackPlayer implements TrackPlayer {
 
   private playRun({ clip, start, end: stop, contentStart, fades }: Piece<AudioClip>, w: ScheduleWindow, shift: number): void {
     const playable = this.clips.playable(clip, shift);
-    // l'audio (quello giusto) arriva: il motore riprogrammerà quando è pronto
+    // the (right) audio is arriving: the engine will reschedule when it's ready
     if (!playable || playable.provisional) this.ctx.missing();
     if (!playable) return;
     const { buffer, rate } = playable;
     let when = timeAtClock(w, start);
     const end = timeAtClock(w, stop);
-    // punto del buffer (in secondi di buffer) che corrisponde all'inizio del tratto
+    // point of the buffer (in buffer seconds) corresponding to the start of the stretch
     let offset = w.tempo.secondsAt(contentStart - playable.startBeat) * rate;
     if (offset < 0) {
-      // il tratto inizia prima del sample: si aspetta che il sample cominci
+      // the stretch starts before the sample: wait for the sample to begin
       when -= offset / rate;
       offset = 0;
     }
@@ -106,7 +106,7 @@ export class AudioTrackPlayer implements TrackPlayer {
     amp.gain.setValueAtTime(g, when + duration - fade);
     amp.gain.linearRampToValueAtTime(0, when + duration);
     src.connect(amp);
-    // le dissolvenze della clip posata: un guadagno in più, che segue la retta disegnata
+    // the placed clip's fades: an extra gain, following the drawn line
     const fadeGain = fades ? graph.createGain() : null;
     if (fadeGain && fades) {
       const at = (b: number) => Math.max(0, timeAtClock(w, b));
@@ -121,7 +121,7 @@ export class AudioTrackPlayer implements TrackPlayer {
     src.start(when, offset, duration * rate);
     src.stop(when + duration);
     const ends = when + duration;
-    /** Dissolvenza da `from` a `to`, poi il nodo si ferma; se non era ancora partito non suona. */
+    /** Fade from `from` to `to`, then the node stops; if it hadn't started yet it doesn't play. */
     const fadeOut = (from: number, to: number) => {
       if (from >= ends) return;
       if (to > when) {
@@ -137,8 +137,8 @@ export class AudioTrackPlayer implements TrackPlayer {
       fadeGain?.disconnect();
     }, {
       cut: at => fadeOut(at - FADE, at),
-      // il tratto nuovo entra da `at` con la sua dissolvenza e questo esce nello stesso tempo:
-      // una dissolvenza incrociata, senza buchi
+      // the new stretch comes in from `at` with its fade and this one goes out at the same time:
+      // a crossfade, without gaps
       retake: at => (at <= when ? stopQuietly(src, when) : fadeOut(at, at + FADE)),
     });
   }

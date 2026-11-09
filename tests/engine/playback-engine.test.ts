@@ -19,7 +19,7 @@ import { ProjectStore } from '../../src/store/project-store';
 import { FakeEffects, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
 import { drumLoop } from '../helpers/signals';
 
-/** DSP nello stesso thread, con il renderer vero. */
+/** DSP in the same thread, with the real renderer. */
 class InlineDsp implements DspBackend {
   private readonly sources = new Map<string, AudioData>();
   renders = 0;
@@ -31,7 +31,7 @@ class InlineDsp implements DspBackend {
   }
 }
 
-/** Progetto a 120 BPM con una traccia audio (loop di 1 battuta = 2 s) e una MIDI. */
+/** Project at 120 BPM with an audio track (1-bar loop = 2 s) and a MIDI one. */
 async function rig(opts: { prepare?: boolean } = {}) {
   const ids = sequentialIds();
   const store = new ProjectStore(Project.empty('t', ids, 2), ids);
@@ -63,7 +63,7 @@ async function rig(opts: { prepare?: boolean } = {}) {
   sync(store.project);
 
   const t = (i: number): TrackId => store.project.tracks[i].id;
-  /** Porta avanti il tempo del contesto a passi di 25 ms, come il timer vero. */
+  /** Advances the context's time in steps of 25 ms, like the real timer. */
   const runUntil = (time: number) => {
     while (graph.currentTime < time - 1e-9) {
       graph.currentTime = Math.min(time, graph.currentTime + 0.025);
@@ -79,27 +79,27 @@ const starts = (g: FakeGraph) => g.sources.filter(s => s.started).map(s => ({
 }));
 
 describe('PlaybackEngine: clip audio', () => {
-  it('una clip a battuta 2 parte dopo 2 s, all\'istante esatto', async () => {
+  it('a clip at bar 2 starts after 2 s, at the exact instant', async () => {
     const r = await rig();
     r.store.apply(placeSample(r.t(0), r.sample.id, 4));
     await r.ready();
     r.engine.setProject(r.store.project);
     r.engine.play(0);
     r.runUntil(1.5);
-    expect(starts(r.graph)).toEqual([]); // non ancora: troppo lontana
+    expect(starts(r.graph)).toEqual([]); // not yet: too far
     r.runUntil(2.0);
     expect(starts(r.graph)).toEqual([{ when: 2.05, offset: 0, duration: 2 }]);
   });
 
-  it('play a metà clip: parte subito, dal punto giusto del buffer', async () => {
+  it('play halfway through a clip: it starts right away, from the right point of the buffer', async () => {
     const r = await rig();
     r.store.apply(placeSample(r.t(0), r.sample.id, 0));
     await r.ready();
-    r.engine.play(1); // un battito = 0.5 s dentro la clip
+    r.engine.play(1); // a beat = 0.5 s into the clip
     expect(starts(r.graph)).toEqual([{ when: 0.05, offset: 0.5, duration: 1.5 }]);
   });
 
-  it('loop della timeline: ogni giro riparte dall\'inizio del loop', async () => {
+  it('timeline loop: each round restarts from the start of the loop', async () => {
     const r = await rig();
     r.store.apply(placeSample(r.t(0), r.sample.id, 0));
     r.store.apply(setLoopRegion({ enabled: true, start: 0, end: 2 }));
@@ -111,10 +111,10 @@ describe('PlaybackEngine: clip audio', () => {
       { when: 1.05, offset: 0, duration: 1 },
       { when: 2.05, offset: 0, duration: 1 },
     ]);
-    expect(r.engine.position).toBeCloseTo(0.3, 6); // 2.2 s − 0.05 s di latenza = 4.3 battiti → 0.3 nel loop
+    expect(r.engine.position).toBeCloseTo(0.3, 6); // 2.2 s − 0.05 s of latency = 4.3 beats → 0.3 in the loop
   });
 
-  it('a 60 BPM la clip è renderizzata al tempo nuovo e dura il doppio', async () => {
+  it('at 60 BPM the clip is rendered at the new tempo and lasts twice as long', async () => {
     const r = await rig();
     r.store.apply(placeSample(r.t(0), r.sample.id, 0));
     r.store.apply(setTempo(60));
@@ -124,64 +124,64 @@ describe('PlaybackEngine: clip audio', () => {
     expect(r.graph.sources[0].buffer!.duration).toBeCloseTo(4, 3);
   });
 
-  it('cambiare il tempo mentre suona non interrompe: il render di prima, poi quello nuovo', async () => {
+  it('changing the tempo while playing doesn\'t interrupt: the previous render, then the new one', async () => {
     const r = await rig();
     r.store.apply(placeSample(r.t(0), r.sample.id, 0));
     await r.ready();
     r.engine.play(0);
-    r.runUntil(0.55); // battito 1
+    r.runUntil(0.55); // beat 1
     r.store.apply(setTempo(60));
-    // il suono di prima esce in dissolvenza mentre entra il nuovo, dove il trasporto sarà
-    // (0.6 s = battito 1.1): nessun buco
+    // the previous sound fades out while the new one comes in, where the transport will be
+    // (0.6 s = beat 1.1): no gap
     const [old, standIn] = r.graph.sources;
     expect(old.stoppedAt).toBeCloseTo(0.602, 9);
-    // il render nuovo non c'è ancora: il vecchio (a 120 BPM) letto a metà velocità resta a tempo
+    // the new render isn't there yet: the old one (at 120 BPM) read at half speed stays in time
     expect(standIn.started!.when).toBeCloseTo(0.6, 6);
-    expect(standIn.started!.offset).toBeCloseTo(0.55, 6); // battito 1.1 a 120 BPM
+    expect(standIn.started!.offset).toBeCloseTo(0.55, 6); // beat 1.1 at 120 BPM
     expect(standIn.playbackRate.value).toBe(0.5);
     expect(standIn.buffer).toBe(old.buffer);
-    await r.clips.prepare(r.store.project); // arriva il render al tempo nuovo
+    await r.clips.prepare(r.store.project); // the render at the new tempo arrives
     r.engine.refresh();
     const last = starts(r.graph).at(-1)!;
     expect(last.when).toBeCloseTo(0.6, 6);
-    // senza risuonare il pezzo già sentito: battito 1.1 a 60 BPM = 1.1 s nel buffer nuovo
+    // without replaying the piece already heard: beat 1.1 at 60 BPM = 1.1 s into the new buffer
     expect(last.offset).toBeCloseTo(1.1, 6);
     expect(r.graph.sources.at(-1)!.playbackRate.value).toBe(1);
   });
 
-  it('modificare una clip mentre suona riprogramma solo la sua traccia, senza fermare niente', async () => {
+  it('editing a clip while playing reschedules only its track, without stopping anything', async () => {
     const r = await rig();
     r.store.apply(placeSample(r.t(0), r.sample.id, 0));
     r.store.apply(addMidiClip(r.t(1), 0, 4));
     const pl = r.store.project.tracks[1].arrangement[0];
     const note = (pitch: number, start: number) => ({ pitch, start, duration: 0.5, velocity: 100 });
-    r.store.apply(updateClip<MidiClip>('note', r.t(1), pl.id, c => c.addingNotes(note(60, 0), note(62, 1.2))));
+    r.store.apply(updateClip<MidiClip>('notes', r.t(1), pl.id, c => c.addingNotes(note(60, 0), note(62, 1.2))));
     await r.ready();
     r.engine.play(0);
-    r.runUntil(0.55); // battito 1: la prima nota suona, la seconda (0.65 s) è già programmata
+    r.runUntil(0.55); // beat 1: the first note plays, the second (0.65 s) is already scheduled
     const synth = r.instruments.created[0];
     const audioSources = r.graph.sources.length, stops = synth.stops;
-    r.store.apply(updateClip<MidiClip>('nota nuova', r.t(1), pl.id, c => c.addingNotes(note(64, 1.3))));
+    r.store.apply(updateClip<MidiClip>('new note', r.t(1), pl.id, c => c.addingNotes(note(64, 1.3))));
     expect(synth.stops).toBe(stops);
     expect(synth.retakes.map(t => +t.toFixed(9))).toEqual([0.6]);
-    // da 0.6 s le note arrivano di nuovo (una volta sola); quella già partita continua
+    // from 0.6 s the notes arrive again (only once); the one already started continues
     expect(synth.notes.map(n => [n.pitch, +n.when.toFixed(6)])).toEqual([[60, 0.05], [62, 0.65], [64, 0.7]]);
-    // la traccia audio non è stata toccata
+    // the audio track wasn't touched
     expect(r.graph.sources).toHaveLength(audioSources);
     expect(r.graph.sources.every(s => s.stoppedAt === null || s.stoppedAt > 1)).toBe(true);
   });
 
-  it('se il render non è pronto la clip parte appena arriva', async () => {
+  it('if the render isn\'t ready the clip starts as soon as it arrives', async () => {
     const r = await rig({ prepare: false });
     r.store.apply(placeSample(r.t(0), r.sample.id, 0));
     r.engine.play(0);
     expect(starts(r.graph)).toEqual([]);
     await new Promise<void>(res => r.clips.on('ready', () => res()));
-    expect(starts(r.graph)).toHaveLength(1); // refresh automatico
-    expect(r.dsp.renders).toBe(1); // richiesto una volta sola
+    expect(starts(r.graph)).toHaveLength(1); // automatic refresh
+    expect(r.dsp.renders).toBe(1); // requested only once
   });
 
-  it('senza warp: il sample originale, il transpose cambia la velocità', async () => {
+  it('without warp: the original sample, the transpose changes the speed', async () => {
     const r = await rig();
     r.store.apply(placeSample(r.t(0), r.sample.id, 0));
     const id = r.store.project.tracks[0].arrangement[0].id;
@@ -189,11 +189,11 @@ describe('PlaybackEngine: clip audio', () => {
     r.engine.play(1);
     const s = r.graph.sources[0];
     expect(s.playbackRate.value).toBe(2);
-    expect(s.started).toMatchObject({ when: 0.05, offset: 1 }); // 0.5 s di timeline a velocità doppia
-    expect(s.buffer!.length).toBe(r.sample.frames); // il sample originale, non un render
+    expect(s.started).toMatchObject({ when: 0.05, offset: 1 }); // 0.5 s of timeline at double speed
+    expect(s.buffer!.length).toBe(r.sample.frames); // the original sample, not a render
   });
 
-  it('stop ferma tutto e avvisa', async () => {
+  it('stop stops everything and notifies', async () => {
     const r = await rig();
     const states: boolean[] = [];
     r.engine.onStateChange(p => states.push(p));
@@ -207,10 +207,10 @@ describe('PlaybackEngine: clip audio', () => {
   });
 });
 
-describe('PlaybackEngine: MIDI e metronomo', () => {
-  it('le note suonano con lo strumento, anche nei giri del loop della clip', async () => {
+describe('PlaybackEngine: MIDI and metronome', () => {
+  it('the notes play with the instrument, also in the rounds of the clip\'s loop', async () => {
     const r = await rig();
-    r.store.apply(addMidiClip(r.t(1), 0, 4)); // clip vuota di 4 battiti, in loop, posata per 4
+    r.store.apply(addMidiClip(r.t(1), 0, 4)); // empty 4-beat clip, looping, placed for 4
     const pl = r.store.project.tracks[1].arrangement[0];
     r.store.apply(updateClip<MidiClip>('note', r.t(1), pl.id, c => c
       .withLoop({ enabled: true, start: 0, end: 2 })
@@ -221,34 +221,34 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     const notes = synth.notes.map(n => ({ pitch: n.pitch, when: +n.when.toFixed(6), duration: +n.duration.toFixed(6) }));
     expect(notes).toEqual([
       { pitch: 60, when: 0.05, duration: 0.25 },
-      // la seconda nota (1 battito) viene tagliata alla fine del giro: dura 0.5 battiti
+      // the second note (1 beat) is cut at the end of the round: it lasts 0.5 beats
       { pitch: 67, when: 0.8, duration: 0.25 },
-      { pitch: 60, when: 1.05, duration: 0.25 }, // secondo giro (battito 2)
+      { pitch: 60, when: 1.05, duration: 0.25 }, // second round (beat 2)
       { pitch: 67, when: 1.8, duration: 0.25 },
     ]);
     expect(synth.notes[1].velocity).toBe(50);
-    // le stesse note, per l'interfaccia: chiedendo per intervalli di tempo
+    // the same notes, for the interface: asking by time intervals
     expect(r.engine.notesStarted(r.t(1), 0, 1)).toEqual([60, 67]);
     expect(r.engine.notesStarted(r.t(1), 1, 1.5)).toEqual([60]);
     r.engine.stop();
     expect(r.engine.notesStarted(r.t(1), 1.5, 3)).toEqual([]);
   });
 
-  it('lo strumento segue la traccia: parametri al volo, tipo nuovo = strumento nuovo', async () => {
+  it('the instrument follows the track: parameters on the fly, new type = new instrument', async () => {
     const r = await rig();
     const synth = r.instruments.created[0];
     expect(synth.type).toBe('analog');
     r.store.apply(setInstrumentParam(r.t(1), 'cutoff', 500));
     expect(synth.updates.at(-1)?.params.cutoff).toBe(500);
     expect(r.instruments.created).toHaveLength(1);
-    r.store.apply(setInstrument(r.t(1), { type: 'altro', preset: null, params: {} }));
+    r.store.apply(setInstrument(r.t(1), { type: 'other', preset: null, params: {} }));
     expect(synth.disposed).toBe(true);
-    expect(r.instruments.created[1].type).toBe('altro');
+    expect(r.instruments.created[1].type).toBe('other');
     r.engine.audition(r.t(1), 64, 90, 0.5);
     expect(r.instruments.created[1].notes).toEqual([{ pitch: 64, velocity: 90, when: 0.005, duration: 0.5 }]);
   });
 
-  it('una nota suonata a mano resta accesa finché non si lascia, anche con il trasporto fermo', async () => {
+  it('a note played by hand stays on until it\'s released, even with the transport stopped', async () => {
     const r = await rig();
     const synth = r.instruments.created[0];
     r.engine.pressNote(r.t(1), 64, 90);
@@ -257,14 +257,14 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     expect(synth.held.size).toBe(0);
   });
 
-  it('una clip con un suono lo dà allo strumento quando parte, una volta sola; il progetto lo segue', async () => {
+  it('a clip with a sound gives it to the instrument when it starts, only once; the project follows it', async () => {
     const r = await rig();
-    const bright = { type: 'analog', preset: 'Chiaro', params: { cutoff: 9000 } };
-    r.store.apply(addMidiClip(r.t(1), 0, 2)); // in loop, posata per 2 battiti
+    const bright = { type: 'analog', preset: 'Bright', params: { cutoff: 9000 } };
+    r.store.apply(addMidiClip(r.t(1), 0, 2)); // looping, placed for 2 beats
     r.store.apply(addMidiClip(r.t(1), 2, 2));
     const [a, b] = r.store.project.tracks[1].arrangement;
-    r.store.apply(updateClip<MidiClip>('loop corto', r.t(1), a.id, c => c.withLoop({ enabled: true, start: 0, end: 1 })));
-    r.store.apply(updateClip<MidiClip>('suono', r.t(1), b.id, c => c.withSound(bright)));
+    r.store.apply(updateClip<MidiClip>('short loop', r.t(1), a.id, c => c.withLoop({ enabled: true, start: 0, end: 1 })));
+    r.store.apply(updateClip<MidiClip>('sound', r.t(1), b.id, c => c.withSound(bright)));
     const heard: unknown[] = [];
     r.engine.onClipSound((track, sound) => {
       heard.push([track, sound]);
@@ -272,36 +272,36 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     });
     const synth = r.instruments.created[0];
     r.engine.play(0);
-    r.runUntil(1.6); // la seconda clip parte al battito 2 (1.05 s), e fa un giro
+    r.runUntil(1.6); // the second clip starts at beat 2 (1.05 s), and does a round
     expect(synth.updates).toEqual([bright]);
     expect(synth.updateTimes.map(t => +t!.toFixed(6))).toEqual([1.05]);
     await Promise.resolve();
     expect(heard).toEqual([[r.t(1), bright]]);
     expect((r.store.project.tracks[1] as MidiTrack).instrument).toBe(bright);
-    expect(r.store.canUndo).toBe(true); // i passi di prima ci sono ancora…
-    expect(r.store.undoLabel).toBe('suono'); // …e il cambio di suono non è uno di loro
-    // ritoccare lo strumento mentre la clip suona: il suono della clip non torna
+    expect(r.store.canUndo).toBe(true); // the previous steps are still there…
+    expect(r.store.undoLabel).toBe('sound'); // …and the sound change isn't one of them
+    // retouching the instrument while the clip plays: the clip's sound doesn't come back
     r.store.apply(setInstrumentParam(r.t(1), 'cutoff', 300));
     r.runUntil(2);
     expect(synth.updates.map(u => u.params.cutoff)).toEqual([9000, 300]);
-    // dopo lo stop, ripartire dentro la clip ridà il suo suono
+    // after the stop, restarting inside the clip gives back its sound
     r.engine.stop();
     r.engine.play(2.5);
     expect(synth.updates.at(-1)).toBe(bright);
   });
 
-  it('il suono di una clip per un altro tipo di strumento si ignora', async () => {
+  it('a clip\'s sound for another instrument type is ignored', async () => {
     const r = await rig();
     r.store.apply(addMidiClip(r.t(1), 0, 2));
     const pl = r.store.project.tracks[1].arrangement[0];
-    r.store.apply(updateClip<MidiClip>('suono', r.t(1), pl.id, c => c.withSound({ type: 'altro', preset: null, params: {} })));
+    r.store.apply(updateClip<MidiClip>('sound', r.t(1), pl.id, c => c.withSound({ type: 'other', preset: null, params: {} })));
     r.engine.play(0);
     r.runUntil(0.5);
     expect(r.instruments.created).toHaveLength(1);
     expect(r.instruments.created[0].updates).toEqual([]);
   });
 
-  it('lo strumento nasce con il tempo del progetto e lo segue quando cambia', async () => {
+  it('the instrument is born with the project\'s tempo and follows it when it changes', async () => {
     const r = await rig();
     const synth = r.instruments.created[0];
     expect(synth.bpm).toBe(120);
@@ -309,17 +309,17 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     expect(synth.tempos).toEqual([]);
     r.store.apply(setTempo(140));
     expect(synth.tempos).toEqual([140]);
-    r.store.apply(setInstrument(r.t(1), { type: 'altro', preset: null, params: {} }));
+    r.store.apply(setInstrument(r.t(1), { type: 'other', preset: null, params: {} }));
     expect(r.instruments.created[1].bpm).toBe(140);
   });
 
-  it('gli effetti sanno dove si trova il trasporto: a ogni partenza, giro di loop e salto; fermo allo stop', async () => {
+  it('the effects know where the transport is: at every start, loop round and jump; stopped at the stop', async () => {
     const r = await rig();
     r.store.apply(setLoopRegion({ enabled: true, start: 1, end: 3 }));
     r.engine.play(0);
     r.runUntil(1.6);
     const bar = { bpm: 120, beatsPerBar: 4 };
-    // da 0 a 3 (1.5 s), poi di nuovo da 1
+    // from 0 to 3 (1.5 s), then again from 1
     expect(r.effects.anchors).toEqual([{ time: 0.05, beat: 0, ...bar }, { time: 1.55, beat: 1, ...bar }]);
     r.engine.seek(2);
     expect(r.effects.anchors.at(-1)).toEqual({ time: expect.closeTo(1.65, 9), beat: 2, ...bar });
@@ -327,7 +327,7 @@ describe('PlaybackEngine: MIDI e metronomo', () => {
     expect(r.effects.anchors.at(-1)).toBeNull();
   });
 
-  it('metronomo: un clic per battito, accento sul primo della battuta', async () => {
+  it('metronome: a click per beat, accent on the first of the bar', async () => {
     const r = await rig();
     r.engine.metronomeOn = true;
     r.engine.play(0);
@@ -348,13 +348,13 @@ describe('mixer', () => {
     expect(audibleTracks(r.store.project.tracks)).toEqual(new Set());
   });
 
-  it('volume e pan nei nodi, canali tolti con le tracce', async () => {
+  it('volume and pan in the nodes, channels removed with the tracks', async () => {
     const r = await rig();
     const g = new FakeGraph();
     const mixer = new MixerGraph(g, new FakeEffects());
     r.store.apply(setMixer(r.t(0), { volumeDb: -6, pan: 0.5 }));
     mixer.sync(r.store.project);
-    expect(g.gains[4].gain.value).toBeCloseTo(0.501, 3); // [0] bus, [1] master, [2] ingresso, [3] tap, [4] volume
+    expect(g.gains[4].gain.value).toBeCloseTo(0.501, 3); // [0] bus, [1] master, [2] input, [3] tap, [4] volume
     expect(g.panners[0].pan.value).toBe(0.5);
     mixer.sync(r.store.project.removingTrack(r.t(0)));
     expect(g.gains[4].connected).toBe(false);

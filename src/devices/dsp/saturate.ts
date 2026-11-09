@@ -1,8 +1,8 @@
-/** Le saturazioni dell'uscita degli strumenti a strati, nell'ordine delle loro scelte. */
-export const DRIVE_TYPES = ['Morbida', 'Dura', 'Ripiegata'] as const;
+/** The saturations of the layered instruments' output, in the order of their choices. */
+export const DRIVE_TYPES = ['Soft', 'Hard', 'Folded'] as const;
 
-/** La saturazione `type` (in DRIVE_TYPES), con `amount` 0..1: a 0 il suono è pulito; poi tanh,
- *  taglio netto a ±1, o ripiegamento (oltre il bordo l'onda torna indietro). */
+/** The saturation `type` (in DRIVE_TYPES), with `amount` 0..1: at 0 the sound is clean; then tanh,
+ *  hard clipping at ±1, or folding (beyond the edge the wave turns back). */
 export function driveSample(x: number, amount: number, type: number): number {
   if (amount < 0.005) return x;
   const d = 1 + amount * 9, wet = Math.min(1, amount * 5);
@@ -13,6 +13,6 @@ export function driveSample(x: number, amount: number, type: number): number {
   return x + (y - x) * wet;
 }
 
-/** Saturazione morbida che tiene il picco a 1 (`amount` 0..1, a 0 pulita). */
+/** Soft saturation keeping the peak at 1 (`amount` 0..1, at 0 clean). */
 export const softClip = (x: number, amount: number): number =>
   (amount < 0.005 ? x : Math.tanh(x * (1 + amount * 6)) / Math.tanh(1 + amount * 6));

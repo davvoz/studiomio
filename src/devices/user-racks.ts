@@ -1,26 +1,26 @@
-/* I rack salvati da chi usa l'app, con i loro dispositivi e le macro. Come i preset dell'utente
- * non sono nel progetto: valgono per tutti i progetti. Nell'app desktop sono file, uno per rack,
- * in Documenti\studiomio\Rack (li scrive il processo principale); nel browser restano nello
- * spazio locale. */
+/* The racks saved by whoever uses the app, with their devices and macros. Like the user presets
+ * they're not in the project: they apply to all projects. In the desktop app they're files, one per rack,
+ * in Documents\studiomio\Rack (the main process writes them); in the browser they stay in
+ * local storage. */
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import { rackPresetFrom, type RackPreset } from '../model/rack-preset';
 import { SAMPLER, upgradeZoneTune } from './instruments/sampler/sampler';
 import type { PresetStorage } from './user-presets';
 
-/** Chi conserva i rack: i file (app desktop) o lo spazio locale (browser). */
+/** Who keeps the racks: the files (desktop app) or local storage (browser). */
 export interface RackBackend {
-  /** Tutti i rack salvati; ciò che non è un rack si salta qui. */
+  /** All the saved racks; what isn't a rack is skipped here. */
   load(): Promise<unknown[]>;
-  /** Scrive il rack (sopra quello con lo stesso nome). */
+  /** Writes the rack (over the one with the same name). */
   save(rack: RackPreset): Promise<void>;
   remove(name: string): Promise<void>;
-  /** Mostra dove sono (la cartella in Esplora file), se si può. */
+  /** Shows where they are (the folder in File Explorer), if possible. */
   reveal?(): Promise<void>;
 }
 
 const KEY = 'studiomio.racks';
 
-/** I rack nello spazio locale, tutti in una voce: [rack, …]. */
+/** The racks in local storage, all in one entry: [rack, …]. */
 export class StorageRacks implements RackBackend {
   constructor(private readonly storage: PresetStorage) {}
 
@@ -49,7 +49,7 @@ export class StorageRacks implements RackBackend {
     try {
       this.storage.setItem(KEY, JSON.stringify(racks));
     } catch {
-      throw new Error('lo spazio locale dell\'app è pieno o bloccato.');
+      throw new Error('the app\'s local storage is full or blocked.');
     }
   }
 }
@@ -60,17 +60,17 @@ export class UserRacks {
 
   constructor(private readonly backend: RackBackend | null) {}
 
-  /** I rack sono cambiati (letti, salvati, eliminati): per chi li elenca, come il browser. */
+  /** The racks changed (read, saved, deleted): for whoever lists them, like the browser. */
   onChange(fn: () => void): Unsubscribe {
     return this.events.on('change', fn);
   }
 
-  /** Si apre la cartella dei rack (solo nell'app desktop). */
+  /** Opens the racks folder (desktop app only). */
   get canReveal(): boolean {
     return !!this.backend?.reveal;
   }
 
-  /** Legge i rack salvati (all'avvio). */
+  /** Reads the saved racks (at startup). */
   async load(): Promise<void> {
     if (!this.backend) return;
     this.racks = [];
@@ -81,7 +81,7 @@ export class UserRacks {
     this.events.emit('change');
   }
 
-  /** I rack salvati in ordine di nome. */
+  /** The saved racks in name order. */
   list(): RackPreset[] {
     return [...this.racks];
   }
@@ -90,9 +90,9 @@ export class UserRacks {
     return this.racks.find(r => r.name === name);
   }
 
-  /** Salva (o sostituisce, se il nome c'è già) un rack. */
+  /** Saves (or replaces, if the name already exists) a rack. */
   async save(rack: RackPreset): Promise<void> {
-    if (!this.backend) throw new Error('lo spazio locale dell\'app non è disponibile.');
+    if (!this.backend) throw new Error('the app\'s local storage isn\'t available.');
     await this.backend.save(rack);
     this.put(rack);
     this.events.emit('change');
@@ -118,7 +118,7 @@ const localStorageOrNull = (): PresetStorage | null => {
   try { return globalThis.localStorage ?? null; } catch { return null; }
 };
 
-/** I rack dell'utente di questa app: i file nell'app desktop, lo spazio locale nel browser. */
+/** This app's user racks: the files in the desktop app, local storage in the browser. */
 export const userRacks = ((): UserRacks => {
   const desktop = typeof window === 'undefined' ? undefined : window.studiomioDesktop?.racks;
   if (desktop) return new UserRacks(desktop);
@@ -126,8 +126,8 @@ export const userRacks = ((): UserRacks => {
   return new UserRacks(storage ? new StorageRacks(storage) : null);
 })();
 
-/** Un rack salvato, con i parametri dello strumento scritti da una versione passata portati a
- *  quelli di adesso (le zone del Sampler fino alla 0.3.18). */
+/** A saved rack, with the instrument's parameters written by a past version brought to
+ *  today's (the Sampler's zones up to 0.3.18). */
 function readRack(raw: unknown): RackPreset | null {
   const rack = rackPresetFrom(raw);
   const inst = rack?.instrument;

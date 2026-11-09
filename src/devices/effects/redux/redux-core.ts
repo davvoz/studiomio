@@ -1,20 +1,20 @@
-/* Il suono del Redux. Per ogni campione:
+/* The Redux's sound. For each sample:
  *
- *   ingresso → (filtro Prima) → tiene fermo il campione finché la fase non arriva in cima (il
- *   passo è Frequenza / frequenza del progetto, la cima si sposta a caso con il Jitter) → a ogni
- *   campione nuovo lo arrotonda su 2^(bit−1) scalini per lato → (filtro Dopo) → mix → × Uscita
+ *   input → (Pre filter) → holds the sample until the phase reaches the top (the
+ *   step is Frequency / project rate, the top moves randomly with the Jitter) → at each
+ *   new sample rounds it to 2^(bits−1) steps per side → (Post filter) → mix → × Output
  *
- * I bit possono essere frazionari: il numero di scalini scorre senza salti. I filtri sono
- * passa-basso a 24 dB, Prima appena sotto la metà della Frequenza (toglie quello che si
- * ripiegherebbe), Dopo alla metà (smussa i gradini). Gira nell'AudioWorklet; qui niente Web
- * Audio. */
+ * The bits can be fractional: the number of steps glides without jumps. The filters are
+ * 24 dB low-passes, Pre just below half the Frequency (removes what would
+ * fold back), Post at half (smooths the steps). Runs in the AudioWorklet; no Web
+ * Audio here. */
 import { dbToGain, type EffectCore } from '../../dsp/core';
 import { FILTER_TYPE, MultimodeFilter } from '../../dsp/multimode-filter';
 import { Noise } from '../../dsp/noise';
 import { MAX_BITS, REDUX_FILTER } from './redux';
 
 const SMOOTH = 0.02;
-/** Di quanto può spostarsi la cima della fase con Jitter al 100% (in frazioni del passo). */
+/** How much the phase's top can move with Jitter at 100% (in fractions of the step). */
 const MAX_JITTER = 0.9;
 
 export class ReduxCore implements EffectCore {
@@ -34,7 +34,7 @@ export class ReduxCore implements EffectCore {
   private output = 1;
   private targetOutput = 1;
   private fresh = true;
-  /** Quanti campioni nuovi ha preso (per i test). */
+  /** How many new samples it took (for tests). */
   taken = 0;
 
   constructor(private readonly sampleRate: number) {
@@ -50,7 +50,7 @@ export class ReduxCore implements EffectCore {
     const filter = p.filter ?? REDUX_FILTER.off;
     if (filter !== this.filter) for (const f of this.filters) f.reset();
     this.filter = filter;
-    // [0, 1] il Prima dei due canali, [2, 3] il Dopo
+    // [0, 1] the Pre of the two channels, [2, 3] the Post
     for (let c = 0; c < 2; c++) {
       this.filters[c].set(rate * 0.45, 0, FILTER_TYPE.lowPass, 4);
       this.filters[c + 2].set(rate * 0.5, 0, FILTER_TYPE.lowPass, 4);

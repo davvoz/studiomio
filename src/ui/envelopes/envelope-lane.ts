@@ -1,13 +1,13 @@
-/* La corsia di una modulazione, sotto l'editor della clip (piano roll o audio) e allineata al
- * suo asse dei battiti, o sotto il master e allineata alla timeline: la curva con i suoi punti,
- * la linea neutra, la griglia. Gesti: clic nel
- * vuoto aggiunge un punto e lo trascina, trascinare un punto lo sposta (Alt: senza griglia,
- * Maiusc: fine), doppio clic lo elimina; in modo disegno (B) si dipingono scalini sulla griglia,
- * con Alt a mano libera. Maiusc+trascina sceglie un tratto: si trascina tutto insieme, e con
- * Ctrl+C/X/V si copia, anche su un altro parametro o in un'altra clip (senza un tratto, la curva
- * intera). F apre le forme pronte, che vanno nel tratto scelto o su tutto ciò che suona. Il bordo
- * in alto cambia l'altezza della corsia.
- * Ogni gesto è un passo di annullamento. */
+/* A modulation's lane, under the clip editor (piano roll or audio) and aligned with its
+ * beat axis, or under the master and aligned with the timeline: the curve with its points,
+ * the neutral line, the grid. Gestures: click in
+ * empty space adds a point and drags it, dragging a point moves it (Alt: without grid,
+ * Shift: fine), double click deletes it; in draw mode (B) steps are painted on the grid,
+ * with Alt freehand. Shift+drag chooses a range: it's dragged all together, and with
+ * Ctrl+C/X/V it's copied, also onto another parameter or into another clip (without a range, the whole
+ * curve). F opens the ready-made shapes, which go into the chosen range or over everything that plays. The top
+ * edge changes the lane's height.
+ * Each gesture is an undo step. */
 import type { Beats, TimeSignature } from '../../core/music-time';
 import type { Color } from '../../model/clip';
 import type { Clipboard } from '../../store/clipboard';
@@ -24,50 +24,50 @@ import { SHAPES, shapePoints, type ShapeChoice } from './envelope-shapes';
 import { choiceTarget, formatModValue, type ModChain } from './mod-targets';
 import { ShapeStrip } from './shape-strip';
 
-/** Le curve che la corsia mostra: quelle di una clip, o quelle del master. */
+/** The curves the lane shows: those of a clip, or those of the master. */
 export interface LaneCurves {
   readonly color: Color;
   readonly envelopes: readonly ClipEnvelope[];
   envelope(target: ModTarget): ClipEnvelope | undefined;
 }
 
-/** Ciò che la corsia usa dell'editor che la ospita. */
+/** What the lane uses of the editor hosting it. */
 export interface LaneHost {
   readonly axis: BeatAxis;
-  /** Le curve (null: niente di aperto); lo stesso oggetto finché non cambiano. */
+  /** The curves (null: nothing open); the same object until they change. */
   curves(): LaneCurves | null;
-  /** La parte che suona, nei battiti dell'asse: fuori è più scura (assente: tutta). */
+  /** The playing part, in the axis's beats: outside it's darker (absent: all of it). */
   span?(): { readonly start: Beats; readonly end: Beats } | null;
-  /** Il passo della griglia (e dell'aggancio). */
+  /** The grid's step (and the snap's). */
   grid(): Beats;
   signature(): TimeSignature;
-  /** Il battito che suona adesso, se suona. */
+  /** The beat playing now, if it plays. */
   playhead(): Beats | null;
-  /** Sostituisce i punti della curva su `target`; senza punti la toglie (un passo di annullamento). */
+  /** Replaces the curve's points on `target`; without points it removes it (one undo step). */
   commit(label: string, target: ModTarget, points: readonly EnvelopePoint[]): void;
-  /** La rotella sulla corsia scorre e zooma il tempo come nell'editor. */
+  /** The wheel on the lane scrolls and zooms the time as in the editor. */
   wheel(e: WheelEvent, x: number): void;
-  /** La catena modulata: per una scelta la corsia mostra l'opzione che si sente. */
+  /** The modulated chain: for a choice the lane shows the option that's heard. */
   chain?(): ModChain | null;
-  /** Gli appunti dell'app: una curva si incolla anche altrove. */
+  /** The app's clipboard: a curve can also be pasted elsewhere. */
   readonly clipboard: Clipboard;
 }
 
-/** La rotella sulla corsia: Ctrl zooma il tempo, altrimenti lo scorre. */
+/** The wheel on the lane: Ctrl zooms the time, otherwise it scrolls it. */
 export function wheelTime(e: WheelEvent, x: number, axis: BeatAxis): BeatAxis {
   e.preventDefault();
   if (e.ctrlKey || e.metaKey) return axis.zoomed(axis.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x);
   return axis.scrolled(axis.startBeat + (e.deltaX || e.deltaY) / axis.pxPerBeat);
 }
 
-/** Margine sopra e sotto la curva. */
+/** Margin above and below the curve. */
 const PAD = 9;
 const HIT_PX = 6;
-/** Sotto questa distanza i quadratini dei punti non si disegnano: su una forma fitta sono un muro. */
+/** Below this distance the points' squares aren't drawn: on a dense shape they're a wall. */
 const HANDLE_GAP_PX = 8;
 const EPS = 1e-9;
 
-/** Il valore subito prima di `beat` (su uno scalino, quello di sinistra). */
+/** The value right before `beat` (on a step, the left one). */
 export function valueBefore(points: readonly EnvelopePoint[], beat: Beats, neutral: number): number {
   if (!points.length) return neutral;
   let i = -1;
@@ -78,8 +78,8 @@ export function valueBefore(points: readonly EnvelopePoint[], beat: Beats, neutr
   return a.value + ((b.value - a.value) * (beat - a.beat)) / (b.beat - a.beat);
 }
 
-/** La curva con i punti `inner` al posto del tratto [from, to]: fuori resta com'era (ai bordi si
- *  salta). Su una curva vuota ci sono solo loro: prima e dopo la curva resta piatta. */
+/** The curve with the points `inner` in place of the range [from, to]: outside it stays as it was (at the edges it
+ *  jumps). On an empty curve only they exist: before and after the curve stays flat. */
 export function replaceRange(points: readonly EnvelopePoint[], from: Beats, to: Beats, inner: readonly EnvelopePoint[], neutral: number): EnvelopePoint[] {
   if (!points.length) return simplify(inner);
   const before = valueBefore(points, from, neutral);
@@ -91,17 +91,17 @@ export function replaceRange(points: readonly EnvelopePoint[], from: Beats, to: 
   ]);
 }
 
-/** La curva con una forma al posto del tratto [from, to]. Su una curva vuota fuori dal tratto resta
- *  la linea neutra. */
+/** The curve with a shape in place of the range [from, to]. On an empty curve outside the range the
+ *  neutral line remains. */
 export function placeShape(points: readonly EnvelopePoint[], from: Beats, to: Beats, inner: readonly EnvelopePoint[], neutral: number): EnvelopePoint[] {
   return replaceRange(points.length ? points : [{ beat: 0, value: neutral }, { beat: to, value: neutral }], from, to, inner, neutral);
 }
 
-/** Uno scalino al valore `value` in [from, to]: fuori la curva resta com'era (ai bordi si salta). */
+/** A step at value `value` in [from, to]: outside the curve stays as it was (at the edges it jumps). */
 export const paintStep = (points: readonly EnvelopePoint[], from: Beats, to: Beats, value: number, neutral: number): EnvelopePoint[] =>
   replaceRange(points.length ? points : [{ beat: from, value: neutral }, { beat: to, value: neutral }], from, to, [{ beat: from, value }, { beat: to, value }], neutral);
 
-/** Il tratto [from, to] della curva, con i battiti relativi a `from`. */
+/** The range [from, to] of the curve, with the beats relative to `from`. */
 export function sliceRange(points: readonly EnvelopePoint[], from: Beats, to: Beats, neutral: number): EnvelopePoint[] {
   if (!points.length) return [];
   const inside = points.filter(p => p.beat > from + EPS && p.beat < to - EPS);
@@ -110,15 +110,15 @@ export function sliceRange(points: readonly EnvelopePoint[], from: Beats, to: Be
   ].map(p => ({ beat: p.beat - from, value: p.value })));
 }
 
-/** Nel tratto [from, to] nessuna modulazione. Se non resta altro, la curva sparisce. */
+/** In the range [from, to] no modulation. If nothing else remains, the curve disappears. */
 export function clearRange(points: readonly EnvelopePoint[], from: Beats, to: Beats, neutral: number): EnvelopePoint[] {
   if (points.every(p => p.beat >= from - EPS && p.beat <= to + EPS)) return [];
   const out = paintStep(points, from, to, neutral, neutral);
   return out.every(p => Math.abs(p.value - neutral) < EPS) ? [] : out;
 }
 
-/** I valori di una curva portati su un'altra scala: la linea neutra resta neutra, gli estremi
- *  vanno sugli estremi. */
+/** A curve's values brought onto another scale: the neutral line stays neutral, the extremes
+ *  go onto the extremes. */
 export function rescalePoints(points: readonly EnvelopePoint[], from: ModScale, to: ModScale): EnvelopePoint[] {
   if (from === to) return [...points];
   const up = (from.max - from.neutral) || 1, down = (from.neutral - from.min) || 1;
@@ -128,9 +128,9 @@ export function rescalePoints(points: readonly EnvelopePoint[], from: ModScale, 
   });
 }
 
-/** Toglie i punti che non cambiano la curva: i doppioni, quelli in mezzo a due con lo stesso
- *  valore, e il primo se ne ha un altro allo stesso battito (prima del primo punto la curva vale
- *  comunque il primo). */
+/** Removes the points that don't change the curve: the duplicates, those between two with the same
+ *  value, and the first if it has another on the same beat (before the first point the curve is
+ *  the first anyway). */
 export function simplify(points: readonly EnvelopePoint[]): EnvelopePoint[] {
   const out: EnvelopePoint[] = [];
   for (const p of points) {
@@ -143,29 +143,29 @@ export function simplify(points: readonly EnvelopePoint[]): EnvelopePoint[] {
   return out;
 }
 
-/** Un trascinamento nella corsia: i punti come saranno al rilascio. */
+/** A drag in the lane: the points as they'll be on release. */
 interface LaneDrag {
   points: EnvelopePoint[];
   changed: boolean;
   readonly label: string;
-  /** Sceglie un tratto: non tocca la curva. */
+  /** Chooses a range: it doesn't touch the curve. */
   readonly sweep?: boolean;
   move(x: number, y: number, alt: boolean, shift: boolean): void;
-  /** Annullato: rimette a posto ciò che ha toccato oltre ai punti. */
+  /** Cancelled: puts back what it touched besides the points. */
   cancel?(): void;
 }
 
-/** Un tratto di tempo scelto nella corsia. */
+/** A range of time chosen in the lane. */
 interface LaneRange {
   readonly from: Beats;
   readonly to: Beats;
 }
 
-/** Quanto può essere fitto il disegno a mano libera, in parti di griglia. */
+/** How dense the freehand drawing can be, in parts of the grid. */
 const FREEHAND_STEPS = 8;
 
-/** Altezza della corsia (trascinando il suo bordo in alto), ricordata da questo browser: sta in
- *  una variabile CSS, perché anche l'editor che la ospita deve crescere con lei. */
+/** Height of the lane (by dragging its top edge), remembered by this browser: it's in
+ *  a CSS variable, because the editor hosting it must also grow with it. */
 const LANE_HEIGHT = { key: 'studiomio.mod-lane.height', variable: '--lane-h', min: 60, max: 360 } as const;
 const setLaneHeight = (px: number) => document.documentElement.style.setProperty(LANE_HEIGHT.variable, `${px}px`);
 
@@ -175,11 +175,11 @@ export class EnvelopeLane {
   private target: ModTarget | null = null;
   private drag: LaneDrag | null = null;
   private range: LaneRange | null = null;
-  /** L'ultima forma messa, finché non si tocca altro: dove è andata e che scelta c'era allora. */
+  /** The last shape placed, until something else is touched: where it went and what selection there was then. */
   private shaped: { readonly range: LaneRange; readonly selection: LaneRange | null } | null = null;
   private readonly strip = new ShapeStrip(c => this.applyShape(c), c => this.tweakShape(c));
   private hover: { x: number; y: number } | null = null;
-  /** Dove comincia la curva: con le forme aperte, sotto la loro barretta. */
+  /** Where the curve starts: with the shapes open, under their little bar. */
   private top = PAD;
   private drawMode = false;
   private dirty = true;
@@ -187,7 +187,7 @@ export class EnvelopeLane {
 
   constructor(private readonly host: LaneHost, private readonly onDrawMode: (on: boolean) => void, private readonly onShapes: (on: boolean) => void) {
     this.surface.canvas.tabIndex = 0;
-    const grip = el('div', { className: 'mod-lane-grip', title: 'Trascina per cambiare l\'altezza della corsia' });
+    const grip = el('div', { className: 'mod-lane-grip', title: 'Drag to change the lane\'s height' });
     this.element.append(this.surface.canvas, grip, this.strip.element);
     this.bindHeight(grip);
     new ResizeObserver(() => {
@@ -201,7 +201,7 @@ export class EnvelopeLane {
     try {
       const saved = Number(localStorage.getItem(LANE_HEIGHT.key));
       if (saved) setLaneHeight(saved);
-    } catch { /* niente preferenza */ }
+    } catch { /* no preference */ }
     grip.addEventListener('pointerdown', e => {
       e.preventDefault();
       const start = this.element.offsetHeight;
@@ -210,7 +210,7 @@ export class EnvelopeLane {
         height = Math.max(LANE_HEIGHT.min, Math.min(LANE_HEIGHT.max, start - dy));
         setLaneHeight(height);
       }, () => {
-        try { localStorage.setItem(LANE_HEIGHT.key, String(height)); } catch { /* resta per adesso */ }
+        try { localStorage.setItem(LANE_HEIGHT.key, String(height)); } catch { /* it stays for now */ }
       });
     });
   }
@@ -254,7 +254,7 @@ export class EnvelopeLane {
     this.dirty = true;
   }
 
-  /** Ridisegna se qualcosa è cambiato (da chiamare a ogni fotogramma dell'editor). */
+  /** Redraws if something changed (to call at every frame of the editor). */
   frame(): void {
     if (!this.target || this.element.hidden) return;
     const state = { axis: this.host.axis, curves: this.host.curves(), playhead: this.host.playhead() };
@@ -265,7 +265,7 @@ export class EnvelopeLane {
     this.paint(state.curves, state.playhead);
   }
 
-  // ---------------------------------------------------------------- geometria
+  // ---------------------------------------------------------------- geometry
 
   private get scale(): ModScale {
     return scaleOf(this.target!);
@@ -303,9 +303,9 @@ export class EnvelopeLane {
     return Math.max(0, alt ? beat : snapTo(beat, this.host.grid()));
   }
 
-  // ---------------------------------------------------------------- gesti
+  // ---------------------------------------------------------------- gestures
 
-  /** Trascina il punto `index` di `start`. */
+  /** Drags point `index` of `start`. */
   private pointDrag(start: readonly EnvelopePoint[], index: number, label: string, changed: boolean): LaneDrag {
     const prev = start[index - 1]?.beat ?? 0, next = start[index + 1]?.beat ?? Infinity;
     const origin = start[index];
@@ -314,7 +314,7 @@ export class EnvelopeLane {
       points: [...start], changed, label,
       move: (x, y, alt, shift) => {
         const beat = Math.max(prev, Math.min(next, this.snap(this.host.axis.xToBeat(x), alt)));
-        // con Maiusc il valore si muove 10 volte più piano, da dove era
+        // with Shift the value moves 10 times slower, from where it was
         if (shift) {
           fineY ??= y;
           const span = this.scale.max - this.scale.min;
@@ -332,16 +332,16 @@ export class EnvelopeLane {
     return drag;
   }
 
-  /** Dipinge scalini sulla griglia: ogni cella toccata prende il valore sotto il puntatore; se
-   *  il puntatore salta delle celle, quelle in mezzo prendono i valori tra i due punti. */
+  /** Paints steps on the grid: each touched cell takes the value under the pointer; if
+   *  the pointer skips some cells, those in between take the values between the two points. */
   private drawDrag(start: readonly EnvelopePoint[]): LaneDrag {
     let last: { beat: Beats; value: number } | null = null;
     const drag: LaneDrag = {
-      points: [...start], changed: false, label: 'Disegna modulazione',
+      points: [...start], changed: false, label: 'Draw modulation',
       move: (x, y, alt) => {
         const grid = this.host.grid(), beat = Math.max(0, this.host.axis.xToBeat(x)), value = this.yToValue(y);
         if (alt) {
-          // a mano libera: una linea dal punto di prima
+          // freehand: a line from the previous point
           const at = snapTo(beat, grid / FREEHAND_STEPS);
           if (last && at !== last.beat) {
             const [a, b] = at > last.beat ? [last, { beat: at, value }] : [{ beat: at, value }, last];
@@ -364,7 +364,7 @@ export class EnvelopeLane {
     return drag;
   }
 
-  /** Sceglie un tratto trascinando (sulla griglia; Alt: senza). */
+  /** Chooses a range by dragging (on the grid; Alt: without). */
   private sweepDrag(start: readonly EnvelopePoint[], x0: number): LaneDrag {
     const from = this.snap(this.host.axis.xToBeat(x0), false);
     return {
@@ -377,13 +377,13 @@ export class EnvelopeLane {
     };
   }
 
-  /** Trascina il tratto scelto: nel tempo sulla griglia (Alt: senza), nel valore tutto insieme. */
+  /** Drags the chosen range: in time on the grid (Alt: without), in value all together. */
   private rangeDrag(start: readonly EnvelopePoint[], range: LaneRange, x0: number, y0: number): LaneDrag {
     const { neutral, min, max } = this.scale, axis = this.host.axis;
     const inner = sliceRange(start, range.from, range.to, neutral), base = clearRange(start, range.from, range.to, neutral);
     const beat0 = axis.xToBeat(x0), value0 = this.yToValue(y0), length = range.to - range.from;
     const drag: LaneDrag = {
-      points: [...start], changed: false, label: 'Sposta tratto della modulazione',
+      points: [...start], changed: false, label: 'Move modulation range',
       move: (x, y, alt) => {
         const raw = axis.xToBeat(x) - beat0, dt = Math.max(-range.from, alt ? raw : snapTo(raw, this.host.grid()));
         const dv = this.yToValue(y) - value0, from = range.from + dt;
@@ -396,7 +396,7 @@ export class EnvelopeLane {
     return drag;
   }
 
-  /** Dove va una forma se non è scelto niente: ciò che suona, o sul master ciò che si vede. */
+  /** Where a shape goes if nothing is chosen: what plays, or on the master what's visible. */
   private whole(): LaneRange | null {
     const span = this.host.span?.();
     if (span) return span.end > span.start ? { from: span.start, to: span.end } : null;
@@ -409,20 +409,20 @@ export class EnvelopeLane {
     if (!range || !this.target) return;
     const shape = SHAPES.find(s => s.id === choice.shape)!, { neutral } = this.scale;
     const inner = shapePoints(choice, range.from, range.to, this.scale);
-    this.commit(`Forma: ${shape.label}`, placeShape(this.points(), range.from, range.to, inner, neutral));
+    this.commit(`Shape: ${shape.label}`, placeShape(this.points(), range.from, range.to, inner, neutral));
     this.shaped = { range, selection: this.range };
     this.surface.canvas.focus({ preventScroll: true });
     this.invalidate();
   }
 
-  /** Ciclo, ampiezza o verso cambiati: se la forma è ancora lì si rifà, nello stesso tratto. */
+  /** Cycle, amplitude or direction changed: if the shape is still there it's redone, in the same range. */
   private tweakShape(choice: ShapeChoice): void {
     const { shaped } = this;
     if (shaped && shaped.selection === this.range) this.applyShape(choice, shaped.range);
     else this.surface.canvas.focus({ preventScroll: true });
   }
 
-  /** Il tratto su cui lavorano i comandi: quello scelto, o tutta la curva. */
+  /** The range the commands work on: the chosen one, or the whole curve. */
   private rangeOrAll(): LaneRange | null {
     const pts = this.points();
     return this.range ?? (pts.length ? { from: pts[0].beat, to: pts[pts.length - 1].beat } : null);
@@ -446,13 +446,13 @@ export class EnvelopeLane {
     this.invalidate();
   }
 
-  /** Incolla al battito `at`; senza, all'inizio del tratto scelto o dov'era quando è stata copiata. */
+  /** Pastes at beat `at`; without, at the start of the chosen range or where it was when copied. */
   private paste(at?: Beats): void {
     const copied = this.host.clipboard.envelope;
     if (!copied || !this.target) return;
     const from = at ?? this.range?.from ?? copied.origin, to = from + copied.span;
     const inner = rescalePoints(copied.points, copied.scale, this.scale).map(p => ({ beat: from + p.beat, value: p.value }));
-    this.commit('Incolla modulazione', replaceRange(this.points(), from, to, inner, this.scale.neutral));
+    this.commit('Paste modulation', replaceRange(this.points(), from, to, inner, this.scale.neutral));
     this.range = copied.span > EPS ? { from, to } : null;
     this.invalidate();
   }
@@ -461,12 +461,12 @@ export class EnvelopeLane {
     const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
     const run = (): boolean => {
       if (ctrl && key === 'c') return this.copy();
-      if (ctrl && key === 'x') { if (this.copy()) this.clear('Taglia modulazione'); return true; }
+      if (ctrl && key === 'x') { if (this.copy()) this.clear('Cut modulation'); return true; }
       if (ctrl && key === 'v') { this.paste(); return true; }
       if (ctrl) return false;
       if (key === 'b') { this.setDraw(!this.drawMode); return true; }
       if (key === 'f') { this.setShapes(!this.shapes); return true; }
-      if ((key === 'delete' || key === 'backspace') && this.range) { this.clear('Cancella tratto della modulazione'); return true; }
+      if ((key === 'delete' || key === 'backspace') && this.range) { this.clear('Clear modulation range'); return true; }
       if (key === 'escape' && this.range) { this.range = null; this.invalidate(); return true; }
       return false;
     };
@@ -496,7 +496,7 @@ export class EnvelopeLane {
       const hit = this.pointAt(x, y), beat = this.host.axis.xToBeat(x), range = this.range;
       const inRange = !!range && beat >= range.from && beat <= range.to;
       if (range && !inRange && !e.shiftKey) {
-        // un clic fuori dal tratto lo lascia e basta
+        // a click outside the range just leaves it
         this.range = null;
         this.invalidate();
         if (!this.drawMode) return;
@@ -504,15 +504,15 @@ export class EnvelopeLane {
       if (this.drawMode) this.drag = this.drawDrag(pts);
       else if (e.shiftKey) this.drag = this.sweepDrag(pts, x);
       else if (inRange) this.drag = this.rangeDrag(pts, range!, x, y);
-      else if (hit >= 0) this.drag = this.pointDrag(pts, hit, 'Sposta punto della modulazione', false);
+      else if (hit >= 0) this.drag = this.pointDrag(pts, hit, 'Move modulation point', false);
       else {
-        // un punto nuovo dove si è premuto, già da trascinare
+        // a new point where it was pressed, ready to drag
         const p = { beat: this.snap(this.host.axis.xToBeat(x), e.altKey), value: this.yToValue(y) };
         const i = pts.filter(q => q.beat <= p.beat).length;
-        this.drag = this.pointDrag([...pts.slice(0, i), p, ...pts.slice(i)], i, 'Aggiungi punto della modulazione', true);
+        this.drag = this.pointDrag([...pts.slice(0, i), p, ...pts.slice(i)], i, 'Add modulation point', true);
       }
       this.drag.move(x, y, e.altKey, false);
-      if (!this.drawMode && (hit >= 0 || inRange)) this.drag.changed = false; // un clic su un punto non lo sposta
+      if (!this.drawMode && (hit >= 0 || inRange)) this.drag.changed = false; // a click on a point doesn't move it
       this.invalidate();
     });
     canvas.addEventListener('pointermove', e => {
@@ -529,7 +529,7 @@ export class EnvelopeLane {
       this.drag = null;
       if (apply && d?.changed) this.commit(d.label, d.points);
       if (!apply) d?.cancel?.();
-      // un clic con Maiusc non sceglie niente
+      // a click with Shift chooses nothing
       if (d?.sweep && this.range && this.range.to - this.range.from < EPS) this.range = null;
       this.invalidate();
     };
@@ -539,25 +539,25 @@ export class EnvelopeLane {
     canvas.addEventListener('dblclick', e => {
       if (this.drawMode) return;
       const { x, y } = pos(e), i = this.pointAt(x, y);
-      if (i >= 0) this.commit('Elimina punto della modulazione', this.points().filter((_, k) => k !== i));
+      if (i >= 0) this.commit('Delete modulation point', this.points().filter((_, k) => k !== i));
     });
     canvas.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (!this.target || this.drag) return;
       const { x, y } = pos(e), i = this.pointAt(x, y), pts = this.points();
       const beat = this.snap(this.host.axis.xToBeat(x), false), copied = !!this.host.clipboard.envelope;
-      const what = this.range ? 'il tratto' : 'la curva';
+      const what = this.range ? 'the range' : 'the curve';
       showContextMenu(e.clientX, e.clientY, [
-        { label: `Taglia ${what}`, shortcut: KEY.cut, disabled: !pts.length, run: () => { if (this.copy()) this.clear('Taglia modulazione'); } },
-        { label: `Copia ${what}`, shortcut: KEY.copy, disabled: !pts.length, run: () => this.copy() },
-        { label: 'Incolla qui', disabled: !copied, run: () => this.paste(beat) },
-        { label: 'Incolla nello stesso punto', shortcut: KEY.paste, disabled: !copied, run: () => this.paste() },
+        { label: `Cut ${what}`, shortcut: KEY.cut, disabled: !pts.length, run: () => { if (this.copy()) this.clear('Cut modulation'); } },
+        { label: `Copy ${what}`, shortcut: KEY.copy, disabled: !pts.length, run: () => this.copy() },
+        { label: 'Paste here', disabled: !copied, run: () => this.paste(beat) },
+        { label: 'Paste in the same place', shortcut: KEY.paste, disabled: !copied, run: () => this.paste() },
         SEPARATOR,
-        { label: 'Elimina il punto', disabled: i < 0, run: () => this.commit('Elimina punto della modulazione', pts.filter((_, k) => k !== i)) },
-        { label: this.range ? 'Cancella il tratto' : 'Cancella la modulazione', disabled: !pts.length, run: () => this.clear('Cancella modulazione') },
+        { label: 'Delete the point', disabled: i < 0, run: () => this.commit('Delete modulation point', pts.filter((_, k) => k !== i)) },
+        { label: this.range ? 'Clear the range' : 'Clear the modulation', disabled: !pts.length, run: () => this.clear('Clear modulation') },
         SEPARATOR,
-        { label: 'Disegno a scalini', shortcut: KEY.draw, checked: this.drawMode, run: () => this.setDraw(!this.drawMode) },
-        { label: 'Forme pronte', shortcut: KEY.shapes, checked: this.shapes, run: () => this.setShapes(!this.shapes) },
+        { label: 'Step drawing', shortcut: KEY.draw, checked: this.drawMode, run: () => this.setDraw(!this.drawMode) },
+        { label: 'Ready-made shapes', shortcut: KEY.shapes, checked: this.shapes, run: () => this.setShapes(!this.shapes) },
       ]);
     });
     canvas.addEventListener('keydown', e => this.key(e));
@@ -572,7 +572,7 @@ export class EnvelopeLane {
     return this.pointAt(x, y) >= 0 ? 'move' : 'copy';
   }
 
-  // ---------------------------------------------------------------- disegno
+  // ---------------------------------------------------------------- drawing
 
   private paint(curves: LaneCurves | null, playhead: Beats | null): void {
     const { g, width: w, height: h } = this.surface;
@@ -581,7 +581,7 @@ export class EnvelopeLane {
     g.fillRect(0, 0, w, h);
     if (!curves) return;
     paintBeatGrid(g, axis, w, 0, h, this.host.grid(), this.host.signature());
-    // fuori da ciò che suona: più scuro
+    // outside what plays: darker
     const span = this.host.span?.();
     if (span) {
       const x0 = axis.beatToX(span.start), x1 = axis.beatToX(span.end);
@@ -589,7 +589,7 @@ export class EnvelopeLane {
       g.fillRect(0, 0, Math.max(0, x0), h);
       g.fillRect(x1, 0, Math.max(0, w - x1), h);
     }
-    // la linea neutra (nessuna modulazione)
+    // the neutral line (no modulation)
     const ny = Math.round(this.valueToY(scale.neutral)) + 0.5;
     g.strokeStyle = 'rgba(255,255,255,0.22)';
     g.setLineDash([4, 4]);
@@ -610,9 +610,9 @@ export class EnvelopeLane {
     g.font = '10.5px system-ui, sans-serif';
     if (!pts.length) {
       g.fillStyle = COLORS.rulerText;
-      g.fillText(this.drawMode ? 'Trascina per disegnare a scalini · con Alt a mano libera · B per uscire' : 'Clic: un punto · B: disegna · F: forme pronte · Maiusc+trascina: scegli un tratto · Ctrl+V: incolla', 8, h - 8);
+      g.fillText(this.drawMode ? 'Drag to draw in steps · with Alt freehand · B to exit' : 'Click: a point · B: draw · F: ready-made shapes · Shift+drag: choose a range · Ctrl+V: paste', 8, h - 8);
     } else {
-      // la curva: piatta prima del primo punto e dopo l'ultimo
+      // the curve: flat before the first point and after the last
       const xs = pts.map(p => axis.beatToX(p.beat)), ys = pts.map(p => this.valueToY(p.value));
       g.beginPath();
       g.moveTo(Math.min(0, xs[0]), ys[0]);
@@ -644,7 +644,7 @@ export class EnvelopeLane {
         g.strokeRect(Math.round(x) - 2.5, Math.round(ys[i]) - 2.5, 6, 6);
       });
     }
-    // il valore sotto il puntatore (o del punto trascinato)
+    // the value under the pointer (or of the dragged point)
     if (this.hover) {
       const v = this.drag ? null : this.yToValue(this.hover.y);
       const chain = this.host.chain?.() ?? null;
@@ -658,8 +658,8 @@ export class EnvelopeLane {
     }
   }
 
-  /** Per una scelta (un interruttore, un menu): a scalini, l'opzione che si sente davvero con la
-   *  curva e la manopola dov'è, all'altezza in cui quell'opzione è esatta. */
+  /** For a choice (a switch, a menu): in steps, the option really heard with the
+   *  curve and the knob where it is, at the height where that option is exact. */
   private paintHeardChoice(pts: readonly EnvelopePoint[], w: number): void {
     const chain = this.host.chain?.(), target = this.target;
     const choice = chain && target ? choiceTarget(chain, target) : null;

@@ -1,35 +1,35 @@
 import type { Beats, TempoMap } from '../core/music-time';
 
-/** Finestra di programmazione: cosa deve partire tra `from` e `to` (battiti della timeline). */
+/** Scheduling window: what must start between `from` and `to` (timeline beats). */
 export interface ScheduleWindow {
   readonly from: Beats;
   readonly to: Beats;
-  /** Inizio della corsa continua (play, o inizio di un giro di loop). */
+  /** Start of the continuous run (play, or start of a loop round). */
   readonly runStart: Beats;
-  /** Fine della corsa: fine del loop, o Infinity. Niente suona oltre. */
+  /** End of the run: end of the loop, or Infinity. Nothing plays beyond. */
   readonly runEnd: Beats;
   readonly tempo: TempoMap;
-  /** Istante del contesto audio in cui suona il battito `beat` di questa corsa. */
+  /** Audio context instant at which beat `beat` of this run plays. */
   timeAt(beat: Beats): number;
-  /** L'orologio continuo (battiti che non saltano mai, per la session) vale `beat + shift`
-   *  in questa corsa. */
+  /** The continuous clock (beats that never jump, for the session) is `beat + shift`
+   *  in this run. */
   readonly shift: number;
-  /** Orologio dell'ultima partenza da capo (play, o riprogrammazione dopo una modifica):
-   *  ciò che era in corso lì riparte da lì. Ai giri di loop non cambia. */
+  /** Clock of the last start from the top (play, or rescheduling after a change):
+   *  what was running there restarts from there. At loop rounds it doesn't change. */
   readonly fresh: number;
 }
 
-/** Istante del contesto audio in cui l'orologio continuo vale `clock`. */
+/** Audio context instant at which the continuous clock is `clock`. */
 export const timeAtClock = (w: ScheduleWindow, clock: number): number => w.timeAt(clock - w.shift);
 
-/** Qualcosa che il trasporto fa suonare: una traccia, il metronomo, … */
+/** Something the transport makes play: a track, the metronome, … */
 export interface ScheduledSource {
   schedule(window: ScheduleWindow): void;
-  /** Ferma subito tutto ciò che ha programmato. */
+  /** Stops right away everything it has scheduled. */
   stopAll(): void;
-  /** Riprogrammazione dopo una modifica: dimentica ciò che ha programmato da `at` (secondi del
-   *  contesto) in poi, senza interrompere ciò che sta già suonando; il trasporto gli manda
-   *  subito le finestre da `at`, dove ciò che è in corso riparte. */
+  /** Rescheduling after a change: forgets what it scheduled from `at` (context
+   *  seconds) on, without interrupting what's already playing; the transport sends it
+   *  right away the windows from `at`, where what's running restarts. */
   retake(at: number): void;
 }
 
@@ -39,8 +39,8 @@ export interface LoopRange {
   readonly end: Beats;
 }
 
-/** Una corsa continua del trasporto: dal battito `beat0`, suonato all'istante `time0`;
- *  l'orologio continuo vale il battito più `shift`. */
+/** A continuous run of the transport: from beat `beat0`, played at instant `time0`;
+ *  the continuous clock is the beat plus `shift`. */
 interface Run {
   readonly beat0: Beats;
   readonly time0: number;
@@ -48,10 +48,10 @@ interface Run {
   readonly shift: number;
 }
 
-/** Programmazione "in anticipo" (lookahead): a ogni `advance(now)` fa partire, con orari
- *  esatti del contesto audio, tutto ciò che suona fino a `now + lookahead`. Gestisce il
- *  loop della timeline aprendo una nuova corsa a ogni giro. Accanto ai battiti della
- *  timeline tiene un orologio continuo, che a ogni giro va avanti invece di tornare indietro. */
+/** "Lookahead" scheduling: at every `advance(now)` it starts, with exact
+ *  audio context times, everything that plays up to `now + lookahead`. It handles the
+ *  timeline loop by opening a new run at each round. Next to the timeline's
+ *  beats it keeps a continuous clock, which at each round goes forward instead of back. */
 export class Scheduler {
   private runs: Run[] = [];
   private scheduledUntil: Beats = 0;
@@ -68,9 +68,9 @@ export class Scheduler {
     return this.runs.length > 0;
   }
 
-  /** Parte dal battito `beat` all'istante `time`, con l'orologio a `clock` (di norma uguale al
-   *  battito; dopo una modifica durante il play continua da dove era). Se `beat` è prima della
-   *  fine del loop attivo, arrivati in fondo si torna all'inizio del loop. */
+  /** Starts from beat `beat` at instant `time`, with the clock at `clock` (normally equal to the
+   *  beat; after a change during play it continues from where it was). If `beat` is before the
+   *  end of the active loop, on reaching the end it goes back to the start of the loop. */
   start(beat: Beats, time: number, tempo: TempoMap, loop: LoopRange, clock: number = beat): void {
     this.tempo = tempo;
     this.loop = loop;
@@ -80,9 +80,9 @@ export class Scheduler {
     this.fresh = clock;
   }
 
-  /** Riparte dall'istante `time` con tempo e loop nuovi senza fermare niente: ciò che è già
-   *  partito finisce come previsto, il resto ogni sorgente lo riprende da lì (vedi `retake`).
-   *  `time` deve cadere entro ciò che è già programmato. */
+  /** Restarts from instant `time` with new tempo and loop without stopping anything: what has already
+   *  started ends as planned, the rest each source picks up from there (see `retake`).
+   *  `time` must fall within what's already scheduled. */
   resumeAt(time: number, tempo: TempoMap, loop: LoopRange): void {
     const beat = this.positionAt(time), clock = this.clockAt(time);
     if (beat === null || clock === null) return;
@@ -90,49 +90,49 @@ export class Scheduler {
     this.start(beat, time, tempo, loop, clock);
   }
 
-  /** Solo `sources` riprendono dall'istante `time` (le tracce modificate): dimenticano ciò che
-   *  avevano programmato da lì e ricevono di nuovo le finestre fin dove si è programmato. Le
-   *  altre sorgenti e le corse restano come sono. `time` deve cadere entro ciò che è già
-   *  programmato. */
+  /** Only `sources` resume from instant `time` (the changed tracks): they forget what
+   *  they had scheduled from there and receive again the windows as far as it was scheduled. The
+   *  other sources and the runs stay as they are. `time` must fall within what's already
+   *  scheduled. */
   retake(time: number, sources: readonly ScheduledSource[]): void {
     const tempo = this.tempo, clock = this.clockAt(time);
     if (!tempo || clock === null || !sources.length) return;
     for (const s of sources) s.retake(time);
     this.runs.forEach((run, i) => {
       const last = i === this.runs.length - 1;
-      if (!last && run.time0 + tempo.secondsAt(run.end - run.beat0) <= time) return; // giro già finito
+      if (!last && run.time0 + tempo.secondsAt(run.end - run.beat0) <= time) return; // round already finished
       const from = Math.max(run.beat0, run.beat0 + tempo.beatAt(time - run.time0));
       const to = last ? this.scheduledUntil : run.end;
-      // ciò che è in corso a `from` riparte da lì, anche le clip della session
+      // what's running at `from` restarts from there, also the session clips
       if (to > from) this.emit(run, from, to, sources, from, clock);
     });
   }
 
-  /** L'orologio all'istante `time` (null se fermo). */
+  /** The clock at instant `time` (null if stopped). */
   clockAt(time: number): number | null {
     const tempo = this.tempo, run = this.runAt(time);
     return tempo && run ? run.beat0 + run.shift + tempo.beatAt(Math.max(0, time - run.time0)) : null;
   }
 
-  /** Fin dove dell'orologio è già tutto programmato: un cambio deciso ora può valere da qui. */
+  /** How far on the clock everything is already scheduled: a change decided now can apply from here. */
   get scheduledClock(): number {
     const run = this.runs[this.runs.length - 1];
     return run ? this.scheduledUntil + run.shift : 0;
   }
 
-  /** Orologio dell'ultima partenza da capo. */
+  /** Clock of the last start from the top. */
   get freshClock(): number {
     return this.fresh;
   }
 
-  /** Istante in cui l'orologio vale `clock` (scorre senza salti, quindi basta l'ultima corsa). */
+  /** Instant at which the clock is `clock` (it flows without jumps, so the last run is enough). */
   timeAtClock(clock: number): number {
     const run = this.runs[this.runs.length - 1];
     if (!run || !this.tempo) return 0;
     return run.time0 + this.tempo.secondsAt(clock - run.shift - run.beat0);
   }
 
-  /** Programma fino a `now + lookahead`. */
+  /** Schedules up to `now + lookahead`. */
   advance(now: number): void {
     const tempo = this.tempo;
     if (!tempo || !this.runs.length) return;
@@ -145,7 +145,7 @@ export class Scheduler {
         this.scheduledUntil = target;
       }
       if (this.scheduledUntil < run.end) break;
-      // fine del giro: la corsa successiva riparte dall'inizio del loop
+      // end of the round: the next run restarts from the start of the loop
       const time0 = run.time0 + tempo.secondsAt(run.end - run.beat0);
       const shift = run.end + run.shift - this.loop.start;
       this.runs = [...this.runs.slice(-2), { beat0: this.loop.start, time0, end: this.loop.end, shift }];
@@ -153,7 +153,7 @@ export class Scheduler {
     }
   }
 
-  /** Tutto [from, to) in una volta, dall'istante `time` (export offline). */
+  /** All of [from, to) at once, from instant `time` (offline export). */
   scheduleRange(from: Beats, to: Beats, time: number, tempo: TempoMap): void {
     this.tempo = tempo;
     const run = { beat0: from, time0: time, end: to, shift: 0 };
@@ -168,7 +168,7 @@ export class Scheduler {
     for (const s of this.sources()) s.stopAll();
   }
 
-  /** Battito della timeline che suona all'istante `time`. */
+  /** Timeline beat playing at instant `time`. */
   positionAt(time: number): Beats | null {
     const tempo = this.tempo, run = this.runAt(time);
     if (!tempo || !run) return null;

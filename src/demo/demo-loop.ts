@@ -1,11 +1,11 @@
-/** Loop demo deterministico, usato dalla pagina di prova e dai test. */
+/** Deterministic demo loop, used by the test page and by tests. */
 
 function lcg(seed: number): () => number {
   let s = seed;
   return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
 }
 
-/** Loop di batteria stereo con un accordo sotto: cassa, rullante e charleston a `bpm`. */
+/** Stereo drum loop with a chord underneath: kick, snare and hi-hat at `bpm`. */
 export function drumLoop(bars = 1, bpm = 120, sr = 44100): Float32Array[] {
   const beat = (60 / bpm) * sr, len = Math.round(beat * 4 * bars);
   const L = new Float32Array(len), R = new Float32Array(len);

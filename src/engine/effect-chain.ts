@@ -4,41 +4,41 @@ import type { EffectSettings } from '../model/device';
 import type { AudioGraph, AudioNodeLike } from './audio-graph';
 import type { DeviceModulation } from './modulation';
 
-/** Punti da cui ascoltare un effetto (per lo spettro): il suono prima e dopo. Le loro uscite
- *  non le tocca nessuno, quindi un collegamento fatto lì resta anche se la catena si ricollega. */
+/** Points to listen to an effect from (for the spectrum): the sound before and after. Nobody touches
+ *  their outputs, so a connection made there stays even if the chain is reconnected. */
 export interface EffectMonitor {
   readonly pre: AudioNodeLike;
   readonly post: AudioNodeLike;
-  /** Per gli effetti di dinamica: chi vuole sapere cosa fanno (null: nessuno). */
+  /** For the dynamics effects: who wants to know what they're doing (null: nobody). */
   watch?(listener: DynamicsListener | null): void;
 }
 
-/** Il livello che il rilevatore sente e la riduzione, in dB. */
+/** The level the detector hears and the reduction, in dB. */
 export type DynamicsListener = (input: number, reduction: number) => void;
 
-/** Un effetto nel grafo audio: il suono entra da `input` ed esce da `output`. */
+/** An effect in the audio graph: the sound enters from `input` and exits from `output`. */
 export interface Effect {
   readonly type: string;
   readonly input: AudioNodeLike;
   readonly output: AudioNodeLike;
   readonly monitor?: EffectMonitor;
-  /** Per i tipi con il sidechain: dove entra il suono che il rilevatore ascolta. */
+  /** For the types with sidechain: where the sound the detector listens to enters. */
   readonly sidechain?: AudioNodeLike;
-  /** I parametri che le clip possono modulare. */
+  /** The parameters the clips can modulate. */
   readonly modulation?: DeviceModulation;
-  /** Nuove impostazioni dello stesso tipo (parametri, acceso/spento). */
+  /** New settings of the same type (parameters, on/off). */
   update(settings: EffectSettings): void;
   setTempo(bpm: number): void;
   dispose(): void;
 }
 
-/** Dove nascono gli effetti: nel browser l'AudioWorklet, nei test un registratore. */
+/** Where the effects are born: in the browser the AudioWorklet, in tests a recorder. */
 export interface EffectHost {
   create(graph: AudioGraph, settings: EffectSettings, bpm: number): Effect;
-  /** Dove si trova il trasporto, per gli effetti che seguono la battuta: vale per tutti gli
-   *  effetti del grafo, anche quelli creati dopo. null: fermo. */
+  /** Where the transport is, for the effects that follow the bar: it applies to all the
+   *  graph's effects, also those created later. null: stopped. */
   transport?(graph: AudioGraph, anchor: TransportAnchor | null): void;
-  /** Si risolve quando gli effetti del grafo hanno ricevuto i messaggi mandati finora. */
+  /** Resolves when the graph's effects have received the messages sent so far. */
   settle?(graph: AudioGraph): Promise<void>;
 }
 
@@ -47,8 +47,8 @@ interface Slot {
   readonly effect: Effect;
 }
 
-/** La catena degli effetti di un canale, tra `input` e `output`, allineata alla traccia:
- *  crea, aggiorna, toglie e ricollega gli effetti solo quando serve. */
+/** The effect chain of a channel, between `input` and `output`, aligned with the track:
+ *  creates, updates, removes and reconnects the effects only when needed. */
 export class EffectChain {
   private slots = new Map<DeviceId, Slot>();
   private order: readonly DeviceId[] = [];
@@ -99,7 +99,7 @@ export class EffectChain {
     this.input.disconnect();
   }
 
-  /** input → effetti nell'ordine → output. */
+  /** input → effects in order → output. */
   private connect(order: readonly DeviceId[]): void {
     this.order = order;
     const effects = order.map(id => this.slots.get(id)!.effect);

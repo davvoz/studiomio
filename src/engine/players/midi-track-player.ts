@@ -10,20 +10,20 @@ import type { DeviceModulation } from '../modulation';
 import type { Instrument, InstrumentHost } from './instrument';
 import type { PlayerContext, TrackPlayer } from './track-player';
 
-/** Suona le clip MIDI della traccia (timeline e session) con il suo strumento. Una nota parte
- *  se il suo inizio cade nella finestra; viene tagliata alla fine del tratto (giro di loop,
- *  bordo della clip, fine della corsa, clip lanciata al suo posto). Una clip con un suono lo
- *  dà allo strumento quando parte (vedi `applySound`). */
+/** Plays the track's MIDI clips (timeline and session) with its instrument. A note starts
+ *  if its start falls in the window; it's cut at the end of the stretch (loop round,
+ *  clip edge, end of the run, clip launched in its place). A clip with a sound
+ *  gives it to the instrument when it starts (see `applySound`). */
 export class MidiTrackPlayer implements TrackPlayer {
   private track: MidiTrack;
   private instrument: Instrument;
-  /** Le impostazioni che lo strumento ha (o avrà, se il suono di una clip è in arrivo). */
+  /** The settings the instrument has (or will have, if a clip's sound is on its way). */
   private settings: InstrumentSettings;
-  /** L'ultimo suono di una clip dato allo strumento (null dopo lo stop). */
+  /** The last clip sound given to the instrument (null after the stop). */
   private sound: InstrumentSettings | null = null;
-  /** L'arpeggiatore che lo strumento conosce. */
+  /** The arpeggiator the instrument knows. */
   private arp: EffectSettings | undefined;
-  /** Il tempo che lo strumento conosce. */
+  /** The tempo the instrument knows. */
   private bpm: number;
   private readonly segments = new WeakMap<Placement, Segment[]>();
 
@@ -37,7 +37,7 @@ export class MidiTrackPlayer implements TrackPlayer {
 
   update(track: Track): void {
     const next = track as MidiTrack;
-    // il suono di una clip già mandato allo strumento torna qui dal progetto: c'è già
+    // a clip's sound already sent to the instrument comes back here from the project: it's already there
     if (next.instrument !== this.settings) this.setInstrument(next.instrument);
     this.syncArp(next);
     this.track = next;
@@ -90,7 +90,7 @@ export class MidiTrackPlayer implements TrackPlayer {
   stopAll(): void {
     this.instrument.stopAll();
     this.ctx.notes.clear();
-    // al prossimo play la clip da cui si parte ridà il suo suono
+    // at the next play the clip it starts from gives back its sound
     this.sound = null;
   }
 
@@ -104,7 +104,7 @@ export class MidiTrackPlayer implements TrackPlayer {
     return instrument;
   }
 
-  /** Stesso tipo: cambiano solo i parametri, le note continuano. Tipo diverso: strumento nuovo. */
+  /** Same type: only the parameters change, the notes continue. Different type: new instrument. */
   private setInstrument(settings: InstrumentSettings): void {
     this.settings = settings;
     if (settings.type === this.instrument.type) return this.instrument.update(settings);
@@ -120,9 +120,9 @@ export class MidiTrackPlayer implements TrackPlayer {
     this.instrument.setArp(arpParams(arp));
   }
 
-  /** Il suono della clip dall'inizio del tratto, se è diverso dall'ultimo dato: ai giri di loop
-   *  e alle riprogrammazioni non si ridà, così ciò che si ritocca mentre la clip suona resta.
-   *  Solo per lo stesso tipo di strumento (un altro tipo si ignora). */
+  /** The clip's sound from the start of the stretch, if it's different from the last one given: at loop rounds
+   *  and reschedulings it isn't given again, so what's retouched while the clip plays stays.
+   *  Only for the same instrument type (another type is ignored). */
   private applySound({ clip, start }: Piece<MidiClip>, w: ScheduleWindow): void {
     const sound = clip.sound;
     if (!sound || sound === this.sound || sound.type !== this.instrument.type) return;
@@ -144,7 +144,7 @@ export class MidiTrackPlayer implements TrackPlayer {
   private playPiece({ clip, start, end, contentStart }: Piece<MidiClip>, w: ScheduleWindow): void {
     const from = Math.max(w.from + w.shift, start), to = Math.min(w.to + w.shift, end);
     if (to <= from) return;
-    // note il cui inizio, riportato sull'orologio, cade in [from, to)
+    // notes whose start, brought onto the clock, falls in [from, to)
     const c0 = contentStart + (from - start), c1 = contentStart + (to - start);
     for (const n of clip.notesIn(c0, c1)) {
       const at = start + (n.start - contentStart);

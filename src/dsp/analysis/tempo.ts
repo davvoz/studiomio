@@ -10,14 +10,14 @@ function autocorr(f: Float32Array, lag: number): number {
   return n > 0 ? s / n : 0;
 }
 
-/** Riporta il tempo nell'ottava 80–160 BPM. */
+/** Brings the tempo into the 80–160 BPM octave. */
 function foldOctave(bpm: number): number {
   while (bpm < 80) bpm *= 2;
   while (bpm >= 160) bpm /= 2;
   return bpm;
 }
 
-/** Per i loop: se una durata di battute intere spiega il tempo stimato entro il 4%, vince quella. */
+/** For loops: if a duration of whole bars explains the estimated tempo within 4%, it wins. */
 function snapToWholeBars(bpm: number, durationSec: number): number {
   if (durationSec <= 0.5 || durationSec > 60) return bpm;
   let snap: number | null = null, err = 0.04;
@@ -32,8 +32,8 @@ function snapToWholeBars(bpm: number, durationSec: number): number {
   return snap ? foldOctave(snap) : bpm;
 }
 
-/** Stima del tempo: autocorrelazione dell'onset con preferenza attorno ai 120 BPM e,
- *  per i loop, aggancio a una durata di battute intere. */
+/** Tempo estimate: autocorrelation of the onset with a preference around 120 BPM and,
+ *  for loops, snapping to a duration of whole bars. */
 export function estimateTempo(envl: OnsetEnvelope, durationSec: number): number {
   const { flux, frameRate } = envl;
   const n = flux.length;
@@ -58,7 +58,7 @@ export function estimateTempo(envl: OnsetEnvelope, durationSec: number): number 
     if (s > best) { best = s; bestL = L; }
   }
   if (!bestL) return 120;
-  // interpolazione parabolica del picco
+  // parabolic interpolation of the peak
   let L = bestL;
   const y0 = ac[bestL - 1], y1 = ac[bestL], y2 = ac[bestL + 1];
   const den = y0 - 2 * y1 + y2;

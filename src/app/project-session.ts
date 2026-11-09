@@ -16,7 +16,7 @@ import { springsAtRest } from '../store/rack-edits';
 import type { SampleId } from '../core/id';
 import type { AudioAnalysis } from '../dsp/analysis/analyze';
 
-/** Ciò che la sessione usa dell'audio (AudioSystem lo soddisfa; i test usano un finto). */
+/** What the session uses of the audio (AudioSystem satisfies it; tests use a fake). */
 export interface SessionAudio {
   readonly context: { decodeAudioData(data: ArrayBuffer): Promise<AudioBuffer> };
   readonly engine: { stop(): void };
@@ -25,25 +25,25 @@ export interface SessionAudio {
 }
 
 type SessionEvents = {
-  /** Cambiati cartella o stato di salvataggio. */
+  /** Folder or save state changed. */
   change: [];
   message: [text: string];
-  /** Il progetto ora vive in questa cartella del disco (aperto o salvato con nome). */
+  /** The project now lives in this disk folder (opened or saved as). */
   stored: [dir: Directory];
 };
 
-/** Il progetto aperto e la sua cartella. Un progetto nuovo vive in una cartella in memoria
- *  finché non lo si salva su disco con "Salva con nome". */
+/** The open project and its folder. A new project lives in an in-memory folder
+ *  until it's saved to disk with "Save as". */
 export class ProjectSession {
   private folder: ProjectFolder;
   private onDisk = false;
   private savedVersion: Project;
-  /** La versione scritta per ultima nella copia di recupero. */
+  /** The version last written to the recovery copy. */
   private autosaved: Project | null = null;
   private readonly events = new Emitter<SessionEvents>();
 
   constructor(private readonly store: ProjectStore, private readonly audio: SessionAudio, private readonly pickDirectory: () => Promise<Directory> = FsAccessDirectory.pick) {
-    this.folder = new ProjectFolder(new MemoryDirectory('Nuovo progetto'));
+    this.folder = new ProjectFolder(new MemoryDirectory('New project'));
     this.savedVersion = store.project;
     store.onChange(() => this.events.emit('change'));
   }
@@ -52,7 +52,7 @@ export class ProjectSession {
     return this.events.on(event, fn);
   }
 
-  /** Nome della cartella (o "Nuovo progetto" se non è ancora su disco). */
+  /** Folder name (or "New project" if it's not on disk yet). */
   get name(): string {
     return this.folder.name;
   }
@@ -61,33 +61,33 @@ export class ProjectSession {
     return this.onDisk && !this.changed;
   }
 
-  /** Ci sono modifiche dall'ultimo salvataggio (o dall'apertura): chiudere il progetto le perde. */
+  /** There are changes since the last save (or since opening): closing the project loses them. */
   get changed(): boolean {
     return this.store.project !== this.savedVersion;
   }
 
-  /** Il progetto com'è adesso conta come non modificato (es. il demo appena caricato). */
+  /** The project as it is now counts as unmodified (e.g. the demo just loaded). */
   forgetChanges(): void {
     this.savedVersion = this.store.project;
     this.events.emit('change');
   }
 
-  /** Importa file audio: copia nella cartella del progetto, analisi e clip sulla timeline.
-   *  Più file vanno su tracce nuove, uno sotto l'altro. */
+  /** Imports audio files: copy into the project folder, analysis and clips on the timeline.
+   *  Several files go on new tracks, one below the other. */
   async importFiles(files: readonly File[], target: TrackId | null, start: Beats): Promise<void> {
     for (const [i, file] of files.entries()) {
       try {
         const sample = await this.loadFile(file);
         this.store.apply(importSample(sample, i === 0 ? target : null, start));
-        this.say(`Importato "${file.name}": ${sample.analysis?.tempo.toFixed(2)} BPM.`);
+        this.say(`Imported "${file.name}": ${sample.analysis?.tempo.toFixed(2)} BPM.`);
       } catch (e) {
-        this.say(`Impossibile importare "${file.name}": ${e instanceof Error ? e.message : e}`);
+        this.say(`Couldn't import "${file.name}": ${e instanceof Error ? e.message : e}`);
       }
     }
   }
 
-  /** Importa file audio negli slot della session, da `slot` in giù nella stessa colonna (su
-   *  una traccia audio nuova se `target` non lo è). I file oltre l'ultima scena si saltano. */
+  /** Imports audio files into session slots, from `slot` down in the same column (on
+   *  a new audio track if `target` isn't one). Files past the last scene are skipped. */
   async importFilesToSlots(files: readonly File[], target: TrackId | null, slot: number): Promise<void> {
     let track = target;
     for (const [i, file] of files.entries()) {
@@ -96,51 +96,51 @@ export class ProjectSession {
         const sample = await this.loadFile(file);
         const before = this.store.project;
         this.store.apply(importSampleToSlot(sample, track, slot + i));
-        // la prima clip può aver creato una traccia nuova (in fondo, o in fondo al gruppo): le altre vanno lì sotto
+        // the first clip may have created a new track (at the bottom, or at the bottom of the group): the others go below it
         track = this.store.project.tracks.find(t => !before.track(t.id))?.id ?? track;
-        this.say(`Importato "${file.name}" nella session.`);
+        this.say(`Imported "${file.name}" into the session.`);
       } catch (e) {
-        this.say(`Impossibile importare "${file.name}": ${e instanceof Error ? e.message : e}`);
+        this.say(`Couldn't import "${file.name}": ${e instanceof Error ? e.message : e}`);
       }
     }
   }
 
-  /** Copia un file audio nella cartella del progetto e lo carica nel motore, senza metterlo da
-   *  nessuna parte: il riferimento lo usa chi lo chiede (es. un pad della Drum Machine). */
+  /** Copies an audio file into the project folder and loads it in the engine, without putting it
+   *  anywhere: the reference is used by whoever asks for it (e.g. a Drum Machine pad). */
   importSampleFile(file: File): Promise<SampleRef> {
     return this.loadFile(file);
   }
 
-  /** Mette nella cartella del progetto un audio già in memoria (es. il loop demo). */
+  /** Puts audio already in memory into the project folder (e.g. the demo loop). */
   async addAudio(name: string, data: AudioData, wav: Uint8Array): Promise<SampleRef> {
     const file = await this.folder.importAudio(name, wav);
     return this.register(name.replace(/\.[^.]+$/, ''), file, data);
   }
 
-  /** Un progetto nuovo, con le tracce iniziali (vedi `starterProject`); `blank`: senza tracce. */
+  /** A new project, with the starting tracks (see `starterProject`); `blank`: without tracks. */
   async newProject(blank = false): Promise<void> {
     this.audio.engine.stop();
-    this.folder = new ProjectFolder(new MemoryDirectory('Nuovo progetto'));
+    this.folder = new ProjectFolder(new MemoryDirectory('New project'));
     this.onDisk = false;
-    this.store.load(blank ? Project.empty('Nuovo progetto', this.store.ids) : starterProject('Nuovo progetto', this.store.ids));
+    this.store.load(blank ? Project.empty('New project', this.store.ids) : starterProject('New project', this.store.ids));
     this.savedVersion = this.store.project;
     this.events.emit('change');
   }
 
-  /** Apre il progetto nella cartella `dir` (senza: la fa scegliere). */
+  /** Opens the project in folder `dir` (without: lets the user choose it). */
   async open(dir?: Directory): Promise<void> {
     dir ??= await this.pickDirectory();
     const folder = new ProjectFolder(dir);
-    if (!(await folder.hasProject())) throw new Error(`"${dir.name}" non contiene un progetto studiomio`);
-    await this.openFolder(folder, true, `Aperto "${dir.name}".`);
+    if (!(await folder.hasProject())) throw new Error(`"${dir.name}" doesn't contain a studiomio project`);
+    await this.openFolder(folder, true, `Opened "${dir.name}".`);
     this.events.emit('stored', dir);
   }
 
-  /** Apre un progetto ricevuto in un file ZIP (vedi `collectAndSave`). Resta in memoria finché
-   *  non lo si salva: "Salva" chiede la cartella in cui metterlo. */
+  /** Opens a project received in a ZIP file (see `collectAndSave`). It stays in memory until
+   *  it's saved: "Save" asks for the folder to put it in. */
   async openArchive(file: File): Promise<void> {
     const dir = await unpackProject(new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.zip$/i, ''));
-    await this.openFolder(new ProjectFolder(dir), false, `Aperto "${dir.name}" da ${file.name}: salvalo per scegliere la sua cartella.`);
+    await this.openFolder(new ProjectFolder(dir), false, `Opened "${dir.name}" from ${file.name}: save it to choose its folder.`);
   }
 
   private async openFolder(folder: ProjectFolder, onDisk: boolean, opened: string): Promise<void> {
@@ -152,16 +152,16 @@ export class ProjectSession {
     this.store.load(project);
     this.savedVersion = project;
     this.events.emit('change');
-    this.say(missing.length ? `${opened} Mancano ${missing.length} file audio: ${missing.map(s => s.file).join(', ')}` : opened);
+    this.say(missing.length ? `${opened} ${missing.length} audio files are missing: ${missing.map(s => s.file).join(', ')}` : opened);
   }
 
-  /** Vero se nella cartella c'è una copia di recupero (modifiche mai salvate: l'app si è
-   *  bloccata o è stata chiusa senza salvare). */
+  /** True if the folder has a recovery copy (changes never saved: the app
+   *  hung or was closed without saving). */
   async hasRecovery(): Promise<boolean> {
     return this.onDisk && (await this.folder.loadRecovery()) !== null;
   }
 
-  /** Riapre la copia di recupero al posto del progetto salvato; resta da salvare. */
+  /** Reopens the recovery copy in place of the saved project; it still needs saving. */
   async restoreRecovery(): Promise<void> {
     const recovered = await this.folder.loadRecovery();
     if (!recovered) return;
@@ -172,22 +172,22 @@ export class ProjectSession {
     this.store.load(project);
     this.autosaved = project;
     this.events.emit('change');
-    this.say(`Ripristinate le modifiche non salvate di "${this.name}": salva per tenerle.`);
+    this.say(`Restored the unsaved changes of "${this.name}": save to keep them.`);
   }
 
-  /** Le modifiche non salvate si buttano: la copia di recupero non serve più. */
+  /** The unsaved changes are thrown away: the recovery copy is no longer needed. */
   async discardRecovery(): Promise<void> {
     if (this.onDisk) await this.folder.dropRecovery();
   }
 
-  /** Scrive la copia di recupero se il progetto è cambiato dall'ultima volta (solo per un
-   *  progetto su disco: uno nuovo non ha ancora una cartella). */
+  /** Writes the recovery copy if the project changed since last time (only for a
+   *  project on disk: a new one doesn't have a folder yet). */
   async autosave(): Promise<void> {
     const project = this.store.project;
     if (!this.onDisk || !this.changed || project === this.autosaved) return;
     const folder = this.folder, saved = this.savedVersion;
     await folder.saveRecovery(springsAtRest(project));
-    // nel frattempo si è salvato o aperto altro: la copia è vecchia e non va lasciata lì
+    // meanwhile something else was saved or opened: the copy is old and mustn't be left there
     if (this.folder !== folder || this.savedVersion !== saved) await folder.dropRecovery();
     else this.autosaved = project;
   }
@@ -198,7 +198,7 @@ export class ProjectSession {
     this.markSaved();
   }
 
-  /** Salva in un'altra cartella, copiandoci i file audio del progetto. */
+  /** Saves to another folder, copying the project's audio files into it. */
   async saveAs(): Promise<void> {
     const dir = await this.pickDirectory();
     await copyFiles(this.folder.dir, dir, this.store.project.samples.map(s => s.file));
@@ -209,25 +209,25 @@ export class ProjectSession {
     this.events.emit('stored', dir);
   }
 
-  /** Raccogli e salva: salva (se il progetto è già su disco) e mette il progetto in un file ZIP
-   *  da passare ad altri, con tutti e soli i file audio che usa. Chi lo riceve lo apre con
-   *  `openArchive`, o lo estrae e apre la cartella. */
+  /** Collect and save: saves (if the project is already on disk) and puts the project in a ZIP file
+   *  to hand to others, with all and only the audio files it uses. Whoever receives it opens it with
+   *  `openArchive`, or extracts it and opens the folder. */
   async collectAndSave(): Promise<File> {
     if (this.onDisk) await this.save();
     const entries = await this.folder.archive(springsAtRest(this.store.project), this.name);
     const file = new File(zipParts(entries) as Uint8Array<ArrayBuffer>[], `${safeFileName(this.name)}.zip`, { type: 'application/zip' });
     const audio = entries.length - 1;
-    this.say(`Raccolto "${this.name}" in ${file.name}: ${audio} file audio, ${(file.size / 1e6).toFixed(1)} MB.`);
+    this.say(`Collected "${this.name}" into ${file.name}: ${audio} audio files, ${(file.size / 1e6).toFixed(1)} MB.`);
     return file;
   }
 
   private markSaved(): void {
     this.savedVersion = this.store.project;
     this.events.emit('change');
-    this.say(`Salvato in "${this.folder.name}".`);
+    this.say(`Saved in "${this.folder.name}".`);
   }
 
-  /** Carica nel motore i file audio del progetto, tranne quelli in `skip`. */
+  /** Loads the project's audio files in the engine, except those in `skip`. */
   private async loadSamples(folder: ProjectFolder, project: Project, skip: readonly SampleRef[]): Promise<void> {
     for (const s of project.samples) {
       if (skip.includes(s)) continue;
@@ -242,7 +242,7 @@ export class ProjectSession {
     return this.register(file.name.replace(/\.[^.]+$/, ''), path, data);
   }
 
-  /** Carica l'audio nel motore, lo analizza e restituisce il riferimento per il progetto. */
+  /** Loads the audio in the engine, analyses it and returns the reference for the project. */
   private async register(name: string, file: string, data: AudioData): Promise<SampleRef> {
     const id = this.store.ids.next('sample');
     await this.audio.addSample(id, data);
@@ -254,7 +254,7 @@ export class ProjectSession {
     };
   }
 
-  /** Decodifica con il contesto audio (che porta il file al suo sample rate); al massimo stereo. */
+  /** Decodes with the audio context (which brings the file to its sample rate); at most stereo. */
   private async decode(bytes: Uint8Array): Promise<AudioData> {
     const buf = await this.audio.context.decodeAudioData(bytes.slice().buffer);
     const channels = Array.from({ length: Math.min(2, buf.numberOfChannels) }, (_, i) => buf.getChannelData(i).slice());

@@ -1,19 +1,19 @@
-/* Le categorie dei dispositivi: strumenti, batterie, effetti audio, e i preset e i rack
- * dell'utente raccolti per dispositivo. Le voci vengono dal registro dei dispositivi, dai preset
- * (di fabbrica e dell'utente) e dai rack salvati: un dispositivo nuovo nel registro compare qui
- * da solo. */
+/* The device categories: instruments, drums, audio effects, and the user's presets and racks
+ * gathered by device. The items come from the device registry, from the presets
+ * (factory and user) and from the saved racks: a new device in the registry shows up here
+ * by itself. */
 import type { Unsubscribe } from '../core/emitter';
 import type { DeviceType, Preset } from '../devices/device-type';
 import type { RackPreset } from '../model/rack-preset';
 import type { BrowserItem, BrowserPayload, BrowserSource } from './item';
 
-/** Ciò che serve dei preset dell'utente (UserPresets lo soddisfa). */
+/** What's needed of the user's presets (UserPresets satisfies it). */
 export interface UserPresetList {
   list(type: string): Preset[];
   onChange?(fn: () => void): Unsubscribe;
 }
 
-/** Ciò che serve dei rack salvati (UserRacks lo soddisfa). */
+/** What's needed of the saved racks (UserRacks satisfies it). */
 export interface UserRackList {
   list(): RackPreset[];
   onChange?(fn: () => void): Unsubscribe;
@@ -21,7 +21,7 @@ export interface UserRackList {
 
 type DeviceKind = 'instrument' | 'effect';
 
-/** Le liste di cui una fonte segue i cambiamenti. */
+/** The lists whose changes a source follows. */
 function onChangeOf(...lists: readonly ({ onChange?(fn: () => void): Unsubscribe } | undefined)[]): BrowserSource['onChange'] {
   const watched = lists.filter(l => l?.onChange);
   if (!watched.length) return undefined;
@@ -31,14 +31,14 @@ function onChangeOf(...lists: readonly ({ onChange?(fn: () => void): Unsubscribe
   };
 }
 
-/** La cartella dei rack di un tipo, come in Live: "Instrument Rack" tra gli strumenti (i rack
- *  con lo strumento), "Audio Effect Rack" tra gli effetti; prima quelli salvati, poi quelli di
- *  fabbrica; nessuna se non ce ne sono. */
+/** The folder of racks of a kind, as in Live: "Instrument Rack" among the instruments (the racks
+ *  with the instrument), "Audio Effect Rack" among the effects; first the saved ones, then the
+ *  factory ones; none if there are none. */
 function rackFolder(prefix: string, kind: DeviceKind, racks: UserRackList | undefined, factory: readonly RackPreset[] = []): BrowserItem[] {
   const ofKind = (r: RackPreset) => !!r.instrument === (kind === 'instrument');
   const list = racks?.list().filter(ofKind) ?? [], fixed = factory.filter(ofKind);
   if (!list.length && !fixed.length) return [];
-  // il tipo nell'id: tra i Preset dell'utente le due cartelle stanno nella stessa fonte
+  // the kind in the id: among the User Presets the two folders sit in the same source
   const id = `${prefix}/rack:${kind}`;
   const item = (r: RackPreset, key: string): BrowserItem => ({ id: `${id}/${key}`, name: r.name, icon: 'rack', payload: { kind: 'rack', rack: r } });
   return [{
@@ -49,11 +49,11 @@ function rackFolder(prefix: string, kind: DeviceKind, racks: UserRackList | unde
 
 const payload = (kind: DeviceKind, type: DeviceType, preset: Preset | null): BrowserPayload => ({ kind, type: type.type, preset });
 
-/** I preset dell'utente di un dispositivo come voci. */
+/** A device's user presets as items. */
 const userItems = (prefix: string, kind: DeviceKind, type: DeviceType, user: UserPresetList, hint?: string): BrowserItem[] =>
   user.list(type.type).map((p): BrowserItem => ({ id: `${prefix}/u:${p.name}`, name: p.name, icon: 'user-preset', hint, payload: payload(kind, type, p) }));
 
-/** I preset di un dispositivo come voci: prima quelli dell'utente, poi quelli di fabbrica. */
+/** A device's presets as items: first the user's, then the factory ones. */
 const presetItems = (prefix: string, kind: DeviceKind, type: DeviceType, user: UserPresetList, hint?: string): BrowserItem[] => [
   ...userItems(prefix, kind, type, user, hint),
   ...type.presets.map((p): BrowserItem => ({ id: `${prefix}/f:${p.name}`, name: p.name, icon: 'preset', hint, payload: payload(kind, type, p) })),
@@ -65,14 +65,14 @@ export interface DeviceSourceOptions {
   readonly kind: DeviceKind;
   readonly types: readonly DeviceType[];
   readonly user: UserPresetList;
-  /** I rack salvati, in una cartella prima dei dispositivi. */
+  /** The saved racks, in a folder before the devices. */
   readonly racks?: UserRackList;
-  /** I rack di fabbrica, nella stessa cartella dopo quelli salvati. */
+  /** The factory racks, in the same folder after the saved ones. */
   readonly factoryRacks?: readonly RackPreset[];
 }
 
-/** Una categoria di dispositivi, come "Instruments" e "Audio Effects" di Live: i rack salvati,
- *  poi una cartella per dispositivo (che si carica così com'è) con dentro i suoi preset. */
+/** A device category, like Live's "Instruments" and "Audio Effects": the saved racks,
+ *  then a folder per device (which loads as it is) with its presets inside. */
 export function deviceSource({ id, label, kind, types, user, racks, factoryRacks }: DeviceSourceOptions): BrowserSource {
   return {
     id, label, section: 'categories',
@@ -87,8 +87,8 @@ export function deviceSource({ id, label, kind, types, user, racks, factoryRacks
   };
 }
 
-/** I preset di alcuni strumenti messi tutti in fila, come "Drums" di Live: i kit della Drum
- *  Machine, pronti da caricare. */
+/** The presets of some instruments all in a row, like Live's "Drums": the Drum
+ *  Machine kits, ready to load. */
 export function kitSource(id: string, label: string, types: readonly DeviceType[], user: UserPresetList): BrowserSource {
   return {
     id, label, section: 'categories',
@@ -97,8 +97,8 @@ export function kitSource(id: string, label: string, types: readonly DeviceType[
   };
 }
 
-/** I rack e i preset salvati dall'utente, una cartella per tipo di rack e per dispositivo (solo
- *  quelli che ne hanno), come la User Library di Live. */
+/** The racks and presets saved by the user, a folder per rack kind and per device (only
+ *  those that have some), like Live's User Library. */
 export function userPresetsSource(instruments: readonly DeviceType[], effects: readonly DeviceType[], user: UserPresetList, racks?: UserRackList): BrowserSource {
   const id = 'user-presets';
   const folders = (kind: DeviceKind, types: readonly DeviceType[]) => types.filter(t => user.list(t.type).length).map((t): BrowserItem => ({
@@ -106,8 +106,8 @@ export function userPresetsSource(instruments: readonly DeviceType[], effects: r
     children: async () => userItems(`${id}/${t.type}`, kind, t, user),
   }));
   return {
-    id, label: 'Preset dell\'utente', section: 'places',
-    empty: 'Nessun preset salvato: ★ nell\'intestazione di un dispositivo o di un rack ne salva uno.',
+    id, label: 'User presets', section: 'places',
+    empty: 'No saved presets: ★ in the header of a device or a rack saves one.',
     items: async () => [
       ...rackFolder(id, 'instrument', racks), ...rackFolder(id, 'effect', racks),
       ...folders('instrument', instruments), ...folders('effect', effects),

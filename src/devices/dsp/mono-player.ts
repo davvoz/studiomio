@@ -1,18 +1,18 @@
-/** Una voce che sa suonare a una voce sola: ripartire (anche con il glide da un'altra nota) o
- *  scivolare verso una nota nuova senza far ripartire gli inviluppi. */
+/** A voice that can play monophonically: restart (also with glide from another note) or
+ *  slide towards a new note without restarting the envelopes. */
 export interface MonoVoice {
   readonly active: boolean;
   readonly releasing: boolean;
-  /** L'intonazione che suona adesso (anche a metà di un glide). */
+  /** The pitch playing now (also halfway through a glide). */
   readonly currentPitch: number;
-  /** Una nota da capo; con `from` l'intonazione parte da lì e scivola fino a `pitch`. */
+  /** A note from the start; with `from` the pitch starts there and slides to `pitch`. */
   start(pitch: number, velocity: number, from: number | null): void;
   slide(pitch: number, velocity: number): void;
   release(): void;
   kill(): void;
 }
 
-/** Come suona la voce sola: in Legato le note sovrapposte scivolano; il glide in secondi. */
+/** How the single voice plays: in Legato overlapping notes slide; the glide in seconds. */
 export interface MonoSettings {
   readonly legato: boolean;
   readonly glide: number;
@@ -24,13 +24,13 @@ interface HeldNote {
   readonly velocity: number;
 }
 
-/** Una voce sola, come un synth monofonico: le note tenute stanno in una pila e suona
- *  l'ultima; quando la si lascia torna quella sotto. In Legato una nota che arriva mentre
- *  un'altra è tenuta scivola senza ripartire; in Mono riparte sempre, con il glide dalla nota
- *  di prima. */
+/** A single voice, like a monophonic synth: the held notes are on a stack and the last one
+ *  plays; when it's released the one below comes back. In Legato a note arriving while
+ *  another is held slides without restarting; in Mono it always restarts, with glide from the
+ *  previous note. */
 export class MonoPlayer {
   private held: HeldNote[] = [];
-  /** Se la voce ha già suonato qualcosa (da lì parte il glide in Mono). */
+  /** Whether the voice has already played something (the glide in Mono starts from there). */
   private played = false;
 
   constructor(private readonly voice: MonoVoice, private readonly s: MonoSettings) {}

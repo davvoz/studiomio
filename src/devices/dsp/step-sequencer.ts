@@ -1,15 +1,15 @@
-/* Il sequencer a passi davanti a uno strumento (vedi devices/sequencer.ts): spento lascia
- * passare le note com'è; acceso, finché una nota è tenuta suona il giro di passi trasposto su di
- * lei, agganciato alla battuta del trasporto. Il giro è deterministico: ogni passo di ogni
- * pattern ha i suoi numeri fissi (colpo, accento, slide, altezza) e le manopole decidono la
- * soglia: a Densità più alta si aggiungono note, a Altezza più alta si allarga la scala, senza
- * che il resto si sposti. Un pattern nuovo entra all'inizio del giro, come su una 303.
- * Gli slide sono note che si sovrappongono: lo strumento in Legato le fa scivolare. Puro: si
- * prova anche in Node. */
+/* The step sequencer in front of an instrument (see devices/sequencer.ts): off it lets the
+ * notes through as they are; on, while a note is held it plays the loop of steps transposed onto
+ * it, locked to the transport's bar. The loop is deterministic: each step of each
+ * pattern has its own fixed numbers (hit, accent, slide, pitch) and the knobs decide the
+ * threshold: with higher Density notes are added, with higher Pitch the scale widens, without
+ * the rest moving. A new pattern comes in at the start of the loop, as on a 303.
+ * The slides are overlapping notes: the instrument in Legato makes them slide. Pure: it's
+ * also tested in Node. */
 import { SEQ_MAX_STEPS, SEQ_RATES, SEQ_SCALES } from '../sequencer';
 import type { InstrumentCore, TransportFollower, TransportPosition } from './core';
 
-/** Un numero in [0, 1) da tre interi, sempre lo stesso per lo stesso ingresso. */
+/** A number in [0, 1) from three integers, always the same for the same input. */
 export function hash01(a: number, b: number, c: number): number {
   let h = Math.imul(a + 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be59b, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
@@ -19,8 +19,8 @@ export function hash01(a: number, b: number, c: number): number {
 
 const HIT = 1, ACCENT = 2, SLIDE = 3, PITCH = 4;
 
-/** Dove cade un passo nel battito decide quando entra con la densità: prima il levare
- *  dell'ottavo (lo spazio tra le casse), poi il battere, poi i sedicesimi. */
+/** Where a step falls in the beat decides when it comes in with the density: first the eighth's
+ *  offbeat (the space between the kicks), then the downbeat, then the sixteenths. */
 function metricBias(beatPos: number): number {
   const f = beatPos - Math.floor(beatPos);
   if (Math.abs(f - 0.5) < 1e-6) return 0;
@@ -42,12 +42,12 @@ export interface SeqSettings {
   readonly accent: number;
   readonly slide: number;
   readonly gate: number;
-  /** Lascia il battere alla cassa: nessun passo sul battito. */
+  /** Leaves the downbeat to the kick: no step on the beat. */
   readonly skipBeat: boolean;
 }
 
-/** Un passo del giro: se suona, quanto sopra la nota tenuta, se è accentato e se scivola nel
- *  prossimo (lo slide vale solo se anche il prossimo suona). */
+/** A step of the loop: whether it plays, how far above the held note, whether it's accented and whether it slides into the
+ *  next (the slide only counts if the next one plays too). */
 export interface SeqStep {
   readonly hit: boolean;
   readonly interval: number;
@@ -55,7 +55,7 @@ export interface SeqStep {
   readonly slide: boolean;
 }
 
-/** Il passo `pos` (0 … length − 1) del pattern `pattern`, che cade al battito `beatPos`. */
+/** Step `pos` (0 … length − 1) of pattern `pattern`, falling at beat `beatPos`. */
 export function seqStep(s: SeqSettings, pattern: number, pos: number, beatPos: number): SeqStep {
   const onBeat = Math.abs(beatPos - Math.round(beatPos)) < 1e-6;
   const score = 0.55 * hash01(pattern, pos, HIT) + 0.45 * metricBias(beatPos);
@@ -66,7 +66,7 @@ export function seqStep(s: SeqSettings, pattern: number, pos: number, beatPos: n
   return { hit, interval, accent: hash01(pattern, pos, ACCENT) < s.accent, slide: hash01(pattern, pos, SLIDE) < s.slide };
 }
 
-/** Le impostazioni dai parametri del dispositivo. */
+/** The settings from the device's parameters. */
 export function seqSettings(p: Readonly<Record<string, number>>): SeqSettings {
   const rate = SEQ_RATES[Math.round(p.seqRate ?? 1)] ?? SEQ_RATES[1];
   const scale = SEQ_SCALES[Math.round(p.seqScale ?? 0)] ?? SEQ_SCALES[0];
@@ -86,46 +86,46 @@ export function seqSettings(p: Readonly<Record<string, number>>): SeqSettings {
   };
 }
 
-/** Velocity delle note: gli accenti oltre la soglia degli strumenti (100). */
+/** Note velocities: the accents above the instruments' threshold (100). */
 const ACCENT_VELOCITY = 127, NORMAL_VELOCITY = 92;
-/** Gli id delle note del sequencer, lontani da quelli della coda delle note. */
+/** The sequencer's note ids, far from those of the note queue. */
 const SEQ_ID_BASE = 0x40000000;
-/** Una nota tenuta che arriva entro questa frazione del passo lo suona lo stesso (la clip che
- *  parte un campione dopo il confine non perde il primo passo). */
+/** A held note arriving within this fraction of the step plays it anyway (the clip
+ *  starting a sample after the boundary doesn't lose the first step). */
 const CATCH_UP = 0.5;
 const EPS = 1e-9;
 
-/** La nota che il sequencer sta suonando. */
+/** The note the sequencer is playing. */
 interface Playing {
   readonly id: number;
-  /** Il battito in cui finisce (Infinity se scivola nel prossimo passo). */
+  /** The beat it ends at (Infinity if it slides into the next step). */
   offBeat: number;
 }
 
 export class StepSequencer implements InstrumentCore, TransportFollower {
   private settings: SeqSettings = seqSettings({});
-  /** Il pattern che suona: quello nuovo entra all'inizio del giro. */
+  /** The playing pattern: the new one comes in at the start of the loop. */
   private activePattern = 0;
-  /** Le note tenute (id → altezza), nell'ordine in cui sono arrivate. */
+  /** The held notes (id → pitch), in the order they arrived. */
   private readonly held = new Map<number, number>();
-  /** Le note passate allo strumento con il sequencer spento (id → altezza): se lo si accende si
-   *  spengono e diventano note tenute (la clip che accende il sequencer e la sua nota arrivano
-   *  insieme: la nota può arrivare un blocco prima del parametro). */
+  /** The notes passed to the instrument with the sequencer off (id → pitch): if it's turned on they
+   *  turn off and become held notes (the clip turning the sequencer on and its note arrive
+   *  together: the note may arrive one block before the parameter). */
   private readonly direct = new Map<number, number>();
   private playing: Playing | null = null;
   private nextId = SEQ_ID_BASE;
   private bpm = 120;
-  /** Il battito all'inizio del blocco (null: trasporto fermo). */
+  /** The beat at the start of the block (null: transport stopped). */
   private blockBeat: number | null = null;
-  /** Da fermo, con una nota tenuta (si suona a mano), l'orologio è il suo e parte con la nota: il
-   *  battito all'inizio del blocco e quello dove è finito l'ultimo tratto. */
+  /** When stopped, with a held note (playing by hand), the clock is its own and starts with the note: the
+   *  beat at the start of the block and the one where the last stretch ended. */
   private freeBeat: number | null = null;
   private freeEnd = 0;
-  /** Il battito dove è finito l'ultimo tratto suonato (per riconoscere i salti). */
+  /** The beat where the last played stretch ended (to recognize jumps). */
   private endBeat: number | null = null;
-  /** Il prossimo confine di passo da suonare (in battiti). */
+  /** The next step boundary to play (in beats). */
   private nextStepBeat: number | null = null;
-  /** Il confine dell'ultimo passo passato senza nota tenuta (per recuperarlo). */
+  /** The boundary of the last step passed without a held note (to recover it). */
   private missedStepBeat: number | null = null;
 
   constructor(private readonly inner: InstrumentCore, private readonly sampleRate: number) {}
@@ -136,7 +136,7 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     this.settings = next;
     this.inner.setParams(params);
     if (next.on && !prev.on) {
-      // le note suonate direttamente si spengono: da qui le suona il sequencer
+      // the notes played directly turn off: from here the sequencer plays them
       for (const [id, pitch] of this.direct) {
         this.inner.noteOff(id);
         this.held.set(id, pitch);
@@ -167,7 +167,7 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     }
     this.freeBeat = null;
     this.bpm = position.bpm;
-    // un salto (loop, cursore spostato): il giro riparte da lì
+    // a jump (loop, cursor moved): the loop restarts from there
     if (this.endBeat === null || Math.abs(position.beat - this.endBeat) > 1e-3) {
       this.release();
       this.nextStepBeat = this.missedStepBeat = null;
@@ -224,12 +224,12 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     const frameAt = (beat: number) => Math.min(to, Math.max(from, from + Math.ceil((beat - beatAt(from)) / perFrame - EPS)));
     const step = s.stepBeats;
     if (this.nextStepBeat === null) {
-      // si riparte (acceso, salto, trasporto partito): il passo appena cominciato si recupera
+      // restart (on, jump, transport started): the step just begun is recovered
       const prev = Math.floor(beatAt(from) / step + 1e-6) * step;
       if (prev < beatAt(from) - EPS) this.missedStepBeat = prev;
     }
     let nextStep = this.nextStepBeat ?? Math.ceil(beatAt(from) / step - 1e-6) * step;
-    // la nota tenuta arrivata poco dopo un confine: quel passo si suona adesso
+    // the held note arrived shortly after a boundary: that step is played now
     if (this.missedStepBeat !== null) {
       if (beatAt(from) - this.missedStepBeat >= step * CATCH_UP) this.missedStepBeat = null;
       else if (this.held.size && !this.playing) {
@@ -263,7 +263,7 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     else this.freeEnd = beatAt(to);
   }
 
-  /** Il passo che comincia al battito `boundary`. */
+  /** The step starting at beat `boundary`. */
   private fireStep(boundary: number): void {
     const s = this.settings;
     const index = Math.round(boundary / s.stepBeats);
@@ -272,7 +272,7 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     const st = seqStep(s, this.activePattern, pos, boundary);
     const prev = this.playing;
     if (!st.hit) {
-      // uno slide verso un passo che non suona più (la densità è scesa): la nota finisce qui
+      // a slide towards a step that no longer plays (the density dropped): the note ends here
       if (prev && !Number.isFinite(prev.offBeat)) {
         this.inner.noteOff(prev.id);
         this.playing = null;
@@ -283,7 +283,7 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     const pitch = Math.max(0, Math.min(127, root + st.interval));
     const id = this.nextId++;
     if (this.nextId >= SEQ_ID_BASE * 1.5) this.nextId = SEQ_ID_BASE;
-    // la nota nuova prima di spegnere quella che scivola: in Legato è lo slide
+    // the new note before turning off the sliding one: in Legato it's the slide
     this.inner.noteOn(id, pitch, st.accent ? ACCENT_VELOCITY : NORMAL_VELOCITY);
     if (prev) this.inner.noteOff(prev.id);
     const nextPos = (pos + 1) % s.length;
@@ -291,7 +291,7 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     this.playing = { id, offBeat: slides ? Infinity : boundary + s.stepBeats * s.gate };
   }
 
-  /** Spegne la nota del sequencer. */
+  /** Turns off the sequencer's note. */
   private release(): void {
     if (this.playing) this.inner.noteOff(this.playing.id);
     this.playing = null;

@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-/** Il motore DSP originale di WarpMio (`tests/reference/warpdsp.legacy.js`), usato come
- *  riferimento: è una funzione autocontenuta, quindi basta valutarla. */
+/** WarpMio's original DSP engine (`tests/reference/warpdsp.legacy.js`), used as
+ *  reference: it's a self-contained function, so evaluating it is enough. */
 export interface LegacyDsp {
   render(channels: Float32Array[], sr: number, job: unknown): Float32Array[];
   onsetEnvelope(mono: Float32Array, sr: number): { flux: Float32Array; hop: number; frameRate: number };

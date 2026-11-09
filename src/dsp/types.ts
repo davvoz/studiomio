@@ -1,7 +1,7 @@
-/** Campioni di uno o più canali, tutti della stessa lunghezza. */
+/** Samples of one or more channels, all the same length. */
 export type Channels = readonly Float32Array[];
 
-/** Array numerico leggibile per indice (Float32Array, Float64Array, number[]…). */
+/** Numeric array readable by index (Float32Array, Float64Array, number[]…). */
 export type Samples = ArrayLike<number>;
 
 export interface AudioData {

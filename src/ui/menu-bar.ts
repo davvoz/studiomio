@@ -1,6 +1,6 @@
-/* La barra dei menu (File, Modifica, …), come nelle applicazioni desktop. Le voci sono dati,
- * chiesti ogni volta che un menu si apre: così segni di spunta, voci disattivate e nomi
- * («Annulla: Sposta clip») sono sempre quelli del momento. Le tendine sono i menu contestuali. */
+/* The menu bar (File, Edit, …), as in desktop applications. The items are data,
+ * asked for every time a menu opens: so check marks, disabled items and names
+ * («Undo: Move clip») are always those of the moment. The drop-downs are the context menus. */
 import { showContextMenu, type MenuItem } from './context-menu';
 
 export interface Menu {
@@ -13,9 +13,9 @@ export class MenuBar {
   private readonly titles: HTMLButtonElement[] = [];
   private readonly title = Object.assign(document.createElement('span'), { className: 'title' });
   private readonly aside = Object.assign(document.createElement('div'), { className: 'aside' });
-  /** Il menu aperto (indice), o null. */
+  /** The open menu (index), or null. */
   private open: number | null = null;
-  /** Il menu appena chiuso dal clic sul suo stesso titolo: quel clic non deve riaprirlo. */
+  /** The menu just closed by the click on its own title: that click mustn't reopen it. */
   private justClosed: number | null = null;
 
   constructor(private readonly menus: readonly Menu[], private readonly projectTitle: () => string) {
@@ -25,15 +25,15 @@ export class MenuBar {
       });
       b.onpointerdown = e => {
         if (e.button !== 0) return;
-        e.preventDefault(); // il fuoco resta al menu che si apre
+        e.preventDefault(); // the focus stays on the menu that opens
         if (this.justClosed !== i) this.show(i);
       };
       b.onpointerenter = () => { if (this.open !== null && this.open !== i) this.show(i); };
-      b.onclick = e => { if (e.detail === 0) this.show(i); }; // Invio o Spazio sul titolo
+      b.onclick = e => { if (e.detail === 0) this.show(i); }; // Enter or Space on the title
       this.titles.push(b);
     });
     this.element.append(...this.titles, this.title, this.aside);
-    // Alt + iniziale apre il menu (le iniziali sono tutte diverse)
+    // Alt + initial opens the menu (the initials are all different)
     document.addEventListener('keydown', e => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
       const i = menus.findIndex(m => m.label[0].toLowerCase() === e.key.toLowerCase());
@@ -44,7 +44,7 @@ export class MenuBar {
     this.render();
   }
 
-  /** Mette dei controlli a destra, dopo il titolo. */
+  /** Puts some controls on the right, after the title. */
   addAside(...nodes: Node[]): void {
     this.aside.append(...nodes);
   }

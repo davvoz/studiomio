@@ -1,6 +1,6 @@
 import type { OnsetEnvelope } from './onset';
 
-/** Beat tracking con programmazione dinamica (Ellis 2007). Restituisce posizioni in campioni. */
+/** Beat tracking with dynamic programming (Ellis 2007). Returns positions in samples. */
 export function trackBeats(envl: OnsetEnvelope, bpm: number): number[] {
   const { flux, hop, frameRate } = envl;
   const n = flux.length;

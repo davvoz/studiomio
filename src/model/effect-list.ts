@@ -1,5 +1,5 @@
-/* Una catena di effetti come dati: la lista ordinata in cui il suono li attraversa. Funzioni
- * pure, usate da tracce e master: ognuna restituisce una lista nuova. */
+/* An effect chain as data: the ordered list the sound goes through. Pure
+ * functions, used by tracks and master: each returns a new list. */
 import type { DeviceId } from '../core/id';
 import type { EffectSettings } from './device';
 
@@ -9,11 +9,11 @@ const clampIndex = (list: EffectList, index: number) => Math.max(0, Math.min(ind
 
 function indexOf(list: EffectList, id: DeviceId): number {
   const i = list.findIndex(e => e.id === id);
-  if (i < 0) throw new RangeError(`effetto ${id} non trovato`);
+  if (i < 0) throw new RangeError(`effect ${id} not found`);
   return i;
 }
 
-/** Aggiunge un effetto in posizione `index` (in fondo se manca). */
+/** Adds an effect at position `index` (at the end if missing). */
 export function add(list: EffectList, effect: EffectSettings, index = list.length): EffectList {
   const e = [...list];
   e.splice(clampIndex(list, index), 0, effect);
@@ -30,7 +30,7 @@ export function update(list: EffectList, id: DeviceId, fn: (e: EffectSettings) =
   return list.map(e => (e.id === id ? { ...fn(e), id } : e));
 }
 
-/** Sposta un effetto nella posizione `index` della catena. */
+/** Moves an effect to position `index` of the chain. */
 export function move(list: EffectList, id: DeviceId, index: number): EffectList {
   const e = [...list];
   const [moved] = e.splice(indexOf(list, id), 1);

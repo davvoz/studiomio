@@ -4,7 +4,7 @@ import { Project } from '../../src/model/project';
 import { ProjectStore } from '../../src/store/project-store';
 import { addSample, addTrack } from '../../src/store/edits';
 
-/** Sample finto: 2 battute a 120 BPM (4 s) a 44,1 kHz, con un transiente per battito. */
+/** Fake sample: 2 bars at 120 BPM (4 s) at 44.1 kHz, with a transient per beat. */
 export function sampleRef(ids: IdFactory, over: Partial<SampleRef> = {}): SampleRef {
   return {
     id: ids.next('sample'), name: 'loop', file: 'audio/loop.wav',
@@ -14,10 +14,10 @@ export function sampleRef(ids: IdFactory, over: Partial<SampleRef> = {}): Sample
   };
 }
 
-/** Store con un progetto vuoto, id prevedibili e (a scelta) tracce e un sample. */
+/** Store with an empty project, predictable ids and (optionally) tracks and a sample. */
 export function setup(opts: { audio?: number; midi?: number; sample?: boolean } = {}) {
   const ids = sequentialIds();
-  const store = new ProjectStore(Project.empty('Prova', ids, 4), ids);
+  const store = new ProjectStore(Project.empty('Test', ids, 4), ids);
   for (let i = 0; i < (opts.audio ?? 0); i++) store.apply(addTrack('audio'));
   for (let i = 0; i < (opts.midi ?? 0); i++) store.apply(addTrack('midi'));
   let sample: SampleRef | null = null;

@@ -1,4 +1,4 @@
-/** Un canvas nitido anche su schermi ad alta densità. */
+/** A sharp canvas even on high-density screens. */
 export class Surface {
   readonly canvas = document.createElement('canvas');
   readonly g = this.canvas.getContext('2d')!;

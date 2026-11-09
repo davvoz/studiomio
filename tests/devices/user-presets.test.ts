@@ -10,7 +10,7 @@ const memory = (initial: Record<string, string> = {}): PresetStorage & { data: R
   return { data, getItem: k => data[k] ?? null, setItem: (k, v) => { data[k] = v; } };
 };
 
-/** Come i file dell'app desktop: ricorda anche la cartella di ogni preset. */
+/** Like the desktop app's files: it also remembers each preset's folder. */
 const files = (initial: unknown[] = []) => {
   const saved: (StoredPreset & { folder: string })[] = [];
   const backend: PresetBackend = {
@@ -25,61 +25,61 @@ const files = (initial: unknown[] = []) => {
   return { backend, saved };
 };
 
-describe('preset dell\'utente', () => {
-  it('salva, sostituisce con lo stesso nome, elenca in ordine ed elimina', async () => {
+describe('user presets', () => {
+  it('saves, replaces with the same name, lists in order and deletes', async () => {
     const { backend, saved } = files();
     const presets = new UserPresets(backend, type => type.toUpperCase());
     await presets.save('analog', { name: 'Zeta', params: { a: 1 } });
     await presets.save('analog', { name: 'alfa', params: { a: 2 } });
     await presets.save('analog', { name: 'Zeta', params: { a: 3 } });
-    await presets.save('delay', { name: 'Eco', params: {} });
+    await presets.save('delay', { name: 'Echo', params: {} });
     expect(presets.list('analog')).toEqual([{ name: 'alfa', params: { a: 2 } }, { name: 'Zeta', params: { a: 3 } }]);
-    expect(presets.find('delay', 'Eco')).toEqual({ name: 'Eco', params: {} });
-    expect(saved.find(p => p.name === 'Eco')?.folder).toBe('DELAY');
-    // al riavvio si rileggono da chi li conserva
+    expect(presets.find('delay', 'Echo')).toEqual({ name: 'Echo', params: {} });
+    expect(saved.find(p => p.name === 'Echo')?.folder).toBe('DELAY');
+    // at restart they're reread from whoever keeps them
     const again = new UserPresets(backend);
     await again.load();
     expect(again.list('analog').map(p => p.name)).toEqual(['alfa', 'Zeta']);
-    await presets.remove('delay', 'Eco');
+    await presets.remove('delay', 'Echo');
     expect(presets.list('delay')).toEqual([]);
     expect(saved.map(p => p.name)).toEqual(['alfa', 'Zeta']);
   });
 
-  it('salta ciò che non è un preset', async () => {
+  it('skips what isn\'t a preset', async () => {
     const presets = new UserPresets(files([
       { type: 'analog', name: 'Ok', params: { a: 1, b: 'x', c: null, d: Infinity } },
-      { type: 'analog', name: '', params: {} }, { name: 'senza tipo', params: {} }, 3, null,
+      { type: 'analog', name: '', params: {} }, { name: 'without type', params: {} }, 3, null,
     ]).backend);
     await presets.load();
     expect(presets.list('analog')).toEqual([{ name: 'Ok', params: { a: 1 } }]);
   });
 
-  it('se il salvataggio non riesce il preset non compare', async () => {
-    const failing: PresetBackend = { ...files().backend, save: () => Promise.reject(new Error('disco pieno')) };
+  it('if saving fails the preset doesn\'t appear', async () => {
+    const failing: PresetBackend = { ...files().backend, save: () => Promise.reject(new Error('disk full')) };
     const presets = new UserPresets(failing);
-    await expect(presets.save('analog', { name: 'X', params: {} })).rejects.toThrow('disco pieno');
+    await expect(presets.save('analog', { name: 'X', params: {} })).rejects.toThrow('disk full');
     expect(presets.list('analog')).toEqual([]);
-    await expect(new UserPresets(null).save('analog', { name: 'X', params: {} })).rejects.toThrow(/non è disponibile/);
+    await expect(new UserPresets(null).save('analog', { name: 'X', params: {} })).rejects.toThrow(/isn't available/);
   });
 
-  it('nel browser restano nello spazio locale, in una voce sola', async () => {
+  it('in the browser they stay in local storage, in a single entry', async () => {
     const storage = memory();
     const presets = new UserPresets(new StoragePresets(storage));
-    await presets.save('analog', { name: 'Uno', params: { a: 1 } });
-    await presets.save('eq', { name: 'Due', params: {} });
-    await presets.remove('eq', 'Due');
-    expect(JSON.parse(storage.data['studiomio.presets'])).toEqual({ analog: [{ name: 'Uno', params: { a: 1 } }] });
+    await presets.save('analog', { name: 'One', params: { a: 1 } });
+    await presets.save('eq', { name: 'Two', params: {} });
+    await presets.remove('eq', 'Two');
+    expect(JSON.parse(storage.data['studiomio.presets'])).toEqual({ analog: [{ name: 'One', params: { a: 1 } }] });
     const again = new UserPresets(new StoragePresets(storage));
     await again.load();
-    expect(again.list('analog')).toEqual([{ name: 'Uno', params: { a: 1 } }]);
+    expect(again.list('analog')).toEqual([{ name: 'One', params: { a: 1 } }]);
     expect(presets.canReveal).toBe(false);
-    // voce rovinata a mano: nessun preset, nessun errore
+    // entry damaged by hand: no presets, no error
     await expect(new StoragePresets(memory({ 'studiomio.presets': '{rotto' })).load()).resolves.toEqual([]);
     const full: PresetStorage = { getItem: () => null, setItem: () => { throw new Error('quota'); } };
-    await expect(new StoragePresets(full).save('', { type: 'analog', name: 'X', params: {} })).rejects.toThrow(/pieno o bloccato/);
+    await expect(new StoragePresets(full).save('', { type: 'analog', name: 'X', params: {} })).rejects.toThrow(/full or blocked/);
   });
 
-  it('si salvano solo i valori diversi dai predefiniti, e ricaricati suonano uguali', () => {
+  it('only the values different from the defaults are saved, and reloaded they play the same', () => {
     const [first, second] = ANALOG.sections.flatMap(s => s.params).flatMap(p => (p.kind === 'number' && p.max > p.min ? [p] : []));
     const changed = first.default === first.max ? first.min : first.max;
     const params = presetParams(ANALOG, { [first.id]: changed, [second.id]: second.default, ignoto: 5 });

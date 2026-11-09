@@ -1,167 +1,165 @@
 # studiomio
 
-DAW nel browser (e in Electron) sul modello di Ableton Live: arrangement e session view, clip
-audio con warp, clip MIDI, modulazioni delle clip, strumenti ed effetti in AudioWorklet, rack con
-macro, controller MIDI. TypeScript; il motore di warp viene da [WarpMio](../warpmio).
+A DAW in the browser (and in Electron) modelled on Ableton Live: arrangement and session view, audio
+clips with warp, MIDI clips, clip modulations, instruments and effects in AudioWorklet, racks with
+macros, MIDI controllers. TypeScript; the warp engine comes from [WarpMio](../warpmio).
 
-## Scarica
+## Download
 
-[![Scarica per Windows](https://img.shields.io/github/v/release/davvoz/studiomio?label=Scarica%20per%20Windows&style=for-the-badge&color=ff9d2e)](https://github.com/davvoz/studiomio/releases/latest/download/studiomio-setup.exe)
+[![Download for Windows](https://img.shields.io/github/v/release/davvoz/studiomio?label=Download%20for%20Windows&style=for-the-badge&color=ff9d2e)](https://github.com/davvoz/studiomio/releases/latest/download/studiomio-setup.exe)
 
-Il pulsante scarica subito l'installer dell'ultima versione (Windows 10/11 a 64 bit). Non è
-firmato: alla prima installazione "Ulteriori informazioni" → "Esegui comunque". Si aggiorna da
-solo. Note e versioni precedenti nelle [Releases](https://github.com/davvoz/studiomio/releases).
+The button downloads the installer of the latest version straight away (Windows 10/11, 64-bit). It
+isn't signed: on the first install choose "More info" → "Run anyway". It updates itself. Notes and
+earlier versions are in the [Releases](https://github.com/davvoz/studiomio/releases).
 
-## Sviluppo
+## Development
 
-Requisiti: Node 22+, Rust con `wasm32-unknown-unknown` e `wasm-pack`. Dopo `npm install` lancia una
-volta `npm run wasm` e `npm run wasm:test` (il pacchetto WebAssembly non è nel repository).
+Requirements: Node 22+, Rust with `wasm32-unknown-unknown` and `wasm-pack`. After `npm install`, run
+`npm run wasm` and `npm run wasm:test` once (the WebAssembly package isn't in the repository).
 
-| Comando | |
+| Command | |
 |---|---|
-| `npm run dev` | server di sviluppo su http://localhost:5173 (intestazioni COOP/COEP; Chrome o Edge) |
-| `npm test` · `npm run typecheck` | test (Vitest) · tipi |
-| `npm run build` | build di produzione in `dist/` |
-| `npm run bench` | tempi del warp, TypeScript contro WebAssembly (`/bench.html`) |
-| `npm run app` · `npm run dist` | l'app in Electron · l'installer in `release/` |
+| `npm run dev` | development server on http://localhost:5173 (COOP/COEP headers; Chrome or Edge) |
+| `npm test` · `npm run typecheck` | tests (Vitest) · types |
+| `npm run build` | production build in `dist/` |
+| `npm run bench` | warp timings, TypeScript against WebAssembly (`/bench.html`) |
+| `npm run app` · `npm run dist` | the app in Electron · the installer in `release/` |
 
-`VITE_DSP_WASM=1` attiva gli algoritmi WebAssembly. Gli script in `scripts/` girano con i moduli
-dell'app: `node scripts/run.mjs scripts/<nome>.ts …`.
+`VITE_DSP_WASM=1` turns on the WebAssembly algorithms. The scripts in `scripts/` run with the app's
+modules: `node scripts/run.mjs scripts/<name>.ts …`.
 
-**Rilascio**: `npm version <patch|minor|major>` e `git push --follow-tags`. Il tag avvia
-`.github/workflows/release.yml` (WASM, test, installer, pubblicazione con `latest.yml`, che le app
-installate leggono per aggiornarsi). Le voci del CHANGELOG sotto "Unreleased" finiscono nella release.
+**Release**: `npm version <patch|minor|major>` and `git push --follow-tags`. The tag starts
+`.github/workflows/release.yml` (WASM, tests, installer, publishing with `latest.yml`, which the
+installed apps read to update themselves). The CHANGELOG entries under "Unreleased" go into the release.
 
-## Architettura
+## Architecture
 
 ```
-UI (DOM + canvas) ──comandi──▶ ProjectStore ──versioni immutabili──▶ PlaybackEngine
+UI (DOM + canvas) ──commands──▶ ProjectStore ──immutable versions──▶ PlaybackEngine
                                     │                                    │
-                              persistence/ (JSON)          Web Audio: mixer, mandate, gruppi
-                                                           AudioWorklet: strumenti, effetti, misuratori
-                                                           Worker pool: render del warp (TS o WASM)
+                              persistence/ (JSON)          Web Audio: mixer, sends, groups
+                                                           AudioWorklet: instruments, effects, meters
+                                                           Worker pool: warp renders (TS or WASM)
 ```
 
 ```
 src/
-  core/         id tipizzati, eventi, tempo musicale (battiti, BPM, metro)
-  model/        il progetto immutabile: tracce (audio, MIDI, gruppo, bus), clip, warp marker,
-                note, modulazioni, dispositivi, rack e macro, scene, quantizzazione del lancio
-  store/        ProjectStore (annulla/ripeti come pila di versioni) e le modifiche, funzioni pure
-                Project → Project, una per azione dell'utente
-  persistence/  progetto ⇄ JSON con versione e migrazioni; cartella del progetto su Directory
-                (File System Access, Node o in memoria)
-  engine/       riproduzione: scheduler con anticipo, session (cosa suona ogni traccia e da quando),
-                modulazioni programmate, catene degli effetti aggiornate per differenza, cache LRU
-                dei render di warp, export offline; tutto su audio-graph.ts (Web Audio o finto)
-  devices/      strumenti ed effetti: descrizioni (parametri, sezioni, preset), motori DSP, rack di
-                fabbrica; worklet/ i processori AudioWorklet; dsp/ i mattoni (oscillatori PolyBLEP,
-                SVF/TPT, ADSR, LFO, polifonia, sovracampionamento, sequencer a passi)
-  dsp/          motore di warp, senza DOM: stretch/ (beats, tones, texture, complex, repitch),
-                analysis/ (onset, transienti, tempo), codec/ (WAV, ZIP), wasm/ (ponte verso Rust)
-  workers/      RPC tipizzato, worker pool, DspService
-  browser/      il browser come dati: fonti, voci, ricerca
-  control/      controller via Web MIDI: APC40 mkII, Launchpad X / Mini MK3 / Pro MK3 / MK2
-  ui/           timeline, session, piano roll, editor audio, modulazioni, catena dei dispositivi
-                (controlli generati dai parametri, pannelli grafici registrati in displays.ts)
-  app/          montaggio: AudioContext, worker, motore, comandi, apertura e salvataggio
-electron/       main.ts: serve dist/ da app://studiomio con COOP/COEP, permessi, aggiornamenti
+  core/         typed ids, events, musical time (beats, BPM, time signature)
+  model/        the immutable project: tracks (audio, MIDI, group, bus), clips, warp markers,
+                notes, modulations, devices, racks and macros, scenes, launch quantization
+  store/        ProjectStore (undo/redo as a stack of versions) and the edits, pure functions
+                Project → Project, one per user action
+  persistence/  project ⇄ JSON with version and migrations; the project folder on a Directory
+                (File System Access, Node or in memory)
+  engine/       playback: scheduler with lookahead, session (what each track plays and since when),
+                scheduled modulations, effect chains updated by difference, LRU cache of the warp
+                renders, offline export; all on audio-graph.ts (Web Audio or fake)
+  devices/      instruments and effects: descriptions (parameters, sections, presets), DSP engines,
+                factory racks; worklet/ the AudioWorklet processors; dsp/ the building blocks
+                (PolyBLEP oscillators, SVF/TPT, ADSR, LFO, polyphony, oversampling, step sequencer)
+  dsp/          warp engine, without DOM: stretch/ (beats, tones, texture, complex, repitch),
+                analysis/ (onset, transients, tempo), codec/ (WAV, ZIP), wasm/ (bridge to Rust)
+  workers/      typed RPC, worker pool, DspService
+  browser/      the browser as data: sources, items, search
+  control/      controllers via Web MIDI: APC40 mkII, Launchpad X / Mini MK3 / Pro MK3 / MK2
+  ui/           timeline, session, piano roll, audio editor, modulations, device chain
+                (controls generated from the parameters, graphic panels registered in displays.ts)
+  app/          assembly: AudioContext, workers, engine, commands, opening and saving
+electron/       main.ts: serves dist/ from app://studiomio with COOP/COEP, permissions, updates
 crates/dsp/     phase vocoder in Rust → WebAssembly (SIMD)
-scripts/        render senza browser (headless-render.ts, render-project.ts), loudness BS.1770
-tests/          un file per modulo; equivalenza con WarpMio (tests/reference/)
+scripts/        rendering without a browser (headless-render.ts, render-project.ts), BS.1770 loudness
+tests/          one file per module; equivalence with WarpMio (tests/reference/)
 ```
 
-Una cartella di progetto contiene `progetto.json` (leggibile, versionato), `progetto.bak.json` (il
-salvataggio precedente) e `audio/` (i file originali copiati all'importazione).
+A project folder holds `progetto.json` (readable, versioned), `progetto.bak.json` (the previous
+save) and `audio/` (the original files, copied on import).
 
-### Audio in tempo reale
+### Real-time audio
 
-- **Due processori AudioWorklet**: uno per gli strumenti (note con il tempo del contesto, ogni blocco
-  diviso al campione esatto di ogni nota) e uno per gli effetti. I motori DSP sono registrati per
-  tipo in `devices/worklet/cores.ts`.
-- **Parametri e modulazioni**: i parametri dei dispositivi arrivano come scalini e rampe datati,
-  applicati a blocchi di 128 campioni (`mod-timeline.ts`). Volume e pan sono AudioParam, precisi al
-  campione.
-- **Trasporto**: effetti e strumenti che seguono la battuta (delay, gate, beat repeat, sequencer)
-  ricevono un'ancora battito ↔ tempo del contesto.
-- **Misuratori**: picco e RMS scritti in SharedArrayBuffer, per questo servono COOP/COEP.
-- **Warp**: le clip audio sono renderizzate nei worker e tenute in una cache LRU per contenuto. Le
-  clip della session girano su un orologio continuo, che resta in fase con il loop della timeline.
+- **Two AudioWorklet processors**: one for the instruments (notes with the context time, each block
+  split at the exact sample of each note) and one for the effects. The DSP engines are registered by
+  type in `devices/worklet/cores.ts`.
+- **Parameters and modulations**: device parameters arrive as timed steps and ramps, applied in
+  blocks of 128 samples (`mod-timeline.ts`). Volume and pan are AudioParams, sample-accurate.
+- **Transport**: effects and instruments that follow the bar (delay, gate, beat repeat, sequencer)
+  get a beat ↔ context time anchor.
+- **Meters**: peak and RMS written into a SharedArrayBuffer, which is why COOP/COEP are needed.
+- **Warp**: audio clips are rendered in the workers and kept in an LRU cache by content. Session
+  clips run on a continuous clock, which stays in phase with the timeline loop.
 
-## Funzionalità
+## Features
 
-- **Arrangement**: timeline su canvas, loop, griglia, taglia/copia/incolla, split, metronomo.
-- **Session**: slot e scene, lancio quantizzato (da nessuno a 4 battute), ritorno all'arrangement
-  per traccia come in Live.
-- **Tracce**: audio, MIDI, gruppi annidati (con solo e mute come in Live) e bus di mandata
-  post-fader.
-- **Clip audio**: warp marker, Auto-Warp dai transienti, modalità di warp, transpose, gain.
-- **Clip MIDI**: piano roll con velocity, fold, quantizzazione, :2 / ×2.
-- **Modulazioni delle clip**: curve relative su volume, pan, qualsiasi parametro o macro. Girano con
-  il loop della clip e finiscono nell'export.
-- **Rack**: Instrument Rack e Audio Effect Rack a catena singola, con 8 macro (manopola, interruttore,
-  pulsante o molla, che lasciata torna da sola al suo riposo) mappabili con minimo e massimo.
-  Preset salvabili, rack di fabbrica.
-- **Browser**: dispositivi, preset, rack, kit, sample del progetto e cartelle del disco, con ricerca
-  e anteprima.
-- **Controller**: APC40 mkII e Launchpad plug and play (Ableton/DAW mode): griglia delle clip,
-  riquadro, mixer, 8 macro o parametri del dispositivo, trasporto. Per diagnosticare il supporto
-  Launchpad, che non è provato sull'hardware, c'è `studiomio.surfaces.report()`.
-- **Export**: mix della timeline con OfflineAudioContext. In Node, `scripts/render-project.ts`
-  calcola il mix e gli stem con gli stessi motori DSP e misura la loudness (integrata, short-term,
+- **Arrangement**: canvas timeline, loop, grid, cut/copy/paste, split, metronome.
+- **Session**: slots and scenes, quantized launch (from none to 4 bars), return to the arrangement
+  per track as in Live.
+- **Tracks**: audio, MIDI, nested groups (with solo and mute as in Live) and post-fader send buses.
+- **Audio clips**: warp markers, Auto-Warp from the transients, warp modes, transpose, gain.
+- **MIDI clips**: piano roll with velocity, fold, quantization, :2 / ×2.
+- **Clip modulations**: relative curves on volume, pan, any parameter or macro. They run with the
+  clip loop and end up in the export.
+- **Racks**: single-chain Instrument Racks and Audio Effect Racks, with 8 macros (knob, toggle,
+  button or spring, which returns to its rest by itself when released) mappable with minimum and
+  maximum. Presets can be saved; factory racks.
+- **Browser**: devices, presets, racks, kits, project samples and disk folders, with search and
+  preview.
+- **Controllers**: plug-and-play APC40 mkII and Launchpad (Ableton/DAW mode): clip grid, box, mixer,
+  8 macros or device parameters, transport. To diagnose the Launchpad support, which hasn't been
+  tested on the hardware, there's `studiomio.surfaces.report()`.
+- **Export**: timeline mix with OfflineAudioContext. In Node, `scripts/render-project.ts` computes
+  the mix and the stems with the same DSP engines and measures the loudness (integrated, short-term,
   true peak).
 
-### Dispositivi
+### Devices
 
-| Strumenti | |
+| Instruments | |
 |---|---|
-| Analog | sottrattivo a due oscillatori, Poli/Mono/Legato con glide, accento stile 303, unison fino a 7 |
-| Wavetable | due oscillatori a tabelle band-limited per ottava, sub, unison, 2 LFO, inviluppo di modulazione |
-| Prisma | wavetable tipo Serum: fonti di modulazione trascinabili, matrice, 13 tipi di filtro |
-| Neuro | bassi reese/neuro, mono: FM, wavefolder, formanti, sub su crossover, 2× sovracampionato |
-| Sampler | Classic / One-Shot / Slice, fino a 32 zone con pitch, filtro, inviluppi e LFO propri |
-| Drum Machine | 16 pad sintetizzati o da sample, choke, inizio e verso del sample |
+| Analog | two-oscillator subtractive, Poly/Mono/Legato with glide, 303-style accent, unison up to 7 |
+| Wavetable | two oscillators on band-limited tables per octave, sub, unison, 2 LFOs, modulation envelope |
+| Prisma | Serum-style wavetable: draggable modulation sources, matrix, 13 filter types |
+| Neuro | reese/neuro basses, mono: FM, wavefolder, formants, sub on a crossover, 2× oversampled |
+| Sampler | Classic / One-Shot / Slice, up to 32 zones with their own pitch, filter, envelopes and LFO |
+| Drum Machine | 16 synthesized or sampled pads, choke, sample start and direction |
 
-Analog e Neuro hanno un **sequencer a passi**. Con una nota tenuta suona un pattern deterministico
-(128 pattern), agganciato alla battuta del trasporto e trasposto su quella nota. Lo controllano
-densità, scala, accenti, slide, passi (1–32), velocità e gate.
+Analog and Neuro have a **step sequencer**. With a held note it plays a deterministic pattern (128
+patterns), locked to the transport's bar and transposed onto that note. It's controlled by density,
+scale, accents, slide, steps (1–32), rate and gate.
 
-**Effetti**: EQ (8 bande, TPT, il grafico usa la stessa matematica del suono), Compressore (con
-sidechain), Multibanda (stile OTT), Drive (6 curve, ADAA, sovracampionato), Clipper, Redux,
+**Effects**: EQ (8 bands, TPT, the graph uses the same maths as the sound), Compressor (with
+sidechain), Multiband (OTT style), Drive (6 curves, ADAA, oversampled), Clipper, Redux,
 Auto Filter, Auto Pan, Chorus, Phaser/Flanger, Pitch Shifter, Trance Gate, Noise Gate, Beat Repeat, Tape Stop, Reverse,
-Delay, Riverbero (FDN 8 linee), Stereo (larghezza e bassi mono), Limiter (lookahead, true peak).
+Delay, Reverb (8-line FDN), Stereo (width and mono lows), Limiter (lookahead, true peak).
 
-### Aggiungere un dispositivo
+### Adding a device
 
-1. La descrizione (`DeviceType`: sezioni di parametri e preset) in `src/devices/instruments/<nome>/`
-   o `src/devices/effects/<nome>/`, registrata in `registry.ts`.
-2. Il motore, registrato con lo stesso nome in `devices/worklet/cores.ts`. Per uno strumento è un
-   `InstrumentCore` (`noteOn`, `noteOff`, `setParams`, `render`), per un effetto un `EffectCore`
+1. The description (`DeviceType`: parameter sections and presets) in `src/devices/instruments/<name>/`
+   or `src/devices/effects/<name>/`, registered in `registry.ts`.
+2. The engine, registered under the same name in `devices/worklet/cores.ts`. For an instrument it's
+   an `InstrumentCore` (`noteOn`, `noteOff`, `setParams`, `render`), for an effect an `EffectCore`
    (`setParams`, `setTempo`, `process`).
 
-Interfaccia, salvataggio, preset, annulla, bypass, mappatura sulle macro e messaggi verso l'audio
-vengono da soli. Un pannello grafico proprio si registra in `ui/device/displays.ts`.
+Interface, saving, presets, undo, bypass, mapping to macros and messages to the audio come by
+themselves. A graphic panel of its own is registered in `ui/device/displays.ts`.
 
-## Principi
+## Principles
 
-- **Modello immutabile**: ogni modifica produce un nuovo `Project` che condivide le parti non
-  toccate. Annulla/ripeti è una pila di versioni, e il motore capisce cosa è cambiato confrontando i
-  riferimenti. Le posizioni sono in battiti; i secondi servono solo per suonare.
-- **Funzioni pure per i calcoli, classi per lo stato**: le modifiche e il DSP sono funzioni; le
-  classi incapsulano stato e ciclo di vita (voci, FFT, pool).
-- **Tabelle invece di switch**: modalità di warp, tipi di clip, tracce e dispositivi sono registri.
-  Aggiungerne uno vuol dire aggiungere una voce, e il compilatore segnala ciò che manca.
-- **Dipendenze iniettate**: algoritmi, worker, id, Directory e grafo audio si sostituiscono nei test.
-- **Retrocompatibilità**: il formato ha una versione, e ogni cambiamento porta una migrazione.
-- **Riferimento**: i test confrontano il warp con il motore originale di WarpMio.
+- **Immutable model**: every edit produces a new `Project` that shares the untouched parts.
+  Undo/redo is a stack of versions, and the engine works out what changed by comparing references.
+  Positions are in beats; seconds are only for playing.
+- **Pure functions for computations, classes for state**: edits and DSP are functions; classes
+  encapsulate state and lifecycle (voices, FFT, pool).
+- **Tables instead of switches**: warp modes, clip kinds, tracks and devices are registries. Adding
+  one means adding an entry, and the compiler points out what's missing.
+- **Injected dependencies**: algorithms, workers, ids, Directory and audio graph are replaced in tests.
+- **Backward compatibility**: the format has a version, and every change brings a migration.
+- **Reference**: the tests compare the warp with WarpMio's original engine.
 
-## Prestazioni (warp, 16 s stereo, Complex)
+## Performance (warp, 16 s stereo, Complex)
 
 | | |
 |---|---|
 | TypeScript | ~290 ms |
 | WebAssembly (Rust, SIMD) | ~330 ms |
-| 8 worker in parallelo | 5× più veloce che in sequenza |
+| 8 workers in parallel | 5× faster than in sequence |
 
-Il WASM è pronto ma spento: su questo carico V8 è più veloce, e il guadagno vero viene dal
-parallelismo dei worker.
+The WASM is ready but off: on this load V8 is faster, and the real gain comes from the workers'
+parallelism.

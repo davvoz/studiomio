@@ -3,7 +3,7 @@ import type { AudioGraph, AudioNodeLike } from '../audio-graph';
 import type { ScheduledSource, ScheduleWindow } from '../scheduler';
 import { ActiveNodes, stopQuietly } from './track-player';
 
-/** Clic su ogni battito, più acuto sul primo della battuta. */
+/** Click on every beat, higher on the first of the bar. */
 export class Metronome implements ScheduledSource {
   enabled = false;
   private readonly active = new ActiveNodes();
@@ -48,7 +48,7 @@ export class Metronome implements ScheduledSource {
       env.disconnect();
     }, {
       cut: at => stopQuietly(osc, Math.max(at, when)),
-      // un clic già partito finisce com'è; quelli da `at` in poi si tolgono
+      // a click already started ends as it is; those from `at` on are removed
       retake: at => { if (at <= when) stopQuietly(osc, when); },
     });
   }

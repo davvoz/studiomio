@@ -1,11 +1,11 @@
-/* "EQ": equalizzatore parametrico a 8 bande, come EQ Eight di Live. Ogni banda ha un tipo
- * (taglio, shelf, campana, notch), frequenza, guadagno, Q e, per i tagli, la pendenza. Qui
- * c'è la descrizione; la matematica dei filtri è in eq-math.ts (la usano sia il suono sia la
- * curva disegnata, così la curva è esattamente ciò che si sente), il suono in eq-core.ts. */
+/* "EQ": 8-band parametric equalizer, like Live's EQ Eight. Each band has a type
+ * (cut, shelf, bell, notch), frequency, gain, Q and, for the cuts, the slope. Here
+ * is the description; the filter maths is in eq-math.ts (used both by the sound and by the
+ * drawn curve, so the curve is exactly what you hear), the sound in eq-core.ts. */
 import type { DeviceType, Preset } from '../../device-type';
 import type { ChoiceParam, NumberParam, ParamSection } from '../../params';
 
-/** I tipi di banda, nell'ordine dei valori del parametro. `gain`: usa il guadagno; `cut`: ha la pendenza. */
+/** The band types, in the order of the parameter values. `gain`: uses the gain; `cut`: has the slope. */
 export const BAND_TYPES = [
   { label: 'Low cut', gain: false, cut: true },
   { label: 'Low shelf', gain: true, cut: false },
@@ -15,17 +15,17 @@ export const BAND_TYPES = [
   { label: 'High cut', gain: false, cut: true },
 ] as const;
 
-/** Valori del parametro "tipo". */
+/** Values of the "type" parameter. */
 export const BAND = { lowCut: 0, lowShelf: 1, bell: 2, notch: 3, highShelf: 4, highCut: 5 } as const;
 
-/** Pendenze dei tagli: quante sezioni da 12 dB/ottava. */
+/** Slopes of the cuts: how many 12 dB/octave sections. */
 export const SLOPES = [{ label: '12 dB', stages: 1 }, { label: '24 dB', stages: 2 }, { label: '48 dB', stages: 4 }] as const;
 
 export const EQ_BANDS = 8;
 export const MIN_FREQ = 20, MAX_FREQ = 20000;
 export const MAX_GAIN = 18;
 
-/** Una banda, con i valori già validati. */
+/** A band, with the values already validated. */
 export interface EqBand {
   readonly on: boolean;
   readonly type: number;
@@ -37,10 +37,10 @@ export interface EqBand {
 
 export type BandKey = keyof EqBand;
 
-/** L'id del parametro `key` della banda `index` (da 0): "b1freq", "b3gain"… */
+/** The id of parameter `key` of band `index` (from 0): "b1freq", "b3gain"… */
 export const bandParam = (index: number, key: BandKey): string => `b${index + 1}${key}`;
 
-/** Le bande dai valori dei parametri (completi, come li dà resolveParams). */
+/** The bands from the parameter values (complete, as resolveParams gives them). */
 export const bandsOf = (values: Readonly<Record<string, number>>): EqBand[] =>
   Array.from({ length: EQ_BANDS }, (_, i) => ({
     on: values[bandParam(i, 'on')] === 1,
@@ -51,8 +51,8 @@ export const bandsOf = (values: Readonly<Record<string, number>>): EqBand[] =>
     slope: values[bandParam(i, 'slope')],
   }));
 
-/** Come si presentano le bande appena aperto l'EQ: i tagli spenti agli estremi, in mezzo
- *  shelf e campane piatte (accese, ma a 0 dB non cambiano nulla). */
+/** How the bands look when the EQ has just been opened: the cuts off at the extremes, in the middle
+ *  flat shelves and bells (on, but at 0 dB they change nothing). */
 const DEFAULT_BANDS: readonly { type: number; freq: number; on: boolean }[] = [
   { type: BAND.lowCut, freq: 30, on: false },
   { type: BAND.lowShelf, freq: 80, on: true },
@@ -75,19 +75,19 @@ function bandSection(i: number): ParamSection {
   const num = (key: BandKey, label: string, min: number, max: number, def: number, unit: string, extra: Partial<NumberParam> = {}): NumberParam =>
     ({ kind: 'number', id: id(key), label, min, max, default: def, unit, ...extra });
   return {
-    label: `Banda ${i + 1}`,
+    label: `Band ${i + 1}`,
     params: [
-      choice('on', 'Accesa', ['Off', 'On'], d.on ? 1 : 0),
-      choice('type', 'Tipo', BAND_TYPES.map(t => t.label), d.type),
-      num('freq', 'Frequenza', MIN_FREQ, MAX_FREQ, d.freq, 'Hz', { scale: 'log' }),
-      num('gain', 'Guadagno', -MAX_GAIN, MAX_GAIN, 0, 'dB', { when: { param: id('type'), is: gainTypes } }),
+      choice('on', 'On', ['Off', 'On'], d.on ? 1 : 0),
+      choice('type', 'Type', BAND_TYPES.map(t => t.label), d.type),
+      num('freq', 'Frequency', MIN_FREQ, MAX_FREQ, d.freq, 'Hz', { scale: 'log' }),
+      num('gain', 'Gain', -MAX_GAIN, MAX_GAIN, 0, 'dB', { when: { param: id('type'), is: gainTypes } }),
       num('q', 'Q', 0.1, 18, 0.71, '', { scale: 'log' }),
-      choice('slope', 'Pendenza', SLOPES.map(s => s.label), 1, { when: { param: id('type'), is: cutTypes } }),
+      choice('slope', 'Slope', SLOPES.map(s => s.label), 1, { when: { param: id('type'), is: cutTypes } }),
     ],
   };
 }
 
-/** Un preset scritto per bande: { 2: { gain: 3 } } diventa { b2gain: 3 }. */
+/** A preset written by bands: { 2: { gain: 3 } } becomes { b2gain: 3 }. */
 const preset = (name: string, bands: Readonly<Record<number, Partial<Record<BandKey, number>>>>, extra: Record<string, number> = {}): Preset => ({
   name,
   params: {
@@ -102,14 +102,14 @@ export const EQ: DeviceType = {
   label: 'EQ',
   sections: [
     ...Array.from({ length: EQ_BANDS }, (_, i) => bandSection(i)),
-    { label: 'Uscita', params: [{ kind: 'number', id: 'output', label: 'Uscita', min: -MAX_GAIN, max: MAX_GAIN, default: 0, unit: 'dB' }] },
+    { label: 'Output', params: [{ kind: 'number', id: 'output', label: 'Output', min: -MAX_GAIN, max: MAX_GAIN, default: 0, unit: 'dB' }] },
   ],
   presets: [
     preset('Init', {}),
-    preset('Pulizia bassi', { 1: { on: 1, freq: 90 } }),
-    preset('Voce', { 1: { on: 1, freq: 90 }, 3: { freq: 300, gain: -3, q: 1.2 }, 6: { freq: 3500, gain: 3, q: 0.9 }, 7: { freq: 11000, gain: 2 } }),
-    preset('Basso presente', { 1: { on: 1, freq: 35 }, 2: { freq: 70, gain: 3 }, 4: { freq: 400, gain: -3, q: 1.4 }, 6: { freq: 2500, gain: 2.5, q: 1.5 } }),
-    preset('Telefono', { 1: { on: 1, freq: 400, slope: 2 }, 5: { freq: 1500, gain: 5, q: 1 }, 8: { on: 1, freq: 3200, slope: 2 } }),
-    preset('Aria', { 7: { freq: 12000, gain: 4, q: 0.7 } }),
+    preset('Low clean-up', { 1: { on: 1, freq: 90 } }),
+    preset('Voice', { 1: { on: 1, freq: 90 }, 3: { freq: 300, gain: -3, q: 1.2 }, 6: { freq: 3500, gain: 3, q: 0.9 }, 7: { freq: 11000, gain: 2 } }),
+    preset('Present bass', { 1: { on: 1, freq: 35 }, 2: { freq: 70, gain: 3 }, 4: { freq: 400, gain: -3, q: 1.4 }, 6: { freq: 2500, gain: 2.5, q: 1.5 } }),
+    preset('Telephone', { 1: { on: 1, freq: 400, slope: 2 }, 5: { freq: 1500, gain: 5, q: 1 }, 8: { on: 1, freq: 3200, slope: 2 } }),
+    preset('Air', { 7: { freq: 12000, gain: 4, q: 0.7 } }),
   ],
 };

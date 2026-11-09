@@ -1,6 +1,6 @@
-/* Costruisce "Fuori dal corpo" (src/demo/fuori-live.ts) come cartella di progetto studiomio:
- *   node scripts/run.mjs scripts/build-fuori-live.ts <cartella dei suoni> <cartella del progetto>
- * I file sono quelli della libreria dell'utente, relativi a <cartella dei suoni>. */
+/* Builds "Fuori dal corpo" (src/demo/fuori-live.ts) as a studiomio project folder:
+ *   node scripts/run.mjs scripts/build-fuori-live.ts <sounds folder> <project folder>
+ * The files are those of the user's library, relative to <sounds folder>. */
 import { buildFuoriLive, type FuoriLiveSound } from '../src/demo/fuori-live';
 import { buildLiveFolder } from './live-folder';
 
@@ -64,6 +64,6 @@ const FILES: Readonly<Record<FuoriLiveSound, string>> = {
 };
 
 export async function main([soundsDir, projectDir]: string[]): Promise<void> {
-  if (!soundsDir || !projectDir) throw new Error('uso: build-fuori-live.ts <cartella dei suoni> <cartella del progetto>');
+  if (!soundsDir || !projectDir) throw new Error('usage: build-fuori-live.ts <sounds folder> <project folder>');
   await buildLiveFolder(FILES, soundsDir, projectDir, buildFuoriLive);
 }

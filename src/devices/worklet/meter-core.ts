@@ -1,12 +1,12 @@
-/** Valori di un misuratore, in quest'ordine: picco sinistro e destro, media dei quadrati
- *  sinistra e destra. Lo scrive l'AudioWorklet, lo legge (e azzera i picchi) l'interfaccia. */
+/** A meter's values, in this order: left and right peak, left and right mean
+ *  of squares. The AudioWorklet writes it, the interface reads it (and resets the peaks). */
 export const METER_VALUES = 4;
 
-/** Costante di tempo della media dei quadrati, in secondi: l'RMS scende di circa 36 dB al secondo. */
+/** Time constant of the mean of squares, in seconds: the RMS falls by about 36 dB per second. */
 const RMS_TIME = 0.12;
 
-/** Misura un blocco alla volta: il picco si accumula in `out` finché chi legge non lo azzera,
- *  la media dei quadrati scorre con la costante RMS_TIME. */
+/** Measures one block at a time: the peak accumulates in `out` until the reader resets it,
+ *  the mean of squares glides with the constant RMS_TIME. */
 export class MeterCore {
   private msL = 0;
   private msR = 0;

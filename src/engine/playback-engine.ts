@@ -28,18 +28,18 @@ import type { PlayerContext, TrackPlayer } from './players/track-player';
 import { Scheduler, type ScheduledSource } from './scheduler';
 import { mergedState, Session, slotClip, type TrackSessionState } from './session';
 
-/** Servizi di cui i player hanno bisogno. */
+/** Services the players need. */
 export interface EngineServices {
   readonly clips: PlayableProvider;
   readonly instruments: InstrumentHost;
   readonly effects: EffectHost;
-  /** Misuratori di livello di tracce e master (solo dal vivo). */
+  /** Level meters of tracks and master (live only). */
   readonly meters?: MeterHost;
 }
 
 export type PlayerFactory = (track: Track, ctx: PlayerContext, services: EngineServices) => TrackPlayer;
 
-/** Un player per tipo di traccia: un tipo nuovo si aggiunge qui (o passando la propria tabella). */
+/** One player per track kind: a new kind is added here (or by passing your own table). */
 export const defaultPlayers: Readonly<Record<string, PlayerFactory>> = {
   audio: (t, ctx, s) => new AudioTrackPlayer(t as AudioTrack, ctx, s.clips),
   midi: (t, ctx, s) => new MidiTrackPlayer(t as MidiTrack, ctx, s.instruments),
@@ -59,35 +59,35 @@ export const intervalTimer: Timer = {
 export interface EngineOptions {
   readonly timer?: Timer;
   readonly players?: Readonly<Record<string, PlayerFactory>>;
-  /** Anticipo della programmazione, in secondi. */
+  /** Scheduling lookahead, in seconds. */
   readonly lookahead?: number;
-  /** Ritardo tra il comando play e il primo suono, in secondi. */
+  /** Delay between the play command and the first sound, in seconds. */
   readonly startLatency?: number;
-  /** Ogni quanto lo scheduler programma, in millisecondi. */
+  /** How often the scheduler schedules, in milliseconds. */
   readonly tickMs?: number;
 }
 
 type EngineEvents = {
   state: [playing: boolean];
-  /** Una clip lanciata o fermata, un ritorno all'arrangement. */
+  /** A clip launched or stopped, a return to the arrangement. */
   session: [];
-  /** Lo strumento della traccia ha preso il suono di una clip che parte. */
+  /** The track's instrument took the sound of a starting clip. */
   sound: [track: TrackId, sound: InstrumentSettings];
 };
 
-/** Trasporto e riproduzione del progetto. Riceve ogni nuova versione del progetto con
- *  `setProject`: aggiorna mixer e player e, se sta suonando e qualcosa che si sente è
- *  cambiato, riprogramma da un attimo dopo senza interrompere niente: solo le tracce cambiate,
- *  o tutto se cambiano tempo o loop. Suona la timeline e le clip lanciate
- *  nella session, quantizzate sull'orologio continuo del trasporto. */
+/** Transport and playback of the project. It receives each new version of the project with
+ *  `setProject`: updates mixer and players and, if it's playing and something audible
+ *  changed, reschedules from a moment later without interrupting anything: only the changed tracks,
+ *  or everything if tempo or loop change. It plays the timeline and the clips launched
+ *  in the session, quantized on the transport's continuous clock. */
 export class PlaybackEngine {
   private project: Project | null = null;
   private readonly mixer: MixerGraph;
   private readonly players = new Map<TrackId, { kind: string; player: TrackPlayer }>();
-  /** Le tracce della versione precedente, per capire cosa è cambiato. */
+  /** The tracks of the previous version, to understand what changed. */
   private previousTracks = new Map<TrackId, Track>();
   private readonly metronome: Metronome;
-  /** Dove si trova il trasporto, per gli effetti che seguono la battuta. */
+  /** Where the transport is, for the effects that follow the bar. */
   private readonly anchors: TransportAnchors;
   private readonly scheduler: Scheduler;
   private readonly events = new Emitter<EngineEvents>();
@@ -97,19 +97,19 @@ export class PlaybackEngine {
   private readonly tickMs: number;
   private cancelTimer: (() => void) | null = null;
   private cursor: Beats = 0;
-  /** Le tracce con un tratto non partito (o partito con l'audio provvisorio) perché il suo
-   *  audio non era pronto. */
+  /** The tracks with a stretch not started (or started with the provisional audio) because its
+   *  audio wasn't ready. */
   private readonly missed = new Set<TrackId>();
   private readonly session = new Session();
-  /** Le note programmate di ogni traccia, per l'interfaccia. */
+  /** Each track's scheduled notes, for the interface. */
   private readonly activity = new Map<TrackId, NoteActivity>();
-  /** Le modulazioni delle clip, una sorgente per traccia. */
+  /** The clip modulations, one source per track. */
   private readonly modulators = new Map<TrackId, TrackModulator>();
-  /** Le curve del master sulla timeline. */
+  /** The master's curves on the timeline. */
   private readonly masterModulator: MasterModulator;
-  /** Ciò che le curve hanno programmato su ogni bersaglio, per le manopole che le seguono. */
+  /** What the curves scheduled on each target, for the knobs following them. */
   private readonly traces: ModTraces;
-  /** I modulatori (LFO, Inviluppo) di ogni catena con almeno uno. */
+  /** The modulators (LFO, Envelope) of each chain with at least one. */
   private readonly chainMods = new Map<ChainOwner, ChainModulators>();
 
   constructor(private readonly graph: AudioGraph, private readonly services: EngineServices, opts: EngineOptions = {}) {
@@ -132,7 +132,7 @@ export class PlaybackEngine {
     return this.scheduler.running;
   }
 
-  /** Battito che si sente adesso (o da cui partirà il play). */
+  /** The beat heard now (or where play will start from). */
   get position(): Beats {
     return (this.playing ? this.scheduler.positionAt(this.graph.currentTime) : null) ?? this.cursor;
   }
@@ -145,12 +145,12 @@ export class PlaybackEngine {
     this.metronome.enabled = on;
   }
 
-  /** Livelli di una traccia o del master dall'ultima lettura (null senza misuratori). */
+  /** Levels of a track or the master since the last read (null without meters). */
   levels(owner: ChainOwner): MeterReading | null {
     return this.mixer.levels(owner);
   }
 
-  /** Da dove ascoltare un effetto che suona (per lo spettro). */
+  /** Where to listen to a playing effect from (for the spectrum). */
   effectMonitor(owner: ChainOwner, id: DeviceId): EffectMonitor | null {
     return this.mixer.effect(owner, id)?.monitor ?? null;
   }
@@ -163,29 +163,29 @@ export class PlaybackEngine {
     return this.events.on('session', fn);
   }
 
-  /** Quando lo strumento di una traccia prende il suono di una clip che parte: il progetto lo
-   *  segue (arriva dopo la programmazione, mai durante). */
+  /** When a track's instrument takes the sound of a starting clip: the project
+   *  follows it (it arrives after the scheduling, never during). */
   onClipSound(fn: (track: TrackId, sound: InstrumentSettings) => void): Unsubscribe {
     return this.events.on('sound', fn);
   }
 
   // ---------------------------------------------------------------- session
 
-  /** Lancia la clip dello slot (slot vuoto: ferma la traccia) al prossimo confine della
-   *  quantizzazione; a trasporto fermo lo fa partire, e la clip con lui. Lo slot di un gruppo
-   *  lancia la riga delle sue tracce, come una scena ristretta al gruppo. */
+  /** Launches the slot's clip (empty slot: stops the track) at the next quantization
+   *  boundary; with the transport stopped it starts it, and the clip with it. A group's slot
+   *  launches the row of its tracks, like a scene restricted to the group. */
   launchSlot(track: TrackId, slot: number): void {
     this.launch([[track, slot]]);
   }
 
-  /** Lancia una scena: in ogni traccia la clip della riga, e dove lo slot è vuoto lo stop. */
+  /** Launches a scene: in each track the row's clip, and where the slot is empty the stop. */
   launchScene(index: number): void {
     this.launch(this.project?.tracks.filter(t => !(t instanceof GroupTrack)).map(t => [t.id, index] as const) ?? []);
   }
 
-  /** Ferma la clip della traccia (di un gruppo: delle sue tracce) al prossimo confine (la
-   *  traccia resta muta, come in Live); a trasporto fermo, la clip che suonava allo stop non
-   *  ripartirà con il play. */
+  /** Stops the track's clip (of a group: of its tracks) at the next boundary (the
+   *  track stays silent, as in Live); with the transport stopped, the clip playing at the stop won't
+   *  restart with play. */
   stopTrack(track: TrackId): void {
     const tracks = this.project?.soundingTracks(track).map(t => t.id) ?? [track];
     if (!this.playing) {
@@ -195,8 +195,8 @@ export class PlaybackEngine {
     this.switchTracks(tracks, (at, id) => this.session.stop(id, at));
   }
 
-  /** Ferma tutte le clip della session (le tracce che seguono la timeline continuano); a
-   *  trasporto fermo, nessuna clip ripartirà con il play. */
+  /** Stops all the session's clips (the tracks following the timeline continue); with the
+   *  transport stopped, no clip will restart with play. */
   stopAllClips(): void {
     if (!this.playing) {
       if (this.session.forget()) this.events.emit('session');
@@ -211,21 +211,21 @@ export class PlaybackEngine {
     this.switchTracks(busy, (at, id) => this.session.stop(id, at));
   }
 
-  /** Le tracce prese dalla session tornano subito alla loro timeline. */
+  /** The tracks taken by the session go back to their timeline right away. */
   backToArrangement(): void {
     const at = this.playing ? this.scheduler.scheduledClock : -Infinity;
     for (const id of this.session.backToArrangement(at)) if (this.playing) this.cutTrack(id, this.scheduler.timeAtClock(at));
     this.events.emit('session');
   }
 
-  /** Cosa suona la traccia nella session; per un gruppo, le sue tracce insieme (vedi `mergedState`). */
+  /** What the track plays in the session; for a group, its tracks together (see `mergedState`). */
   sessionState(track: Track): TrackSessionState {
     const clock = this.clock;
     if (track instanceof GroupTrack && this.project) return mergedState(this.project.soundingTracks(track.id).map(t => this.session.state(t, clock)));
     return this.session.state(track, clock);
   }
 
-  /** Le clip della session che suonano adesso, traccia per traccia ("Cattura e inserisci scena"). */
+  /** The session clips playing now, track by track ("Capture and insert scene"). */
   playingClips(): Map<TrackId, ClipId> {
     const clock = this.clock, playing = new Map<TrackId, ClipId>();
     for (const t of this.project?.tracks ?? []) {
@@ -235,22 +235,22 @@ export class PlaybackEngine {
     return playing;
   }
 
-  /** Vero se qualche traccia non segue la timeline (si accende "Torna all'arrangement"). */
+  /** True if some track isn't following the timeline ("Back to arrangement" lights up). */
   get arrangementOverridden(): boolean {
     return this.session.taken.size > 0;
   }
 
-  /** Le tracce prese dalla session (nell'arrangement si mostrano spente). */
+  /** The tracks taken by the session (in the arrangement they show as off). */
   get takenTracks(): ReadonlySet<TrackId> {
     return this.session.taken;
   }
 
-  /** L'orologio continuo adesso. */
+  /** The continuous clock now. */
   private get clock(): number {
     return (this.playing ? this.scheduler.clockAt(this.graph.currentTime) : null) ?? this.cursor;
   }
 
-  /** Il prossimo confine della quantizzazione non ancora programmato. */
+  /** The next quantization boundary not yet scheduled. */
   private boundary(): number {
     const p = this.project!, q = launchQuantumBeats(p.launchQuantization, p.signature);
     const earliest = this.scheduler.scheduledClock;
@@ -260,7 +260,7 @@ export class PlaybackEngine {
   private launch(items: readonly (readonly [TrackId, number])[]): void {
     const p = this.project;
     if (!p) return;
-    // lo slot di un gruppo vale per le sue tracce
+    // a group's slot applies to its tracks
     const clips = items.flatMap(([id, slot]) => p.soundingTracks(id).map(t => [t.id, t.slots[slot] ?? null] as const));
     if (this.playing) {
       this.switchTracks(clips.map(([id]) => id), (at, id) => {
@@ -270,7 +270,7 @@ export class PlaybackEngine {
       });
       return;
     }
-    // da fermo: le clip partono con il trasporto, dal cursore
+    // when stopped: the clips start with the transport, from the cursor
     if (!clips.some(([, c]) => c)) return;
     for (const [id, clip] of clips) {
       if (clip) this.session.launch(id, clip.id, this.cursor);
@@ -280,7 +280,7 @@ export class PlaybackEngine {
     this.events.emit('session');
   }
 
-  /** Cambia la scaletta delle tracce al prossimo confine e taglia lì ciò che era già programmato. */
+  /** Changes the tracks' schedule at the next boundary and cuts there what was already scheduled. */
   private switchTracks(tracks: readonly TrackId[], change: (at: number, track: TrackId) => void): void {
     if (!tracks.length) return;
     const at = this.boundary();
@@ -298,7 +298,7 @@ export class PlaybackEngine {
     this.mixer.sync(next);
     const changed = this.syncPlayers(next);
     const mods = this.syncChainModulators(next, changed);
-    // le curve del master si riprendono anche se cambia la sua catena (i bersagli sono lì)
+    // the master's curves are picked up again even if its chain changes (the targets are there)
     const curves = this.masterModulator.update(next.masterAutomation);
     const master = curves || (!!prev && (prev.masterEffects !== next.masterEffects || prev.masterRacks !== next.masterRacks) && next.masterAutomation.length > 0);
     if (!this.playing) return;
@@ -310,7 +310,7 @@ export class PlaybackEngine {
   play(from: Beats = this.cursor): void {
     if (!this.project) return;
     this.cursor = Math.max(0, from);
-    // da fermo: le clip che suonavano allo stop ripartono con il trasporto
+    // when stopped: the clips playing at the stop restart with the transport
     if (!this.playing) this.session.start(this.cursor);
     this.restart(this.cursor);
     this.cancelTimer ??= this.timer.every(this.tickMs, () => this.scheduler.advance(this.graph.currentTime));
@@ -331,49 +331,49 @@ export class PlaybackEngine {
     this.events.emit('session');
   }
 
-  /** Sposta la testina; se sta suonando continua da lì. */
+  /** Moves the playhead; if it's playing it continues from there. */
   seek(beat: Beats): void {
     this.cursor = Math.max(0, beat);
     if (this.playing) this.restart(this.cursor);
   }
 
-  /** Da chiamare quando arriva dell'audio che mancava: le tracce che l'aspettavano si
-   *  riprogrammano da un attimo dopo, così si sente. */
+  /** To be called when missing audio arrives: the tracks waiting for it
+   *  are rescheduled from a moment later, so it's heard. */
   refresh(): void {
     if (this.playing && this.missed.size) this.retake([...this.missed]);
   }
 
-  /** L'ora del contesto audio, in secondi. */
+  /** The audio context's time, in seconds. */
   get audioTime(): number {
     return this.graph.currentTime;
   }
 
-  /** Le altezze delle note della traccia partite in [from, to) (secondi del contesto audio):
-   *  per accendere i pad mentre suona. Le note prima di `from` si dimenticano. */
+  /** The pitches of the track's notes started in [from, to) (audio context seconds):
+   *  to light up the pads while it plays. The notes before `from` are forgotten. */
   notesStarted(track: TrackId, from: number, to: number): number[] {
     return this.activity.get(track)?.between(from, to) ?? [];
   }
 
-  /** Dove leggono adesso le voci dello strumento della traccia, se suona un sample (frazioni
-   *  del sample): i cursori sulla forma d'onda del Sampler. */
+  /** Where the voices of the track's instrument read now, if it plays a sample (fractions
+   *  of the sample): the cursors on the Sampler's waveform. */
   playheads(track: TrackId): readonly number[] {
     return this.players.get(track)?.player.playheads?.() ?? [];
   }
 
-  /** Dove una curva porta adesso il bersaglio di una traccia o del master, nella scala del suo
-   *  tipo (per un parametro: lo spostamento della manopola, −1 … +1); null se nessuna curva l'ha
-   *  mai toccato. Una macro dà la sua curva, i parametri che muove il loro spostamento. */
+  /** Where a curve takes a track's or the master's target now, in the scale of its
+   *  type (for a parameter: the knob offset, −1 … +1); null if no curve ever
+   *  touched it. A macro gives its curve, the parameters it moves their offset. */
   modulationAt(owner: ChainOwner, target: ModTarget): number | null {
     return this.traces.current(`${owner}|${targetKey(target)}`, target.kind === 'mixer' && target.param === 'volume');
   }
 
-  /** Fa sentire subito una nota con lo strumento della traccia (piano roll, tastiera). */
+  /** Plays a note right away with the track's instrument (piano roll, keyboard). */
   audition(track: TrackId, pitch: number, velocity = 100, seconds = 0.3): void {
     this.players.get(track)?.player.audition?.(pitch, velocity, seconds);
   }
 
-  /** Una nota suonata a mano con lo strumento della traccia: parte subito e suona finché non
-   *  arriva `releaseNote`, a trasporto fermo o mentre le clip girano. */
+  /** A note played by hand with the track's instrument: it starts right away and plays until
+   *  `releaseNote` arrives, with the transport stopped or while the clips run. */
   pressNote(track: TrackId, pitch: number, velocity: number): void {
     this.players.get(track)?.player.press?.(pitch, velocity);
   }
@@ -382,9 +382,9 @@ export class PlaybackEngine {
     this.players.get(track)?.player.release?.(pitch);
   }
 
-  /** Programma tutto [from, to) a partire dall'istante `at` (export offline). */
+  /** Schedules all of [from, to) starting from instant `at` (offline export). */
   scheduleRange(from: Beats, to: Beats, at = 0): void {
-    if (!this.project) throw new Error('nessun progetto');
+    if (!this.project) throw new Error('no project');
     this.scheduler.scheduleRange(from, to, at, this.project.tempo);
   }
 
@@ -394,25 +394,25 @@ export class PlaybackEngine {
     this.players.clear();
   }
 
-  /** Riprogramma da `beat` (play, salto del cursore). Se stava già suonando l'orologio
-   *  continua (le clip della session restano in fase), altrimenti parte dal battito. */
+  /** Reschedules from `beat` (play, cursor jump). If it was already playing the clock
+   *  continues (the session clips stay in phase), otherwise it starts from the beat. */
   private restart(beat: Beats): void {
     this.restartAt(beat, this.playing ? this.clock : beat, this.graph.currentTime + this.startLatency);
   }
 
-  /** Tempo o loop nuovi mentre suona: tutto riprende da dove il trasporto sarà quando il nuovo
-   *  suono arriva (così niente slitta), senza fermare ciò che suona già. */
+  /** New tempo or loop while playing: everything resumes from where the transport will be when the new
+   *  sound arrives (so nothing slips), without stopping what's already playing. */
   private resume(): void {
     const p = this.project!, now = this.graph.currentTime;
-    // tutto programmato oltre l'istante della ripresa: da lì le sorgenti ripartono
+    // everything scheduled beyond the resume instant: from there the sources restart
     this.scheduler.advance(now);
     this.missed.clear();
     this.scheduler.resumeAt(now + this.startLatency, p.tempo, p.loop);
     this.scheduler.advance(now);
   }
 
-  /** Solo le tracce `ids` (modificate, o con l'audio appena arrivato) e, con `master`, le curve
-   *  del master riprendono da un attimo dopo; le altre continuano senza accorgersene. */
+  /** Only the tracks `ids` (changed, or with the audio just arrived) and, with `master`, the master's
+   *  curves resume from a moment later; the others continue without noticing. */
   private retake(ids: Iterable<TrackId>, master = false, mods: readonly ChainModulators[] = []): void {
     const now = this.graph.currentTime;
     this.scheduler.advance(now);
@@ -423,7 +423,7 @@ export class PlaybackEngine {
       if (player) sources.push(player);
       if (mod) sources.push(mod);
     }
-    // i modulatori dopo le curve: sentono anche le curve che muovono i loro parametri
+    // the modulators after the curves: they also hear the curves moving their parameters
     sources.push(...mods);
     this.scheduler.retake(now + this.startLatency, sources);
   }
@@ -436,30 +436,30 @@ export class PlaybackEngine {
     this.scheduler.advance(this.graph.currentTime);
   }
 
-  /** Taglia all'istante `time` ciò che la traccia aveva programmato (suono e modulazioni). */
+  /** Cuts at instant `time` what the track had scheduled (sound and modulations). */
   private cutTrack(id: TrackId, time: number): void {
     this.players.get(id)?.player.cut(time);
     this.modulators.get(id)?.cut(time);
   }
 
-  /** Dove va una modulazione di una traccia o del master: il canale del mixer (solo le tracce), lo
-   *  strumento, un effetto o la macro di un rack (che muove i parametri mappati). Ciò che riceve
-   *  resta anche nella sua traccia, per l'interfaccia. */
+  /** Where a modulation of a track or of the master goes: the mixer channel (tracks only), the
+   *  instrument, an effect or a rack's macro (which moves the mapped parameters). What it receives
+   *  also stays in its trace, for the interface. */
   private modSink(owner: ChainOwner, target: ModTarget, channel?: string): ModSink | null {
     const sink = this.destination(owner, target, channel);
     return sink && this.traces.wrap(`${owner}|${targetKey(target)}`, scaleOf(target).neutral, sink, channel);
   }
 
-  /** `channel`: la fonte, se non sono le curve delle clip (un modulatore): si somma a loro. */
+  /** `channel`: the source, if it isn't the clip curves (a modulator): it adds to them. */
   private destination(owner: ChainOwner, target: ModTarget, channel?: string): ModSink | null {
     if (target.kind === 'mixer') return owner === MASTER ? null : audioParamSink(this.mixer.modulation(owner, target.param, channel));
-    // il transpose lo suona la clip audio stessa
+    // the transpose is played by the audio clip itself
     if (target.kind === 'clip') return null;
     const racks = owner === MASTER ? this.project?.masterRacks : this.project?.track(owner)?.racks;
     const rack = findRack(racks ?? [], target.device as DeviceId);
     if (rack) return this.macroSink(owner, rack, macroIndex(target.param), channel);
     if (target.device === INSTRUMENT_DEVICE && owner === MASTER) return null;
-    // l'arpeggiatore vive nello strumento e i suoi parametri viaggiano con i suoi
+    // the arpeggiator lives in the instrument and its parameters travel with its own
     const inInstrument = target.device === INSTRUMENT_DEVICE
       || this.project?.effectsOf(owner).some(e => e.id === target.device && isArpType(e.type));
     const device = inInstrument
@@ -476,7 +476,7 @@ export class PlaybackEngine {
       const sink = spec && this.modSink(owner, { kind: 'device', device: m.device, param: m.param }, channel);
       return sink ? [{ sink, scale: mappingTravel(spec, m) }] : [];
     }));
-    // un interruttore o un pulsante scatta, come quando lo si preme
+    // a toggle or a button snaps, as when it's pressed
     return isSwitchMacro(macro) ? switchSink(sink, macro.value >= MACRO_MAX / 2) : sink;
   }
 
@@ -484,19 +484,19 @@ export class PlaybackEngine {
     for (const { player } of this.players.values()) yield player;
     yield* this.modulators.values();
     yield this.masterModulator;
-    // dopo le curve: i modulatori sentono anche le curve che muovono i loro parametri
+    // after the curves: the modulators also hear the curves moving their parameters
     yield* this.chainMods.values();
     yield this.metronome;
     yield this.anchors;
   }
 
-  /** Allinea i player alle tracce; restituisce quelle in cui è cambiato qualcosa che si sente. */
+  /** Aligns the players with the tracks; returns those in which something audible changed. */
   private syncPlayers(project: Project): Set<TrackId> {
     const changed = new Set<TrackId>();
     const present = new Set<TrackId>();
     const prevTracks = this.previousTracks;
     for (const t of project.tracks) {
-      // un gruppo non suona clip: è solo un canale del mixer
+      // a group plays no clips: it's only a mixer channel
       if (t instanceof GroupTrack) continue;
       present.add(t.id);
       const entry = this.players.get(t.id);
@@ -512,7 +512,7 @@ export class PlaybackEngine {
       entry?.player.dispose();
       const factory = this.factories[t.kind];
       if (!factory) {
-        console.warn(`nessun player per le tracce "${t.kind}"`);
+        console.warn(`no player for "${t.kind}" tracks`);
         this.players.delete(t.id);
         continue;
       }
@@ -542,8 +542,8 @@ export class PlaybackEngine {
     return changed;
   }
 
-  /** Allinea i modulatori delle catene (tracce, bus, master); restituisce quelli da riprendere:
-   *  i modulatori cambiati e quelli delle tracce cambiate (le note che li fanno partire). */
+  /** Aligns the chains' modulators (tracks, buses, master); returns those to resume:
+   *  the changed modulators and those of the changed tracks (the notes that start them). */
   private syncChainModulators(project: Project, changed: ReadonlySet<TrackId>): ChainModulators[] {
     const out: ChainModulators[] = [];
     const present = new Set<ChainOwner>();
@@ -568,7 +568,7 @@ export class PlaybackEngine {
     return out;
   }
 
-  /** Vero se è cambiata una clip della session che la traccia suona o suonerà. */
+  /** True if a session clip the track plays or will play changed. */
   private playingClipChanged(prev: Track, next: Track): boolean {
     if (prev.slots === next.slots) return false;
     return this.session.programs(next.id).some(p => p.source.kind === 'clip' && slotClip(prev, p.source.clip) !== slotClip(next, p.source.clip));

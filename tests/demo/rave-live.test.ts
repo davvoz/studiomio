@@ -24,7 +24,7 @@ describe('Rave illegale', () => {
   const track = (p: Project, name: string) => p.tracks.find(t => t.name === name) as MidiTrack;
   const NAMES = ['Cassa', 'Colpi', 'Piatti', 'Levare', 'Acido', 'Sampler', 'Rottura', 'Lunghi'];
 
-  it('esattamente otto tracce (una pagina dell\'APC40), a 145 BPM, lancio alla battuta', () => {
+  it('exactly eight tracks (one APC40 page), at 145 BPM, launch on the bar', () => {
     const p = build();
     expect(p.tempo.bpm).toBe(RAVE_LIVE_BPM);
     expect(RAVE_LIVE_BPM).toBe(145);
@@ -33,7 +33,7 @@ describe('Rave illegale', () => {
     expect(p.launchQuantization).toBe('1bar');
   });
 
-  it('la registrazione sulla timeline dura più di mezz\'ora, a sezioni di otto battute', () => {
+  it('the recording on the timeline lasts more than half an hour, in sections of eight bars', () => {
     const p = build();
     const end = Math.max(...p.tracks.map(t => t.arrangementEnd));
     expect(end * (60 / RAVE_LIVE_BPM)).toBeGreaterThan(30 * 60);
@@ -41,7 +41,7 @@ describe('Rave illegale', () => {
     for (const s of starts) expect(s % 32).toBe(0);
   });
 
-  it('ogni traccia è un Instrument Rack con otto macro con il nome; l\'acido ha anche il suo rack di effetti', () => {
+  it('each track is an Instrument Rack with eight named macros; the acid also has its effects rack', () => {
     const p = build();
     for (const name of NAMES) {
       const racks = p.racksOf(track(p, name).id);
@@ -52,7 +52,7 @@ describe('Rave illegale', () => {
     expect(p.racksOf(MASTER)[0].name).toBe('Macchina');
   });
 
-  it('la cassa suona solo casse: otto corpi accordati sulla quinta (Sol), gli strati spenti finché le macro non li alzano', () => {
+  it('the kick plays only kicks: eight bodies tuned on the fifth (G), the layers off until the macros raise them', () => {
     const p = build();
     const kick = track(p, 'Cassa');
     for (const [i, b] of RAVE_PARTS.BODIES.entries()) {
@@ -61,16 +61,16 @@ describe('Rave illegale', () => {
     }
     const sounds = new Set(Object.values(kick.instrument.samples ?? {}).map(id => p.sample(id)!.name));
     for (const s of sounds) expect(['ancora', 'corpus', 'secca', 'martello', 'distorta', 'industriale', 'gabber', 'boom', 'ferro', 'click', 'rimbombo']).toContain(s);
-    // Ferro e Click a 0: gli strati a −36 dB
+    // Ferro and Click at 0: the layers at −36 dB
     expect(kick.instrument.params[padParam(8, 'level')]).toBe(-36);
     expect(kick.instrument.params[padParam(9, 'level')]).toBe(-36);
-    // ogni colpo del corpo suona anche gli strati
+    // each hit of the body also plays the layers
     const dritta = kick.slots[RAVE_LIVE.scenes.findIndex(s => s.name === 'Macchina')] as MidiClip;
     const body = dritta.notes.filter(n => n.pitch === padNote(0)).length;
     expect(dritta.notes.filter(n => n.pitch === padNote(8))).toHaveLength(body);
   });
 
-  it('il basso, il sampler e i lunghi pompano con la cassa (sidechain)', () => {
+  it('the bass, the sampler and the long sounds pump with the kick (sidechain)', () => {
     const p = build();
     const kick = track(p, 'Cassa').id;
     for (const name of ['Levare', 'Sampler', 'Lunghi']) {
@@ -79,7 +79,7 @@ describe('Rave illegale', () => {
     }
   });
 
-  it('le clip "Seq" accendono il sequencer e tengono solo la tonica (o il giro); le scritte no', () => {
+  it('the "Seq" clips turn on the sequencer and hold only the root (or the loop); the written ones don\'t', () => {
     const p = build();
     const acid = track(p, 'Acido');
     const clips = acid.clips as MidiClip[];
@@ -95,9 +95,9 @@ describe('Rave illegale', () => {
     expect(acid.instrument.params.voiceMode).toBe(2);
   });
 
-  it('l\'acido e il basso stanno in Do frigio con il tritono (le note di brehho23)', () => {
+  it('the acid and the bass are in C phrygian with the tritone (brehho23\'s notes)', () => {
     const p = build();
-    const SCALE = new Set([0, 1, 3, 5, 6, 7, 8, 10]); // Do Reb Mib Fa Fa# Sol Lab Sib
+    const SCALE = new Set([0, 1, 3, 5, 6, 7, 8, 10]); // C Db Eb F F# G Ab Bb
     for (const name of ['Acido', 'Levare']) {
       for (const c of track(p, name).clips as MidiClip[]) {
         for (const n of c.notes) expect(SCALE.has(n.pitch % 12), `${name} ${c.name} ${n.pitch}`).toBe(true);
@@ -105,7 +105,7 @@ describe('Rave illegale', () => {
     }
   });
 
-  it('i sampler: zone su tasti diversi, banchi di otto, nessuna nota lunga oltre la fine della clip', () => {
+  it('the samplers: zones on different keys, banks of eight, no long note past the end of the clip', () => {
     const p = build();
     for (const name of ['Sampler', 'Lunghi']) {
       const t = track(p, name);
@@ -116,7 +116,7 @@ describe('Rave illegale', () => {
       for (const c of t.clips as MidiClip[]) {
         for (const n of c.notes) {
           expect(keys, `${name} ${c.name}`).toContain(n.pitch);
-          // un suono lungo tenuto oltre la fine verrebbe tagliato senza il suo rilascio
+          // a long sound held past the end would be cut without its release
           if (name === 'Lunghi') expect(n.start + n.duration, `${name} ${c.name}`).toBeLessThanOrEqual(c.region.end + 1e-9);
         }
       }
@@ -124,13 +124,13 @@ describe('Rave illegale', () => {
     expect(Object.values(RAVE_PARTS.PERC_BANKS).map(b => b.length)).toEqual([8, 8, 8, 8]);
   });
 
-  it('salite, rulli e impatti suonano una volta; i bordoni sono in loop con le dissolvenze', () => {
+  it('risers, rolls and impacts play once; the drones loop with the fades', () => {
     const p = build();
     const once = (name: string, clip: string) => (track(p, name).clips as MidiClip[]).find(c => c.name === clip)!;
     for (const [t, c] of [['Lunghi', 'Salita 8'], ['Lunghi', 'Impatto'], ['Cassa', 'Rullo'], ['Colpi', 'Salita'], ['Rottura', 'Tensione']]) {
       expect(once(t, c).loop.enabled, `${t} ${c}`).toBe(false);
     }
-    // la salita finisce sull'ultimo battito della clip
+    // the riser ends on the clip's last beat
     const rise = once('Lunghi', 'Salita 8');
     expect(Math.max(...rise.notes.map(n => n.start + n.duration))).toBeCloseTo(rise.region.end, 6);
     const long = track(p, 'Lunghi');
@@ -139,7 +139,7 @@ describe('Rave illegale', () => {
     expect(long.instrument.params[zoneParam(drone, 'loop')]).toBe(1);
   });
 
-  it('i tasti: i pulsanti del master su Q W E R T, la rullata su A', () => {
+  it('the keys: the master\'s buttons on Q W E R T, the roll on A', () => {
     const p = build();
     expect(p.keyMap).toHaveLength(RAVE_PARTS.KEYS.length);
     const keyOf = (code: string) => p.keyMap.find(m => m.key === code)!.target;
@@ -155,7 +155,7 @@ describe('Rave illegale', () => {
     expect(a.kind === 'macro' && p.racksOf(track(p, 'Colpi').id)[0].macros[a.index].name).toBe('Rullata');
   });
 
-  it('le clip stanno nel giro e gli effetti modulati esistono; si salva e si riapre uguale', () => {
+  it('the clips sit in the loop and the modulated effects exist; it saves and reopens the same', () => {
     const p = build();
     for (const t of p.tracks as MidiTrack[]) {
       const effects = new Set(t.effects.map(e => e.id));

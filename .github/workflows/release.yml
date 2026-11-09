@@ -1,7 +1,7 @@
-# Pubblica una release quando si fa il push di un tag di versione:
+# Publishes a release when a version tag is pushed:
 #   npm version minor        (0.1.0 → 0.2.0: commit + tag v0.2.0)
 #   git push --follow-tags
-# Le app installate la trovano al prossimo avvio e propongono l'aggiornamento.
+# Installed apps find it on their next start and offer the update.
 name: release
 
 on:
@@ -9,7 +9,7 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write   # per creare la release e caricare l'installer
+  contents: write   # to create the release and upload the installer
 
 jobs:
   windows:
@@ -32,11 +32,11 @@ jobs:
 
       - run: npm ci
       - run: npm run wasm
-      # serve anche senza test: il typecheck di npm run build controlla i test, che lo importano
+      # needed even without tests: the typecheck in npm run build checks the tests, which import it
       - run: npm run wasm:test
 
-      # una release con i test rotti non deve arrivare agli utenti; un fix urgente può saltarli
-      # con "[skip tests]" nel messaggio del commit di versione (release.bat patch notest)
+      # a release with broken tests must not reach users; an urgent fix can skip them
+      # with "[skip tests]" in the version commit message (release.bat patch notest)
       - if: ${{ !contains(github.event.head_commit.message, '[skip tests]') }}
         run: npm test
 
@@ -44,11 +44,11 @@ jobs:
       - run: npm run electron:build
       - run: npx electron-builder --win --publish never
 
-      # la release si crea in un colpo solo con tutti i file: electron-builder li caricava in
-      # parallelo e ne creava due per tag (o una a metà, senza latest.yml per gli aggiornamenti).
-      # Il testo è la sezione della versione nel CHANGELOG.md. La copia con il nome fisso serve al
-      # link diretto del README (releases/latest/download/studiomio-setup.exe); gli aggiornamenti
-      # usano quella con la versione, scritta in latest.yml.
+      # the release is created in one go with all the files: electron-builder uploaded them in
+      # parallel and created two per tag (or a half one, without latest.yml for updates).
+      # The text is the version's section in CHANGELOG.md. The copy with the fixed name is for the
+      # README's direct link (releases/latest/download/studiomio-setup.exe); updates
+      # use the one with the version, written in latest.yml.
       - shell: bash
         run: |
           v="${GITHUB_REF_NAME#v}"

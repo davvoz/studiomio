@@ -1,8 +1,8 @@
-/* Dove va ciò che arriva dal browser, come in Live: uno strumento sulla traccia MIDI (su un'altra
- * traccia, in una traccia MIDI nuova), un effetto in fondo alla catena, un rack salvato (un
- * Instrument Rack come uno strumento, un Audio Effect Rack come un effetto), un sample sulla timeline,
- * in uno slot o (sulla catena di una traccia MIDI) in un Sampler. Con il doppio clic va dove si sta lavorando: la catena aperta in basso, lo slot
- * scelto nella session, la traccia scelta al cursore nella timeline. */
+/* Where what comes from the browser goes, as in Live: an instrument on the MIDI track (on another
+ * track, in a new MIDI track), an effect at the end of the chain, a saved rack (an
+ * Instrument Rack like an instrument, an Audio Effect Rack like an effect), a sample on the timeline,
+ * in a slot or (on a MIDI track's chain) in a Sampler. With a double click it goes where you're working: the chain open at the bottom, the slot
+ * chosen in the session, the chosen track at the cursor in the timeline. */
 import type { TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import type { BrowserPayload, LoadTarget } from '../browser/item';
@@ -21,12 +21,12 @@ import type { UiState } from '../ui/ui-state';
 export interface BrowserLoaderDeps {
   readonly store: ProjectStore;
   readonly ui: UiState;
-  /** L'import dei file audio, come quando li si trascina da fuori. */
+  /** Importing audio files, as when they're dragged in from outside. */
   readonly importFiles: (files: File[], track: TrackId | null, beat: Beats) => Promise<void>;
   readonly importFilesToSlots: (files: File[], track: TrackId | null, slot: number) => Promise<void>;
-  /** Copia un file audio nel progetto (per il Sampler). */
+  /** Copies an audio file into the project (for the Sampler). */
   readonly importSample: (file: File) => Promise<SampleRef>;
-  /** Il cursore della timeline: un sample caricato su una catena va lì. */
+  /** The timeline cursor: a sample loaded on a chain goes there. */
   readonly cursor: () => Beats;
   readonly openDevices: (owner: ChainOwner) => void;
   readonly say: (text: string) => void;
@@ -68,19 +68,19 @@ export class BrowserLoader {
     if (!where) return;
     this.deps.openDevices(where);
     const name = where === MASTER ? 'Master' : store.project.track(where)?.name;
-    this.deps.say(`${preset ? `${label}: ${preset.name}` : label} in fondo agli effetti di "${name}".`);
+    this.deps.say(`${preset ? `${label}: ${preset.name}` : label} at the end of "${name}"'s effects.`);
   }
 
   private rack(rack: RackPreset, target: LoadTarget): void {
     const { store, ui, say } = this.deps;
     const owner = ownerOf(target);
-    if (rack.instrument && owner === MASTER) return say(`«${rack.name}» ha uno strumento: va su una traccia MIDI, non sul master.`);
-    // un rack salvato con una versione più nuova dell'app può avere dispositivi che questa non ha
+    if (rack.instrument && owner === MASTER) return say(`«${rack.name}» has an instrument: it goes on a MIDI track, not on the master.`);
+    // a rack saved with a newer version of the app may have devices this one doesn't have
     const unknown = [
       ...(rack.instrument && !instrumentType(rack.instrument.type) ? [rack.instrument.type] : []),
       ...rack.effects.filter(e => !effectType(e.type)).map(e => e.type),
     ];
-    if (unknown.length) return say(`«${rack.name}» usa dispositivi che questa versione non ha (${unknown.join(', ')}): aggiorna l'app.`);
+    if (unknown.length) return say(`«${rack.name}» uses devices this version doesn't have (${unknown.join(', ')}): update the app.`);
     const before = new Set(store.project.tracks.map(t => t.id));
     store.apply(loadRack(owner, rack));
     const where = store.project.tracks.find(t => !before.has(t.id))?.id ?? owner;
@@ -88,20 +88,20 @@ export class BrowserLoader {
     if (rack.instrument && where !== MASTER) ui.selectTrack(where);
     this.deps.openDevices(where);
     const name = where === MASTER ? 'Master' : store.project.track(where)?.name;
-    say(rack.instrument ? `Rack «${rack.name}» su "${name}".` : `Rack «${rack.name}» in fondo agli effetti di "${name}".`);
+    say(rack.instrument ? `Rack «${rack.name}» on "${name}".` : `Rack «${rack.name}» at the end of "${name}"'s effects.`);
   }
 
   private async audio(payload: Extract<BrowserPayload, { kind: 'sample' | 'file' }>, target: LoadTarget): Promise<void> {
     const { store, ui } = this.deps;
-    // sulla catena di una traccia MIDI: lo suona un Sampler
+    // on a MIDI track's chain: a Sampler plays it
     const midi = target.kind === 'chain' && target.owner !== MASTER ? store.project.track(target.owner) : undefined;
     if (midi instanceof MidiTrack) {
       const sample = payload.kind === 'sample' ? payload.sample : await this.deps.importSample(await payload.file());
       store.apply(loadSampler(midi.id, sample));
       this.deps.openDevices(midi.id);
-      return this.deps.say(`"${sample.name}" nel Sampler di "${midi.name}".`);
+      return this.deps.say(`"${sample.name}" in "${midi.name}"'s Sampler.`);
     }
-    // su una catena: sulla timeline della sua traccia, al cursore
+    // on a chain: on its track's timeline, at the cursor
     const at: LoadTarget = target.kind === 'chain'
       ? { kind: 'lane', track: target.owner === MASTER ? null : target.owner, beat: this.deps.cursor() } : target;
     if (payload.kind === 'file') {
@@ -110,7 +110,7 @@ export class BrowserLoader {
     }
     const before = store.project;
     if (at.kind === 'slot') {
-      if (at.slot >= before.scenes.length) return this.deps.say('Nessuna scena lì: aggiungine una per metterci il sample.');
+      if (at.slot >= before.scenes.length) return this.deps.say('No scene there: add one to put the sample in it.');
       store.apply(importSampleToSlot(payload.sample, at.track, at.slot));
     } else if (at.kind === 'lane') {
       store.apply(importSample(payload.sample, at.track, at.beat));
@@ -119,5 +119,5 @@ export class BrowserLoader {
   }
 }
 
-/** La traccia (o il master) su cui va un dispositivo. */
+/** The track (or the master) a device goes on. */
 const ownerOf = (target: LoadTarget): ChainOwner | null => (target.kind === 'chain' ? target.owner : target.track);

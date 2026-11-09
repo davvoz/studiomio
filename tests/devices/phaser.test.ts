@@ -13,7 +13,7 @@ const phaser = (params: Record<string, number>) => {
   return core;
 };
 
-/** Elabora `input` (uguale nei due canali) a blocchi. */
+/** Processes `input` (the same on both channels) in blocks. */
 function run(core: PhaserCore, input: Float32Array): [Float32Array, Float32Array] {
   const outL = new Float32Array(input.length), outR = new Float32Array(input.length);
   for (let f = 0; f < input.length; f += BLOCK) {
@@ -31,12 +31,12 @@ const rms = (x: Float32Array, from = 0, to = x.length) => {
 };
 
 describe('Phaser', () => {
-  it('a mix 0 il suono passa intatto', () => {
+  it('at mix 0 the sound passes intact', () => {
     const x = sine(440, 4800);
     expect(run(phaser({ mix: 0 }), x)[0]).toEqual(x);
   });
 
-  it('due stadi fermi a metà mix fanno una buca proprio al centro', () => {
+  it('two still stages at half mix make a notch right at the centre', () => {
     const fixed = { stages: 0, center: 1000, depth: 0, feedback: 0, mix: 50 };
     const atCenter = rms(run(phaser(fixed), sine(1000, SR / 2))[0], SR / 4);
     const away = rms(run(phaser(fixed), sine(100, SR / 2))[0], SR / 4);
@@ -44,7 +44,7 @@ describe('Phaser', () => {
     expect(away).toBeGreaterThan(0.6);
   });
 
-  it('il flanger ripete il colpo dopo il suo ritardo', () => {
+  it('the flanger repeats the hit after its delay', () => {
     const x = new Float32Array(4800);
     x[0] = 1;
     const [y] = run(phaser({ mode: PHASER_MODE.flanger, delay: 5, depth: 0, feedback: 0, mix: 100 }), x);
@@ -53,19 +53,19 @@ describe('Phaser', () => {
     expect(at).toBe(240);
   });
 
-  it('va a tempo e il destro è sfasato', () => {
-    // la buca gira con l'LFO: a 120 BPM e 1 battuta il giro dura 2 secondi
-    const moving = { stages: 0, center: 1000, depth: 100, feedback: 0, mix: 50, sync: PHASER_SYNC.tempo, division: TEMPO_RATE['1 battuta'], stereo: 90 };
+  it('it\'s synced and the right one is offset', () => {
+    // the notch turns with the LFO: at 120 BPM and 1 bar the cycle lasts 2 seconds
+    const moving = { stages: 0, center: 1000, depth: 100, feedback: 0, mix: 50, sync: PHASER_SYNC.tempo, division: TEMPO_RATE['1 bar'], stereo: 90 };
     const [l, r] = run(phaser(moving), sine(1000, 4 * SR));
     const env = (x: Float32Array, at: number) => rms(x, at - 480, at + 480);
-    // dopo un giro l'LFO sinistro è a zero (buca al centro), a un quarto di giro no; il destro
-    // è un quarto di giro avanti
+    // after a cycle the left LFO is at zero (notch at the centre), at a quarter of a cycle not; the right one
+    // is a quarter of a cycle ahead
     expect(env(l, 2 * SR)).toBeLessThan(0.1);
     expect(env(l, SR / 2)).toBeGreaterThan(0.5);
     expect(env(r, 2 * SR)).toBeGreaterThan(0.5);
   });
 
-  it('con il feedback al massimo resta limitato', () => {
+  it('with the feedback at maximum it stays bounded', () => {
     for (const mode of [PHASER_MODE.phaser, PHASER_MODE.flanger]) {
       const [y] = run(phaser({ mode, feedback: 95, depth: 100, mix: 100, sync: PHASER_SYNC.hz, rate: 3 }), sine(220, SR));
       expect(Math.max(...y.map(Math.abs))).toBeLessThan(4);

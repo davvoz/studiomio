@@ -6,22 +6,22 @@ import { clipTimes, type AudioClip, type WarpOptions } from '../model/audio-clip
 import { sampleDuration, type SampleRef } from '../model/sample';
 import type { WarpMarkers } from '../model/warp-markers';
 
-/** Lavoro di warp di una clip: il sample intero portato al tempo del progetto. */
+/** A clip's warp job: the whole sample brought to the project's tempo. */
 export interface ClipRender {
   readonly job: WarpJob;
-  /** Battito della clip in cui cade il primo campione del risultato. */
+  /** Clip beat the first sample of the result falls on. */
   readonly startBeat: Beats;
 }
 
 interface SettingsContext {
   readonly options: WarpOptions;
-  /** Transienti del sample, in campioni. */
+  /** The sample's transients, in samples. */
   readonly transients: readonly number[];
-  /** Inizi delle fette sulla griglia di `step` battiti, in campioni. */
+  /** Slice starts on the grid of `step` beats, in samples. */
   readonly gridSlices: (step: Beats) => number[];
 }
 
-/** Dalle opzioni salvate nella clip alle impostazioni dell'algoritmo, modalità per modalità. */
+/** From the options saved in the clip to the algorithm's settings, mode by mode. */
 const settingsFor: { readonly [M in WarpMode]: (c: SettingsContext) => SettingsOf<M> } = {
   repitch: () => ({ mode: 'repitch' }),
   beats: ({ options: { beats }, transients, gridSlices }) => ({
@@ -38,7 +38,7 @@ const settingsFor: { readonly [M in WarpMode]: (c: SettingsContext) => SettingsO
   }),
 };
 
-/** Punti [uscita, ingresso] in campioni: ogni marker dentro il sample, più inizio e fine. */
+/** [output, input] points in samples: each marker inside the sample, plus start and end. */
 function mapPoints(markers: WarpMarkers, duration: number, sr: number, tempo: TempoMap): MapPoint[] {
   const b0 = markers.beatOf(0);
   const ts = [0, duration, ...markers.markers.map(m => m.t).filter(t => t > 0 && t < duration)].sort((a, b) => a - b);
@@ -50,14 +50,14 @@ function mapPoints(markers: WarpMarkers, duration: number, sr: number, tempo: Te
   return points;
 }
 
-/** L'altezza della clip con `shift` semitoni in più, dentro i limiti del transpose. */
+/** The clip's pitch with `shift` extra semitones, within the transpose's limits. */
 export const shiftedPitch = (clip: AudioClip, shift: number): number => Math.max(-48, Math.min(48, clip.transpose + shift)) + clip.detune / 100;
 
-/** Il lavoro di warp di una clip audio (con warp attivo) al tempo del progetto, trasposta di
- *  `shift` semitoni in più (la curva del transpose). */
+/** The warp job of an audio clip (with warp active) at the project's tempo, transposed by
+ *  `shift` extra semitones (the transpose curve). */
 export function clipRender(clip: AudioClip, sample: SampleRef, tempo: TempoMap, shift = 0): ClipRender {
-  if (!clip.warp.enabled) throw new Error('la clip non usa il warp');
-  if (clip.sample !== sample.id) throw new Error('il sample non è quello della clip');
+  if (!clip.warp.enabled) throw new Error('the clip doesn\'t use warp');
+  if (clip.sample !== sample.id) throw new Error('the sample isn\'t the clip\'s');
   const sr = sample.sampleRate, duration = sampleDuration(sample), markers = clip.warp.markers;
   const points = mapPoints(markers, duration, sr, tempo);
   const startBeat = markers.beatOf(0), endBeat = markers.beatOf(duration);
@@ -77,7 +77,7 @@ export function clipRender(clip: AudioClip, sample: SampleRef, tempo: TempoMap, 
       outLength: Math.max(1, Math.round(points[points.length - 1][0])),
       transpose: shiftedPitch(clip, shift),
       settings,
-      // solo se serve: le clip dritte tengono la chiave di render di sempre
+      // only if needed: the straight clips keep their usual render key
       ...(clip.reversed ? { reverse: true } : {}),
     },
     startBeat,

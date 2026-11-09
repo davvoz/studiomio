@@ -24,7 +24,7 @@ function run(core: DrumCore, queue: NoteQueue, frames: number): { left: Float32A
   return { left, right };
 }
 
-/** Il pad 1 come pad Sample (livello e pan neutri), più `extra`. */
+/** Pad 1 as a Sample pad (neutral level and pan), plus `extra`. */
 const samplePad = (extra: Record<string, number> = {}) =>
   ({ ...modelDefaults(0, MODEL.sample), [padParam(0, 'level')]: 0, [padParam(0, 'pan')]: 0, ...extra });
 
@@ -56,30 +56,30 @@ const lastSound = (x: Float32Array) => {
 };
 
 describe('Drum Machine: pad Sample', () => {
-  it('suona il sample com\'è, dal campione della nota, sui due canali', () => {
+  it('plays the sample as it is, from the note\'s sample, on both channels', () => {
     const left = Float32Array.from({ length: 4800 }, (_, i) => Math.sin(i * 0.05) * 0.6);
     const right = left.map(v => -v);
     const { core, queue } = kit(samplePad(), { sampleRate: SR, channels: [left, right] });
     queue.add(36, 127, 300, 310);
     const out = run(core, queue, 6000);
     expect(out.left.subarray(0, 300).every(v => v === 0)).toBe(true);
-    // all'inizio l'inviluppo è pieno: esce il sample, identico
+    // at the start the envelope is full: the sample comes out, identical
     let err = 0;
     for (let i = 0; i < 2000; i++) err = Math.max(err, Math.abs(out.left[300 + i] - left[i]), Math.abs(out.right[300 + i] - right[i]));
     expect(err).toBeLessThan(1e-3);
-    // finito il file, la voce tace e si libera
+    // the file over, the voice is silent and is freed
     expect(lastSound(out.left)).toBeLessThan(300 + 4800);
     expect(core.activePads).toBe(0);
   });
 
-  it('un file a un\'altra frequenza di campionamento suona alla sua intonazione', () => {
+  it('a file at another sample rate plays at its own pitch', () => {
     const { core, queue } = kit(samplePad(), sine(1000, 0.5, 22050));
     queue.add(36, 127, 0, 10);
     const out = run(core, queue, SR / 4);
     expect(zeroCrossHz(out.left, 0, SR / 4)).toBeCloseTo(1000, -1);
   });
 
-  it('intonazione: +12 semitoni suona un\'ottava sopra e dura la metà', () => {
+  it('pitch: +12 semitones plays an octave up and lasts half', () => {
     const { core, queue } = kit(samplePad({ [padParam(0, 'tune')]: 12 }), sine(500, 0.4));
     queue.add(36, 127, 0, 10);
     const out = run(core, queue, SR / 2);
@@ -87,19 +87,19 @@ describe('Drum Machine: pad Sample', () => {
     expect(lastSound(out.left) / SR).toBeCloseTo(0.2, 1);
   });
 
-  it('il decay accorcia il sample; lo snap lo satura', () => {
+  it('the decay shortens the sample; the snap saturates it', () => {
     const short = kit(samplePad({ [padParam(0, 'decay')]: 0.05 }), sine(200, 1));
     short.queue.add(36, 127, 0, 10);
     expect(lastSound(run(short.core, short.queue, SR).left) / SR).toBeLessThan(0.051);
     const clean = kit(samplePad(), sine(200, 0.3, SR, 0.3)), hot = kit(samplePad({ [padParam(0, 'snap')]: 100 }), sine(200, 0.3, SR, 0.3));
     for (const k of [clean, hot]) k.queue.add(36, 127, 0, 10);
-    // la saturazione alza i passaggi piani (il picco resta sotto 1)
+    // the saturation raises the quiet passages (the peak stays below 1)
     const a = run(clean.core, clean.queue, 4800).left, b = run(hot.core, hot.queue, 4800).left;
     expect(rms(b)).toBeGreaterThan(rms(a) * 1.8);
     expect(Math.max(...b.map(Math.abs))).toBeLessThanOrEqual(1);
   });
 
-  it('il tono fa da filtro: sotto metà toglie gli acuti, sopra toglie i bassi', () => {
+  it('the tone acts as filter: below half it removes the highs, above it removes the lows', () => {
     const mix: SampleData = { sampleRate: SR, channels: [Float32Array.from({ length: SR / 2 }, (_, i) => 0.3 * Math.sin((2 * Math.PI * 60 * i) / SR) + 0.3 * Math.sin((2 * Math.PI * 8000 * i) / SR))] };
     const play = (tone: number) => {
       const k = kit(samplePad({ [padParam(0, 'tone')]: tone }), mix);
@@ -112,11 +112,11 @@ describe('Drum Machine: pad Sample', () => {
     expect(play(85)).toBeGreaterThan(play(50) * 1.3);
   });
 
-  it('senza sample il pad tace; il choke vale anche per i sample', () => {
+  it('without sample the pad is silent; the choke also applies to the samples', () => {
     const empty = kit(samplePad(), null);
     empty.queue.add(36, 127, 0, 10);
     expect(rms(run(empty.core, empty.queue, 4800).left)).toBe(0);
-    // pad 1 (sample lungo) e pad 2 nello stesso gruppo: il secondo ferma il primo
+    // pad 1 (long sample) and pad 2 in the same group: the second stops the first
     const { core, queue } = kit({ ...samplePad({ [padParam(0, 'choke')]: 1 }), [padParam(1, 'choke')]: 1, [padParam(1, 'level')]: -60 }, sine(300, 2));
     queue.add(36, 127, 0, 10);
     queue.add(37, 127, 4800, 4810);
@@ -125,41 +125,41 @@ describe('Drum Machine: pad Sample', () => {
     expect(rms(out, 4800 + 0.03 * SR, SR / 2)).toBeLessThan(0.002);
   });
 
-  it('Inizio: suona da metà del file; al contrario: lo stesso pezzo dalla fine all\'inizio', () => {
-    // una rampa: ogni campione dice da dove viene
+  it('Start: plays from the middle of the file; reversed: the same piece from the end to the start', () => {
+    // a ramp: each sample says where it comes from
     const ramp: SampleData = { sampleRate: SR, channels: [Float32Array.from({ length: SR }, (_, i) => i / SR)] };
     const fwd = kit(samplePad({ [padParam(0, 'start')]: 50 }), ramp);
     fwd.queue.add(36, 127, 0, 10);
     const a = run(fwd.core, fwd.queue, 4800).left;
     expect(a[0]).toBeCloseTo(0.5, 3);
     expect(a[2400]).toBeGreaterThan(a[100]);
-    // al contrario con decay 0,1 s: da 0,5 + 0,1 giù fino a 0,5, e finisce lì
+    // reversed with decay 0.1 s: from 0.5 + 0.1 down to 0.5, and it ends there
     const rev = kit(samplePad({ [padParam(0, 'start')]: 50, [padParam(0, 'reverse')]: 1, [padParam(0, 'decay')]: 0.1 }), ramp);
     rev.queue.add(36, 127, 0, 10);
     const b = run(rev.core, rev.queue, 9600).left;
-    // a metà del pezzo la rampa vale 0,55 (diviso l'inviluppo noto: 1 − 0,5⁴), alla fine 0,5
+    // halfway through the piece the ramp is 0.55 (divided by the known envelope: 1 − 0.5⁴), at the end 0.5
     const mid = Math.round(0.05 * SR);
     expect(b[mid] / (1 - 0.5 ** 4)).toBeCloseTo(0.55, 2);
     expect(b[Math.round(0.098 * SR)]).toBeCloseTo(0.502, 2);
-    // l'inviluppo al contrario sale: all'inizio è piano
+    // the reversed envelope rises: at the start it's quiet
     expect(b[50] / (0.6 - 50 / SR)).toBeLessThan(0.1);
     expect(lastSound(b) / SR).toBeLessThan(0.101);
   });
 
-  it('posti dei sample e nomi dei pad', () => {
+  it('sample slots and pad names', () => {
     expect([padSlot(0), padSlot(15), padOfSlot('p16'), padOfSlot('p17'), padOfSlot('x1')]).toEqual(['p1', 'p16', 15, -1, -1]);
     const values = resolveParams(DRUMS, samplePad());
     expect(padNames(values)[0]).toBe('Sample');
     expect(padNames(values, new Map([['p1', 'KICK TECHNO']]))[0]).toBe('KICK TECHNO');
     expect(DRUMS.noteNames!(values, new Map([['p1', 'KICK TECHNO']])).get(36)).toBe('KICK TECHNO');
-    // si numerano i nomi uguali, non i modelli: un pad Sample vuoto accanto a uno pieno è "Sample"
+    // the equal names are numbered, not the models: an empty Sample pad next to a full one is "Sample"
     const two = resolveParams(DRUMS, { ...samplePad(), ...modelDefaults(1, MODEL.sample) });
     expect(padNames(two).slice(0, 2)).toEqual(['Sample 1', 'Sample 2']);
     expect(padNames(two, new Map([['p1', 'kick']])).slice(0, 2)).toEqual(['kick', 'Sample']);
   });
 });
 
-describe('sample nei dispositivi: modifiche e salvataggio', () => {
+describe('samples in the devices: edits and saving', () => {
   const rig = () => {
     const s = setup({ midi: 1 });
     s.store.apply(setInstrument(s.track(0), { type: 'drums', preset: 'Init', params: {} }));
@@ -167,7 +167,7 @@ describe('sample nei dispositivi: modifiche e salvataggio', () => {
     return { ...s, instrument };
   };
 
-  it('caricare un sample su un pad: entra nel progetto, il pad diventa Sample, un passo solo', () => {
+  it('loading a sample on a pad: it enters the project, the pad becomes Sample, a single step', () => {
     const { store, track, ids, instrument } = rig();
     const kick = sampleRef(ids, { name: 'kick', file: 'audio/kick.wav' });
     store.apply(setInstrumentSamples(track(0), { p1: kick }, modelDefaults(0, MODEL.sample)));
@@ -176,13 +176,13 @@ describe('sample nei dispositivi: modifiche e salvataggio', () => {
     expect(instrument().params[padParam(0, 'model')]).toBe(MODEL.sample);
     expect(store.project.usedSampleIds().has(kick.id)).toBe(true);
     expect(store.project.sampleNames(instrument()).get('p1')).toBe('kick');
-    expect(() => store.project.removingSample(kick.id)).toThrow(/usato/);
+    expect(() => store.project.removingSample(kick.id)).toThrow(/is used/);
     store.undo();
     expect(store.project.samples).toEqual([]);
     expect(instrument().samples).toBeUndefined();
   });
 
-  it('scambiare e togliere; lo stesso sample su due pad entra una volta', () => {
+  it('swapping and removing; the same sample on two pads enters once', () => {
     const { store, track, ids, instrument } = rig();
     const a = sampleRef(ids, { name: 'a' }), b = sampleRef(ids, { name: 'b' });
     store.apply(setInstrumentSamples(track(0), { p1: a, p2: b }));
@@ -195,7 +195,7 @@ describe('sample nei dispositivi: modifiche e salvataggio', () => {
     expect(store.project.withoutUnusedSamples().samples).toEqual([]);
   });
 
-  it('si salvano con il progetto; un file della versione 6 si apre com\'era', () => {
+  it('they\'re saved with the project; a version 6 file opens as it was', () => {
     const { store, track, ids, instrument } = rig();
     const kick = sampleRef(ids, { name: 'kick' });
     store.apply(setInstrumentSamples(track(0), { p1: kick }, modelDefaults(0, MODEL.sample)));

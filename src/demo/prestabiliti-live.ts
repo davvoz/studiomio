@@ -1,27 +1,27 @@
-/* "Prestabiliti": hard techno a 146 BPM in Fa frigio, costruita sullo sketch "brehho23" per
- * essere suonata dalla session con l'APC40 (otto tracce: una pagina della griglia). Il titolo
- * è nel monologo che la attraversa: una voce che sa di essere fatta di dati e si sente
- * "libera di espandermi solo entro confini prestabiliti".
+/* "Prestabiliti": hard techno at 146 BPM in F phrygian, built on the "brehho23" sketch to
+ * be played from the session with the APC40 (eight tracks: one page of the grid). The title
+ * is in the monologue running through it: a voice that knows it's made of data and feels
+ * "free to expand only within pre-established (prestabiliti) boundaries".
  *
- *   Cassa       "ancora" dello sketch portata in Fa (il corpo è un Fa#1 a 45 Hz: un semitono
- *               giù) e la grana di una cassa industriale tenuta solo sopra i 230 Hz; Clipper;
- *   Rumble      la stessa cassa in un riverbero tutto bagnato e mono, saturata e chiusa sotto
- *               i 190 Hz, schiacciata dalla pompa a ogni colpo;
- *   Acido       la patch e il motivo dello sketch (tonica, seconda bemolle, tritono: là era
- *               Do–Reb–Fa#, qui Fa–Solb–Si), aperto in una 303 vera: risonanza, accenti,
- *               slide, la Multibanda "Denso" e l'EQ dello sketch;
- *   Robot       "Solo Robotoid Low Frequency" (un Fa1 tenuto che gracchia) per i momenti senza
- *               rumble e gli One_Shot in Fa dello sketch come stab sincopati nei drop;
- *   Clap        il clap con la "fruity snare" dello sketch sotto e i fantasmi;
- *   Piatti      chiusi a sedicesimi, aperti in levare, ride, crash, tamburello;
- *   Perc & FX   il kit dello sketch (il rim abbassato di nove semitoni e gli One_Shot 17, 18,
- *               19 con i loro decay) e il suo groove, tom in Fa, tic e metalli, le salite;
- *   Voce        le frasi del monologo ("0 Lead Vocals", che è già a 146: le fette restano a
- *               tempo senza warp), "again" e tre frasi di "terrible cicle".
+ *   Cassa       the sketch's "ancora" brought to F (the body is an F#1 at 45 Hz: a semitone
+ *               down) and the grain of an industrial kick kept only above 230 Hz; Clipper;
+ *   Rumble      the same kick in a fully wet mono reverb, saturated and closed below
+ *               190 Hz, squashed by the pump at every hit;
+ *   Acido       the sketch's patch and motif (root, flat second, tritone: there it was
+ *               C–Db–F#, here F–Gb–B), opened into a real 303: resonance, accents,
+ *               slides, the "Denso" Multiband and the sketch's EQ;
+ *   Robot       "Solo Robotoid Low Frequency" (a held, croaking F1) for the moments without
+ *               rumble and the sketch's One_Shots in F as syncopated stabs in the drops;
+ *   Clap        the clap with the sketch's "fruity snare" underneath and the ghosts;
+ *   Piatti      closed sixteenths, open on the offbeat, ride, crash, tambourine;
+ *   Perc & FX   the sketch's kit (the rim lowered by nine semitones and One_Shots 17, 18,
+ *               19 with their decays) and its groove, toms in F, ticks and metals, the risers;
+ *   Voce        the monologue's phrases ("0 Lead Vocals", which is already at 146: the slices stay in
+ *               time without warp), "again" and three phrases of "terrible cicle".
  *
- * Dieci scene, due pagine dell'APC40: Intro, Groove, Monologo, Tensione, Drop, Prigioniera (il
- * break senza cassa), Libera (la salita), Drop 2, Catena (il ritmo spezzato dello sketch che
- * torna dritto), Outro. Il montaggio è in live-builder.ts; i file, in
+ * Ten scenes, two APC40 pages: Intro, Groove, Monologo, Tensione, Drop, Prigioniera (the
+ * break without kick), Libera (the rise), Drop 2, Catena (the sketch's broken rhythm
+ * straightening out), Outro. The assembly is in live-builder.ts; the files, in
  * scripts/build-prestabiliti-live.ts. */
 import type { Beats } from '../core/music-time';
 import { DETECTOR } from '../devices/effects/compressor/compressor';
@@ -42,7 +42,7 @@ import { acid, BAR, curve, duck, repeat, roll, steps, STEP, swing } from './patt
 
 export const PRESTABILITI_LIVE_BPM = 146;
 
-/** I suoni che il live usa, per ruolo (chi costruisce il progetto dà il file di ognuno). */
+/** The sounds the live uses, by role (whoever builds the project gives the file for each). */
 export const PRESTABILITI_LIVE_SOUNDS = [
   'kick', 'kickGrit',
   'clap', 'fruity', 'snare', 'ghost',
@@ -61,27 +61,27 @@ type TrackKey = 'kick' | 'rumble' | 'acid' | 'robot' | 'clap' | 'hats' | 'perc' 
 const SWING = 0.07;
 
 const SPB = 60 / PRESTABILITI_LIVE_BPM;
-/** Battiti di un suono lungo `seconds`. */
+/** Beats of a sound `seconds` long. */
 const beatsOf = (seconds: number): Beats => seconds / SPB;
 
 // ------------------------------------------------------------------ le frasi
 
-/** Le frasi parlate: il file, dove partono e quanto durano (secondi, misurati sui silenzi del
- *  file e sulla trascrizione). */
+/** The spoken phrases: the file, where they start and how long they last (seconds, measured on the
+ *  file's silences and on the transcription). */
 const PHRASES = {
-  // "Vi sono innumerevoli elementi che formano il corpo e la mente degli esseri umani."
+  // "There are countless elements that make up the body and mind of human beings."
   elementi: { sound: 'monologue', at: 0, length: 6.18 },
-  // "Con innumerevoli sono i componenti che fanno di me un individuo con la mia propria personalità."
+  // "Countless too are the components that make me an individual with my own personality."
   componenti: { sound: 'monologue', at: 6.85, length: 7.0 },
-  // "Certo, ho una faccia, una voce che mi distinguono da tutti gli altri, ma i miei pensieri
-  // e i miei ricordi appartengono unicamente a me."
+  // "Sure, I have a face, a voice that set me apart from everyone else, but my thoughts
+  // and my memories belong only to me."
   faccia: { sound: 'monologue', at: 14.08, length: 8.61 },
-  // "E ho consapevolezza del mio destino."
+  // "And I am aware of my destiny."
   destino: { sound: 'monologue', at: 23.25, length: 2.32 },
-  // "Ognuna di queste cose non è che una piccola parte del tutto."
+  // "Each of these things is but a small part of the whole."
   tutto: { sound: 'monologue', at: 26.55, length: 4.15 },
-  // "Io raccolgo dati che uso a modo mio e questo crea un miscuglio che mi dà forma come
-  // individuo e da cui emerge la mia coscienza."
+  // "I collect data that I use in my own way and this creates a mixture that shapes me as an
+  // individual and from which my consciousness emerges."
   coscienza: { sound: 'monologue', at: 30.76, length: 8.53 },
   // "Mi sento…"
   misento: { sound: 'monologue', at: 39.7, length: 1.16 },
@@ -89,7 +89,7 @@ const PHRASES = {
   prigioniera: { sound: 'monologue', at: 41.2, length: 1.23 },
   // "Libera di espandermi solo entro confini prestabiliti."
   libera: { sound: 'monologue', at: 43.2, length: 2.81 },
-  // "prestabiliti" che rimbalza in eco, a tempo
+  // "prestabiliti" bouncing in the echo, in time
   eco: { sound: 'monologue', at: 46.15, length: 7.75 },
   // "Never speak to me of such things again."
   never: { sound: 'film', at: 4.98, length: 1.78 },
@@ -101,8 +101,8 @@ const PHRASES = {
 
 type Phrase = keyof typeof PHRASES;
 
-/** Il pad di una frase: tutte nello stesso choke (una nuova ferma quella prima). Il decay è
- *  lungo abbastanza da tenerla piena fino in fondo (il pad cade nell'ultimo terzo). */
+/** A phrase's pad: all in the same choke (a new one stops the previous one). The decay is
+ *  long enough to keep it full to the end (the pad falls in the last third). */
 const phrasePad = (p: Phrase, level: number): PadSound<PrestabilitiLiveSound> => {
   const { sound, at, length } = PHRASES[p];
   return { sound, at, decay: Math.min(MAX_DECAY, length / 0.6), choke: 1, level };
@@ -118,8 +118,8 @@ const KITS = {
   rumble: [
     { sound: 'kick', tune: -1, decay: 0.5, level: 0 },
   ],
-  // il Robotoid a pezzi (in choke: un pezzo ferma l'altro), poi gli One_Shot in Fa senza i
-  // loro bassi (Tono sopra metà: passa-alto intorno ai 75 Hz), che sono del rumble
+  // the Robotoid in pieces (choked: one piece stops the other), then the One_Shots in F without
+  // their lows (Tone above half: high-pass around 75 Hz), which belong to the rumble
   robot: [
     { sound: 'robotoid', at: 8.0, decay: 6, choke: 1, level: 0 },
     { sound: 'robotoid', at: 8.6, decay: 6, choke: 1, level: 0 },
@@ -143,7 +143,7 @@ const KITS = {
     { sound: 'crash', decay: 1.6, tone: 60, level: -6 },
     { sound: 'tamb', decay: 0.08, tone: 60, level: -9, pan: -22 },
   ],
-  // i primi quattro sono il kit dello sketch, con i suoi valori
+  // the first four are the sketch's kit, with its values
   perc: [
     { model: 'rim', tune: -9, decay: 0.124, tone: 58, level: -2 },
     { sound: 'shot17', decay: 0.066, tone: 60, level: -3, pan: -14 },
@@ -161,13 +161,13 @@ const KITS = {
     phrasePad('elementi', -6), phrasePad('componenti', -6), phrasePad('faccia', -6), phrasePad('destino', -6),
     phrasePad('tutto', -6), phrasePad('coscienza', -6), phrasePad('misento', -6), phrasePad('prigioniera', -5),
     phrasePad('libera', -6), phrasePad('eco', -7),
-    // il film è 9 dB sotto il monologo: qui gli passa sopra
+    // the film is 9 dB below the monologue: here it goes over it
     phrasePad('never', 6), phrasePad('born', 6), phrasePad('chain', 6),
     { sound: 'again', level: -9 },
-    // "again" giù di una quarta: la stessa voce, più grande
+    // "again" down a fourth: the same voice, bigger
     { sound: 'again', tune: -5, level: -8 },
-    // il taglio: un rim muto nel choke delle frasi, per fermarle dove finiscono (sono pezzi di
-    // un file solo: senza taglio continuerebbero nella frase dopo)
+    // the cut: a silent rim in the phrases' choke, to stop them where they end (they're pieces of
+    // a single file: without a cut they'd continue into the next phrase)
     { model: 'rim', decay: 0.01, level: -36, choke: 1 },
   ],
 } satisfies Record<string, readonly PadSound<PrestabilitiLiveSound>[]>;
@@ -181,10 +181,10 @@ const VOX: Readonly<Record<Phrase | 'again' | 'againLow' | 'cut', number>> = {
   libera: 8, eco: 9, never: 10, born: 11, chain: 12, again: 13, againLow: 14, cut: 15,
 };
 
-// ------------------------------------------------------------------ il suono dell'acido
+// ------------------------------------------------------------------ the acid sound
 
-/** La patch dello sketch ("Acid" in Legato, glide 60, accento 70, fDecay 0.18) aperta: là il
- *  filtro era quasi chiuso e senza risonanza, un basso scuro; qui canta. */
+/** The sketch's patch ("Acid" in Legato, glide 60, accent 70, fDecay 0.18) opened up: there the
+ *  filter was almost closed and without resonance, a dark bass; here it sings. */
 const ACID: ParamValues = {
   oscA: 0, mix: 0, voiceMode: VOICE_MODE.legato, glide: 60, accent: 70,
   cutoff: 420, resonance: 80, filterEnv: 66, keyTrack: 20,
@@ -195,25 +195,25 @@ const ACID: ParamValues = {
 
 const len = (bars: number): Beats => bars * BAR;
 
-/** Battute di un pad, una stringa per battuta. */
+/** Bars of a pad, one string per bar. */
 const phrase = (pad: number, barsOf: readonly string[], from: Beats = 0): Note[] =>
   barsOf.flatMap((b, k) => steps(pad, b, from + k * BAR));
 
-/** Un colpo solo di un pad. */
+/** A single hit of a pad. */
 const hit = (pad: number, at: Beats, velocity = 110): Note => ({ pitch: padNote(pad), start: at, duration: STEP, velocity });
 
-/** Una frase a `at` battiti, e il taglio dove finisce. */
+/** A phrase at `at` beats, and the cut where it ends. */
 const say = (p: Phrase, at: Beats, velocity = 110): Note[] =>
   [hit(VOX[p], at, velocity), hit(VOX.cut, at + beatsOf(PHRASES[p].length) + 0.1, 60)];
 
-// --- la cassa
+// --- the kick
 const K = {
   four: 'X... X... X... X...',
   push: 'X... X... X... X..x',
   skip: 'X... X... X... ....',
   roll: 'X... X... X.x. X.xx',
   half: 'X... .... X... ....',
-  // il ritmo spezzato dello sketch: la cassa sull'uno e sul levare del tre
+  // the sketch's broken rhythm: the kick on the one and on the offbeat of three
   broken: 'X... .... ..X. ....',
   one: 'X... .... .... ....',
   rest: '.... .... .... ....',
@@ -225,7 +225,7 @@ const kickBars = (count: number, last: string = K.roll): string[] =>
 const KICK = {
   intro: phrase(0, kickBars(16, K.push)),
   groove: phrase(0, kickBars(16)),
-  // le ultime due battute senza cassa: il vuoto prima del drop
+  // the last two bars without kick: the void before the drop
   tension: phrase(0, [...kickBars(14, K.four), K.rest, K.rest]),
   drop: phrase(0, kickBars(32, K.skip)),
   climb: phrase(0, [K.half, K.half, K.four, K.four, K.four, K.four, K.roll, K.rest]),
@@ -234,18 +234,18 @@ const KICK = {
   outro: phrase(0, [...kickBars(15, K.four), K.one]),
 };
 
-/** La clip della cassa: ogni colpo suona il corpo (pad 1) e la grana (pad 2) insieme. */
+/** The kick clip: each hit plays the body (pad 1) and the grain (pad 2) together. */
 const kickClip = (name: string, notes: readonly Note[], length: Beats): ClipSpec =>
   clip(name, [...notes, ...notes.map(n => ({ ...n, pitch: padNote(1) }))], length);
 
-/** Dove colpisce la cassa (i colpi pieni). */
+/** Where the kick hits (the full hits). */
 const kickHits = (kick: readonly Note[]): Beats[] => kick.filter(n => n.velocity >= 100).map(n => n.start);
 
-// --- la pompa: il volume giù sulla cassa e su prima della prossima
+// --- the pump: the volume down on the kick and up before the next one
 const pump = (kick: readonly Note[], depth: number, release: Beats, level = 1): ModSpec =>
   ({ target: VOLUME, points: duck(kickHits(kick), depth, release).map(p => ({ ...p, value: p.value * level })) });
 
-/** La pompa del rumble: zero sul colpo, pieno sul levare dell'ottavo, poi respira. */
+/** The rumble's pump: zero on the hit, full on the eighth's offbeat, then it breathes. */
 const rumblePump = (kick: readonly Note[], level = 1): ModSpec => ({
   target: VOLUME,
   points: kickHits(kick).sort((a, b) => a - b).flatMap(h => [
@@ -254,7 +254,7 @@ const rumblePump = (kick: readonly Note[], level = 1): ModSpec => ({
   ]),
 });
 
-/** Il rumble suona dove suona la cassa (da `from` battiti). */
+/** The rumble plays where the kick plays (from `from` beats). */
 const rumbleClip = (name: string, kick: readonly Note[], length: Beats, level = 1, from: Beats = 0): ClipSpec => {
   const hits = kick.filter(n => n.velocity >= 100 && n.start >= from);
   return clip(name, hits, length, [rumblePump(hits, level)]);
@@ -263,7 +263,7 @@ const rumbleClip = (name: string, kick: readonly Note[], length: Beats, level = 
 const mod = (param: string, points: EnvelopePoint[]): ModSpec => ({ target: instrumentParam(param), points });
 const fade = (...points: (readonly [Beats, number])[]): ModSpec => ({ target: VOLUME, points: curve(...points) });
 
-// --- clap e rullante sul due e sul quattro (come nello sketch), la fruity snare sotto
+// --- clap and snare on two and four (as in the sketch), the fruity snare underneath
 const BACK = '.... X... .... X...';
 const GHOSTS = ['.... .... .... ..o.', '.... ...o .... ....', '.... .... ..o. ...o', '.... ...o .... .o..'];
 function claps(count: number, opts: { snare?: boolean; ghosts?: boolean; fills?: Readonly<Record<number, string>>; from?: number } = {}): Note[] {
@@ -279,7 +279,7 @@ function claps(count: number, opts: { snare?: boolean; ghosts?: boolean; fills?:
   }).flat();
 }
 
-/** Il rullo prima del drop: due battute a ottavi, due a sedicesimi, sempre più forte. */
+/** The roll before the drop: two bars in eighths, two in sixteenths, louder and louder. */
 const snareRoll = (from: Beats): Note[] => [
   ...roll(CL.fruity, from, 16, 0.5, [64, 90]),
   ...roll(CL.fruity, from + len(2), 32, 0.25, [88, 127]),
@@ -305,18 +305,18 @@ function hats(count: number, opts: HatOpts): Note[] {
   ], SWING);
 }
 
-/** La ride a ottavi con il levare più leggero (o solo quarti), da `from` battute. */
+/** The ride in eighths with a lighter offbeat (or quarters only), from `from` bars. */
 const rides = (count: number, eighths = true, from = 0): Note[] =>
   swing(phrase(HAT.ride, Array(count - from).fill(eighths ? 'x.o. x.o. x.o. x.o.' : 'x... x... x... x...'), len(from)), SWING);
 
-// --- le percussioni: il groove dello sketch (rim e One_Shot), due battute
+// --- the percussion: the sketch's groove (rim and One_Shot), two bars
 const GROOVE = [
   ...steps(PERC.rim, 'x.x. .x.. x..x .... | x.x. .x.. x..x ..o.'),
   ...steps(PERC.shot19, 'x... .... .... .... | x... .... .... ....'),
   ...steps(PERC.shot18, '.... ..x. .... ..x. | .... ..x. .... ..x.'),
   ...steps(PERC.shot17, '.... .... ..x. X... | x..x .x.. x... ....'),
 ];
-/** I tom in Fa a gruppi di tre sedicesimi contro il quattro, i tic, il metallo a fine frase. */
+/** The toms in F in groups of three sixteenths against the four, the ticks, the metal at the end of the phrase. */
 const DRIVE_PERC = [
   ...steps(PERC.tom, 'X..x ..x. .x.. X..x ..x. .x.. x..x ....'),
   ...steps(PERC.tick, '..x. ...x ..x. .x.. ..x. ...x .x.. ..x.'),
@@ -327,31 +327,31 @@ function perc(count: number, opts: { light?: boolean; full?: boolean } = {}): No
   return swing([...repeat(base, len(2), count / 2), ...(opts.full ? repeat(DRIVE_PERC, len(2), count / 2) : [])], SWING);
 }
 
-// --- l'acido, in Fa frigio con il Si del motivo (il tritono)
-/** Il motivo dello sketch: tonica a ottavi, la seconda bemolle, il tritono che scivola sulla
- *  tonica. */
+// --- the acid, in F phrygian with the motif's B (the tritone)
+/** The sketch's motif: root in eighths, the flat second, the tritone sliding onto the
+ *  root. */
 const MOTIF = acid([
   'F2 . f2 . F2 . f2 . Gb2 - . gb2 - . b1~ -',
   'F2 . f2 . F2 . f2 . Gb2 - . ab2~ gb2 . b1~ -',
 ].join(' '));
-/** Lo stesso a note lunghe, per il break. */
+/** The same in long notes, for the break. */
 const BREATH = acid([
   'F2 - - - - - - - Gb2 - - - - - b1~ -',
   'F2 - - - - - - - ab2 - - - gb2~ - b1 -',
 ].join(' '));
-/** Pieno: sedicesimi con i salti d'ottava, la terza minore, la settima e il tritono. */
+/** Full: sixteenths with octave jumps, the minor third, the seventh and the tritone. */
 const FULL = acid([
   'F2 f2 f3~ eb3 f2 . Gb2 f2 f2 F3 . f2 b2~ c3 f2 eb2',
   'F2 f2 Ab2~ f2 f3 . f2 Gb3 f2 F3 f2 b2 c3~ f2 Ab2 gb2',
 ].join(' '));
-/** Il martello del secondo drop: la tonica che batte, le ottave sugli accenti. */
+/** The second drop's hammer: the pounding root, the octaves on the accents. */
 const HAMMER = acid([
   'F2 f2 F3 f2 f2 F2 f3 f2 F2 f2 F3 f2 Gb2~ f2 Ab2 f2',
   'F2 f2 F3 f2 f2 F2 f3 f2 F2 f2 B2 f2 C3~ b2 f2 F3',
 ].join(' '));
 const acidLine = (line: readonly Note[], count: number): Note[] => repeat(line, len(2), count / 2);
 
-// --- il robot: gli stab in levare, mai sul colpo della cassa
+// --- the robot: the stabs on the offbeat, never on the kick's hit
 const STABS = [
   ...steps(ROBOT.stab, '..X. .... ..x. .... | ..X. .... .... ..x.'),
   ...steps(ROBOT.stab2, '.... .... .... ...x | .... ..x. .... ....'),
@@ -359,17 +359,17 @@ const STABS = [
 const STABS_HARD = [...STABS, ...steps(ROBOT.color, '.... ...x .... .... | .... .... ...x ....')];
 const stabs = (count: number, hard = false, from = 0): Note[] =>
   repeat(hard ? STABS_HARD : STABS, len(2), count / 2).filter(n => n.start >= len(from));
-/** Il Robotoid tenuto: un pezzo ogni due battute, alternando due punti del file (in choke). */
+/** The held Robotoid: a piece every two bars, alternating two points of the file (choked). */
 const hum = (count: number, from = 0): Note[] =>
   Array.from({ length: (count - from) / 2 }, (_, k) => hit(k % 2 ? ROBOT.hum2 : ROBOT.hum, len(from + 2 * k), 104));
 
-// ------------------------------------------------------------------ gli effetti
+// ------------------------------------------------------------------ the effects
 
-/** I tipi di banda dell'EQ che servono qui (valori del parametro "type"). */
+/** The EQ band types needed here (values of the "type" parameter). */
 const BELL = 2, HIGH_SHELF = 4;
 
-/** Un EQ: un passa-alto (24 dB) a `low` Hz e, se c'è, un passa-basso a `high`; poi le bande
- *  date (campane, o il tipo indicato). */
+/** An EQ: a high-pass (24 dB) at `low` Hz and, if given, a low-pass at `high`; then the given
+ *  bands (bells, or the stated type). */
 function eqOf(name: string, low: number, high: number | null, bands: readonly (readonly [freq: number, gain: number, q: number, type?: number])[] = []): EffectSpec {
   const p: Record<string, number> = { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: low, [bandParam(0, 'slope')]: 1 };
   bands.forEach(([freq, gain, q, type = BELL], i) => Object.assign(p, {
@@ -379,10 +379,10 @@ function eqOf(name: string, low: number, high: number | null, bands: readonly (r
   return eq(name, p);
 }
 
-/** Dove sono il delay e il riverbero nella catena dell'Acido (per le modulazioni del break). */
+/** Where the delay and the reverb are in the Acido chain (for the break's modulations). */
 const ACID_DELAY = 4, ACID_REVERB = 5;
 
-// ------------------------------------------------------------------ le tracce
+// ------------------------------------------------------------------ the tracks
 
 const TRACKS: readonly TrackSpec<PrestabilitiLiveSound, TrackKey>[] = [
   {
@@ -406,7 +406,7 @@ const TRACKS: readonly TrackSpec<PrestabilitiLiveSound, TrackKey>[] = [
     key: 'acid', name: 'Acido', volumeDb: 1, analog: ACID,
     effects: [
       drive('Acido', { shape: SHAPE.hard, drive: 16, bias: 12, color: 25, low: 15, split: 150, tone: 9000 }),
-      // la Multibanda e l'EQ dello sketch
+      // the sketch's Multiband and EQ
       multiband('Denso', { depth: 60, time: 40, upward: 31, output: 2 }),
       eqOf('Acido', 95, 10000, [[227, -1.5, 1], [622, 2.6, 1]]),
       clipper('Punte', { ceiling: -8, knee: 50, output: 3 }),
@@ -458,7 +458,7 @@ const TRACKS: readonly TrackSpec<PrestabilitiLiveSound, TrackKey>[] = [
 
 // ------------------------------------------------------------------ le scene
 
-/** Una salita che finisce esattamente su `end` (battiti), lunga `seconds`. */
+/** A riser ending exactly on `end` (beats), `seconds` long. */
 const riserTo = (pad: number, end: Beats, seconds: number): Note => hit(pad, Math.max(0, end - beatsOf(seconds)), 110);
 
 const RISER_S = 10.971, REVERSE_S = 5.486;
@@ -487,7 +487,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       clap: clip('Clap', claps(16, { from: 8 }), len(16)),
       hats: clip('Piatti', hats(16, { closed: true, offbeat: true }), len(16)),
       perc: clip('Groove', perc(16), len(16)),
-      // il motivo entra chiuso e si apre in sedici battute
+      // the motif comes in closed and opens over sixteen bars
       acid: clip('Motivo', acidLine(MOTIF, 16), len(16), [
         pump(KICK.groove, 0.45, 0.4),
         mod(CUTOFF, curve([0, -0.32], [len(16), -0.12])),
@@ -522,7 +522,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
         ...perc(16),
         riserTo(PERC.riser, len(16), RISER_S), riserTo(PERC.reverse, len(16), REVERSE_S),
       ], len(16)),
-      // la linea piena, chiusa, che si apre fino al drop
+      // the full line, closed, opening up to the drop
       acid: clip('Pieno chiuso', acidLine(FULL, 16), len(16), [
         pump(KICK.tension, 0.5, 0.4),
         mod(CUTOFF, curve([0, -0.28], [len(14), 0.08], [len(16), 0.14])),
@@ -554,7 +554,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Prigioniera', bars: 16,
     clips: {
-      // niente cassa: il Robotoid tiene il fondo, l'acido respira a note lunghe nell'eco
+      // no kick: the Robotoid holds the bottom, the acid breathes in long notes in the echo
       hats: clip('Tamburello', hats(16, { tamb: true }).filter(n => n.start >= len(8)), len(16)),
       perc: clip('Tic lontani', [
         ...perc(16, { light: true }).filter(n => n.start >= len(4)), hit(PERC.down, 0, 100),
@@ -614,8 +614,8 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Catena', bars: 16,
     clips: {
-      // il ritmo spezzato dello sketch (cassa sull'uno e sul levare del tre, clap sul due e sul
-      // quattro) con il Robotoid sotto; poi la cassa torna dritta e con lei il rumble
+      // the sketch's broken rhythm (kick on the one and on the offbeat of three, clap on two and
+      // four) with the Robotoid underneath; then the kick goes straight again and the rumble with it
       kick: kickClip('Spezzata, poi dritta', KICK.chain, len(16)),
       rumble: rumbleClip('Rombo', KICK.chain, len(16), 1, len(8)),
       clap: clip('Clap', claps(16, { ghosts: true }), len(16)),
@@ -665,13 +665,13 @@ export const PRESTABILITI_LIVE: LiveSpec<PrestabilitiLiveSound, TrackKey> = {
   arrangement: SCENES.map((_, i) => i),
 };
 
-/** Le clip di una scena, per chi le vuole controllare. */
+/** A scene's clips, for whoever wants to check them. */
 export const prestabilitiScene = (name: string): Partial<Record<TrackKey, ClipSpec>> | undefined => SCENES.find(s => s.name === name)?.clips;
 
-/** Le frasi parlate, per chi le vuole controllare. */
+/** The spoken phrases, for whoever wants to check them. */
 export const PRESTABILITI_PHRASES = PHRASES;
 
-/** Costruisce il live nel progetto (vuoto) dello store. */
+/** Builds the live in the store's (empty) project. */
 export function buildPrestabilitiLive(store: ProjectStore, sounds: Readonly<Record<PrestabilitiLiveSound, SampleRef>>): void {
   buildLive(store, PRESTABILITI_LIVE, sounds);
 }

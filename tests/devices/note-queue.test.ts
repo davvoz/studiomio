@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { InstrumentCore } from '../../src/devices/dsp/core';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
 
-/** Registra accensioni e spegnimenti con il campione in cui arrivano. */
+/** Records note-ons and note-offs with the sample they arrive at. */
 function recorder() {
   const events: string[] = [];
   let frame = 0;
@@ -15,11 +15,11 @@ function recorder() {
 }
 
 describe('NoteQueue', () => {
-  it('dropFrom: toglie le note che partirebbero da lì, quelle già partite finiscono com\'erano', () => {
+  it('dropFrom: removes the notes that would start from there, those already started end as they were', () => {
     const q = new NoteQueue();
-    q.add(60, 100, 0, 300);   // già partita: deve finire a 300
-    q.add(62, 100, 100, 150); // parte prima del taglio: resta
-    q.add(64, 100, 200, 400); // parte dal taglio in poi: sparisce
+    q.add(60, 100, 0, 300);   // already started: it must end at 300
+    q.add(62, 100, 100, 150); // starts before the cut: it stays
+    q.add(64, 100, 200, 400); // starts from the cut on: it disappears
     q.dropFrom(200);
     const r = recorder();
     r.play(q, 512);
@@ -27,8 +27,8 @@ describe('NoteQueue', () => {
   });
 });
 
-describe('NoteQueue: note tenute a mano', () => {
-  it('suona dal press al release', () => {
+describe('NoteQueue: notes held by hand', () => {
+  it('plays from the press to the release', () => {
     const q = new NoteQueue(), r = recorder();
     q.press(60, 100, 10);
     r.play(q, 128);
@@ -38,7 +38,7 @@ describe('NoteQueue: note tenute a mano', () => {
     expect(r.events).toEqual(['on 60 @10', 'off #1 @200']);
   });
 
-  it('un tasto premuto e lasciato nello stesso blocco non resta acceso', () => {
+  it('a key pressed and released in the same block doesn\'t stay on', () => {
     const q = new NoteQueue(), r = recorder();
     q.press(60, 100, 0);
     q.release(60, 0);
@@ -46,7 +46,7 @@ describe('NoteQueue: note tenute a mano', () => {
     expect(r.events).toEqual(['on 60 @0', 'off #1 @1']);
   });
 
-  it('i tagli delle clip non toccano la nota tenuta', () => {
+  it('the clips\' cuts don\'t touch the held note', () => {
     const q = new NoteQueue(), r = recorder();
     q.press(60, 100, 0);
     r.play(q, 128);
@@ -57,7 +57,7 @@ describe('NoteQueue: note tenute a mano', () => {
     expect(r.events).toEqual(['on 60 @0', 'off #1 @200']);
   });
 
-  it('dopo lo stop il rilascio non fa niente', () => {
+  it('after the stop the release does nothing', () => {
     const q = new NoteQueue(), r = recorder();
     q.press(60, 100, 0);
     r.play(q, 128);
@@ -67,7 +67,7 @@ describe('NoteQueue: note tenute a mano', () => {
     expect(r.events).toEqual(['on 60 @0']);
   });
 
-  it('la stessa altezza premuta di nuovo chiude la nota prima', () => {
+  it('the same pitch pressed again closes the previous note', () => {
     const q = new NoteQueue(), r = recorder();
     q.press(60, 100, 0);
     q.press(60, 100, 50);

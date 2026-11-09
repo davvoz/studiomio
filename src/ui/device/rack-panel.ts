@@ -1,7 +1,7 @@
-/* Il pannello di un rack, a sinistra dei suoi dispositivi come in Live: intestazione, le 8 macro
- * e, con "Map" acceso, le mappature della macro scelta (minimo, massimo, togli) e il modo di
- * aggiungerne, anche sulle macro dei rack che ha dentro. Ogni modifica passa dallo store. Con ★
- * il rack si salva per gli altri progetti. */
+/* A rack's panel, on the left of its devices as in Live: header, the 8 macros
+ * and, with "Map" on, the mappings of the chosen macro (minimum, maximum, remove) and the way to
+ * add some, also on the macros of the racks it has inside. Every change goes through the store. With ★
+ * the rack is saved for the other projects. */
 import type { DeviceId } from '../../core/id';
 import { activeSections } from '../../devices/device-type';
 import { formatParam, type NumberParam, type ParamSpec } from '../../devices/params';
@@ -26,38 +26,38 @@ import { controlFor, registerControl, type ParamControl } from './controls';
 
 export interface RackPanelOptions {
   readonly store: ProjectStore;
-  /** Le macro molla: il mouse dice quando ne tiene una e quando la lascia. */
+  /** The spring macros: the mouse says when it holds one and when it lets it go. */
   readonly springs?: MacroSprings;
   readonly owner: ChainOwner;
   readonly rack: Rack;
-  /** Il nome di un dispositivo della catena, come nei titoli dei pannelli. */
+  /** The name of a device of the chain, as in the panels' titles. */
   readonly deviceLabel: (key: DeviceKey) => string;
   readonly canMove: (dir: -1 | 1) => boolean;
-  /** C'è un rack accanto (prima −1, dopo +1) in cui mettere questo. */
+  /** There's a rack next to it (before −1, after +1) to put this one in. */
   readonly canNest: (dir: -1 | 1) => boolean;
-  /** Le voci di copia e incolla del rack. */
+  /** The rack's copy and paste items. */
   readonly headMenu?: () => MenuItem[];
-  /** Le prime voci del menu di una macro. */
+  /** The first items of a macro's menu. */
   readonly macroMenu?: (macro: number) => MenuItem[];
-  /** Le voci per mappare una macro sulle macro dei rack intorno (nessuna se il rack non è dentro un altro). */
+  /** The items to map a macro to the macros of the surrounding racks (none if the rack isn't inside another). */
   readonly outerMenu: (macro: number) => MenuItem[];
-  /** La macro scelta con "Map" acceso: undefined spento, null acceso senza macro scelta. */
+  /** The macro chosen with "Map" on: undefined off, null on with no macro chosen. */
   readonly mapping: number | null | undefined;
   readonly folded: boolean;
   readonly onMapMode: (macro: number | null | undefined) => void;
   readonly onFold: () => void;
-  /** Il menu degli effetti da aggiungere in fondo al rack. */
+  /** The menu of the effects to add at the end of the rack. */
   readonly onAddEffect: (x: number, y: number) => void;
-  /** Clic sul nome: sceglie il rack (Maiusc estende la scelta). */
+  /** Click on the name: chooses the rack (Shift extends the selection). */
   readonly onSelect: (extend: boolean) => void;
-  /** KEY acceso: un clic su una macro la sceglie per la tastiera del computer (`onKeyTarget`). */
+  /** KEY on: a click on a macro chooses it for the computer keyboard (`onKeyTarget`). */
   readonly keyMapping: () => boolean;
   readonly onKeyTarget: (macro: number) => void;
-  /** Un messaggio per la barra di stato (rack salvato, errore…). */
+  /** A message for the status bar (rack saved, error…). */
   readonly say?: (text: string) => void;
 }
 
-/** Il nome e la manopola di un parametro mappato, per le righe delle mappature. */
+/** The name and the knob of a mapped parameter, for the mapping rows. */
 interface MappingRow {
   readonly mapping: MacroMapping;
   readonly min: ParamControl;
@@ -68,7 +68,7 @@ export class RackPanel {
   readonly element = el('div', { className: 'rack-panel' });
   readonly head = el('div', { className: 'device-panel-head' });
   private readonly macros: ParamControl[] = [];
-  /** Riposo e ritorno sotto le manopole delle molle, per macro. */
+  /** Rest and return under the springs' knobs, per macro. */
   private readonly springChips = new Map<number, { readonly rest: HTMLElement; readonly time: HTMLElement }>();
   private readonly rows: MappingRow[] = [];
   private readonly name: HTMLElement;
@@ -78,34 +78,34 @@ export class RackPanel {
     const project = o.store.project;
     const button = (text: string, title: string, run: (e: MouseEvent) => void, extra: Record<string, unknown> = {}) =>
       el<HTMLButtonElement>('button', { className: 'mini', textContent: text, title, onclick: run, ...extra });
-    const name = this.name = el('span', { className: 'device-name', textContent: rackName(rack), title: 'Doppio clic per rinominare' });
+    const name = this.name = el('span', { className: 'device-name', textContent: rackName(rack), title: 'Double click to rename' });
     name.onclick = e => o.onSelect(e.shiftKey);
     name.ondblclick = () => renameInline(name, n => this.apply(renameRack(o.owner, rack.id, n)));
     const hasInstrument = rack.devices.includes('instrument');
     this.head.append(
-      button(o.folded ? '▸' : '▾', o.folded ? 'Mostra i dispositivi del rack' : 'Nascondi i dispositivi del rack', () => o.onFold(), { className: 'mini fold' }),
+      button(o.folded ? '▸' : '▾', o.folded ? 'Show the rack\'s devices' : 'Hide the rack\'s devices', () => o.onFold(), { className: 'mini fold' }),
       name,
-      button('Map', 'Mappa le macro sui parametri dei dispositivi del rack (e sulle macro dei rack che ha dentro)',
+      button('Map', 'Map the macros to the parameters of the rack\'s devices (and to the macros of the racks it has inside)',
         () => o.onMapMode(o.mapping === undefined ? null : undefined),
         { className: `mini map${o.mapping !== undefined ? ' on' : ''}` }),
-      button('+', 'Aggiungi un effetto in fondo al rack', e => {
+      button('+', 'Add an effect at the end of the rack', e => {
         const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
         o.onAddEffect(r.left, r.bottom + 2);
       }),
-      button('◂', 'Sposta il rack prima', () => this.apply(moveRack(o.owner, rack.id, -1)), { disabled: !o.canMove(-1) }),
-      button('▸', 'Sposta il rack dopo', () => this.apply(moveRack(o.owner, rack.id, 1)), { disabled: !o.canMove(1) }),
-      button('★', 'Salva il rack: lo ritrovi nel browser, in tutti i progetti (clic destro sull\'intestazione: aggiorna, elimina)',
+      button('◂', 'Move the rack earlier', () => this.apply(moveRack(o.owner, rack.id, -1)), { disabled: !o.canMove(-1) }),
+      button('▸', 'Move the rack later', () => this.apply(moveRack(o.owner, rack.id, 1)), { disabled: !o.canMove(1) }),
+      button('★', 'Save the rack: you\'ll find it in the browser, in all projects (right click on the header: update, delete)',
         () => this.askName(), { className: 'mini save-preset' }),
-      button('⊟', 'Separa il rack: i dispositivi restano, le macro spariscono (Ctrl+Maiusc+G)', () => this.apply(ungroupRack(o.owner, rack.id))),
-      ...(hasInstrument ? [] : [button('×', 'Elimina il rack con i suoi effetti', () => this.apply(removeRack(o.owner, rack.id)))]),
+      button('⊟', 'Ungroup the rack: the devices stay, the macros disappear (Ctrl+Shift+G)', () => this.apply(ungroupRack(o.owner, rack.id))),
+      ...(hasInstrument ? [] : [button('×', 'Delete the rack with its effects', () => this.apply(removeRack(o.owner, rack.id)))]),
     );
     this.head.addEventListener('contextmenu', e => {
       e.preventDefault();
       const clip = o.headMenu?.() ?? [];
       showContextMenu(e.clientX, e.clientY, [
         ...clip, ...(clip.length ? [SEPARATOR] : []),
-        { label: 'Metti nel rack prima', disabled: !o.canNest(-1), run: () => this.apply(nestRack(o.owner, rack.id, -1)) },
-        { label: 'Metti nel rack dopo', disabled: !o.canNest(1), run: () => this.apply(nestRack(o.owner, rack.id, 1)) },
+        { label: 'Put in the rack before', disabled: !o.canNest(-1), run: () => this.apply(nestRack(o.owner, rack.id, -1)) },
+        { label: 'Put in the rack after', disabled: !o.canNest(1), run: () => this.apply(nestRack(o.owner, rack.id, 1)) },
         SEPARATOR,
         ...this.saveMenu(),
       ]);
@@ -117,7 +117,7 @@ export class RackPanel {
     this.element.classList.toggle('mapping', o.mapping !== undefined);
   }
 
-  /** I valori di macro e mappature dal rack attuale (la forma è la stessa). */
+  /** The values of macros and mappings from the current rack (the shape is the same). */
   update(rack: Rack): void {
     rack.macros.forEach((m, i) => {
       this.macros[i]?.set(m.value);
@@ -144,10 +144,10 @@ export class RackPanel {
     const set = (v: number) => setMacro(o.owner, o.rack.id, index, v);
     const mode = macroMode(m), spring = springOf(m);
     const control = mode === 'knob' || mode === 'spring'
-      // una molla torna da sola: tirarla non è un passo di annullamento
+      // a spring returns by itself: pulling it isn't an undo step
       ? controlFor(spec, m.value, (v, final) => (spring ? o.store.apply(set(v), { transient: true }) : this.merge(set(v), `macro-${o.rack.id}-${index}`, final)))
       : registerControl(new MacroSwitch(spec.label, m.value, mode,
-        // l'interruttore è un passo di annullamento; il pulsante tenuto premuto no (si disfa da solo)
+        // the toggle is an undo step; the held button isn't (it undoes itself)
         on => (mode === 'toggle' ? this.apply(set(on ? MACRO_MAX : 0)) : o.store.apply(set(on ? MACRO_MAX : 0), { transient: true }))));
     this.macros.push(control);
     const e = control.element;
@@ -156,12 +156,12 @@ export class RackPanel {
     e.classList.toggle('used', m.mappings.length > 0);
     e.classList.toggle('chosen', o.mapping === index);
     e.title = m.mappings.length
-      ? `${spec.label}: muove ${m.mappings.map(x => `${o.deviceLabel(x.device)} · ${mappingSpec(p, o.owner, x)?.label ?? x.param}`).join(', ')}`
-      : `${spec.label}: nessun parametro mappato (accendi Map, scegli la macro e clicca un parametro)`;
+      ? `${spec.label}: moves ${m.mappings.map(x => `${o.deviceLabel(x.device)} · ${mappingSpec(p, o.owner, x)?.label ?? x.param}`).join(', ')}`
+      : `${spec.label}: no mapped parameter (turn on Map, choose the macro and click a parameter)`;
     if (spring) {
-      e.title += '\nMolla: lasciata torna al riposo (↺: trascinalo su e giù) nel tempo di ritorno (clic per sceglierlo).';
+      e.title += '\nSpring: released it returns to rest (↺: drag it up and down) within the return time (click to choose it).';
       e.append(this.springRow(index, spring));
-      // il mouse sulla manopola la tiene: finché non lo si lascia non torna
+      // the mouse on the knob holds it: until it's released it doesn't return
       e.addEventListener('pointerdown', ev => {
         const springs = o.springs;
         if (ev.button !== 0 || !springs) return;
@@ -175,7 +175,7 @@ export class RackPanel {
         addEventListener('pointercancel', up, true);
       });
     }
-    // con KEY acceso un clic sceglie la macro per la tastiera, con Map acceso per mapparla, invece di girarla
+    // with KEY on a click chooses the macro for the keyboard, with Map on to map it, instead of turning it
     for (const type of ['pointerdown', 'click', 'dblclick', 'wheel']) {
       e.addEventListener(type, ev => {
         const keys = o.keyMapping();
@@ -193,27 +193,27 @@ export class RackPanel {
       const outer = o.outerMenu(index);
       showContextMenu(ev.clientX, ev.clientY, [
         ...(o.macroMenu?.(index) ?? []),
-        { label: 'Rinomina la macro', run: () => label && renameInline(label, n => this.apply(renameMacro(o.owner, o.rack.id, index, n))) },
-        { label: 'Nome automatico', disabled: m.name === null, run: () => this.apply(renameMacro(o.owner, o.rack.id, index, null)) },
+        { label: 'Rename the macro', run: () => label && renameInline(label, n => this.apply(renameMacro(o.owner, o.rack.id, index, n))) },
+        { label: 'Automatic name', disabled: m.name === null, run: () => this.apply(renameMacro(o.owner, o.rack.id, index, null)) },
         SEPARATOR,
         ...MACRO_MODES.map(([value, label]) => ({
           label, checked: mode === value, run: () => this.apply(setMacroMode(o.owner, o.rack.id, index, value)),
         })),
         SEPARATOR,
-        { label: 'Mappa…', run: () => o.onMapMode(index) },
-        // dentro un altro rack, la macro si mappa sulle macro di quelli intorno
+        { label: 'Map…', run: () => o.onMapMode(index) },
+        // inside another rack, the macro maps to the macros of the surrounding ones
         ...(outer.length ? [SEPARATOR, ...outer] : []),
       ]);
     });
     return e;
   }
 
-  /** Sotto la manopola di una molla: il riposo (si trascina su e giù) e il tempo di ritorno (un
-   *  clic apre le scelte). */
+  /** Under a spring's knob: the rest (dragged up and down) and the return time (a
+   *  click opens the choices). */
   private springRow(index: number, spring: MacroSpring): HTMLElement {
     const { o } = this;
-    const rest = el('span', { className: 'spring-rest', title: 'Riposo: dove torna la macro lasciata (trascina su e giù, Maiusc per i passi fini)' });
-    const time = el('span', { className: 'spring-time', title: 'Ritorno: in quanto torna al riposo (clic per sceglierlo)' });
+    const rest = el('span', { className: 'spring-rest', title: 'Rest: where the released macro returns (drag up and down, Shift for fine steps)' });
+    const time = el('span', { className: 'spring-time', title: 'Return: how quickly it returns to rest (click to choose it)' });
     const chips = { rest, time };
     this.springChips.set(index, chips);
     showSpring(chips, spring);
@@ -252,86 +252,86 @@ export class RackPanel {
       showContextMenu(ev.clientX, ev.clientY, [
         ...items(true), SEPARATOR, ...items(false), SEPARATOR,
         {
-          label: 'Altro…', run: () => editInline(time, springTimeLabel(s), text => {
+          label: 'More…', run: () => editInline(time, springTimeLabel(s), text => {
             const parsed = parseSpringTime(text);
             if (parsed) pick(parsed.time, parsed.sync);
-            else o.say?.(`"${text}" non è un tempo di ritorno: scrivi per esempio 300 ms, 1.5 s, 3/16 o 2 battute.`);
-          }, 'es. 300 ms, 3/16, 2 battute'),
+            else o.say?.(`"${text}" isn't a return time: write for example 300 ms, 1.5 s, 3/16 or 2 bars.`);
+          }, 'e.g. 300 ms, 3/16, 2 bars'),
         },
       ]);
     });
     return el('div', { className: 'macro-spring' }, rest, time);
   }
 
-  // ---------------------------------------------------------------- rack salvati
+  // ---------------------------------------------------------------- saved racks
 
-  /** Il menu dell'intestazione: salvare il rack, aggiornare o eliminare quello salvato con il
-   *  suo nome. */
+  /** The header's menu: saving the rack, updating or deleting the one saved with its
+   *  name. */
   private saveMenu(): MenuItem[] {
     const name = rackName(this.o.rack);
     const saved = !!userRacks.find(name);
     return [
-      { label: 'Salva il rack…', run: () => this.askName() },
-      { label: `Aggiorna il rack salvato «${name}»`, disabled: !saved, run: () => void this.save(name) },
-      { label: `Elimina il rack salvato «${name}»`, disabled: !saved, run: () => void this.remove(name) },
-      ...(userRacks.canReveal ? [{ label: 'Apri la cartella dei rack', run: () => void userRacks.reveal().catch(e => this.o.say?.(message(e))) }] : []),
+      { label: 'Save the rack…', run: () => this.askName() },
+      { label: `Update the saved rack «${name}»`, disabled: !saved, run: () => void this.save(name) },
+      { label: `Delete the saved rack «${name}»`, disabled: !saved, run: () => void this.remove(name) },
+      ...(userRacks.canReveal ? [{ label: 'Open the racks folder', run: () => void userRacks.reveal().catch(e => this.o.say?.(message(e))) }] : []),
     ];
   }
 
-  /** Il nome si scrive al posto di quello del rack; parte dal nome del rack. */
+  /** The name is typed in place of the rack's; it starts from the rack's name. */
   private askName(): void {
     if (!this.name.isConnected) return;
-    editInline(this.name, rackName(this.o.rack), name => void this.save(name), 'Nome del rack');
+    editInline(this.name, rackName(this.o.rack), name => void this.save(name), 'Rack name');
   }
 
-  /** Salva il rack com'è ora; il rack prende il nome con cui è salvato, come in Live. */
+  /** Saves the rack as it is now; the rack takes the name it's saved with, as in Live. */
   private async save(name: string): Promise<void> {
     const { store, owner, rack, say } = this.o;
     const existed = !!userRacks.find(name);
     try {
       await userRacks.save(captureRack(springsAtRest(store.project), owner, rack.id, name));
     } catch (e) {
-      say?.(`Non è stato possibile salvare il rack «${name}»: ${message(e)}`);
+      say?.(`Couldn't save the rack «${name}»: ${message(e)}`);
       return;
     }
     const now = findRack(store.project.racksOf(owner), rack.id);
     if (now && now.name !== name) this.apply(renameRack(owner, rack.id, name));
-    // i sample sono file del progetto: nel rack salvato restano solo i parametri
+    // the samples are project files: only the parameters remain in the saved rack
     const samples = rack.devices.some(k => deviceAt(store.project, owner, k)?.samples);
-    const note = samples ? ' I sample caricati non sono nel rack salvato.' : '';
-    say?.(existed ? `Rack «${name}» aggiornato.${note}` : `Rack «${name}» salvato: lo trovi nel browser, in tutti i progetti.${note}`);
+    const note = samples ? ' The loaded samples aren\'t in the saved rack.' : '';
+    say?.(existed ? `Rack «${name}» updated.${note}` : `Rack «${name}» saved: you'll find it in the browser, in all projects.${note}`);
   }
 
   private async remove(name: string): Promise<void> {
     try {
       await userRacks.remove(name);
     } catch (e) {
-      this.o.say?.(`Non è stato possibile eliminare il rack «${name}»: ${message(e)}`);
+      this.o.say?.(`Couldn't delete the rack «${name}»: ${message(e)}`);
       return;
     }
-    this.o.say?.(`Rack salvato «${name}» eliminato (quello nel progetto resta).`);
+    this.o.say?.(`Saved rack «${name}» deleted (the one in the project stays).`);
   }
 
-  // ---------------------------------------------------------------- mappature
+  // ---------------------------------------------------------------- mappings
 
-  /** Le mappature della macro scelta, e "+ Parametro". */
+  /** The mappings of the chosen macro, and "+ Parameter". */
   private mappingList(p: Project): HTMLElement {
     const { o } = this;
     const index = o.mapping;
     const list = el('div', { className: 'rack-mappings' });
     if (index === null || index === undefined) {
-      list.append(el('div', { className: 'muted', textContent: 'Scegli una macro, poi clicca un parametro di un dispositivo del rack (o "+ Parametro").' }));
+      list.append(el('div', { className: 'muted', textContent: 'Choose a macro, then click a parameter of a device of the rack (or "+ Parameter").' }));
       return list;
     }
     const macro = o.rack.macros[index];
-    const add = el<HTMLButtonElement>('button', { className: 'mini', textContent: '+ Parametro', title: 'Mappa un parametro su questa macro' });
+    const add = el<HTMLButtonElement>('button', { className: 'mini', textContent: '+ Parameter', title: 'Map a parameter to this macro' });
     add.onclick = () => {
       const r = add.getBoundingClientRect();
       this.chooseParam(p, index, r.left, r.bottom + 2);
     };
     list.append(el('div', { className: 'rack-mappings-head' },
       el('span', { textContent: macroName(macro, index, x => mappingSpec(p, o.owner, x)?.label) }), add));
-    if (!macro.mappings.length) list.append(el('div', { className: 'muted', textContent: 'Clicca un parametro di un dispositivo del rack per mapparlo qui.' }));
+    if (!macro.mappings.length) list.append(el('div', { className: 'muted', textContent: 'Click a parameter of a device of the rack to map it here.' }));
     for (const m of macro.mappings) {
       const spec = mappingSpec(p, o.owner, m);
       if (!spec) continue;
@@ -342,12 +342,12 @@ export class RackPanel {
       list.append(el('div', { className: 'rack-mapping' },
         el('div', { className: 'rack-mapping-name', textContent: `${o.deviceLabel(m.device)} · ${spec.label}`, title: `${formatParam(spec, m.min)} → ${formatParam(spec, m.max)}` }),
         row.min.element, row.max.element,
-        el<HTMLButtonElement>('button', { className: 'mini', textContent: '×', title: 'Togli dalla macro', onclick: () => this.apply(unmapParam(o.owner, m.device, m.param)) })));
+        el<HTMLButtonElement>('button', { className: 'mini', textContent: '×', title: 'Remove from the macro', onclick: () => this.apply(unmapParam(o.owner, m.device, m.param)) })));
     }
     return list;
   }
 
-  /** Due menu: il dispositivo del rack (o un rack che ha dentro), poi il suo parametro (o la sua macro). */
+  /** Two menus: the rack's device (or a rack it has inside), then its parameter (or its macro). */
   private chooseParam(p: Project, index: number, x: number, y: number): void {
     const { o } = this;
     const mapped = (device: DeviceKey, param: string) => o.rack.macros[index].mappings.some(m => m.device === device && m.param === param);
@@ -376,7 +376,7 @@ export class RackPanel {
     this.o.store.apply(edit);
   }
 
-  /** Una manopola trascinata è un solo passo di annullamento. */
+  /** A dragged knob is a single undo step. */
   private merge(edit: Edit, mergeKey: string, final: boolean): void {
     this.o.store.apply(edit, { mergeKey });
     if (final) this.o.store.endMerge();
@@ -385,16 +385,16 @@ export class RackPanel {
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-/** Il riposo e il tempo di ritorno di una molla, sotto la sua manopola. */
+/** The rest and the return time of a spring, under its knob. */
 function showSpring(chips: { readonly rest: HTMLElement; readonly time: HTMLElement }, s: MacroSpring): void {
   const rest = `↺ ${Math.round(s.rest)}`, time = springTimeLabel(s);
   if (chips.rest.textContent !== rest) chips.rest.textContent = rest;
   if (chips.time.textContent !== time) chips.time.textContent = time;
 }
 
-/** Una macro interruttore o pulsante: un tasto che si illumina quando è acceso. L'interruttore
- *  cambia a ogni clic; il pulsante è acceso finché lo si tiene premuto. Una curva che lo fa
- *  scattare (oltre metà strada) lo accende o lo spegne finché dura. */
+/** A toggle or button macro: a key that lights up when it's on. The toggle
+ *  changes at every click; the button is on while it's held down. A curve making it
+ *  snap (past halfway) turns it on or off while it lasts. */
 class MacroSwitch implements ParamControl {
   readonly element = el('div', { className: 'macro-switch' });
   private readonly key: HTMLButtonElement;
@@ -403,7 +403,7 @@ class MacroSwitch implements ParamControl {
 
   constructor(label: string, value: number, mode: 'toggle' | 'button', press: (on: boolean) => void) {
     this.key = el<HTMLButtonElement>('button', {
-      className: `macro-key ${mode}`, title: mode === 'toggle' ? 'Clic: accendi o spegni' : 'Tieni premuto: acceso finché non lo lasci',
+      className: `macro-key ${mode}`, title: mode === 'toggle' ? 'Click: turn on or off' : 'Hold down: on until you release it',
     });
     this.element.append(this.key, el('div', { className: 'knob-label', textContent: label }));
     if (mode === 'toggle') this.key.onclick = () => press(!this.on);
@@ -426,7 +426,7 @@ class MacroSwitch implements ParamControl {
     this.render();
   }
 
-  /** Come nel motore (switchSink): acceso scatta in giù a −½, spento scatta in su a +½. */
+  /** As in the engine (switchSink): on snaps down at −½, off snaps up at +½. */
   modulate(offset: number): void {
     const flipped = this.on ? offset <= -0.5 : offset >= 0.5;
     if (flipped === this.flipped) return;

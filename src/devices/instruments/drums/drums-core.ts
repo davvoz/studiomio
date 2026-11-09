@@ -1,10 +1,10 @@
-/* Il suono della Drum Machine: ogni pad ha due voci del suo modello (un colpo nuovo fa
- * sfumare in pochi millisecondi quello prima, senza click) e i modelli sono piccole sintesi
- * classiche: seni con caduta d'intonazione per casse e tom, rumore filtrato per rullante, clap
- * e shaker, sei quadre stonate tra loro per hi-hat e piatti (come la 808). Il modello Sample
- * suona il file caricato sul pad. Un pad con uno strumento (Kick, Snare, Hat e Piatti) ha
- * dentro il motore di quello strumento, che riceve i parametri del pad senza il prefisso. Gira
- * nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
+/* The Drum Machine's sound: each pad has two voices of its model (a new hit fades the previous one
+ * out in a few milliseconds, without clicks) and the models are small classic
+ * syntheses: sines with a pitch drop for kicks and toms, filtered noise for snare, clap
+ * and shaker, six squares detuned from each other for hi-hats and cymbals (like the 808). The Sample model
+ * plays the file loaded on the pad. A pad with an instrument (Kick, Snare, Hat and Cymbals) has
+ * that instrument's engine inside, which receives the pad's parameters without the prefix. Runs
+ * in the AudioWorklet; no Web Audio here, so it's also tested in Node. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { decayCoef } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
@@ -16,38 +16,38 @@ import { KickCore } from '../kick/kick-core';
 import { SnareCore } from '../snare/snare-core';
 import { DRUM_MODELS, DRUM_PADS, innerPrefix, padInstrument, padOfNote, padOfSlot, padsOf, splitInner, type DrumPad } from './drums';
 
-/** Sotto questo livello una voce è finita (−100 dB). */
+/** Below this level a voice is finished (−100 dB). */
 const FLOOR = 1e-5;
-/** Quanto dura la sfumatura di un colpo interrotto (nuovo colpo, choke, stop). */
+/** How long the fade of an interrupted hit lasts (new hit, choke, stop). */
 const CHOKE_TIME = 0.004;
 const LP = 0, BP = 1, HP = 2;
 const TWO_PI = 2 * Math.PI;
 
-/** Ciò che un colpo deve sapere del suo pad, già convertito. */
+/** What a hit must know about its pad, already converted. */
 interface Hit {
-  /** Rapporto di frequenza dall'intonazione (1 = come il modello). */
+  /** Frequency ratio from the pitch (1 = like the model). */
   readonly ratio: number;
   readonly decay: number;
-  /** Tono e snap in 0..1. */
+  /** Tone and snap in 0..1. */
   readonly tone: number;
   readonly snap: number;
-  /** Il sample del pad (solo il modello Sample lo usa), da dove parte (0..1) e se al contrario. */
+  /** The pad's sample (only the Sample model uses it), where it starts (0..1) and whether reversed. */
   readonly sample: SampleData | null;
   readonly start: number;
   readonly reverse: boolean;
 }
 
-/** Saturazione morbida che tiene il picco a 1: `drive` 0 = pulito. */
+/** Soft saturation keeping the peak at 1: `drive` 0 = clean. */
 const saturate = (x: number, drive: number): number => {
   if (drive < 0.01) return x;
   const d = 1 + drive * 4;
   return Math.tanh(x * d) / Math.tanh(d);
 };
 
-/** Una voce: il modello dà un campione alla volta (`next`) e tiene in `amp` il livello del suo
- *  inviluppo principale; la classe base fa guadagno, pan e la sfumatura quando viene fermata. */
+/** A voice: the model gives one sample at a time (`next`) and keeps in `amp` the level of its
+ *  main envelope; the base class does gain, pan and the fade when it's stopped. */
 export abstract class DrumVoice {
-  /** Livello dell'inviluppo principale: sotto FLOOR la voce è finita. */
+  /** Level of the main envelope: below FLOOR the voice is finished. */
   protected amp = 0;
   protected gainL = 0;
   protected gainR = 0;
@@ -71,7 +71,7 @@ export abstract class DrumVoice {
     this.start(hit);
   }
 
-  /** Sfuma in pochi millisecondi. */
+  /** Fades out in a few milliseconds. */
   choke(): void {
     if (this.active) this.choking = true;
   }
@@ -86,7 +86,7 @@ export abstract class DrumVoice {
     }
   }
 
-  /** Il guadagno della sfumatura, un campione alla volta (1 se la voce non è fermata). */
+  /** The fade's gain, one sample at a time (1 if the voice isn't stopped). */
   protected chokeGain(): number {
     if (this.choking) this.fade *= this.chokeK;
     return this.fade;
@@ -96,7 +96,7 @@ export abstract class DrumVoice {
   protected abstract next(): number;
 }
 
-/** Un seno con l'intonazione che cade da `sweep` volte la frequenza base: casse e tom. */
+/** A sine with the pitch falling from `sweep` times the base frequency: kicks and toms. */
 abstract class PitchedDrum extends DrumVoice {
   protected phase = 0;
   protected base = 50;
@@ -222,7 +222,7 @@ class Snare extends DrumVoice {
   }
 }
 
-/** Battimani: tre colpi di rumore ravvicinati, poi la coda. */
+/** Handclap: three closely spaced noise bursts, then the tail. */
 class Clap extends DrumVoice {
   private static readonly GAP = 0.011;
   private readonly noise = new Noise(41);
@@ -255,7 +255,7 @@ class Clap extends DrumVoice {
     const env = this.burst * this.burstMix + this.tail * 0.7;
     this.burst *= this.burstK;
     this.tail *= this.tailK;
-    // finché non parte la coda la voce è viva
+    // until the tail starts the voice is alive
     this.amp = this.n <= 2 * gap ? 1 : this.tail;
     return this.bp.process(this.noise.next()) * env * 3.2;
   }
@@ -293,10 +293,10 @@ class Rim extends DrumVoice {
   }
 }
 
-/** Le sei frequenze delle quadre della 808 per hi-hat e piatti. */
+/** The six frequencies of the 808's squares for hi-hats and cymbals. */
 const METAL_HZ = [205.3, 304.4, 369.6, 522.7, 540, 800] as const;
 
-/** Hi-hat e piatti: sei quadre stonate tra loro, passa-banda e passa-alto, più rumore. */
+/** Hi-hats and cymbals: six squares detuned from each other, band-pass and high-pass, plus noise. */
 class Metal extends DrumVoice {
   private readonly noise = new Noise(67);
   private readonly bp = new Svf(this.sampleRate);
@@ -338,7 +338,7 @@ class Metal extends DrumVoice {
   }
 }
 
-/** Campanaccio: due quadre, passa-banda, un colpo veloce sopra un decadimento più lento. */
+/** Cowbell: two squares, band-pass, a fast hit over a slower decay. */
 class Cowbell extends DrumVoice {
   private readonly bp = new Svf(this.sampleRate);
   private readonly square = WAVE_TABLE[1];
@@ -374,7 +374,7 @@ class Cowbell extends DrumVoice {
   }
 }
 
-/** Shaker: rumore acuto con un attacco breve (più lungo con poco snap). */
+/** Shaker: high noise with a short attack (longer with little snap). */
 class Shaker extends DrumVoice {
   private readonly noise = new Noise(79);
   private readonly hp = new Svf(this.sampleRate);
@@ -403,7 +403,7 @@ class Shaker extends DrumVoice {
   }
 }
 
-/** Interpolazione di Hermite a 4 punti tra x[k] e x[k+1] (bordi ripetuti). */
+/** 4-point Hermite interpolation between x[k] and x[k+1] (edges repeated). */
 const hermite = (x: Float32Array, k: number, f: number): number => {
   const n = x.length;
   const xm = x[k > 0 ? k - 1 : 0], x0 = x[k], x1 = x[k + 1 < n ? k + 1 : n - 1], x2 = x[k + 2 < n ? k + 2 : n - 1];
@@ -411,26 +411,26 @@ const hermite = (x: Float32Array, k: number, f: number): number => {
   return ((c3 * f + c2) * f + c1) * f + x0;
 };
 
-/** Gli ultimi campioni di un sample sfumano, se il file finisce di colpo. */
+/** The last samples of a sample fade out, if the file ends abruptly. */
 const END_FADE = 64;
 
-/** Il sample del pad: suonato da Inizio all'intonazione del pad (interpolazione di Hermite,
- *  anche quando il file ha un'altra frequenza di campionamento), con il decay che lo accorcia
- *  (resta pieno e cade verso la fine), Tono come filtro DJ (sotto metà passa-basso, sopra
- *  passa-alto) e Snap come saturazione. Al contrario suona lo stesso pezzo (da Inizio per la
- *  durata del decay) dalla fine all'inizio, e l'inviluppo si rovescia: sale e finisce secco,
- *  come un colpo al contrario. È stereo: fa da sé il giro del campione. */
+/** The pad's sample: played from Start at the pad's pitch (Hermite interpolation,
+ *  also when the file has another sample rate), with the decay shortening it
+ *  (it stays full and falls towards the end), Tone as a DJ filter (below half low-pass, above
+ *  high-pass) and Snap as saturation. Reversed it plays the same piece (from Start for the
+ *  decay's length) from the end to the start, and the envelope flips: it rises and ends dry,
+ *  like a reversed hit. It's stereo: it does the sample's round by itself. */
 class SampleVoice extends DrumVoice {
   private data: SampleData | null = null;
   private pos = 0;
   private step = 1;
-  /** Il tempo della voce in unità del decay: a 1 è finita. */
+  /** The voice's time in units of the decay: at 1 it's finished. */
   private t = 0;
   private tStep = 0;
   private drive = 0;
   private filtered = false;
   private reverse = false;
-  /** Il campione dove la voce si ferma (andando avanti: fine del file; al contrario: Inizio). */
+  /** The sample where the voice stops (going forward: end of the file; reversed: Start). */
   private stop = 0;
   private readonly filterL = new Svf(this.sampleRate);
   private readonly filterR = new Svf(this.sampleRate);
@@ -446,7 +446,7 @@ class SampleVoice extends DrumVoice {
     this.t = 0;
     this.tStep = 1 / (hit.decay * this.sampleRate);
     if (this.reverse) {
-      // il pezzo che il decay lascerebbe suonare, letto dalla fine
+      // the piece the decay would let play, read from the end
       this.pos = Math.min(length - 1, from + hit.decay * this.sampleRate * speed);
       this.step = -speed;
       this.stop = from;
@@ -459,7 +459,7 @@ class SampleVoice extends DrumVoice {
     const tone = hit.tone - 0.5;
     this.filtered = Math.abs(tone) > 0.02;
     if (this.filtered) {
-      // passa-basso da 20 kHz giù fino a 100 Hz, passa-alto da 20 Hz su fino a 5 kHz
+      // low-pass from 20 kHz down to 100 Hz, high-pass from 20 Hz up to 5 kHz
       const [cutoff, type] = tone < 0 ? [20000 * Math.pow(100 / 20000, -2 * tone), LP] : [20 * Math.pow(250, 2 * tone), HP];
       for (const f of [this.filterL, this.filterR]) {
         f.reset();
@@ -469,7 +469,7 @@ class SampleVoice extends DrumVoice {
   }
 
   protected next(): number {
-    return 0; // non serve: render fa tutto, in stereo
+    return 0; // not needed: render does everything, in stereo
   }
 
   override render(left: Float32Array, right: Float32Array, from: number, to: number): void {
@@ -493,12 +493,12 @@ class SampleVoice extends DrumVoice {
         l = saturate(l, drive);
         r = stereo ? saturate(r, drive) : l;
       }
-      // pieno all'inizio, poi cade verso la fine del decay (al contrario: sale presto e resta
-      // pieno fino in fondo); gli ultimi campioni prima del bordo sfumano
+      // full at the start, then it falls towards the end of the decay (reversed: rises early and stays
+      // full to the end); the last samples before the edge fade
       const u = reverse ? 1 - this.t : this.t, u2 = u * u, tail = reverse ? k - stop : stop - k;
       const env = 1 - u2 * u2;
       const g = env * this.chokeGain() * (tail < END_FADE ? tail / END_FADE : 1);
-      // il livello dell'inviluppo dice se la voce è viva (non la sfumatura dei bordi del file)
+      // the envelope's level says whether the voice is alive (not the fade of the file's edges)
       this.amp = Math.max(FLOOR, env);
       left[i] += l * g * gainL;
       right[i] += r * g * gainR;
@@ -509,7 +509,7 @@ class SampleVoice extends DrumVoice {
   }
 }
 
-/** Le voci per id del modello: aggiungere un suono è una riga qui e una in DRUM_MODELS. */
+/** The voices by model id: adding a sound is one line here and one in DRUM_MODELS. */
 const VOICES: Readonly<Record<string, (sampleRate: number) => DrumVoice>> = {
   kick: sr => new Kick(sr),
   boom: sr => new Boom(sr),
@@ -525,20 +525,20 @@ const VOICES: Readonly<Record<string, (sampleRate: number) => DrumVoice>> = {
   sample: sr => new SampleVoice(sr),
 };
 
-/** I motori degli strumenti che un pad può suonare, per tipo. */
+/** The engines of the instruments a pad can play, by type. */
 const INNER_CORES: Readonly<Record<string, (sampleRate: number) => InstrumentCore & SamplePlayer>> = {
   kick: sr => new KickCore(sr),
   snare: sr => new SnareCore(sr),
   cymbals: sr => new CymbalsCore(sr),
 };
 
-/** Dopo quanto silenzio uno strumento di un pad smette di suonare (per non calcolarlo a vuoto). */
+/** After how much silence a pad's instrument stops playing (so as not to compute it for nothing). */
 const INNER_QUIET = 0.5;
 
-/** Lo strumento dentro un pad: il suo motore e i parametri da leggere tra quelli della Drum Machine. */
+/** The instrument inside a pad: its engine and the parameters to read among the Drum Machine's. */
 class InnerInstrument {
   readonly core: InstrumentCore & SamplePlayer;
-  /** Gli id dei parametri dello strumento e, nello stesso ordine, quelli con il prefisso del pad. */
+  /** The ids of the instrument's parameters and, in the same order, those with the pad's prefix. */
   private readonly ids: readonly string[];
   private readonly keys: readonly string[];
   private quiet = Infinity;
@@ -572,7 +572,7 @@ class InnerInstrument {
     this.core.silence();
   }
 
-  /** Suona in [from, to) e tiene il conto del silenzio. */
+  /** Plays in [from, to) and keeps count of the silence. */
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     this.core.render(left, right, from, to);
     let loud = false;
@@ -581,24 +581,24 @@ class InnerInstrument {
   }
 }
 
-/** Un pad: due voci per modello (nate quando servono) e i suoi valori. */
+/** A pad: two voices per model (created when needed) and its values. */
 class Pad {
   settings: DrumPad | null = null;
-  /** Il sample caricato sul pad (suona se il modello è Sample). */
+  /** The sample loaded on the pad (it plays if the model is Sample). */
   sample: SampleData | null = null;
   private readonly voices = new Map<number, readonly [DrumVoice, DrumVoice]>();
   private current = 0;
-  /** Gli strumenti che il pad ha suonato, per tipo (tornando a uno, è com'era), e quello attuale. */
+  /** The instruments the pad has played, by type (going back to one, it's as it was), and the current one. */
   private readonly inners = new Map<string, InnerInstrument>();
   private inner: InnerInstrument | null = null;
-  /** I sample degli strumenti, per posto con il prefisso ("p3.kick.body"). */
+  /** The instruments' samples, by slot with the prefix ("p3.kick.body"). */
   private readonly innerSamples = new Map<string, SampleData | null>();
   private scratchL = new Float32Array(128);
   private scratchR = new Float32Array(128);
 
   constructor(private readonly index: number, private readonly sampleRate: number) {}
 
-  /** Le voci (o lo strumento) del modello attuale: si creano qui, mai mentre si suona un blocco. */
+  /** The voices (or the instrument) of the current model: they're created here, never while playing a block. */
   prepare(params: Readonly<Record<string, number>>): void {
     const model = this.settings?.model ?? -1;
     const instrument = padInstrument(model);
@@ -621,7 +621,7 @@ class Pad {
     if (make && !this.voices.has(model)) this.voices.set(model, [make(this.sampleRate), make(this.sampleRate)]);
   }
 
-  /** Il sample di uno strumento del pad (posto con il prefisso). */
+  /** The sample of one of the pad's instruments (slot with the prefix). */
   setInnerSample(slot: string, type: string, inner: string, sample: SampleData | null): void {
     this.innerSamples.set(slot, sample);
     this.inners.get(type)?.core.setSample(inner, sample);
@@ -635,7 +635,7 @@ class Pad {
     }
     const pair = s && this.voices.get(s.model);
     if (!s || !pair) return;
-    // il colpo prima sfuma, il nuovo parte sull'altra voce
+    // the previous hit fades, the new one starts on the other voice
     pair[this.current].choke();
     this.current ^= 1;
     const gain = dbToGain(s.level) * velocityGain, pan = s.pan / 100;
@@ -662,7 +662,7 @@ class Pad {
     for (const pair of this.voices.values()) for (const v of pair) if (v.active) v.render(left, right, from, to);
     const inner = this.inner, s = this.settings;
     if (!inner?.active || !s) return;
-    // lo strumento suona a parte; livello e pan del pad li mette qui
+    // the instrument plays separately; the pad's level and pan are applied here
     const n = to - from;
     if (this.scratchL.length < n) {
       this.scratchL = new Float32Array(n);
@@ -685,7 +685,7 @@ export class DrumCore implements InstrumentCore, SamplePlayer {
   private readonly pads: Pad[];
   private velocity = 0.7;
   private volume = 1;
-  /** Guadagno d'uscita attuale: segue `volume` senza scalini. */
+  /** Current output gain: follows `volume` without steps. */
   private gain = -1;
   private readonly gainK: number;
   private scratchL = new Float32Array(128);
@@ -705,8 +705,8 @@ export class DrumCore implements InstrumentCore, SamplePlayer {
     this.volume = dbToGain(params.volume ?? -4);
   }
 
-  /** Il sample del pad di `slot` ("p1"…), o di uno strumento di un pad ("p3.kick.body"): il colpo
-   *  che suona già tiene il suo, il prossimo usa questo. */
+  /** The sample of the pad of `slot` ("p1"…), or of an instrument of a pad ("p3.kick.body"): the hit
+   *  already playing keeps its own, the next uses this one. */
   setSample(slot: string, sample: SampleData | null): void {
     const inner = splitInner(slot);
     if (inner) return this.pads[inner.pad].setInnerSample(slot, inner.type, inner.inner, sample);
@@ -724,14 +724,14 @@ export class DrumCore implements InstrumentCore, SamplePlayer {
     pad.hit(velocity, 1 - this.velocity + this.velocity * v * v);
   }
 
-  /** I colpi suonano fino in fondo: la durata della nota non conta. */
+  /** The hits ring to the end: the note's length doesn't count. */
   noteOff(): void {}
 
   silence(): void {
     for (const p of this.pads) p.choke();
   }
 
-  /** Quanti pad stanno suonando (per i test). */
+  /** How many pads are playing (for tests). */
   get activePads(): number {
     return this.pads.filter(p => p.active).length;
   }

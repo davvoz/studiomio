@@ -1,6 +1,6 @@
 declare const brand: unique symbol;
 
-/** Identificatore tipizzato: un TrackId non si può passare dove serve un ClipId. */
+/** Typed identifier: a TrackId can't be passed where a ClipId is needed. */
 export type Id<K extends string> = string & { readonly [brand]: K };
 
 export type ProjectId = Id<'project'>;
@@ -11,7 +11,7 @@ export type SampleId = Id<'sample'>;
 export type SceneId = Id<'scene'>;
 export type DeviceId = Id<'device'>;
 
-/** Chi crea gli identificatori: iniettato, così i test usano id prevedibili. */
+/** Who creates the identifiers: injected, so tests use predictable ids. */
 export interface IdFactory {
   next<K extends string>(kind: K): Id<K>;
 }
@@ -20,7 +20,7 @@ export const randomIds: IdFactory = {
   next: <K extends string>(kind: K) => `${kind}-${crypto.randomUUID()}` as Id<K>,
 };
 
-/** Id progressivi per tipo (track-1, track-2, clip-1…): per test ed esempi. */
+/** Sequential ids per type (track-1, track-2, clip-1…): for tests and examples. */
 export function sequentialIds(): IdFactory {
   const counters = new Map<string, number>();
   return {
@@ -32,5 +32,5 @@ export function sequentialIds(): IdFactory {
   };
 }
 
-/** Converte una stringa letta da file in un id (la validazione del formato spetta al chiamante). */
+/** Converts a string read from a file into an id (validating the format is up to the caller). */
 export const asId = <K extends string>(value: string): Id<K> => value as Id<K>;

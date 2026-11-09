@@ -1,6 +1,6 @@
-/* La parte di Web Audio che il motore usa. AudioContext e OfflineAudioContext la
- * soddisfano così come sono; i test usano un grafo finto che registra cosa viene
- * programmato. Il motore dipende da queste interfacce, non dal browser. */
+/* The part of Web Audio the engine uses. AudioContext and OfflineAudioContext
+ * satisfy it as they are; the tests use a fake graph that records what gets
+ * scheduled. The engine depends on these interfaces, not on the browser. */
 
 export interface AudioParamLike {
   value: number;
@@ -8,13 +8,13 @@ export interface AudioParamLike {
   linearRampToValueAtTime(value: number, time: number): unknown;
   setTargetAtTime(target: number, startTime: number, timeConstant: number): unknown;
   cancelScheduledValues(time: number): unknown;
-  /** Toglie gli eventi da `time` in poi tenendo il valore che c'è lì (non in tutti i browser). */
+  /** Removes the events from `time` on, keeping the value there (not in all browsers). */
   cancelAndHoldAtTime?(time: number): unknown;
 }
 
 export interface AudioNodeLike {
   connect(destination: AudioNodeLike): unknown;
-  /** Senza destinazione stacca tutte le uscite; con, solo quella (errore se non è collegata). */
+  /** Without a destination disconnects all the outputs; with one, only that (error if it isn't connected). */
   disconnect(destination?: AudioNodeLike): void;
 }
 
@@ -26,7 +26,7 @@ export interface PannerNodeLike extends AudioNodeLike {
   readonly pan: AudioParamLike;
 }
 
-/** Una sorgente di valore costante: collegata a un AudioParam, gli somma `offset`. */
+/** A constant-value source: connected to an AudioParam, it adds `offset` to it. */
 export interface ConstantSourceNodeLike extends AudioNodeLike {
   readonly offset: AudioParamLike;
   connect(destination: AudioNodeLike | AudioParamLike): unknown;
@@ -69,10 +69,10 @@ export interface AudioGraph {
   createBuffer(channels: number, length: number, sampleRate: number): AudioBufferLike;
 }
 
-/** Decibel → guadagno lineare; sotto i −70 dB è silenzio. */
+/** Decibels → linear gain; below −70 dB it's silence. */
 export const dbToGain = (db: number): number => (db <= -70 ? 0 : Math.pow(10, db / 20));
 
-/** Canali → buffer del grafo. */
+/** Channels → graph buffer. */
 export function toAudioBuffer(graph: AudioGraph, channels: readonly Float32Array[], sampleRate: number): AudioBufferLike {
   const buf = graph.createBuffer(channels.length, Math.max(1, channels[0].length), sampleRate);
   channels.forEach((c, i) => buf.copyToChannel(c as Float32Array<ArrayBuffer>, i));

@@ -1,17 +1,17 @@
-/** Una voce di un synth polifonico. */
+/** A voice of a polyphonic synth. */
 export interface PolyVoice {
-  /** Vero finché suona (anche durante il rilascio). */
+  /** True while it plays (also during the release). */
   readonly active: boolean;
   readonly releasing: boolean;
   start(pitch: number, velocity: number): void;
   release(): void;
-  /** Spegnimento rapido. */
+  /** Quick shutdown. */
   kill(): void;
   render(left: Float32Array, right: Float32Array, from: number, to: number): void;
 }
 
-/** Polifonia per qualunque synth: assegna le note alle voci e, quando sono tutte occupate,
- *  ruba quella in rilascio da più tempo, altrimenti la più vecchia. */
+/** Polyphony for any synth: assigns notes to voices and, when they're all busy,
+ *  steals the one releasing the longest, otherwise the oldest. */
 export class VoicePool<V extends PolyVoice> {
   private readonly noteOf: (number | null)[];
   private readonly startedAt: number[];
@@ -22,8 +22,8 @@ export class VoicePool<V extends PolyVoice> {
     this.startedAt = voices.map(() => 0);
   }
 
-  /** Una voce per la nota; chi suona più voci per nota (le zone del Sampler) la chiama più
-   *  volte con lo stesso `id` e fa partire ogni voce a modo suo con `start`. */
+  /** A voice for the note; whoever plays several voices per note (the Sampler's zones) calls it several
+   *  times with the same `id` and starts each voice in its own way with `start`. */
   noteOn(id: number, pitch: number, velocity: number, start: (voice: V) => void = v => v.start(pitch, velocity)): void {
     const i = this.pick();
     this.noteOf[i] = id;
@@ -31,7 +31,7 @@ export class VoicePool<V extends PolyVoice> {
     start(this.voices[i]);
   }
 
-  /** Lascia tutte le voci della nota. */
+  /** Releases all the note's voices. */
   noteOff(id: number): void {
     for (let i = 0; i < this.voices.length; i++) {
       if (this.noteOf[i] !== id) continue;

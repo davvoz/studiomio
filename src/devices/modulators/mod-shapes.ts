@@ -1,19 +1,19 @@
-/* Le forme dei modulatori, come funzioni del tempo: il valore di un LFO dopo un certo numero di
- * giri e quello di un inviluppo a un istante, sapendo quando è partito e quando è stato
- * lasciato. Niente stato che avanza campione per campione: il motore le chiede dove vuole (anche
- * di nuovo, dopo una riprogrammazione) e ottiene sempre lo stesso valore. Le forme sono quelle di
- * Prisma (shapes.ts). Puro: si prova in Node. */
+/* The modulators' shapes, as functions of time: an LFO's value after a certain number of
+ * cycles and an envelope's at an instant, knowing when it started and when it was
+ * released. No state advancing sample by sample: the engine asks for them wherever it wants (even
+ * again, after a reschedule) and always gets the same value. The shapes are
+ * Prisma's (shapes.ts). Pure: tested in Node. */
 import { bend, drawnValue, isRandomShape, LFO_SHAPE, randomValue, shapeValue, type LfoPoint } from '../instruments/prisma/shapes';
 
-/** Il valore (0…1) della forma `shape` dopo `cycles` giri; `points` è la forma disegnata, `seed`
- *  cambia i valori delle forme casuali (lo stesso seme e giro danno lo stesso valore). */
+/** The value (0…1) of shape `shape` after `cycles` cycles; `points` is the drawn shape, `seed`
+ *  changes the values of the random shapes (the same seed and cycle give the same value). */
 export function lfoUnit(shape: number, points: readonly LfoPoint[], cycles: number, seed = 0): number {
   const k = Math.floor(cycles), phase = cycles - k;
   if (isRandomShape(shape)) return randomValue(shape, k + seed * 7919, phase);
   return shape === LFO_SHAPE.drawn ? drawnValue(points, phase) : shapeValue(shape, phase);
 }
 
-/** Un inviluppo con hold e curve (come quelli di Prisma): i tempi in secondi, sustain 0…1. */
+/** An envelope with hold and curves (like Prisma's): the times in seconds, sustain 0…1. */
 export interface EnvTimes {
   readonly attack: number;
   readonly hold: number;
@@ -25,9 +25,9 @@ export interface EnvTimes {
   readonly releaseCurve: number;
 }
 
-/** Una partenza dell'inviluppo: da `on` a `off` (secondi) è tenuto, poi rilascia. `from` è il
- *  livello da cui parte l'attacco (quello che aveva: ripartire non fa salti), `level` quanto vale
- *  il massimo (la velocity). Una partenza nuova prende il posto di quella di prima. */
+/** A start of the envelope: from `on` to `off` (seconds) it's held, then it releases. `from` is the
+ *  level the attack starts from (the one it had: restarting doesn't jump), `level` what the
+ *  maximum is worth (the velocity). A new start takes the place of the previous one. */
 export interface EnvTrigger {
   readonly on: number;
   readonly off: number;
@@ -36,7 +36,7 @@ export interface EnvTrigger {
   readonly times: EnvTimes;
 }
 
-/** Il livello (0…1, prima del `level`) di un inviluppo tenuto da `dt` secondi. */
+/** The level (0…1, before `level`) of an envelope held for `dt` seconds. */
 function heldLevel(e: EnvTimes, from: number, dt: number): number {
   if (dt < e.attack) return from + (1 - from) * bend(dt / e.attack, e.attackCurve);
   dt -= e.attack;
@@ -46,7 +46,7 @@ function heldLevel(e: EnvTimes, from: number, dt: number): number {
   return e.sustain;
 }
 
-/** Il valore (0…1) della partenza `g` all'istante `t` (da `g.on` in poi). */
+/** The value (0…1) of start `g` at instant `t` (from `g.on` on). */
 export function envValue(g: EnvTrigger, t: number): number {
   const e = g.times;
   if (t < g.off) return g.level * heldLevel(e, g.from, Math.max(0, t - g.on));

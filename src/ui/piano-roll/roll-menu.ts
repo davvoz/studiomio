@@ -1,9 +1,9 @@
-/* Menu contestuale del piano roll: sulle note, sullo spazio vuoto, altrove. */
+/* The piano roll's context menu: on the notes, on empty space, elsewhere. */
 import type { Beats } from '../../core/music-time';
 import { KEY, SEPARATOR, type MenuItem } from '../context-menu';
 import type { RollHit } from './roll-gestures';
 
-/** Ciò che il menu usa del piano roll. */
+/** What the menu uses of the piano roll. */
 export interface RollMenuActions {
   readonly canPaste: boolean;
   readonly drawMode: boolean;
@@ -18,36 +18,36 @@ export interface RollMenuActions {
   transpose(semitones: number): void;
   selectAll(): void;
   toggleDraw(): void;
-  /** Il battito sulla griglia (all'inizio della cella) sotto il puntatore. */
+  /** The beat on the grid (at the start of the cell) under the pointer. */
   cellStart(beat: Beats): Beats;
 }
 
 const general = (r: RollMenuActions): MenuItem[] => [
-  { label: 'Seleziona tutto', shortcut: KEY.selectAll, run: () => r.selectAll() },
-  { label: 'Quantizza tutte le note', shortcut: KEY.quantize, run: () => { r.selectAll(); r.quantize(); } },
-  { label: 'Modo disegno', shortcut: KEY.draw, checked: r.drawMode, run: () => r.toggleDraw() },
+  { label: 'Select all', shortcut: KEY.selectAll, run: () => r.selectAll() },
+  { label: 'Quantize all notes', shortcut: KEY.quantize, run: () => { r.selectAll(); r.quantize(); } },
+  { label: 'Draw mode', shortcut: KEY.draw, checked: r.drawMode, run: () => r.toggleDraw() },
   SEPARATOR,
-  { label: 'Duplica loop', shortcut: KEY.duplicateLoop, run: () => r.duplicateLoop() },
+  { label: 'Duplicate loop', shortcut: KEY.duplicateLoop, run: () => r.duplicateLoop() },
 ];
 
 const noteMenu = (r: RollMenuActions): MenuItem[] => [
-  { label: 'Taglia', shortcut: KEY.cut, run: () => r.cut() },
-  { label: 'Copia', shortcut: KEY.copy, run: () => r.copy() },
-  { label: 'Incolla', shortcut: KEY.paste, disabled: !r.canPaste, run: () => r.paste() },
-  { label: 'Duplica', shortcut: KEY.duplicate, run: () => r.duplicate() },
+  { label: 'Cut', shortcut: KEY.cut, run: () => r.cut() },
+  { label: 'Copy', shortcut: KEY.copy, run: () => r.copy() },
+  { label: 'Paste', shortcut: KEY.paste, disabled: !r.canPaste, run: () => r.paste() },
+  { label: 'Duplicate', shortcut: KEY.duplicate, run: () => r.duplicate() },
   SEPARATOR,
-  { label: 'Quantizza', shortcut: KEY.quantize, run: () => r.quantize() },
-  { label: 'Un\'ottava sopra', shortcut: 'Maiusc+↑', run: () => r.transpose(12) },
-  { label: 'Un\'ottava sotto', shortcut: 'Maiusc+↓', run: () => r.transpose(-12) },
+  { label: 'Quantize', shortcut: KEY.quantize, run: () => r.quantize() },
+  { label: 'An octave up', shortcut: 'Shift+↑', run: () => r.transpose(12) },
+  { label: 'An octave down', shortcut: 'Shift+↓', run: () => r.transpose(-12) },
   SEPARATOR,
-  { label: `Elimina${r.selection.size > 1 ? ` (${r.selection.size} note)` : ''}`, shortcut: KEY.delete, run: () => r.deleteSelected() },
+  { label: `Delete${r.selection.size > 1 ? ` (${r.selection.size} notes)` : ''}`, shortcut: KEY.delete, run: () => r.deleteSelected() },
 ];
 
 const MENUS: { readonly [K in RollHit['kind']]: (r: RollMenuActions, hit: Extract<RollHit, { kind: K }>) => MenuItem[] } = {
   note: r => noteMenu(r),
   velocity: r => noteMenu(r),
   empty: (r, hit) => [
-    { label: 'Incolla qui', shortcut: KEY.paste, disabled: !r.canPaste, run: () => r.paste(r.cellStart(hit.beat)) },
+    { label: 'Paste here', shortcut: KEY.paste, disabled: !r.canPaste, run: () => r.paste(r.cellStart(hit.beat)) },
     SEPARATOR,
     ...general(r),
   ],

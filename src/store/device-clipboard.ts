@@ -1,7 +1,7 @@
-/* Dispositivi negli appunti: effetti, strumento o un rack intero, da incollare nella stessa catena
- * o in un'altra del progetto. Si copia una fotografia; incollare crea id nuovi. Un rack passa dal
- * formato dei rack salvati (che tiene mappature e destinazioni dei modulatori); ciò che quello
- * lascia fuori, perché è del progetto, si rimette qui: i sample dello strumento e il sidechain. */
+/* Devices in the clipboard: effects, instrument or a whole rack, to paste in the same chain
+ * or in another one of the project. A snapshot is copied; pasting creates new ids. A rack goes through the
+ * saved rack format (which keeps mappings and modulator targets); what that one
+ * leaves out, because it belongs to the project, is put back here: the instrument's samples and the sidechain. */
 import type { DeviceId, TrackId } from '../core/id';
 import type { EffectSettings, InstrumentSettings } from '../model/device';
 import { INSTRUMENT_DEVICE, type ModTarget } from '../model/envelope';
@@ -15,11 +15,11 @@ import { edit, type Edit, type EditContext } from './project-store';
 
 export interface CopiedDevices {
   readonly kind: 'devices';
-  /** La catena da cui vengono: lì le destinazioni dei modulatori valgono ancora. */
+  /** The chain they come from: there the modulators' targets still apply. */
   readonly owner: ChainOwner;
   readonly instrument: InstrumentSettings | null;
   readonly effects: readonly EffectSettings[];
-  /** Copiato con un clic sul nome del rack: il rack intero (`effects` sono i suoi effetti). */
+  /** Copied with a click on the rack's name: the whole rack (`effects` are its effects). */
   readonly rack: RackPreset | null;
 }
 
@@ -30,7 +30,7 @@ const instrumentOf = (p: Project, owner: ChainOwner): InstrumentSettings | null 
 
 const isMidi = (p: Project, owner: ChainOwner) => instrumentOf(p, owner) !== null;
 
-/** I dispositivi `keys` della catena di `owner`, nell'ordine del suono; null se non c'è niente. */
+/** The devices `keys` of `owner`'s chain, in the order of the sound; null if there's nothing. */
 export function copyDevices(p: Project, owner: ChainOwner, keys: readonly DeviceKey[]): CopiedDevices | null {
   const instrument = keys.includes(INSTRUMENT_DEVICE) ? instrumentOf(p, owner) : null;
   const effects = p.effectsOf(owner).filter(e => keys.includes(e.id));
@@ -47,8 +47,8 @@ export function copyRack(p: Project, owner: ChainOwner, id: DeviceId): CopiedDev
   };
 }
 
-/** Dove va ciò che si incolla dopo `after`: dopo il rack più esterno che lo contiene, per non
- *  finirgli in mezzo; senza `after`, in fondo. */
+/** Where what's pasted after `after` goes: after the outermost rack containing it, so as not to
+ *  end up in its middle; without `after`, at the end. */
 function indexAfter(p: Project, owner: ChainOwner, after: DeviceKey | null): number {
   const effects = p.effectsOf(owner), order = p.chainKeys(owner);
   if (!after) return effects.length;
@@ -57,9 +57,9 @@ function indexAfter(p: Project, owner: ChainOwner, after: DeviceKey | null): num
   return effects.findIndex(e => e.id === last) + 1;
 }
 
-/** Gli effetti con id nuovi. Una destinazione di un modulatore segue il suo bersaglio se è stato
- *  copiato insieme a lui; altrimenti vale solo restando nella stessa catena (o puntando allo
- *  strumento, se è arrivato anche lui). Una traccia non può ascoltare sé stessa. */
+/** The effects with new ids. A modulator's target follows its target if it was
+ *  copied together with it; otherwise it applies only staying in the same chain (or pointing to the
+ *  instrument, if that came along too). A track can't listen to itself. */
 function freshEffects(content: CopiedDevices, owner: ChainOwner, ctx: EditContext): EffectSettings[] {
   const ids = new Map(content.effects.map(e => [e.id as DeviceKey, ctx.ids.next('device')]));
   const retarget = (t: ModTarget | null): ModTarget | null => {
@@ -89,17 +89,17 @@ function pasteRack(p: Project, content: CopiedDevices, owner: ChainOwner, ctx: E
   return content.instrument?.samples && isMidi(next, owner) ? setInstrument(owner as TrackId, content.instrument).apply(next, ctx) : next;
 }
 
-/** Incolla nella catena di `owner`, dopo il dispositivo `after` (senza, in fondo). Lo strumento
- *  prende il posto di quello della traccia; un rack va in fondo, come quando arriva dal browser. */
+/** Pastes into `owner`'s chain, after device `after` (without, at the end). The instrument
+ *  takes the place of the track's; a rack goes at the end, as when it comes from the browser. */
 export const pasteDevices = (content: CopiedDevices, owner: ChainOwner, after: DeviceKey | null = null): Edit =>
-  edit(content.rack ? `Incolla ${content.rack.name}` : 'Incolla dispositivi', (p, ctx) => {
+  edit(content.rack ? `Paste ${content.rack.name}` : 'Paste devices', (p, ctx) => {
     if (content.rack) return pasteRack(p, content, owner, ctx);
-    if (content.instrument && !content.effects.length && !isMidi(p, owner)) throw new Error('Lo strumento va su una traccia MIDI.');
+    if (content.instrument && !content.effects.length && !isMidi(p, owner)) throw new Error('The instrument goes on a MIDI track.');
     const next = content.instrument && isMidi(p, owner) ? setInstrument(owner as TrackId, content.instrument).apply(p, ctx) : p;
     const fresh = freshEffects(content, owner, ctx), at = indexAfter(next, owner, after);
     return next.updatingEffects(owner, list => [...list.slice(0, at), ...fresh, ...list.slice(at)]);
   });
 
-/** Toglie gli effetti `keys` (lo strumento resta: una traccia MIDI ne ha sempre uno). */
+/** Removes the effects `keys` (the instrument stays: a MIDI track always has one). */
 export const removeDevices = (owner: ChainOwner, keys: readonly DeviceKey[]): Edit =>
-  edit('Taglia dispositivi', (p, ctx) => keys.reduce((q, k) => (k === INSTRUMENT_DEVICE ? q : removeEffect(owner, k).apply(q, ctx)), p));
+  edit('Cut devices', (p, ctx) => keys.reduce((q, k) => (k === INSTRUMENT_DEVICE ? q : removeEffect(owner, k).apply(q, ctx)), p));

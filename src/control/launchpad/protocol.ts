@@ -1,14 +1,14 @@
-/* Il protocollo dei Novation Launchpad come lo usa Live 11 (script Launchpad_X,
- * Launchpad_Mini_MK3, Launchpad_Pro_MK3, Launchpad_MK2 e novation/): X, Mini MK3 e Pro MK3 in
- * "DAW mode", il MK2 nel suo layout Session. Per tutti la griglia 8×8 è fatta di note 11..88
- * (la riga in alto è 81..88), i pulsanti di scena stanno a destra (89, 79 … 19), la tavolozza è
- * quella dell'APC40 mkII; un LED è fisso col colore sul canale 1, lampeggia col secondo colore
- * sul canale 2, pulsa sul canale 3 (le animazioni le fa il controller, a tempo). Nella DAW mode
- * i LED li comanda il programma, come fa Live. Qui ci sono solo dati e conti puri. */
+/* The Novation Launchpad protocol as Live 11 uses it (scripts Launchpad_X,
+ * Launchpad_Mini_MK3, Launchpad_Pro_MK3, Launchpad_MK2 and novation/): X, Mini MK3 and Pro MK3 in
+ * "DAW mode", the MK2 in its Session layout. For all of them the 8×8 grid is made of notes 11..88
+ * (the top row is 81..88), the scene buttons are on the right (89, 79 … 19), the palette is
+ * the APC40 mkII's; a LED is steady with the colour on channel 1, blinks with the second colour
+ * on channel 2, pulses on channel 3 (the controller does the animations, in time). In DAW mode
+ * the LEDs are driven by the program, as Live does. Here there's only data and pure maths. */
 
 export type ModelId = 'x' | 'mini' | 'pro' | 'mk2';
 
-/** I pulsanti fuori dalla griglia e dalla colonna delle scene. */
+/** The buttons outside the grid and the scene column. */
 export type Button =
   | 'up' | 'down' | 'left' | 'right' | 'session'
   // Launchpad X
@@ -24,18 +24,18 @@ export type Button =
 export interface Model {
   readonly id: ModelId;
   readonly name: string;
-  /** Il riconoscimento dal nome delle porte MIDI ("LPX MIDI", "MIDIIN2 (LPX MIDI)", "Launchpad MK2"…). */
+  /** Recognition from the MIDI port names ("LPX MIDI", "MIDIIN2 (LPX MIDI)", "Launchpad MK2"…). */
   readonly port: RegExp;
-  /** Quale interfaccia USB è quella per i programmi (la "DAW"): su Windows la prima porta ha il
-   *  nome del controller, le altre "MIDIIN2 (…)", "MIDIIN3 (…)". */
+  /** Which USB interface is the one for programs (the "DAW"): on Windows the first port has the
+   *  controller's name, the others "MIDIIN2 (…)", "MIDIIN3 (…)". */
   readonly dawInterface: number;
-  /** Il byte del modello nei SysEx Novation: F0 00 20 29 02 <id> … */
+  /** The model byte in Novation SysEx: F0 00 20 29 02 <id> … */
   readonly sysexId: number;
-  /** La famiglia nella risposta d'identità: F0 7E <dev> 06 02 00 20 29 <famiglia> 00 00 … */
+  /** The family in the identity reply: F0 7E <dev> 06 02 00 20 29 <family> 00 00 … */
   readonly family: readonly [number, number];
-  /** I pulsanti di scena mandano CC (X, Mini MK3, Pro MK3) o note (MK2). */
+  /** The scene buttons send CCs (X, Mini MK3, Pro MK3) or notes (MK2). */
   readonly sceneKind: 'cc' | 'note';
-  /** I pulsanti, tutti CC sul canale 1 (premuto 127, lasciato 0). */
+  /** The buttons, all CCs on channel 1 (pressed 127, released 0). */
   readonly buttons: Readonly<Partial<Record<Button, number>>>;
 }
 
@@ -62,22 +62,22 @@ export const MODELS: readonly Model[] = [
   },
 ];
 
-/** Un Launchpad, anche di un modello che studiomio non conosce (Launchpad, S, Mini, Pro del 2015…). */
+/** A Launchpad, also of a model studiomio doesn't know (Launchpad, S, Mini, Pro from 2015…). */
 export const ANY_LAUNCHPAD = /launchpad|\bLP(X|Mini|Pro)/i;
 
-/** Il modello dal nome di una porta, o null. */
+/** The model from a port name, or null. */
 export const modelOfPort = (name: string): Model | null => MODELS.find(m => m.port.test(name)) ?? null;
 
-/** L'interfaccia USB di una porta dal suo nome: "MIDIIN2 (LPX MIDI)" è la 2, "LPX MIDI" la 1;
- *  'daw' se il nome lo dice (macOS, il nuovo stack MIDI di Windows: "LPX DAW"). */
+/** A port's USB interface from its name: "MIDIIN2 (LPX MIDI)" is 2, "LPX MIDI" is 1;
+ *  'daw' if the name says so (macOS, the new Windows MIDI stack: "LPX DAW"). */
 export function portInterface(name: string): number | 'daw' {
   if (/\bDAW\b/i.test(name)) return 'daw';
   const m = /^\s*MIDI(?:IN|OUT)(\d+)\s*\(/i.exec(name);
   return m ? Number(m[1]) : 1;
 }
 
-/** Fra le porte del controller, quella della DAW: col nome che lo dice, o quella dell'interfaccia
- *  giusta per il modello (`prefer` la sceglie a mano), o la sola che c'è. */
+/** Among the controller's ports, the DAW one: with the name saying so, or the one of the right
+ *  interface for the model (`prefer` chooses it by hand), or the only one there is. */
 export function dawPort<P extends { readonly name?: string | null }>(ports: readonly P[], model: Model, prefer?: number): P | undefined {
   const named = ports.find(p => portInterface(p.name ?? '') === 'daw');
   if (named && prefer === undefined) return named;
@@ -85,64 +85,64 @@ export function dawPort<P extends { readonly name?: string | null }>(ports: read
   return ports.find(p => portInterface(p.name ?? '') === wanted) ?? (ports.length === 1 ? ports[0] : undefined);
 }
 
-// ------------------------------------------------------------------ griglia
+// ------------------------------------------------------------------ grid
 
 export const SIZE = 8;
 
-/** Nota del pad in colonna `col` (0 = sinistra) e riga `row` (0 = in alto). */
+/** Note of the pad in column `col` (0 = left) and row `row` (0 = top). */
 export const padNote = (col: number, row: number): number => (SIZE - row) * 10 + col + 1;
 
-/** Colonna e riga (0 = in alto) di una nota della griglia, o null. */
+/** Column and row (0 = top) of a grid note, or null. */
 export function padAt(note: number): { col: number; row: number } | null {
   const r = Math.floor(note / 10), c = note % 10;
   return r >= 1 && r <= SIZE && c >= 1 && c <= SIZE ? { col: c - 1, row: SIZE - r } : null;
 }
 
-/** Il pulsante di scena della riga `row` (0 = in alto): 89, 79 … 19. */
+/** The scene button of row `row` (0 = top): 89, 79 … 19. */
 export const sceneButton = (row: number): number => (SIZE - row) * 10 + 9;
 
-/** La riga di un pulsante di scena, o null. */
+/** The row of a scene button, or null. */
 export function sceneAt(n: number): number | null {
   const r = Math.floor(n / 10);
   return n % 10 === 9 && r >= 1 && r <= SIZE ? SIZE - r : null;
 }
 
-/** Launchpad Pro MK3: i pulsanti sotto la griglia, uno per traccia (101..108). */
+/** Launchpad Pro MK3: the buttons under the grid, one per track (101..108). */
 export const TRACK_BUTTONS = 101;
 
 // ------------------------------------------------------------------ SysEx
 
 const header = (model: Model) => [0xf0, 0x00, 0x20, 0x29, 0x02, model.sysexId];
 
-/** La richiesta d'identità, come la manda Live a questi controller. */
+/** The identity request, as Live sends it to these controllers. */
 export const IDENTITY_REQUEST: readonly number[] = [0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7];
 
-/** La famiglia nella risposta d'identità di un apparecchio Novation, o null se non lo è. */
+/** The family in a Novation device's identity reply, or null if it isn't one. */
 export function identityFamily(data: ArrayLike<number>): [number, number] | null {
   if (data.length < 10 || data[0] !== 0xf0 || data[1] !== 0x7e || data[3] !== 0x06 || data[4] !== 0x02) return null;
   return data[5] === 0x00 && data[6] === 0x20 && data[7] === 0x29 ? [data[8], data[9]] : null;
 }
 
-/** X, Mini MK3, Pro MK3: la DAW mode (i LED della Session li comanda il programma) o il modo normale. */
+/** X, Mini MK3, Pro MK3: DAW mode (the program drives the Session LEDs) or the normal mode. */
 export const dawMode = (model: Model, on: boolean): number[] => [...header(model), 0x10, on ? 1 : 0, 0xf7];
 
-/** Cosa mostra la griglia. */
+/** What the grid shows. */
 export type Layout = 'session' | 'volume' | 'pan' | 'device';
 
-/** Il SysEx che cambia layout. X e Mini MK3: 00 <layout> (Session 0, fader 0x0D); Pro MK3:
- *  00 <layout> <pagina> 00 (Session 0, fader 1 con la pagina 0 volume, 1 pan, 3 dispositivo);
- *  MK2: 22 <layout> (Session 0, fader del volume 4, del pan 5). */
+/** The SysEx that changes layout. X and Mini MK3: 00 <layout> (Session 0, faders 0x0D); Pro MK3:
+ *  00 <layout> <page> 00 (Session 0, faders 1 with page 0 volume, 1 pan, 3 device);
+ *  MK2: 22 <layout> (Session 0, volume faders 4, pan faders 5). */
 export function layoutMessage(model: Model, layout: Layout): number[] {
   if (model.id === 'mk2') return [...header(model), 0x22, layout === 'volume' ? 4 : layout === 'pan' ? 5 : 0, 0xf7];
   if (model.id === 'pro') return [...header(model), 0x00, layout === 'session' ? 0 : 1, FADER_PAGE[layout], 0x00, 0xf7];
   return [...header(model), 0x00, layout === 'session' ? 0 : 0x0d, 0xf7];
 }
 
-/** Pro MK3: la pagina di fader di ogni layout (i suoi fader mandano i CC pagina × 8 + 0..7). */
+/** Pro MK3: the fader page of each layout (its faders send CCs page × 8 + 0..7). */
 export const FADER_PAGE: Readonly<Record<Layout, number>> = { session: 0, volume: 0, pan: 1, device: 3 };
 
-/** Il layout che il controller dice di mostrare (lo dice quando lo si cambia dal controller),
- *  o null se il messaggio non lo è: 'other' è un layout suo (note, custom, impostazioni…). */
+/** The layout the controller says it shows (it says so when it's changed from the controller),
+ *  or null if the message isn't one: 'other' is a layout of its own (note, custom, settings…). */
 export function reportedLayout(model: Model, data: ArrayLike<number>): 'session' | 'faders' | 'other' | null {
   if (model.id === 'mk2' || data.length < 9) return null;
   const h = header(model);
@@ -150,36 +150,36 @@ export function reportedLayout(model: Model, data: ArrayLike<number>): 'session'
   return data[7] === 0 ? 'session' : data[7] === (model.id === 'pro' ? 1 : 0x0d) ? 'faders' : 'other';
 }
 
-/** X e Mini MK3: i due colori del pulsante Session (il primo quando la griglia è sulla Session). */
+/** X and Mini MK3: the Session button's two colours (the first when the grid is on Session). */
 export const sessionColor = (model: Model, active: number, inactive: number): number[] =>
   [...header(model), 0x14, active, inactive, 0xf7];
 
-/** I fader disegnati sulla griglia: verticali o orizzontali, da zero o dal centro. */
+/** The faders drawn on the grid: vertical or horizontal, from zero or from the centre. */
 export interface FaderSetup {
   readonly horizontal: boolean;
   readonly bipolar: boolean;
   readonly colors: readonly number[];
 }
 
-/** X e Pro MK3: la pagina di 8 fader (01 <pagina> <orientamento> e per ogni fader indice,
- *  polarità, CC, colore). Mandano e ricevono i CC sul canale 5 (FADER_CHANNEL). */
+/** X and Pro MK3: the page of 8 faders (01 <page> <orientation> and for each fader index,
+ *  polarity, CC, colour). They send and receive the CCs on channel 5 (FADER_CHANNEL). */
 export function faderSetup(model: Model, page: number, f: FaderSetup): number[] {
   const faders = Array.from({ length: SIZE }, (_, i) => [i, f.bipolar ? 1 : 0, faderCc(model, page, i), f.colors[i] ?? 0]);
   return [...header(model), 0x01, page, f.horizontal ? 1 : 0, ...faders.flat(), 0xf7];
 }
 
-/** X e Pro MK3: il canale dei fader (valore) e quello del loro colore. */
+/** X and Pro MK3: the faders' channel (value) and that of their colour. */
 export const FADER_CHANNEL = 4;
 export const FADER_COLOR_CHANNEL = 5;
 
-/** Il CC del fader `i`: X 21..28 (canale 5), Pro MK3 pagina × 8 + i (canale 5), MK2 21..28 (canale 1). */
+/** The CC of fader `i`: X 21..28 (channel 5), Pro MK3 page × 8 + i (channel 5), MK2 21..28 (channel 1). */
 export const faderCc = (model: Model, page: number, i: number): number => (model.id === 'pro' ? page * SIZE + i : 21 + i);
 
-/** MK2: un fader del layout Volume o Pan (2B <indice> <tipo> <colore> <valore>; tipo 0 volume, 1 pan). */
+/** MK2: a fader of the Volume or Pan layout (2B <index> <type> <colour> <value>; type 0 volume, 1 pan). */
 export const mk2Fader = (index: number, pan: boolean, color: number, value: number): number[] =>
   [0xf0, 0x00, 0x20, 0x29, 0x02, 0x18, 0x2b, index, pan ? 1 : 0, color, value, 0xf7];
 
-/** MK2: la challenge che Live manda dopo l'identità (quattro byte da 7 bit), e la risposta. */
+/** MK2: the challenge Live sends after the identity (four 7-bit bytes), and the reply. */
 export const mk2Challenge = (bytes: readonly number[]): number[] =>
   [0xf0, 0x00, 0x20, 0x29, 0x02, 0x18, 0x40, ...bytes.map(b => b & 0x7f), 0xf7];
 export const isMk2ChallengeResponse = (data: ArrayLike<number>): boolean =>
@@ -187,9 +187,9 @@ export const isMk2ChallengeResponse = (data: ArrayLike<number>): boolean =>
 /** MK2: Live se ne va. */
 export const MK2_QUIT: readonly number[] = [0xf0, 0x00, 0x20, 0x29, 0x02, 0x18, 0x40, 0xf7];
 
-// ------------------------------------------------------------------ colori
+// ------------------------------------------------------------------ colours
 
-/** I colori della tavolozza che Live usa sui Launchpad (novation/colors.py: Rgb). */
+/** The palette colours Live uses on the Launchpads (novation/colors.py: Rgb). */
 export const COLOR = {
   off: 0,
   whiteHalf: 1,
@@ -212,18 +212,18 @@ export const COLOR = {
   yellowHalf: 125,
 } as const;
 
-/** I canali delle animazioni: lampeggia (tra il colore fisso e questo) e pulsa. */
+/** The animation channels: blink (between the steady colour and this one) and pulse. */
 const BLINK_CHANNEL = 1;
 const PULSE_CHANNEL = 2;
 
-/** Lo stato di un LED in un numero solo: il colore fisso, e per un'animazione il suo colore e canale. */
+/** A LED's state in a single number: the steady colour, and for an animation its colour and channel. */
 const animated = (base: number, color: number, channel: number) => base + 128 * color + 16384 * channel;
-/** Lampeggia tra spento e il colore (Blink(BLACK, color)): come una clip in coda. */
+/** Blinks between off and the colour (Blink(BLACK, color)): like a queued clip. */
 export const blink = (color: number): number => animated(COLOR.off, color, BLINK_CHANNEL);
-/** Pulsa nel colore (Pulse(BLACK, color)): come la clip che suona. */
+/** Pulses in the colour (Pulse(BLACK, color)): like the playing clip. */
 export const pulse = (color: number): number => animated(COLOR.off, color, PULSE_CHANNEL);
 
-/** I messaggi di un LED: uno (colore fisso) o due (il fisso, poi l'animazione sul suo canale). */
+/** A LED's messages: one (steady colour) or two (the steady one, then the animation on its channel). */
 export function ledMessages(status: number, number: number, value: number): number[][] {
   const channel = value >> 14;
   if (!channel) return [[status, number, value & 0x7f]];

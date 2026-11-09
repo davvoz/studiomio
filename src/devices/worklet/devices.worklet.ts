@@ -1,5 +1,5 @@
-/* I processori AudioWorklet dei dispositivi: uno per tutti gli strumenti, uno per tutti gli
- * effetti. Ognuno crea il motore del tipo richiesto e riceve parametri (e note) dalla porta. */
+/* The devices' AudioWorklet processors: one for all the instruments, one for all the
+ * effects. Each creates the engine of the requested type and receives parameters (and notes) from the port. */
 import { ARP } from '../arp/arp';
 import { Arpeggiator } from '../arp/arpeggiator';
 import { metersDynamics } from '../dsp/core';
@@ -21,7 +21,7 @@ import {
   type InstrumentMessage, type InstrumentProcessorOptions, type InstrumentReply, type MeterMessage, type MeterProcessorOptions, type MeterReply,
 } from './protocol';
 
-// globali dell'AudioWorkletGlobalScope (non sono nelle librerie DOM di TypeScript)
+// AudioWorkletGlobalScope globals (they're not in TypeScript's DOM libraries)
 declare const sampleRate: number;
 declare const currentFrame: number;
 declare abstract class AudioWorkletProcessor {
@@ -32,34 +32,34 @@ declare function registerProcessor(name: string, ctor: new (options: AudioWorkle
 
 type Handlers<M extends { type: string }> = { readonly [K in M['type']]: (m: Extract<M, { type: K }>) => void };
 
-/** I parametri del tipo che si possono modulare: tutti, numeri e scelte (una scelta si sposta
- *  lungo le sue opzioni e scatta a metà strada, come quando si gira la sua manopola). */
+/** The type's parameters that can be modulated: all of them, numbers and choices (a choice moves
+ *  along its options and snaps halfway, as when turning its knob). */
 const modSpecs = (...types: (DeviceType | undefined)[]): Map<string, ParamSpec> =>
   new Map(types.flatMap(type => (type ? paramsOf(type) : [])).map(p => [p.id, p] as const));
 
-/** Collega la porta alla tabella dei messaggi. */
+/** Connects the port to the message table. */
 function listen<M extends { type: string }>(port: MessagePort, handlers: Handlers<M>): void {
   port.onmessage = (e: MessageEvent<M>) => (handlers[e.data.type as M['type']] as (m: M) => void)(e.data);
 }
 
 // ------------------------------------------------------------------ strumenti
 
-/** Motore muto per un tipo sconosciuto: il progetto si apre lo stesso. */
+/** Silent engine for an unknown type: the project opens anyway. */
 const silentInstrument: InstrumentCore = { setParams() {}, noteOn() {}, noteOff() {}, silence() {}, render() {} };
 
-/** Ogni quanti secondi si mandano le posizioni delle voci (per chi le ha). */
+/** Every how many seconds the voices' positions are sent (for whoever has them). */
 const PLAYHEADS_POST = 1 / 30;
 
 class InstrumentProcessor extends AudioWorkletProcessor {
   private readonly type: string;
-  /** Il motore dello strumento, con davanti l'arpeggiatore: le note passano da lui. */
+  /** The instrument's engine, with the arpeggiator in front: the notes go through it. */
   private arp: Arpeggiator;
   private readonly queue = new NoteQueue();
   private readonly mod: ParamModulation;
-  /** Il motore, se segue la battuta (il sequencer), e dove si trova il trasporto. */
+  /** The engine, if it follows the bar (the sequencer), and where the transport is. */
   private follower: TransportFollower | null = null;
   private readonly clock = new TransportClock();
-  /** Quello che il motore ha ricevuto, per ricrearlo uguale se si guasta. */
+  /** What the engine received, to recreate it identical if it breaks. */
   private params: Readonly<Record<string, number>>;
   private readonly samples = new Map<string, SampleData | null>();
   private bpm: number;
@@ -67,7 +67,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
   private readonly heads = new Float32Array(32);
   private headCount = 0;
   private untilHeads = 0;
-  /** Cambi che valgono da un istante (campione), in ordine. */
+  /** Changes applying from an instant (sample), in order. */
   private readonly later: { readonly frame: number; readonly run: () => void }[] = [];
   private alive = true;
 
@@ -111,7 +111,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     return this.arp.inner;
   }
 
-  /** Un motore nuovo con i parametri, i sample e il tempo che ha ricevuto quello di prima. */
+  /** A new engine with the parameters, the samples and the tempo the previous one received. */
   private build(): Arpeggiator {
     const core = INSTRUMENT_CORES[this.type]?.(sampleRate) ?? silentInstrument;
     if (playsSamples(core)) for (const [slot, sample] of this.samples) core.setSample(slot, sample);
@@ -126,7 +126,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     const [left, right = left] = outputs[0];
     let error: unknown = null;
     try {
-      // le manopole e le modulazioni valgono dall'inizio del blocco
+      // the knobs and the modulations apply from the start of the block
       const now = currentFrame / sampleRate;
       while (this.later.length && this.later[0].frame < currentFrame + left.length) this.later.shift()!.run();
       const params = this.mod.paramsAt(now);
@@ -150,7 +150,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     return this.alive;
   }
 
-  /** `run` subito, o nel blocco che contiene l'istante `at` (secondi del contesto). */
+  /** `run` right away, or in the block containing the instant `at` (context seconds). */
   private at(at: number | undefined, run: () => void): void {
     const frame = at === undefined ? -Infinity : Math.round(at * sampleRate);
     if (frame < currentFrame) return run();
@@ -159,8 +159,8 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     this.later.splice(i, 0, { frame, run });
   }
 
-  /** Le posizioni delle voci, ogni PLAYHEADS_POST secondi mentre suonano; una volta vuote
-   *  quando smettono. */
+  /** The voices' positions, every PLAYHEADS_POST seconds while they play; once empty
+   *  when they stop. */
   private postHeads(frames: number): void {
     if ((this.untilHeads -= frames / sampleRate) > 0) return;
     this.untilHeads = PLAYHEADS_POST;
@@ -172,15 +172,15 @@ class InstrumentProcessor extends AudioWorkletProcessor {
   }
 }
 
-// ------------------------------------------------------------------ effetti
+// ------------------------------------------------------------------ effects
 
-/** Effetto di tipo sconosciuto: lascia passare il suono. */
+/** Effect of unknown type: lets the sound through. */
 const passThrough: EffectCore = {
   setParams() {}, setTempo() {},
   process: (inL, inR, outL, outR, n) => { outL.set(inL.subarray(0, n)); outR.set(inR.subarray(0, n)); },
 };
 
-/** Ogni quanti secondi un effetto di dinamica dice al pannello cosa sta facendo. */
+/** Every how many seconds a dynamics effect tells the panel what it's doing. */
 const DYNAMICS_POST = 1 / 30;
 
 class EffectProcessor extends AudioWorkletProcessor {
@@ -188,22 +188,22 @@ class EffectProcessor extends AudioWorkletProcessor {
   private core: EffectCore;
   private runner: EffectRunner;
   private readonly mod: ParamModulation;
-  /** Il motore, se il suo rilevatore ascolta il secondo ingresso (sidechain). */
+  /** The engine, if its detector listens to the second input (sidechain). */
   private keyed: KeyedEffect | null = null;
-  /** Il motore, se segue la battuta, e dove si trova il trasporto. */
+  /** The engine, if it follows the bar, and where the transport is. */
   private follower: TransportFollower | null = null;
   private readonly clock = new TransportClock();
-  /** Quello che il motore ha ricevuto, per ricrearlo uguale se si guasta. */
+  /** What the engine received, to recreate it identical if it breaks. */
   private params: Readonly<Record<string, number>>;
   private bpm: number;
   private enabled: boolean;
   private keyedOn: boolean;
   private readonly faults = new FaultGate();
   private silence = new Float32Array(128);
-  /** Le copie ripulite degli ingressi (vedi `cleaned`). */
+  /** The cleaned copies of the inputs (see `cleaned`). */
   private spare = [new Float32Array(128), new Float32Array(128), new Float32Array(128), new Float32Array(128)];
   private alive = true;
-  /** Il pannello guarda: ogni DYNAMICS_POST secondi gli si dice cosa fa l'effetto. */
+  /** The panel is watching: every DYNAMICS_POST seconds it's told what the effect is doing. */
   private watched = false;
   private untilDynamics = 0;
   private readonly dynamics = new Float32Array(2);
@@ -232,7 +232,7 @@ class EffectProcessor extends AudioWorkletProcessor {
     });
   }
 
-  /** Un motore nuovo con i parametri, il tempo e l'ascolto che ha ricevuto quello di prima. */
+  /** A new engine with the parameters, the tempo and the listening the previous one received. */
   private build(): [EffectCore, EffectRunner] {
     const core = EFFECT_CORES[this.type]?.(sampleRate) ?? passThrough;
     this.setKeyed(this.keyedOn, core);
@@ -256,12 +256,12 @@ class EffectProcessor extends AudioWorkletProcessor {
     const spare = this.spare;
     let error: unknown = null;
     try {
-      // senza nulla collegato l'ingresso è vuoto: le code (eco, riverbero) continuano sul silenzio;
-      // un ingresso guasto (da un nodo che non è dei nostri) si ripulisce prima che entri
+      // with nothing connected the input is empty: the tails (echo, reverb) continue on silence;
+      // a broken input (from a node that isn't ours) is cleaned before it comes in
       const [inL = this.silence, inR = inL] = inputs[0] ?? [];
       const l = cleaned(inL, spare[0]), r = inR === inL ? l : cleaned(inR, spare[1]);
       if (this.keyed) {
-        // la traccia ascoltata che tace (o nessuna collegata) è silenzio: il rilevatore non sente niente
+        // the listened-to track being silent (or none connected) is silence: the detector hears nothing
         const [keyL = this.silence, keyR = keyL] = inputs[1] ?? [];
         const kl = cleaned(keyL, spare[2]);
         this.keyed.setKey(kl, keyR === keyL ? kl : cleaned(keyR, spare[3]));
@@ -294,13 +294,13 @@ class EffectProcessor extends AudioWorkletProcessor {
   }
 }
 
-// ------------------------------------------------------------------ misuratori
+// ------------------------------------------------------------------ meters
 
-/** Ogni quanti secondi, senza memoria condivisa, si mandano i livelli. */
+/** Every how many seconds, without shared memory, the levels are sent. */
 const METER_POST = 1 / 30;
 
-/** Misuratore di livello: il suono passa invariato, picco e RMS vanno nella memoria condivisa
- *  (o, se manca, in un messaggio ogni METER_POST secondi). */
+/** Level meter: the sound passes unchanged, peak and RMS go into shared memory
+ *  (or, if it's missing, into a message every METER_POST seconds). */
 class MeterProcessor extends AudioWorkletProcessor {
   private readonly core: MeterCore;
   private readonly values: Float32Array;
@@ -325,8 +325,8 @@ class MeterProcessor extends AudioWorkletProcessor {
       this.silence = new Float32Array(outL.length);
       this.spare = this.spare.map(() => new Float32Array(outL.length));
     }
-    // quando non suona niente l'ingresso non ha canali: è silenzio, e l'RMS deve scendere; un
-    // ingresso guasto si ripulisce (il misuratore lo lascerebbe passare)
+    // when nothing plays the input has no channels: it's silence, and the RMS must fall; a
+    // broken input is cleaned (the meter would let it through)
     const [rawL = this.silence, rawR = rawL] = inputs[0] ?? [];
     const inL = cleaned(rawL, this.spare[0]), inR = rawR === rawL ? inL : cleaned(rawR, this.spare[1]);
     outL.set(inL);

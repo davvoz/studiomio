@@ -1,10 +1,10 @@
 import type { TransportAnchor } from '../../devices/worklet/transport-clock';
 import type { ScheduledSource, ScheduleWindow } from '../scheduler';
 
-/** Dice agli effetti che seguono la battuta dove si trova il trasporto: un ancoraggio
- *  all'inizio di ogni corsa (play, giro di loop, salto, tempo o loop nuovi), da lì il worklet
- *  conta da solo. Lo stop lo annuncia il motore, che sa quando il trasporto si ferma davvero
- *  (lo scheduler si ferma anche per ripartire subito da un'altra parte). */
+/** Tells the effects that follow the bar where the transport is: an anchor
+ *  at the start of each run (play, loop round, jump, new tempo or loop), from there the worklet
+ *  counts by itself. The stop is announced by the engine, which knows when the transport really stops
+ *  (the scheduler also stops to restart right away from somewhere else). */
 export class TransportAnchors implements ScheduledSource {
   private last: TransportAnchor | null = null;
 
@@ -19,7 +19,7 @@ export class TransportAnchors implements ScheduledSource {
     this.announce({ time: w.timeAt(w.from), beat: w.from, bpm, beatsPerBar: this.beatsPerBar() });
   }
 
-  /** Il metro è cambiato: l'ultimo ancoraggio vale ancora, con le battute nuove. */
+  /** The time signature changed: the last anchor still applies, with the new bars. */
   resend(): void {
     if (this.last && this.last.beatsPerBar !== this.beatsPerBar()) this.announce({ ...this.last, beatsPerBar: this.beatsPerBar() });
   }

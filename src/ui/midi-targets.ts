@@ -1,28 +1,28 @@
-/* I controlli che si possono mappare sul MIDI portano il loro bersaglio in `data-midi-target`
- * (le macro e i parametri li segna la catena dei dispositivi, il mixer li segna da sé: vedi
- * mixer-controls). Da qui, per tutta la pagina: con MIDI acceso un clic su uno di loro lo
- * sceglie invece di muoverlo, e ognuno mostra il controllo MIDI che lo muove (`data-midi`). */
+/* The controls that can be mapped to MIDI carry their target in `data-midi-target`
+ * (the macros and the parameters are marked by the device chain, the mixer marks them itself: see
+ * mixer-controls). From here, for the whole page: with MIDI on a click on one of them
+ * chooses it instead of moving it, and each shows the MIDI control moving it (`data-midi`). */
 import { decodeMidiTarget, encodeMidiTarget, midiLabel, type MidiMap } from '../model/midi-map';
 import { macroOf } from '../model/rack';
 import type { ProjectStore } from '../store/project-store';
 import type { UiState } from './ui-state';
 
-/** Con MIDI acceso questi eventi su un controllo mappabile non arrivano al controllo. */
+/** With MIDI on these events on a mappable control don't reach the control. */
 const BLOCKED = ['pointerdown', 'mousedown', 'click', 'dblclick', 'wheel'];
 
 export class MidiTargets {
-  /** Il nome del controllo MIDI di ogni bersaglio (per `data-midi-target`), della mappa `labelsOf`. */
+  /** The name of each target's MIDI control (for `data-midi-target`), from the map `labelsOf`. */
   private labels = new Map<string, string>();
   private labelsOf: MidiMap | null = null;
   private scheduled = false;
-  /** Qualcosa è segnato nella pagina (finché sì, i controlli nuovi vanno segnati anche loro). */
+  /** Something is marked in the page (while it is, the new controls must be marked too). */
   private marked = false;
 
   constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly say: (text: string) => void) {
     for (const type of BLOCKED) addEventListener(type, e => this.intercept(e), { capture: true, passive: false });
     store.onChange(() => this.schedule());
     ui.onChange(() => this.schedule());
-    // le viste rifanno i loro controlli quando vogliono: i nuovi si segnano al fotogramma dopo
+    // the views redo their controls whenever they like: the new ones are marked at the next frame
     new MutationObserver(() => this.schedule()).observe(document.body, { childList: true, subtree: true });
     this.schedule();
   }
@@ -37,7 +37,7 @@ export class MidiTargets {
     if (e.type !== 'pointerdown') return;
     if (target.kind === 'param') {
       const found = macroOf(this.store.project.racksOf(target.owner), target.device, target.param);
-      if (found) return this.say(`Lo muove la macro ${found.index + 1} del rack: dai il controllo MIDI alla macro.`);
+      if (found) return this.say(`Macro ${found.index + 1} of the rack moves it: give the MIDI control to the macro.`);
     }
     this.ui.chooseMidiTarget(target);
   }

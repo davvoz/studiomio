@@ -1,9 +1,9 @@
-/* La tastiera del computer come tastiera musicale, con la disposizione di Live: la fila di mezzo
- * sono i tasti bianchi, quella sopra i neri, Z X l'ottava, C V la velocity. Suona le tracce MIDI
- * accese con il pulsante ⌨. I tasti si riconoscono dalla posizione (`code`), non dalla lettera:
- * la disposizione resta la stessa con qualunque lingua della tastiera. Con Ctrl o Alt restano
- * scorciatoie e nei campi di testo si scrive. Con una traccia accesa questi tasti suonano anche se
- * sono mappati sulle macro: la mappatura torna spegnendo ⌨, e gli altri tasti mappati restano. */
+/* The computer keyboard as a musical keyboard, with Live's layout: the middle row
+ * is the white keys, the one above the black ones, Z X the octave, C V the velocity. It plays the MIDI tracks
+ * armed with the ⌨ button. Keys are recognized by position (`code`), not by letter:
+ * the layout stays the same with any keyboard language. With Ctrl or Alt they stay
+ * shortcuts and in text fields you type. With a track armed these keys play even if
+ * they're mapped to macros: the mapping comes back turning ⌨ off, and the other mapped keys stay. */
 import type { TrackId } from '../core/id';
 import { resolveParams } from '../devices/device-type';
 import { instrumentType } from '../devices/registry';
@@ -12,24 +12,24 @@ import type { Project } from '../model/project';
 import { ownedByField } from '../ui/keymap';
 import type { UiState } from '../ui/ui-state';
 
-/** Quanti semitoni sopra la nota di base suona ogni tasto. */
+/** How many semitones above the base note each key plays. */
 const NOTE_KEYS: Readonly<Record<string, number>> = {
   KeyA: 0, KeyW: 1, KeyS: 2, KeyE: 3, KeyD: 4, KeyF: 5, KeyT: 6, KeyG: 7, KeyY: 8, KeyH: 9, KeyU: 10, KeyJ: 11,
   KeyK: 12, KeyO: 13, KeyL: 14, KeyP: 15, Semicolon: 16, Quote: 17,
 };
 
-/** I gradini della velocity, come in Live. */
+/** The velocity steps, as in Live. */
 const VELOCITIES = [1, 20, 40, 60, 80, 100, 120, 127] as const;
 const START_VELOCITY = VELOCITIES.indexOf(100);
 const MAX_OCTAVES = 5;
 
-/** Il Do centrale: dove parte il tasto A per gli strumenti melodici. */
+/** Middle C: where the A key starts for melodic instruments. */
 const MIDDLE_C = 60;
 
-const HINT = "Tastiera accesa: da A a L le note, W E T Y U O P i tasti neri, Z X l'ottava, C V la velocity.";
+const HINT = "Keyboard on: A to L the notes, W E T Y U O P the black keys, Z X the octave, C V the velocity.";
 
-/** La nota del tasto A per una traccia: per gli strumenti con una nota per suono (i pad di una
- *  drum machine) la prima che suona qualcosa, per gli altri il Do centrale. */
+/** The A key's note for a track: for instruments with one note per sound (the pads of a
+ *  drum machine) the first that plays something, for the others middle C. */
 export function keyboardBase(project: Project, id: TrackId): number {
   const track = project.track(id);
   if (!(track instanceof MidiTrack)) return MIDDLE_C;
@@ -39,7 +39,7 @@ export function keyboardBase(project: Project, id: TrackId): number {
 }
 
 export interface NoteKeyboardOutput {
-  /** La nota del tasto A per la traccia, con l'ottava al suo posto di partenza. */
+  /** The A key's note for the track, with the octave at its starting place. */
   base(track: TrackId): number;
   press(track: TrackId, pitch: number, velocity: number): void;
   release(track: TrackId, pitch: number): void;
@@ -51,8 +51,8 @@ interface HeldNote {
   readonly pitch: number;
 }
 
-/** Trasforma i tasti in note. Ogni tasto giù ricorda cosa ha fatto partire: cambiare ottava con
- *  una nota tenuta non la lascia accesa per sempre. */
+/** Turns keys into notes. Each key down remembers what it started: changing octave with
+ *  a held note doesn't leave it on forever. */
 export class NoteKeyboard {
   private octave = 0;
   private velocity = START_VELOCITY;
@@ -67,7 +67,7 @@ export class NoteKeyboard {
 
   constructor(private readonly out: NoteKeyboardOutput) {}
 
-  /** Il tasto è della tastiera musicale. */
+  /** The key belongs to the musical keyboard. */
   owns(code: string): boolean {
     return code in NOTE_KEYS || code in this.commands;
   }
@@ -95,7 +95,7 @@ export class NoteKeyboard {
     for (const code of [...this.held.keys()]) this.up(code);
   }
 
-  /** Le note delle tracce che hanno spento la tastiera si fermano. */
+  /** The notes of the tracks that turned the keyboard off stop. */
   keepTracks(tracks: ReadonlySet<TrackId>): void {
     for (const [code, notes] of this.held) {
       for (const n of notes) if (!tracks.has(n.track)) this.out.release(n.track, n.pitch);
@@ -119,19 +119,19 @@ export class NoteKeyboard {
 
   private report(): void {
     const octave = this.octave > 0 ? `+${this.octave}` : String(this.octave);
-    this.out.say(`Tastiera: ottava ${octave}, velocity ${VELOCITIES[this.velocity]}.`);
+    this.out.say(`Keyboard: octave ${octave}, velocity ${VELOCITIES[this.velocity]}.`);
   }
 }
 
-/** Collega i tasti della finestra alla tastiera musicale, quando una traccia è accesa. */
+/** Connects the window's keys to the musical keyboard, when a track is armed. */
 export class NoteKeys {
-  /** Le tracce accese l'ultima volta (per accorgersi di una nuova). */
+  /** The tracks armed last time (to notice a new one). */
   private shown: ReadonlySet<TrackId> = new Set();
 
   constructor(private readonly ui: UiState, private readonly keyboard: NoteKeyboard) {
     addEventListener('keydown', e => this.down(e), true);
     addEventListener('keyup', e => this.up(e), true);
-    // un tasto lasciato fuori dalla finestra non arriva: le note si spengono lo stesso
+    // a key released outside the window doesn't arrive: the notes turn off anyway
     addEventListener('blur', () => keyboard.releaseAll());
     ui.onChange(() => this.tracksChanged());
   }
@@ -141,7 +141,7 @@ export class NoteKeys {
     if (!ui.keyboardTracks.size || !keyboard.owns(e.code) || ui.keyMapping || ui.midiMapping) return;
     if (e.ctrlKey || e.metaKey || e.altKey || this.ownedElsewhere(e)) return;
     e.preventDefault();
-    // anche i tasti mappati, in ascolto sulla stessa finestra
+    // the mapped keys too, listening on the same window
     e.stopImmediatePropagation();
     if (!e.repeat) keyboard.down(e.code, ui.keyboardTracks);
   }
@@ -150,8 +150,8 @@ export class NoteKeys {
     this.keyboard.up(e.code);
   }
 
-  /** Il tasto spetta a un campo di testo, a una finestra aperta o a un menu. Non a una casella a
-   *  scelta: dopo un preset il fuoco resta lì, e una lettera cambierebbe il preset invece di suonare. */
+  /** The key belongs to a text field, an open dialog or a menu. Not to a select
+   *  box: after a preset the focus stays there, and a letter would change the preset instead of playing. */
   private ownedElsewhere(e: KeyboardEvent): boolean {
     const target = e.target instanceof HTMLElement ? e.target : null;
     return (target?.tagName !== 'SELECT' && ownedByField(target, e)) || !!target?.closest('dialog, .context-menu');

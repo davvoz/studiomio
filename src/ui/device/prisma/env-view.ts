@@ -1,8 +1,8 @@
-/* Un inviluppo di Prisma disegnato, con le maniglie: la fine dell'attacco, dell'hold e del
- * rilascio si trascinano in orizzontale (il tempo), quella del decay anche in verticale (il
- * sustain); i pallini a metà di attacco, decay e rilascio si trascinano in verticale per
- * curvarli. Il tempo è disegnato in radice quadrata: i tempi brevi restano larghi. Con `fit` la
- * scala del tempo si adatta all'inviluppo, che riempie la larghezza (ferma mentre si trascina). */
+/* A drawn Prisma envelope, with the handles: the end of the attack, of the hold and of the
+ * release are dragged horizontally (the time), the decay's also vertically (the
+ * sustain); the dots halfway through attack, decay and release are dragged vertically to
+ * curve them. The time is drawn as a square root: the short times stay wide. With `fit` the
+ * time scale adapts to the envelope, which fills the width (still while dragging). */
 import { bend } from '../../../devices/instruments/prisma/shapes';
 import type { ParamValues } from '../../../model/device';
 import { el } from '../../dom';
@@ -10,24 +10,24 @@ import { ACCENT, BACKGROUND, drag, fit, GRID, LABEL } from './canvas';
 
 const MAX_TIME = 10, MIN_TIME = 0.001;
 const PAD = 8, HANDLE = 4, HIT = 9;
-/** Con `fit`: la somma delle radici dei tempi che riempie la larghezza almeno (un decay di 1 s),
- *  così un inviluppo cortissimo non diventa enorme, e il margine lasciato a destra. */
+/** With `fit`: the sum of the times' roots that fills the width at least (a 1 s decay),
+ *  so a very short envelope doesn't become huge, and the margin left on the right. */
 const FIT_MIN = 1, FIT_ROOM = 1.1;
 
 type Handle = 'A' | 'H' | 'D' | 'R' | 'Ac' | 'Dc' | 'Rc';
 
 export class EnvView {
   readonly canvas = el<HTMLCanvasElement>('canvas', {
-    className: 'prisma-env', title: 'Trascina le maniglie: tempi e sustain; i pallini a metà dei tratti li curvano (doppio clic: diritti)',
+    className: 'prisma-env', title: 'Drag the handles: times and sustain; the dots halfway through the segments curve them (double click: straight)',
   });
   private env = 1;
   private hot: Handle | null = null;
-  /** La scala del tempo, ferma mentre si trascina una maniglia (con `fit`). */
+  /** The time scale, still while a handle is dragged (with `fit`). */
   private frozen: number | null = null;
 
   constructor(
     private readonly values: () => Readonly<Record<string, number>>, private readonly set: (values: ParamValues, final: boolean) => void,
-    /** Il nome dell'inviluppo `env`, scritto nell'angolo (vuoto: niente nome, e il disegno sale). */
+    /** The name of envelope `env`, written in the corner (empty: no name, and the drawing rises). */
     private readonly label: (env: number) => string = env => (env === 1 ? 'Env 1 · volume' : `Env ${env}`),
     private readonly fit = false,
   ) {
@@ -48,7 +48,7 @@ export class EnvView {
     });
   }
 
-  /** Quale inviluppo (1…4) si disegna. */
+  /** Which envelope (1…4) is drawn. */
   show(env: number): void {
     this.env = env;
     this.paint(true);
@@ -58,12 +58,12 @@ export class EnvView {
     return `e${this.env}${h}`;
   }
 
-  /** Le misure del disegno: dove sono i punti, con questi valori. */
+  /** The drawing's measurements: where the points are, with these values. */
   private layout(v: Readonly<Record<string, number>>) {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     const e = (p: string) => v[`e${this.env}${p}`];
     const sustainW = w * 0.12, room = w - 2 * PAD - sustainW;
-    // pixel per radice di secondo: quattro tratti da MAX_TIME, o quanto serve per riempire
+    // pixels per root of a second: four segments of MAX_TIME, or as much as needed to fill
     const roots = Math.sqrt(e('A')) + Math.sqrt(e('H')) + Math.sqrt(e('D')) + Math.sqrt(e('R'));
     const k = this.frozen ?? (this.fit ? room / (Math.max(FIT_MIN, roots) * FIT_ROOM) : room / (4 * Math.sqrt(MAX_TIME)));
     const px = (t: number) => k * Math.sqrt(Math.max(0, t));
@@ -103,7 +103,7 @@ export class EnvView {
     if (!h || e.button !== 0) return;
     e.preventDefault();
     const v0 = this.values(), L = this.layout(v0), curve0 = v0[this.param(h)];
-    // il tempo si legge dall'inizio del tratto di cui si trascina la fine
+    // the time is read from the start of the segment whose end is being dragged
     const x0 = h === 'A' ? PAD : h === 'H' ? L.xA : h === 'D' ? L.xH : L.xS;
     const r = this.canvas.getBoundingClientRect();
     const timeAt = (clientX: number) => {
@@ -115,8 +115,8 @@ export class EnvView {
     drag(e, this.canvas, (_dx, dy, m) => {
       const fine = m.shiftKey ? 0.25 : 1;
       if (h.endsWith('c')) {
-        // salendo il tratto si gonfia verso l'alto: per l'attacco è correre all'inizio, per
-        // decay e rilascio (che scendono) è restare su più a lungo
+        // going up the segment bulges upwards: for the attack it's running at the start, for
+        // decay and release (which go down) it's staying up longer
         const sign = h === 'Ac' ? 1 : -1;
         last = { [this.param(h)]: Math.round(Math.max(-100, Math.min(100, curve0 - dy * 1.2 * fine * sign))) };
       } else {
@@ -171,7 +171,7 @@ export class EnvView {
     g.strokeStyle = ACCENT;
     g.lineWidth = 2;
     g.stroke(curve);
-    // la nota rilasciata: dove finisce il sustain
+    // the released note: where the sustain ends
     g.strokeStyle = 'rgba(255,255,255,0.18)';
     g.setLineDash([3, 3]);
     g.beginPath();

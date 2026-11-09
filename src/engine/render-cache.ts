@@ -3,15 +3,15 @@ import type { WarpJob } from '../dsp/stretch/warp-renderer';
 
 export type RenderFn = (sampleId: SampleId, job: WarpJob, supersedeKey?: string) => Promise<Float32Array[]>;
 
-/** Chiave di un render: due clip con lo stesso sample e lo stesso warp condividono il risultato. */
+/** Key of a render: two clips with the same sample and the same warp share the result. */
 export const renderKey = (sampleId: SampleId, job: WarpJob): string => `${sampleId}|${JSON.stringify(job)}`;
 
 const bytesOf = (channels: readonly Float32Array[]) => channels.reduce((s, c) => s + c.byteLength, 0);
 
-/** Render di warp già calcolati, per contenuto del lavoro. Le richieste uguali in corso si
- *  uniscono; oltre il budget di memoria si scartano i render usati meno di recente. */
+/** Warp renders already computed, by job content. Equal requests in progress are
+ *  merged; beyond the memory budget the least recently used renders are discarded. */
 export class RenderCache {
-  /** In ordine di uso: l'ultimo è il più recente. */
+  /** In order of use: the last is the most recent. */
   private readonly done = new Map<string, Float32Array[]>();
   private readonly pending = new Map<string, Promise<Float32Array[]>>();
   private bytes = 0;
@@ -26,7 +26,7 @@ export class RenderCache {
     return this.bytes;
   }
 
-  /** Il render, se è pronto. */
+  /** The render, if it's ready. */
   get(key: string): Float32Array[] | undefined {
     const v = this.done.get(key);
     if (v) {
@@ -36,8 +36,8 @@ export class RenderCache {
     return v;
   }
 
-  /** Il render pronto o in arrivo. `supersedeKey` (es. l'id della clip): una richiesta nuova
-   *  con la stessa chiave rende inutile quella vecchia, che non viene più attesa. */
+  /** The render ready or on its way. `supersedeKey` (e.g. the clip's id): a new request
+   *  with the same key makes the old one useless, and it's no longer awaited. */
   ensure(key: string, sampleId: SampleId, job: WarpJob, supersedeKey?: string): Promise<Float32Array[]> {
     const ready = this.get(key);
     if (ready) return Promise.resolve(ready);

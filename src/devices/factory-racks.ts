@@ -1,26 +1,26 @@
-/* I rack di fabbrica, nel browser accanto a quelli salvati dall'utente (come i rack di Live).
- * Sono rack come gli altri: dispositivi già regolati e macro mappate, solo scritti qui.
+/* The factory racks, in the browser next to those saved by the user (like Live's racks).
+ * They're racks like the others: devices already set and macros mapped, only written here.
  *
- * "Tornado" è un multieffetto da suonare dal vivo alla Turnado: otto effetti in fila, una
- * macro ciascuno. A 0 l'effetto non c'è (il suono passa com'è); girando entra e si fa più forte.
- * Sulle 8 manopole Device Control dell'APC40, o sulla tastiera, si suona come uno strumento.
- * Gli altri Audio Effect Rack sono suoni famosi (Fade to Grey come quello di Live, il dub, il
- * filtro della house francese, la cassetta, lo shoegaze): anche loro con le macro a 0 lasciano
- * passare il suono com'è, e partono dove sono già utili.
+ * "Tornado" is a multi-effect to play live à la Turnado: eight effects in a row, one
+ * macro each. At 0 the effect isn't there (the sound passes as it is); turning it, it comes in and gets stronger.
+ * On the APC40's 8 Device Control knobs, or on the keyboard, it's played like an instrument.
+ * The other Audio Effect Racks are famous sounds (Fade to Grey like Live's, dub, the
+ * French house filter, the cassette, shoegaze): they too with the macros at 0 let
+ * the sound through as it is, and start where they're already useful.
  *
- * Gli Instrument Rack partono da un preset dello strumento e ci aggiungono effetti; le macro
- * muovono insieme strumento ed effetti, e partono dove il suono è già bello.
+ * The Instrument Racks start from an instrument preset and add effects to it; the macros
+ * move instrument and effects together, and start where the sound is already nice.
  *
- * Levare, 303, Acido FX e Macchina vengono dal live "Rave illegale" (src/demo/rave-live.ts).
- * Salsiccia è il rack del master del live "Cripta": ingrassa tutto il mix, come un Sausage Fattener.
+ * Levare, 303, Acido FX and Macchina come from the live "Rave illegale" (src/demo/rave-live.ts).
+ * Salsiccia is the master rack of the live "Cripta": it fattens the whole mix, like a Sausage Fattener.
  *
- * Wobble, Pompa, Cancello, Acido vivo, Sirena e Colpo hanno dentro dei modulatori (LFO e
- * Inviluppo) già collegati: con il trasporto che va il suono si muove da solo, e le macro
- * decidono quanto (la profondità del modulatore) e come (la sua velocità, la sua coda).
+ * Wobble, Pompa, Cancello, Acido vivo, Sirena and Colpo have modulators inside (LFO and
+ * Envelope) already connected: with the transport running the sound moves by itself, and the macros
+ * decide how much (the modulator's depth) and how (its speed, its tail).
  *
- * I rack di batteria partono da un kit della Drum Machine (o dal Kick, dallo Snare, da Hat e
- * Piatti da soli): le macro muovono anche i parametri degli strumenti dentro i pad, per id con il
- * pad davanti ("p1.kick.decay": la cassa del pad 1). */
+ * The drum racks start from a Drum Machine kit (or from the Kick, the Snare, Hat and
+ * Cymbals alone): the macros also move the parameters of the instruments inside the pads, by id with the
+ * pad in front ("p1.kick.decay": pad 1's kick). */
 import type { DeviceType } from './device-type';
 import type { RackPreset, SavedDevice, SavedEffect, SavedMacro } from '../model/rack-preset';
 import { MACRO_COUNT, type MacroMode } from '../model/rack';
@@ -57,17 +57,17 @@ import { SEQ_RATE, SEQ_SCALE } from './sequencer';
 
 const index = (list: readonly (readonly [string, ...unknown[]])[], label: string) => list.findIndex(([l]) => l === label);
 
-/** Un dispositivo da un preset di fabbrica (null: da Init), con dei parametri cambiati. */
+/** A device from a factory preset (null: from Init), with some parameters changed. */
 function device(type: DeviceType, preset: string | null, params: Readonly<Record<string, number>> = {}): SavedDevice {
   const base = preset === null ? {} : type.presets.find(p => p.name === preset)?.params;
-  if (!base) throw new RangeError(`${type.label}: il preset «${preset}» non c'è`);
+  if (!base) throw new RangeError(`${type.label}: preset «${preset}» doesn't exist`);
   return { type: type.type, preset, params: { ...base, ...params } };
 }
 
 const effect = (type: DeviceType, preset: string | null, params?: Readonly<Record<string, number>>): SavedEffect =>
   ({ ...device(type, preset, params), enabled: true });
 
-/** Un EQ: un passa-alto a `low` Hz (24 dB) e delle campane [frequenza, guadagno, Q]. */
+/** An EQ: a high-pass at `low` Hz (24 dB) and some bells [frequency, gain, Q]. */
 function eqOf(low: number, bells: readonly (readonly [freq: number, gain: number, q: number])[]): SavedEffect {
   const params: Record<string, number> = { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: low, [bandParam(0, 'slope')]: 1 };
   bells.forEach(([freq, gain, q], i) => Object.assign(params, {
@@ -76,13 +76,13 @@ function eqOf(low: number, bells: readonly (readonly [freq: number, gain: number
   return effect(EQ, null, params);
 }
 
-/** Il Beat Repeat da suonare a pulsante: spento lascia passare il suono com'è. */
+/** The Beat Repeat to play as a button: off it lets the sound through as it is. */
 const repeatButton = (grid: string): SavedEffect =>
   effect(BEAT_REPEAT, null, { only: 1, repeat: 0, grid: index(GRIDS, grid), mode: REPEAT_MODE.insert, decay: 8, volume: 0 });
 
-/** Un modulatore (LFO o Inviluppo) del rack e le sue destinazioni, [dove, quantità in %]: dove
- *  è `on(posto, parametro)` (un parametro di un dispositivo del rack, lo strumento al posto 0),
- *  VOLUME o PAN della traccia. */
+/** A modulator (LFO or Envelope) of the rack and its targets, [where, amount in %]: where
+ *  is `on(slot, parameter)` (a parameter of a device of the rack, the instrument at slot 0),
+ *  VOLUME or PAN of the track. */
 function modulator(type: DeviceType, preset: string | null, params: Readonly<Record<string, number>>,
   links: readonly (readonly [target: string, amount: number])[]): SavedEffect {
   const amounts = Object.fromEntries(links.map(([, amount], i) => [linkAmount(i + 1), amount]));
@@ -92,20 +92,20 @@ function modulator(type: DeviceType, preset: string | null, params: Readonly<Rec
 const on = (device: number, param: string): string => `d${device}:${param}`;
 const VOLUME = 'mixer:volume', PAN = 'mixer:pan';
 
-/** Un parametro mosso da una macro: il dispositivo (per posto nel rack), il parametro, il suo
- *  valore a 0 e a 127. */
+/** A parameter moved by a macro: the device (by slot in the rack), the parameter, its
+ *  value at 0 and at 127. */
 type Move = readonly [device: number, param: string, min: number, max: number];
 
 interface MacroSpec {
   readonly name: string;
   readonly mode?: MacroMode;
-  /** Dove parte (0 … 127); assente: 0. */
+  /** Where it starts (0 … 127); missing: 0. */
   readonly value?: number;
   readonly moves: readonly Move[];
 }
 
 function rack(name: string, instrument: SavedDevice | null, effects: readonly SavedEffect[], macros: readonly MacroSpec[]): RackPreset {
-  if (macros.length > MACRO_COUNT) throw new RangeError(`${name}: più di ${MACRO_COUNT} macro`);
+  if (macros.length > MACRO_COUNT) throw new RangeError(`${name}: more than ${MACRO_COUNT} macros`);
   return {
     name, instrument, effects,
     macros: Array.from({ length: MACRO_COUNT }, (_, i): SavedMacro => {
@@ -120,7 +120,7 @@ function rack(name: string, instrument: SavedDevice | null, effects: readonly Sa
   };
 }
 
-/** Uno slot del Tornado: un effetto e la sua macro, che muove i parametri dati da [a 0, a 127]. */
+/** A Tornado slot: an effect and its macro, which moves the given parameters from [at 0, at 127]. */
 interface Slot {
   readonly macro: string;
   readonly mode?: MacroMode;
@@ -128,7 +128,7 @@ interface Slot {
   readonly moves: Readonly<Record<string, readonly [min: number, max: number]>>;
 }
 
-/** Un Audio Effect Rack fatto di slot: l'effetto i è mosso dalla macro i. */
+/** An Audio Effect Rack made of slots: effect i is moved by macro i. */
 const slots = (name: string, list: readonly Slot[]): RackPreset =>
   rack(name, null, list.map(s => s.effect), list.map((s, i) => ({
     name: s.macro, mode: s.mode,
@@ -137,7 +137,7 @@ const slots = (name: string, list: readonly Slot[]): RackPreset =>
 
 export const TORNADO: RackPreset = slots('Tornado', [
   {
-    // a tempo, sul battere di ogni quarto: sempre più spesso, sempre più fitto
+    // synced, on the downbeat of each quarter: more and more often, denser and denser
     macro: 'Stutter',
     effect: effect(BEAT_REPEAT, null, { interval: index(INTERVALS, '1/4'), offset: 0, gate: 2, mode: REPEAT_MODE.insert, decay: 10 }),
     moves: { chance: [0, 100], grid: [index(GRIDS, '1/16'), index(GRIDS, '1/32')], gate: [2, 4] },
@@ -158,15 +158,15 @@ export const TORNADO: RackPreset = slots('Tornado', [
     moves: { mix: [0, 100], rate: [48000, 2500], bits: [16, 5] },
   },
   {
-    // il passa-basso che si chiude, con un po' di LFO e di risonanza in più
-    macro: 'Filtro',
+    // the low-pass closing, with a bit more LFO and resonance
+    macro: 'Filter',
     effect: effect(AUTO_FILTER, null, { type: FILTER_TYPE.lowPass, slope: 1, lfoShape: LFO_SHAPE.triangle, lfoSync: AUTO_FILTER_SYNC.tempo, lfoDivision: TEMPO_RATE['1/2'] }),
     moves: { mix: [0, 100], freq: [20000, 300], resonance: [10, 55], lfoAmount: [0, 25] },
   },
   {
-    // il Chorus con ritardo corto e feedback: un flanger
+    // the Chorus with a short delay and feedback: a flanger
     macro: 'Flanger',
-    effect: effect(CHORUS, null, { mode: CHORUS_MODE.chorus, delay: 3, sync: CHORUS_SYNC.tempo, division: TEMPO_RATE['2 battute'] }),
+    effect: effect(CHORUS, null, { mode: CHORUS_MODE.chorus, delay: 3, sync: CHORUS_SYNC.tempo, division: TEMPO_RATE['2 bars'] }),
     moves: { mix: [0, 50], feedback: [0, 70], depth: [30, 60] },
   },
   {
@@ -175,73 +175,73 @@ export const TORNADO: RackPreset = slots('Tornado', [
     moves: { amount: [0, 100] },
   },
   {
-    // un pulsante: tenuto frena, lasciato riparte
+    // a button: held it brakes, released it starts again
     macro: 'Stop', mode: 'button',
-    effect: effect(TAPE_STOP, null, { sync: TAPE_SYNC.tempo, division: index(BRAKE_DIVISIONS, '1/2'), start: index(STARTS, 'Subito'), curve: BRAKE_CURVE.smooth, spin: 250 }),
+    effect: effect(TAPE_STOP, null, { sync: TAPE_SYNC.tempo, division: index(BRAKE_DIVISIONS, '1/2'), start: index(STARTS, 'Immediately'), curve: BRAKE_CURVE.smooth, spin: 250 }),
     moves: { stop: [0, 1] },
   },
 ]);
 
-/** La 303: l'Analog "Acid" con le manopole della scatoletta argentata, poi saturazione ed eco. */
-export const ACIDO: RackPreset = (() => {
+/** The 303: the "Acid" Analog with the silver box's knobs, then saturation and echo. */
+export const ACID: RackPreset = (() => {
   const SYNTH = 0, DRIVE_ = 1, ECHO = 2, ROOM = 3;
-  return rack('Acido', device(ANALOG, 'Acid'), [
-    effect(DRIVE, 'Calda', { mix: 0 }),
+  return rack('Acid', device(ANALOG, 'Acid'), [
+    effect(DRIVE, 'Warm', { mix: 0 }),
     effect(DELAY, 'Ping-pong 1/8.', { highCut: 3500, lowCut: 200 }),
-    effect(REVERB, 'Piatto'),
+    effect(REVERB, 'Cymbal'),
   ], [
     { name: 'Cutoff', value: 45, moves: [[SYNTH, 'cutoff', 120, 3500]] },
-    { name: 'Risonanza', value: 80, moves: [[SYNTH, 'resonance', 40, 90]] },
+    { name: 'Resonance', value: 80, moves: [[SYNTH, 'resonance', 40, 90]] },
     { name: 'Env Mod', value: 64, moves: [[SYNTH, 'filterEnv', 20, 100]] },
     { name: 'Decay', value: 50, moves: [[SYNTH, 'fDecay', 0.05, 1.2]] },
     { name: 'Accent', value: 90, moves: [[SYNTH, 'accent', 0, 100]] },
     { name: 'Glide', value: 30, moves: [[SYNTH, 'glide', 0, 250]] },
-    // la saturazione entra (Dry/Wet) e spinge; il volume lo tiene il Drive (Auto)
-    { name: 'Sporco', value: 40, moves: [[DRIVE_, 'mix', 0, 100], [DRIVE_, 'drive', 4, 30], [DRIVE_, 'output', 0, -4]] },
-    { name: 'Eco', value: 20, moves: [[ECHO, 'mix', 0, 35], [ECHO, 'feedback', 25, 60], [ROOM, 'mix', 0, 25]] },
+    // the saturation comes in (Dry/Wet) and pushes; the Drive holds the volume (Auto)
+    { name: 'Dirty', value: 40, moves: [[DRIVE_, 'mix', 0, 100], [DRIVE_, 'drive', 4, 30], [DRIVE_, 'output', 0, -4]] },
+    { name: 'Echo', value: 20, moves: [[ECHO, 'mix', 0, 35], [ECHO, 'feedback', 25, 60], [ROOM, 'mix', 0, 25]] },
   ]);
 })();
 
-/** Il pad: il Wavetable "Pad che respira", allargato dal Chorus, tagliato a tempo dal Gate,
- *  allungato da eco e riverbero. */
-export const NEBBIA: RackPreset = (() => {
+/** The pad: the Wavetable "Breathing pad", widened by the Chorus, cut in time by the Gate,
+ *  lengthened by echo and reverb. */
+export const FOG: RackPreset = (() => {
   const SYNTH = 0, WIDE = 1, CHOP = 2, ECHO = 3, ROOM = 4;
-  return rack('Nebbia', device(WAVETABLE, 'Pad che respira'), [
-    effect(CHORUS, 'Chorus largo'),
+  return rack('Fog', device(WAVETABLE, 'Breathing pad'), [
+    effect(CHORUS, 'Wide chorus'),
     effect(GATE, null, { ...pattern('x.xx .xx. x.xx .x.x'), rate: index(STEP_RATES, '1/16'), gate: 70, release: 40 }),
-    effect(DELAY, 'Eco lungo', { pingPong: 1, division: index(DIVISIONS, '1/4.') }),
-    effect(REVERB, 'Sala', { decay: 6, mix: 35 }),
+    effect(DELAY, 'Long echo', { pingPong: 1, division: index(DIVISIONS, '1/4.') }),
+    effect(REVERB, 'Hall', { decay: 6, mix: 35 }),
   ], [
-    { name: 'Apri', value: 75, moves: [[SYNTH, 'cutoff', 250, 16000], [SYNTH, 'resonance', 25, 5]] },
-    // sposta le due tabelle in versi opposti: il timbro cambia, il volume resta
+    { name: 'Open', value: 75, moves: [[SYNTH, 'cutoff', 250, 16000], [SYNTH, 'resonance', 25, 5]] },
+    // moves the two tables in opposite directions: the timbre changes, the volume stays
     { name: 'Morph', value: 20, moves: [[SYNTH, 'posA', 0, 90], [SYNTH, 'posB', 70, 0]] },
-    { name: 'Respiro', value: 80, moves: [[SYNTH, 'lfo1Amount', 0, 90], [SYNTH, 'lfo2Amount', 0, 70]] },
-    { name: 'Larghezza', value: 60, moves: [[SYNTH, 'detune', 4, 40], [SYNTH, 'spread', 30, 100], [WIDE, 'mix', 0, 60]] },
-    { name: 'Lentezza', value: 70, moves: [[SYNTH, 'attack', 0.005, 4], [SYNTH, 'release', 0.3, 6]] },
+    { name: 'Breath', value: 80, moves: [[SYNTH, 'lfo1Amount', 0, 90], [SYNTH, 'lfo2Amount', 0, 70]] },
+    { name: 'Width', value: 60, moves: [[SYNTH, 'detune', 4, 40], [SYNTH, 'spread', 30, 100], [WIDE, 'mix', 0, 60]] },
+    { name: 'Slowness', value: 70, moves: [[SYNTH, 'attack', 0.005, 4], [SYNTH, 'release', 0.3, 6]] },
     { name: 'Gate', moves: [[CHOP, 'depth', 0, 100]] },
-    { name: 'Eco', value: 25, moves: [[ECHO, 'mix', 0, 40], [ECHO, 'feedback', 30, 70]] },
-    { name: 'Spazio', value: 50, moves: [[ROOM, 'mix', 10, 70], [ROOM, 'size', 50, 100], [ROOM, 'decay', 2, 14]] },
+    { name: 'Echo', value: 25, moves: [[ECHO, 'mix', 0, 40], [ECHO, 'feedback', 30, 70]] },
+    { name: 'Space', value: 50, moves: [[ROOM, 'mix', 10, 70], [ROOM, 'size', 50, 100], [ROOM, 'decay', 2, 14]] },
   ]);
 })();
 
-/** Il basso neuro: il Neuro "Neuro ringhio" con un wobble a tempo sul cutoff, poi phaser, OTT
- *  e i bassi in mono. */
-export const RINGHIO: RackPreset = (() => {
+/** The neuro bass: the Neuro "Neuro ringhio" with a synced wobble on the cutoff, then phaser, OTT
+ *  and the lows in mono. */
+export const GROWL: RackPreset = (() => {
   const SYNTH = 0, SWIRL = 1, OTT = 2;
-  return rack('Ringhio', device(NEURO, 'Neuro ringhio', {
+  return rack('Growl', device(NEURO, 'Neuro growl', {
     lfo2Shape: NEURO_LFO.sine, lfo2Dest: NEURO_DEST.cutoff, lfo2Retrig: 0,
   }), [
-    effect(PHASER, 'Reese che gira'),
+    effect(PHASER, 'Spinning reese'),
     effect(MULTIBAND, 'OTT'),
-    effect(STEREO, 'Basso mono'),
+    effect(STEREO, 'Mono bass'),
   ], [
     { name: 'Cutoff', value: 80, moves: [[SYNTH, 'cutoff', 200, 9000]] },
-    { name: 'Ringhio', value: 55, moves: [[SYNTH, 'fm', 0, 75], [SYNTH, 'fold', 0, 60]] },
-    { name: 'Vocale', value: 60, moves: [[SYNTH, 'vowel', 0, 100], [SYNTH, 'formant', 20, 90]] },
-    // il wobble: quanto (Profondità) e quanto veloce (da 1/4 a 1/16, a scatti)
+    { name: 'Growl', value: 55, moves: [[SYNTH, 'fm', 0, 75], [SYNTH, 'fold', 0, 60]] },
+    { name: 'Vocal', value: 60, moves: [[SYNTH, 'vowel', 0, 100], [SYNTH, 'formant', 20, 90]] },
+    // the wobble: how much (Depth) and how fast (from 1/4 to 1/16, in steps)
     { name: 'Wobble', moves: [[SYNTH, 'lfo2Amount', 0, 80]] },
-    { name: 'Velocità', value: 40, moves: [[SYNTH, 'lfo2Rate', TEMPO_RATE['1/4'], TEMPO_RATE['1/16']]] },
-    { name: 'Distorsione', value: 50, moves: [[SYNTH, 'dist', 0, 90], [SYNTH, 'drive', 30, 80]] },
+    { name: 'Rate', value: 40, moves: [[SYNTH, 'lfo2Rate', TEMPO_RATE['1/4'], TEMPO_RATE['1/16']]] },
+    { name: 'Distortion', value: 50, moves: [[SYNTH, 'dist', 0, 90], [SYNTH, 'drive', 30, 80]] },
     { name: 'Phaser', moves: [[SWIRL, 'mix', 0, 60]] },
     { name: 'OTT', value: 50, moves: [[OTT, 'depth', 0, 100], [SYNTH, 'sub', 90, 50]] },
   ]);
@@ -249,9 +249,9 @@ export const RINGHIO: RackPreset = (() => {
 
 // ---------------------------------------------------------------- Audio Effect Rack
 
-/** La transizione di Live: una manopola (Fade) che porta il suono in una scia grigia. I filtri
- *  si stringono dai due lati, eco e coda crescono, lo stereo si chiude e il volume scende; le
- *  altre macro decidono com'è la scia. Con Fade a 0 il suono passa com'è. */
+/** Live's transition: one knob (Fade) taking the sound into a grey trail. The filters
+ *  narrow from both sides, echo and tail grow, the stereo closes and the volume drops; the
+ *  other macros decide what the trail is like. With Fade at 0 the sound passes as it is. */
 export const FADE_TO_GREY: RackPreset = (() => {
   const LOW = 0, HIGH = 1, ECHO = 2, ROOM = 3, IMAGE = 4;
   return rack('Fade to Grey', null, [
@@ -267,106 +267,106 @@ export const FADE_TO_GREY: RackPreset = (() => {
         [ECHO, 'mix', 0, 40], [ROOM, 'mix', 0, 60], [IMAGE, 'width', 100, 45], [IMAGE, 'gain', 0, -9],
       ],
     },
-    { name: 'Eco', value: 60, moves: [[ECHO, 'feedback', 25, 85]] },
-    // a scatti: da 1/8. a 1/2
-    { name: 'Tempo eco', value: 40, moves: [[ECHO, 'division', index(DIVISIONS, '1/8.'), index(DIVISIONS, '1/2')]] },
-    { name: 'Coda', value: 60, moves: [[ROOM, 'decay', 2, 18], [ROOM, 'size', 60, 100]] },
-    { name: 'Scuro', value: 50, moves: [[ROOM, 'damping', 10000, 2000], [ECHO, 'highCut', 6000, 1200]] },
-    { name: 'Risonanza', value: 30, moves: [[LOW, 'resonance', 0, 60], [HIGH, 'resonance', 0, 60]] },
+    { name: 'Echo', value: 60, moves: [[ECHO, 'feedback', 25, 85]] },
+    // in steps: from 1/8. to 1/2
+    { name: 'Echo time', value: 40, moves: [[ECHO, 'division', index(DIVISIONS, '1/8.'), index(DIVISIONS, '1/2')]] },
+    { name: 'Tail', value: 60, moves: [[ROOM, 'decay', 2, 18], [ROOM, 'size', 60, 100]] },
+    { name: 'Dark', value: 50, moves: [[ROOM, 'damping', 10000, 2000], [ECHO, 'highCut', 6000, 1200]] },
+    { name: 'Resonance', value: 30, moves: [[LOW, 'resonance', 0, 60], [HIGH, 'resonance', 0, 60]] },
   ]);
 })();
 
-/** Il dub di King Tubby: la mandata al delay, il "lancio" del feedback che si autoalimenta,
- *  il filtro che lo spazza, la molla e il nastro. Le macro a 0: il suono passa com'è. */
+/** King Tubby's dub: the send to the delay, the "throw" of the self-feeding feedback,
+ *  the filter sweeping it, the spring and the tape. The macros at 0: the sound passes as it is. */
 export const DUB: RackPreset = (() => {
   const SWEEP = 0, ECHO = 1, SPRING = 2, TAPE = 3;
   return rack('Dub', null, [
     effect(AUTO_FILTER, null, { type: FILTER_TYPE.highPass, slope: 0, freq: 20, resonance: 35, mix: 0 }),
     effect(DELAY, 'Dub', { mix: 0 }),
-    effect(REVERB, 'Piatto', { size: 40, decay: 2.5, diffusion: 60, mix: 0 }),
-    effect(DRIVE, 'Nastro', { mix: 0 }),
+    effect(REVERB, 'Cymbal', { size: 40, decay: 2.5, diffusion: 60, mix: 0 }),
+    effect(DRIVE, 'Tape', { mix: 0 }),
   ], [
-    { name: 'Mandata', value: 50, moves: [[ECHO, 'mix', 0, 60]] },
-    // oltre il 90 % il delay suona da solo: il lancio
-    { name: 'Lancio', value: 50, moves: [[ECHO, 'feedback', 40, 94]] },
+    { name: 'Send', value: 50, moves: [[ECHO, 'mix', 0, 60]] },
+    // beyond 90 % the delay plays by itself: the throw
+    { name: 'Throw', value: 50, moves: [[ECHO, 'feedback', 40, 94]] },
     { name: 'Tempo', value: 70, moves: [[ECHO, 'division', index(DIVISIONS, '1/8'), index(DIVISIONS, '1/2')]] },
-    { name: 'Scuro', value: 50, moves: [[ECHO, 'highCut', 5000, 800]] },
-    { name: 'Filtro', moves: [[SWEEP, 'mix', 0, 100], [SWEEP, 'freq', 20, 1800]] },
-    { name: 'Molla', value: 40, moves: [[SPRING, 'mix', 0, 45]] },
-    { name: 'Nastro', value: 30, moves: [[TAPE, 'mix', 0, 100], [TAPE, 'drive', 6, 22]] },
+    { name: 'Dark', value: 50, moves: [[ECHO, 'highCut', 5000, 800]] },
+    { name: 'Filter', moves: [[SWEEP, 'mix', 0, 100], [SWEEP, 'freq', 20, 1800]] },
+    { name: 'Spring', value: 40, moves: [[SPRING, 'mix', 0, 45]] },
+    { name: 'Tape', value: 30, moves: [[TAPE, 'mix', 0, 100], [TAPE, 'drive', 6, 22]] },
   ]);
 })();
 
-/** Il filtro della house francese: il passa-basso risonante che si apre e si chiude, la pompa
- *  in quarti (come il sidechain della cassa), il phaser, un po' di sporco e la colla. */
+/** The French house filter: the resonant low-pass opening and closing, the pump
+ *  in quarters (like the kick's sidechain), the phaser, a bit of dirt and the glue. */
 export const FRENCH_TOUCH: RackPreset = (() => {
   const SWEEP = 0, PUMP = 1, SWIRL = 2, DIRT = 3, GLUE = 4;
   return rack('French Touch', null, [
     effect(AUTO_FILTER, null, { type: FILTER_TYPE.lowPass, slope: 1, freq: 20000, resonance: 40, mix: 0 }),
-    // un'onda a dente in quarti, senza stereo: il volume che riparte a ogni colpo
+    // a saw wave in quarters, without stereo: the volume restarting at every hit
     effect(AUTO_PAN, null, { shape: LFO_SHAPE.sawUp, sync: AUTO_PAN_SYNC.tempo, division: TEMPO_RATE['1/4'], stereo: 0, amount: 0 }),
-    effect(PHASER, 'Phaser lento', { mix: 0 }),
-    effect(DRIVE, 'Calda', { mix: 0 }),
-    effect(COMPRESSOR, 'Colla', { mix: 0 }),
+    effect(PHASER, 'Slow phaser', { mix: 0 }),
+    effect(DRIVE, 'Warm', { mix: 0 }),
+    effect(COMPRESSOR, 'Glue', { mix: 0 }),
   ], [
-    { name: 'Filtro', moves: [[SWEEP, 'mix', 0, 100], [SWEEP, 'freq', 20000, 180]] },
-    { name: 'Risonanza', value: 50, moves: [[SWEEP, 'resonance', 10, 75]] },
-    { name: 'Pompa', moves: [[PUMP, 'amount', 0, 85]] },
+    { name: 'Filter', moves: [[SWEEP, 'mix', 0, 100], [SWEEP, 'freq', 20000, 180]] },
+    { name: 'Resonance', value: 50, moves: [[SWEEP, 'resonance', 10, 75]] },
+    { name: 'Pump', moves: [[PUMP, 'amount', 0, 85]] },
     { name: 'Phaser', moves: [[SWIRL, 'mix', 0, 60], [SWIRL, 'feedback', 30, 75]] },
-    { name: 'Sporco', moves: [[DIRT, 'mix', 0, 70], [DIRT, 'drive', 6, 20]] },
-    { name: 'Colla', value: 60, moves: [[GLUE, 'mix', 0, 100]] },
+    { name: 'Dirty', moves: [[DIRT, 'mix', 0, 70], [DIRT, 'drive', 6, 20]] },
+    { name: 'Glue', value: 60, moves: [[GLUE, 'mix', 0, 100]] },
   ]);
 })();
 
-/** La cassetta consumata: il nastro che ondeggia (wow), la saturazione, i bit che mancano, le
- *  alte che se ne vanno, lo stereo che si stringe e la frenata del registratore. */
-export const CASSETTA: RackPreset = (() => {
+/** The worn cassette: the wobbling tape (wow), the saturation, the missing bits, the
+ *  highs going away, the stereo narrowing and the recorder braking. */
+export const CASSETTE: RackPreset = (() => {
   const WOW = 0, TAPE = 1, BITS = 2, DULL = 3, NARROW = 4, BRAKE = 5;
-  return rack('Cassetta', null, [
-    // il wow: il Chorus tutto bagnato è un vibrato (in modo Vibrato il mix non c'è), e mono come il nastro
+  return rack('Cassette', null, [
+    // the wow: the fully wet Chorus is a vibrato (in Vibrato mode there's no mix), and mono like the tape
     effect(CHORUS, null, { mode: CHORUS_MODE.chorus, delay: 6, sync: CHORUS_SYNC.hz, rate: 0.7, depth: 20, width: 0, mix: 0 }),
-    effect(DRIVE, 'Nastro', { mix: 0 }),
-    effect(REDUX, 'Campionatore 12 bit', { mix: 0 }),
+    effect(DRIVE, 'Tape', { mix: 0 }),
+    effect(REDUX, '12-bit sampler', { mix: 0 }),
     effect(AUTO_FILTER, null, { type: FILTER_TYPE.lowPass, slope: 0, freq: 20000, resonance: 5, mix: 0 }),
     effect(STEREO, null, { bassMono: 0 }),
-    effect(TAPE_STOP, 'Frenata breve'),
+    effect(TAPE_STOP, 'Short brake'),
   ], [
     { name: 'Wow', value: 40, moves: [[WOW, 'mix', 0, 100], [WOW, 'depth', 10, 55]] },
-    { name: 'Nastro', value: 50, moves: [[TAPE, 'mix', 0, 100], [TAPE, 'drive', 6, 22]] },
+    { name: 'Tape', value: 50, moves: [[TAPE, 'mix', 0, 100], [TAPE, 'drive', 6, 22]] },
     { name: 'Bit', value: 30, moves: [[BITS, 'mix', 0, 100], [BITS, 'bits', 16, 7], [BITS, 'rate', 48000, 11000]] },
-    { name: 'Opaco', value: 50, moves: [[DULL, 'mix', 0, 100], [DULL, 'freq', 20000, 2200]] },
-    { name: 'Stretto', value: 30, moves: [[NARROW, 'width', 100, 20]] },
+    { name: 'Dull', value: 50, moves: [[DULL, 'mix', 0, 100], [DULL, 'freq', 20000, 2200]] },
+    { name: 'Narrow', value: 30, moves: [[NARROW, 'width', 100, 20]] },
     { name: 'Stop', mode: 'button', moves: [[BRAKE, 'stop', 0, 1]] },
   ]);
 })();
 
-/** Il muro di suono dello shoegaze: il fuzz, la leva del vibrato, il riverbero al contrario che
- *  risucchia, l'eco e la coda infinita, tutto largo. */
-export const MURO: RackPreset = (() => {
+/** Shoegaze's wall of sound: the fuzz, the vibrato bar, the reverse reverb that
+ *  sucks back, the echo and the endless tail, all wide. */
+export const WALL: RackPreset = (() => {
   const FUZZ = 0, BEND = 1, SUCK = 2, ECHO = 3, ROOM = 4, WIDE = 5;
-  return rack('Muro', null, [
+  return rack('Wall', null, [
     effect(DRIVE, 'Fuzz', { mix: 0 }),
-    // la leva del vibrato: il Chorus che entra fino a tutto bagnato
+    // the vibrato bar: the Chorus coming in up to fully wet
     effect(CHORUS, null, { mode: CHORUS_MODE.chorus, delay: 5, sync: CHORUS_SYNC.hz, rate: 0.35, depth: 30, width: 50, mix: 0 }),
-    effect(REVERSE, 'Risucchio di 1 battuta', { mix: 0 }),
-    effect(DELAY, 'Eco lungo', { mix: 0 }),
-    effect(REVERB, 'Coda infinita', { mix: 0 }),
+    effect(REVERSE, '1-bar suck', { mix: 0 }),
+    effect(DELAY, 'Long echo', { mix: 0 }),
+    effect(REVERB, 'Endless tail', { mix: 0 }),
     effect(STEREO, null, { bassMono: 0 }),
   ], [
     { name: 'Fuzz', value: 60, moves: [[FUZZ, 'mix', 0, 100], [FUZZ, 'drive', 14, 32], [FUZZ, 'output', 0, -4]] },
-    { name: 'Leva', value: 40, moves: [[BEND, 'mix', 0, 100], [BEND, 'depth', 10, 60]] },
-    { name: 'Risucchio', moves: [[SUCK, 'mix', 0, 55]] },
-    { name: 'Eco', value: 30, moves: [[ECHO, 'mix', 0, 40], [ECHO, 'feedback', 30, 70]] },
-    { name: 'Muro', value: 70, moves: [[ROOM, 'mix', 0, 65], [ROOM, 'decay', 4, 20]] },
-    { name: 'Larghezza', value: 50, moves: [[WIDE, 'width', 100, 180]] },
+    { name: 'Lever', value: 40, moves: [[BEND, 'mix', 0, 100], [BEND, 'depth', 10, 60]] },
+    { name: 'Suck', moves: [[SUCK, 'mix', 0, 55]] },
+    { name: 'Echo', value: 30, moves: [[ECHO, 'mix', 0, 40], [ECHO, 'feedback', 30, 70]] },
+    { name: 'Wall', value: 70, moves: [[ROOM, 'mix', 0, 65], [ROOM, 'decay', 4, 20]] },
+    { name: 'Width', value: 50, moves: [[WIDE, 'width', 100, 180]] },
   ]);
 })();
 
-/** La 303 del rave: la distorsione dura, il gate a passi che la taglia, phaser, eco puntato e
- *  un buio corto; Ripeti è un pulsante (un Beat Repeat a 1/16 finché lo si tiene). */
-export const ACIDO_FX: RackPreset = (() => {
+/** The rave's 303: the hard distortion, the step gate cutting it, phaser, dotted echo and
+ *  a short darkness; Ripeti is a button (a 1/16 Beat Repeat while it's held). */
+export const ACID_FX: RackPreset = (() => {
   const DIRT = 0, CHOP = 1, SWIRL = 2, ECHO = 3, ROOM = 4, REPEAT = 5;
-  return rack('Acido FX', null, [
+  return rack('Acid FX', null, [
     effect(DRIVE, null, { shape: SHAPE.hard, drive: 16, bias: 12, color: 25, low: 15, split: 150, tone: 9000, mix: 0, oversampling: 0 }),
     effect(GATE, null, { ...pattern('x.xx .xx. x.xx .x.x'), rate: index(STEP_RATES, '1/16'), gate: 70, release: 15, depth: 0 }),
     effect(PHASER, null, { mix: 0 }),
@@ -374,117 +374,117 @@ export const ACIDO_FX: RackPreset = (() => {
     effect(REVERB, null, { size: 60, decay: 1.6, predelay: 10, damping: 4500, lowCut: 300, mix: 0 }),
     repeatButton('1/16'),
   ], [
-    { name: 'Distorsione', value: 70, moves: [[DIRT, 'mix', 0, 100], [DIRT, 'drive', 4, 26]] },
-    { name: 'Taglio', moves: [[CHOP, 'depth', 0, 100]] },
+    { name: 'Distortion', value: 70, moves: [[DIRT, 'mix', 0, 100], [DIRT, 'drive', 4, 26]] },
+    { name: 'Cut', moves: [[CHOP, 'depth', 0, 100]] },
     { name: 'Phaser', moves: [[SWIRL, 'mix', 0, 60]] },
-    { name: 'Eco', value: 30, moves: [[ECHO, 'mix', 0, 40], [ECHO, 'feedback', 20, 65]] },
-    { name: 'Spazio', value: 15, moves: [[ROOM, 'mix', 0, 40]] },
-    { name: 'Ripeti', mode: 'button', moves: [[REPEAT, 'repeat', 0, 1]] },
+    { name: 'Echo', value: 30, moves: [[ECHO, 'mix', 0, 40], [ECHO, 'feedback', 20, 65]] },
+    { name: 'Space', value: 15, moves: [[ROOM, 'mix', 0, 40]] },
+    { name: 'Repeat', mode: 'button', moves: [[REPEAT, 'repeat', 0, 1]] },
   ]);
 })();
 
-/** La macchina del master del rave: tre Ripeti, Al contrario e Stop nastro a pulsante, la
- *  Sottrazione (il passa-alto che toglie cassa e basso prima di ridare tutto), il Muro
- *  (passa-basso) e il Lo-fi. A 0 il suono passa com'è. */
-export const MACCHINA: RackPreset = (() => {
+/** The rave's master machine: three Ripeti, Al contrario and Stop nastro as buttons, the
+ *  Sottrazione (the high-pass removing kick and bass before giving everything back), the Muro
+ *  (low-pass) and the Lo-fi. At 0 the sound passes as it is. */
+export const MACHINE: RackPreset = (() => {
   const R8 = 0, R16 = 1, R32 = 2, BACK = 3, BRAKE = 4, LOW = 5, HIGH = 6, BITS = 7;
-  return rack('Macchina', null, [
+  return rack('Machine', null, [
     repeatButton('1/8'),
     repeatButton('1/16'),
     repeatButton('1/32'),
     effect(REVERSE, null, { reverse: 1, length: index(REVERSE_LENGTHS, '1/4'), mix: 0 }),
-    effect(TAPE_STOP, null, { sync: TAPE_SYNC.tempo, division: index(BRAKE_DIVISIONS, '1/2'), start: index(STARTS, 'Subito'), curve: BRAKE_CURVE.smooth, spin: 300 }),
+    effect(TAPE_STOP, null, { sync: TAPE_SYNC.tempo, division: index(BRAKE_DIVISIONS, '1/2'), start: index(STARTS, 'Immediately'), curve: BRAKE_CURVE.smooth, spin: 300 }),
     effect(AUTO_FILTER, null, { type: FILTER_TYPE.highPass, slope: 1, freq: 20, resonance: 10, mix: 0 }),
     effect(AUTO_FILTER, null, { type: FILTER_TYPE.lowPass, slope: 1, freq: 20000, resonance: 15, mix: 0 }),
     effect(REDUX, null, { mix: 0, bits: 16, rate: 48000 }),
   ], [
-    { name: 'Ripeti 1/8', mode: 'button', moves: [[R8, 'repeat', 0, 1]] },
-    { name: 'Ripeti 1/16', mode: 'button', moves: [[R16, 'repeat', 0, 1]] },
-    { name: 'Ripeti 1/32', mode: 'button', moves: [[R32, 'repeat', 0, 1]] },
-    { name: 'Al contrario', mode: 'button', moves: [[BACK, 'mix', 0, 100]] },
-    { name: 'Stop nastro', mode: 'button', moves: [[BRAKE, 'stop', 0, 1]] },
-    { name: 'Sottrazione', moves: [[LOW, 'mix', 0, 100], [LOW, 'freq', 20, 700]] },
-    { name: 'Muro', moves: [[HIGH, 'mix', 0, 100], [HIGH, 'freq', 20000, 350]] },
+    { name: 'Repeat 1/8', mode: 'button', moves: [[R8, 'repeat', 0, 1]] },
+    { name: 'Repeat 1/16', mode: 'button', moves: [[R16, 'repeat', 0, 1]] },
+    { name: 'Repeat 1/32', mode: 'button', moves: [[R32, 'repeat', 0, 1]] },
+    { name: 'Reversed', mode: 'button', moves: [[BACK, 'mix', 0, 100]] },
+    { name: 'Tape stop', mode: 'button', moves: [[BRAKE, 'stop', 0, 1]] },
+    { name: 'Subtraction', moves: [[LOW, 'mix', 0, 100], [LOW, 'freq', 20, 700]] },
+    { name: 'Wall', moves: [[HIGH, 'mix', 0, 100], [HIGH, 'freq', 20000, 350]] },
     { name: 'Lo-fi', moves: [[BITS, 'mix', 0, 100], [BITS, 'bits', 16, 6], [BITS, 'rate', 48000, 6000]] },
   ]);
 })();
 
 // ---------------------------------------------------------------- Instrument Rack
 
-/** Il polysynth della new wave: due dente di sega e un'ottava di quadra, il filtro che morde un
- *  po', il vibrato leggero, poi chorus ensemble, eco ping-pong e sala. */
-export const NUOVA_ONDA: RackPreset = (() => {
+/** The new wave polysynth: two saws and an octave of square, the filter biting a
+ *  little, light vibrato, then ensemble chorus, ping-pong echo and hall. */
+export const NEW_WAVE: RackPreset = (() => {
   const SYNTH = 0, ENSEMBLE = 1, ECHO = 2, ROOM = 3;
-  return rack('Nuova onda', device(ANALOG, 'Lead', {
+  return rack('New wave', device(ANALOG, 'Lead', {
     oscA: 0, oscB: 1, oscBSemi: 12, oscBFine: 6, mix: 40, unison: 2, detune: 14, cutoff: 2200, resonance: 30, filterEnv: 45,
     fDecay: 0.6, fSustain: 30, attack: 0.005, decay: 0.8, sustain: 70, release: 0.5, lfoRate: 5, lfoPitch: 6, volume: -9,
   }), [
-    effect(CHORUS, 'Ensemble archi'),
+    effect(CHORUS, 'String ensemble'),
     effect(DELAY, 'Ping-pong 1/8.', { highCut: 4000, mix: 20 }),
-    effect(REVERB, 'Sala', { decay: 3.5 }),
+    effect(REVERB, 'Hall', { decay: 3.5 }),
   ], [
     { name: 'Cutoff', value: 64, moves: [[SYNTH, 'cutoff', 300, 8000]] },
-    { name: 'Risonanza', value: 35, moves: [[SYNTH, 'resonance', 5, 80]] },
-    { name: 'Inviluppo', value: 60, moves: [[SYNTH, 'filterEnv', 0, 90]] },
-    { name: 'Attacco', moves: [[SYNTH, 'attack', 0.001, 1.5], [SYNTH, 'fAttack', 0.001, 1]] },
-    { name: 'Rilascio', value: 30, moves: [[SYNTH, 'release', 0.1, 3]] },
+    { name: 'Resonance', value: 35, moves: [[SYNTH, 'resonance', 5, 80]] },
+    { name: 'Envelope', value: 60, moves: [[SYNTH, 'filterEnv', 0, 90]] },
+    { name: 'Attack', moves: [[SYNTH, 'attack', 0.001, 1.5], [SYNTH, 'fAttack', 0.001, 1]] },
+    { name: 'Release', value: 30, moves: [[SYNTH, 'release', 0.1, 3]] },
     { name: 'Chorus', value: 60, moves: [[ENSEMBLE, 'mix', 0, 80], [ENSEMBLE, 'depth', 20, 70]] },
-    { name: 'Eco', value: 45, moves: [[ECHO, 'mix', 0, 45], [ECHO, 'feedback', 20, 65]] },
-    { name: 'Spazio', value: 45, moves: [[ROOM, 'mix', 5, 60], [ROOM, 'decay', 1.5, 8]] },
+    { name: 'Echo', value: 45, moves: [[ECHO, 'mix', 0, 45], [ECHO, 'feedback', 20, 65]] },
+    { name: 'Space', value: 45, moves: [[ROOM, 'mix', 5, 60], [ROOM, 'decay', 1.5, 8]] },
   ]);
 })();
 
-/** Gli archi della string machine di Oxygène: il Wavetable "Archi" più lento, nel phaser che
- *  gira piano, nell'ensemble e in una sala lunga. */
-export const OSSIGENO: RackPreset = (() => {
+/** Oxygène's string machine strings: the slower Wavetable "Strings", in the phaser
+ *  turning slowly, in the ensemble and in a long hall. */
+export const OXYGEN: RackPreset = (() => {
   const SYNTH = 0, SWIRL = 1, ENSEMBLE = 2, ECHO = 3, ROOM = 4;
-  return rack('Ossigeno', device(WAVETABLE, 'Archi', { attack: 0.6, release: 1.5, cutoff: 4000, volume: -6 }), [
-    effect(PHASER, 'Phaser lento', { mix: 60 }),
-    effect(CHORUS, 'Ensemble archi'),
-    effect(DELAY, 'Eco lungo', { mix: 15 }),
-    effect(REVERB, 'Sala', { decay: 5, mix: 35 }),
+  return rack('Oxygen', device(WAVETABLE, 'Strings', { attack: 0.6, release: 1.5, cutoff: 4000, volume: -6 }), [
+    effect(PHASER, 'Slow phaser', { mix: 60 }),
+    effect(CHORUS, 'String ensemble'),
+    effect(DELAY, 'Long echo', { mix: 15 }),
+    effect(REVERB, 'Hall', { decay: 5, mix: 35 }),
   ], [
     { name: 'Phaser', value: 90, moves: [[SWIRL, 'mix', 0, 80], [SWIRL, 'feedback', 20, 75]] },
-    // a scatti: da 4 battute a 1/2 per giro
-    { name: 'Velocità', value: 40, moves: [[SWIRL, 'division', TEMPO_RATE['4 battute'], TEMPO_RATE['1/2']]] },
-    { name: 'Brillantezza', value: 70, moves: [[SYNTH, 'cutoff', 800, 10000]] },
+    // in steps: from 4 bars to 1/2 per cycle
+    { name: 'Rate', value: 40, moves: [[SWIRL, 'division', TEMPO_RATE['4 bars'], TEMPO_RATE['1/2']]] },
+    { name: 'Brightness', value: 70, moves: [[SYNTH, 'cutoff', 800, 10000]] },
     { name: 'Ensemble', value: 70, moves: [[ENSEMBLE, 'mix', 0, 80]] },
-    { name: 'Attacco', value: 40, moves: [[SYNTH, 'attack', 0.01, 3]] },
-    { name: 'Rilascio', value: 40, moves: [[SYNTH, 'release', 0.3, 6]] },
-    { name: 'Eco', value: 20, moves: [[ECHO, 'mix', 0, 35]] },
-    { name: 'Spazio', value: 50, moves: [[ROOM, 'mix', 10, 60], [ROOM, 'decay', 2, 12]] },
+    { name: 'Attack', value: 40, moves: [[SYNTH, 'attack', 0.01, 3]] },
+    { name: 'Release', value: 40, moves: [[SYNTH, 'release', 0.3, 6]] },
+    { name: 'Echo', value: 20, moves: [[ECHO, 'mix', 0, 35]] },
+    { name: 'Space', value: 50, moves: [[ROOM, 'mix', 10, 60], [ROOM, 'decay', 2, 12]] },
   ]);
 })();
 
-/** L'hoover dei rave (Mentasm, l'Alpha Juno): PWM e dente di sega un'ottava sotto, sette copie
- *  larghe, il glide e lo "swoop" che sale all'attacco, nel chorus. */
+/** The rave hoover (Mentasm, the Alpha Juno): PWM and a saw an octave down, seven wide
+ *  copies, the glide and the "swoop" rising at the attack, in the chorus. */
 export const HOOVER: RackPreset = (() => {
   const SYNTH = 0, WIDE = 1, GRIT = 2, ROOM = 3;
   return rack('Hoover', device(WAVETABLE, 'Supersaw', {
-    tableA: TABLE.PWM, posA: 60, tableB: TABLE.Base, posB: 67, levelB: 60, semiB: -12, unison: 7, detune: 35, spread: 100,
+    tableA: TABLE.PWM, posA: 60, tableB: TABLE.Basic, posB: 67, levelB: 60, semiB: -12, unison: 7, detune: 35, spread: 100,
     voiceMode: VOICE_MODE.legato, glide: 120, cutoff: 6000, sustain: 100, release: 0.4,
     mAttack: 0.001, mDecay: 0.3, mSustain: 0, mRelease: 0.2, envDest: MOD_DEST.pitch, envAmount: -25, envDest2: MOD_DEST.none,
     lfo1Shape: WT_LFO.triangle, lfo1Sync: LFO_SYNC.hz, lfo1Rate: 0.6, lfo1Retrig: 1, lfo1Dest: MOD_DEST.posA, lfo1Amount: 30,
     volume: -16,
   }), [
-    effect(CHORUS, 'Chorus largo', { mix: 60 }),
-    effect(DRIVE, 'Calda', { mix: 0 }),
-    effect(REVERB, 'Sala', { mix: 20 }),
+    effect(CHORUS, 'Wide chorus', { mix: 60 }),
+    effect(DRIVE, 'Warm', { mix: 0 }),
+    effect(REVERB, 'Hall', { mix: 20 }),
   ], [
-    // lo swoop: quanto sotto parte la nota (fino a 12 semitoni) prima di salire
+    // the swoop: how far below the note starts (up to 12 semitones) before rising
     { name: 'Swoop', value: 64, moves: [[SYNTH, 'envAmount', 0, -50]] },
     { name: 'Glide', value: 40, moves: [[SYNTH, 'glide', 0, 400]] },
     { name: 'PWM', value: 64, moves: [[SYNTH, 'lfo1Amount', 0, 60]] },
-    { name: 'Larghezza', value: 80, moves: [[SYNTH, 'detune', 10, 50], [WIDE, 'mix', 0, 80]] },
+    { name: 'Width', value: 80, moves: [[SYNTH, 'detune', 10, 50], [WIDE, 'mix', 0, 80]] },
     { name: 'Cutoff', value: 80, moves: [[SYNTH, 'cutoff', 500, 14000]] },
-    { name: 'Ottava sotto', value: 90, moves: [[SYNTH, 'levelB', 0, 70]] },
-    { name: 'Grinta', moves: [[GRIT, 'mix', 0, 100], [GRIT, 'drive', 6, 20]] },
-    { name: 'Spazio', value: 35, moves: [[ROOM, 'mix', 5, 50]] },
+    { name: 'Octave down', value: 90, moves: [[SYNTH, 'levelB', 0, 70]] },
+    { name: 'Grit', moves: [[GRIT, 'mix', 0, 100], [GRIT, 'drive', 6, 20]] },
+    { name: 'Space', value: 35, moves: [[ROOM, 'mix', 5, 50]] },
   ]);
 })();
 
-/** Gli ottoni da polysynth degli anni '80 (l'OB-Xa di "Jump"): dente di sega scordati, il
- *  filtro che si apre all'attacco, chorus, compressione e una stanza. */
+/** The '80s polysynth brass (the OB-Xa of "Jump"): detuned saws, the
+ *  filter opening at the attack, chorus, compression and a room. */
 export const JUMP: RackPreset = (() => {
   const SYNTH = 0, ENSEMBLE = 1, GLUE = 2, ROOM = 3;
   return rack('Jump', device(ANALOG, 'Pad', {
@@ -492,389 +492,389 @@ export const JUMP: RackPreset = (() => {
     filterEnv: 50, keyTrack: 40, fAttack: 0.02, fDecay: 0.5, fSustain: 45, fRelease: 0.3, attack: 0.01, decay: 0.6, sustain: 85,
     release: 0.25, lfoCutoff: 0, velocity: 40, volume: -8,
   }), [
-    effect(CHORUS, 'Chorus largo', { mix: 35 }),
-    effect(COMPRESSOR, 'Colla'),
-    effect(REVERB, 'Stanza'),
+    effect(CHORUS, 'Wide chorus', { mix: 35 }),
+    effect(COMPRESSOR, 'Glue'),
+    effect(REVERB, 'Room'),
   ], [
-    { name: 'Brillantezza', value: 55, moves: [[SYNTH, 'cutoff', 300, 6000]] },
-    { name: 'Morso', value: 60, moves: [[SYNTH, 'filterEnv', 0, 90]] },
-    // il filtro che si apre piano: gli ottoni che si gonfiano
-    { name: 'Gonfia', value: 20, moves: [[SYNTH, 'fAttack', 0.001, 0.4], [SYNTH, 'attack', 0.003, 0.15]] },
-    { name: 'Spessore', value: 50, moves: [[SYNTH, 'detune', 5, 40], [SYNTH, 'oscBFine', 3, 20]] },
-    { name: 'Rilascio', value: 20, moves: [[SYNTH, 'release', 0.05, 2]] },
+    { name: 'Brightness', value: 55, moves: [[SYNTH, 'cutoff', 300, 6000]] },
+    { name: 'Bite', value: 60, moves: [[SYNTH, 'filterEnv', 0, 90]] },
+    // the filter opening slowly: the brass swelling
+    { name: 'Swell', value: 20, moves: [[SYNTH, 'fAttack', 0.001, 0.4], [SYNTH, 'attack', 0.003, 0.15]] },
+    { name: 'Thickness', value: 50, moves: [[SYNTH, 'detune', 5, 40], [SYNTH, 'oscBFine', 3, 20]] },
+    { name: 'Release', value: 20, moves: [[SYNTH, 'release', 0.05, 2]] },
     { name: 'Chorus', value: 50, moves: [[ENSEMBLE, 'mix', 0, 70]] },
-    { name: 'Colla', value: 50, moves: [[GLUE, 'mix', 0, 100]] },
-    { name: 'Spazio', value: 40, moves: [[ROOM, 'mix', 5, 45]] },
+    { name: 'Glue', value: 50, moves: [[GLUE, 'mix', 0, 100]] },
+    { name: 'Space', value: 40, moves: [[ROOM, 'mix', 5, 45]] },
   ]);
 })();
 
-/** Il basso in levare del rave: Neuro a una voce, due denti di sega e una quadra appena
- *  scordata, il filtro che morde con l'inviluppo di modulazione, il sub pulito sotto il
- *  crossover; i bassi in mono. Il sequencer è pronto (spento): acceso lascia il battere alla
- *  cassa. Nel live pompa in sidechain sulla cassa: qui il compressore non c'è (va messo dopo,
- *  con la cassa come sidechain). */
-export const LEVARE: RackPreset = (() => {
+/** The rave's offbeat bass: monophonic Neuro, two saws and a slightly
+ *  detuned square, the filter biting with the modulation envelope, the clean sub below the
+ *  crossover; the lows in mono. The sequencer is ready (off): on it leaves the downbeat to the
+ *  kick. In the live it pumps sidechained to the kick: here there's no compressor (it goes after,
+ *  with the kick as sidechain). */
+export const OFFBEAT: RackPreset = (() => {
   const SYNTH = 0, ROOM = 2;
-  return rack('Levare', device(NEURO, null, {
+  return rack('Offbeat', device(NEURO, null, {
     oscA: 0, oscB: 1, oscBSemi: 0, oscBFine: -7, mix: 35, unison: 1,
     filterType: 0, cutoff: 900, resonance: 25, drive: 30, keyTrack: 40,
     dist: 20, sub: 70, subOctave: 0, crossover: 120,
     voiceMode: 0, glide: 0, attack: 0.002, decay: 0.18, sustain: 40, release: 0.07, velocity: 30,
     mAttack: 0.001, mDecay: 0.1, mSustain: 0, mRelease: 0.05, envDest: NEURO_DEST.cutoff, envAmount: 45,
     volume: -6,
-    seqKick: 1, seqDensity: 70, seqRange: 25, seqScale: SEQ_SCALE['Frigio e tritono'], seqSlide: 0, seqAccent: 25, seqGate: 60, seqPattern: 11,
+    seqKick: 1, seqDensity: 70, seqRange: 25, seqScale: SEQ_SCALE['Phrygian and tritone'], seqSlide: 0, seqAccent: 25, seqGate: 60, seqPattern: 11,
   }), [
     eqOf(35, [[250, -2.5, 1], [2500, 1.5, 1]]),
     effect(REVERB, null, { size: 75, decay: 1.2, predelay: 0, diffusion: 90, damping: 2500, lowCut: 30, width: 0, mix: 0 }),
     effect(STEREO, null, { monoFreq: 150 }),
   ], [
     { name: 'Cutoff', value: 60, moves: [[SYNTH, 'cutoff', 150, 8000]] },
-    { name: 'Morso', value: 60, moves: [[SYNTH, 'envAmount', 0, 80], [SYNTH, 'mDecay', 0.04, 0.25]] },
-    { name: 'Coda', value: 60, moves: [[SYNTH, 'decay', 0.06, 0.6], [SYNTH, 'release', 0.02, 0.3]] },
+    { name: 'Bite', value: 60, moves: [[SYNTH, 'envAmount', 0, 80], [SYNTH, 'mDecay', 0.04, 0.25]] },
+    { name: 'Tail', value: 60, moves: [[SYNTH, 'decay', 0.06, 0.6], [SYNTH, 'release', 0.02, 0.3]] },
     { name: 'Sub', value: 87, moves: [[SYNTH, 'sub', 20, 100]] },
-    { name: 'Ringhio', moves: [[SYNTH, 'fm', 0, 55], [SYNTH, 'fold', 0, 45]] },
-    { name: 'Distorsione', value: 50, moves: [[SYNTH, 'dist', 0, 70], [SYNTH, 'drive', 15, 70]] },
-    { name: 'Vocale', moves: [[SYNTH, 'formant', 0, 80], [SYNTH, 'vowel', 0, 100]] },
-    // il basso in una stanza piccola e scura, mono: il rimbombo sotto la cassa
+    { name: 'Growl', moves: [[SYNTH, 'fm', 0, 55], [SYNTH, 'fold', 0, 45]] },
+    { name: 'Distortion', value: 50, moves: [[SYNTH, 'dist', 0, 70], [SYNTH, 'drive', 15, 70]] },
+    { name: 'Vocal', moves: [[SYNTH, 'formant', 0, 80], [SYNTH, 'vowel', 0, 100]] },
+    // the bass in a small dark mono room: the boom under the kick
     { name: 'Rumble', moves: [[ROOM, 'mix', 0, 40], [ROOM, 'decay', 1.2, 2.5]] },
   ]);
 })();
 
-/** La 303 che si scrive da sola: l'Analog in Legato con glide e accento, e il sequencer a passi
- *  pronto (Frigio e tritono, sedicesimi; si accende nella sezione Sequencer, e con il trasporto
- *  che va basta tenere la tonica). Pattern sceglie il giro, Follia lo porta da poche note a una
- *  linea frenetica. Da mettere davanti ad Acido FX. */
-export const TRECENTOTRE: RackPreset = (() => {
+/** The 303 that writes itself: the Analog in Legato with glide and accent, and the step sequencer
+ *  ready (Phrygian and tritone, sixteenths; it's turned on in the Sequencer section, and with the transport
+ *  running it's enough to hold the root). Pattern chooses the loop, Follia takes it from a few notes to a
+ *  frantic line. To put in front of Acido FX. */
+export const THREE_OH_THREE: RackPreset = (() => {
   const SYNTH = 0;
   return rack('303', device(ANALOG, null, {
     oscA: 0, mix: 0, voiceMode: ANALOG_VOICE.legato, glide: 60, accent: 70,
     cutoff: 420, resonance: 80, filterEnv: 66, keyTrack: 20,
     fDecay: 0.18, fSustain: 0, fRelease: 0.08, sustain: 100, release: 0.05, velocity: 35, volume: -11,
-    seqScale: SEQ_SCALE['Frigio e tritono'], seqRate: SEQ_RATE['1/16'], seqLength: 16, seqGate: 55,
+    seqScale: SEQ_SCALE['Phrygian and tritone'], seqRate: SEQ_RATE['1/16'], seqLength: 16, seqGate: 55,
   }), [
     eqOf(95, [[160, -4, 1.2], [622, 2.5, 1]]),
   ], [
     { name: 'Cutoff', value: 55, moves: [[SYNTH, 'cutoff', 90, 3500]] },
-    { name: 'Risonanza', value: 90, moves: [[SYNTH, 'resonance', 30, 95]] },
+    { name: 'Resonance', value: 90, moves: [[SYNTH, 'resonance', 30, 95]] },
     { name: 'Env Mod', value: 76, moves: [[SYNTH, 'filterEnv', 10, 100]] },
     { name: 'Decay', value: 40, moves: [[SYNTH, 'fDecay', 0.04, 1]] },
-    { name: 'Accento', value: 90, moves: [[SYNTH, 'accent', 0, 100]] },
+    { name: 'Accent', value: 90, moves: [[SYNTH, 'accent', 0, 100]] },
     { name: 'Glide', value: 38, moves: [[SYNTH, 'glide', 0, 200]] },
-    // il giro del sequencer: uno nuovo entra all'inizio del giro
+    // the sequencer's loop: a new one comes in at the start of the loop
     { name: 'Pattern', moves: [[SYNTH, 'seqPattern', 0, 127]] },
-    // da un acido minimale (poche note, la tonica) a uno frenetico (pieno, largo, slide, accenti)
-    { name: 'Follia', value: 40, moves: [[SYNTH, 'seqDensity', 25, 100], [SYNTH, 'seqRange', 5, 85], [SYNTH, 'seqSlide', 5, 55], [SYNTH, 'seqAccent', 15, 60]] },
+    // from a minimal acid (few notes, the root) to a frantic one (full, wide, slides, accents)
+    { name: 'Madness', value: 40, moves: [[SYNTH, 'seqDensity', 25, 100], [SYNTH, 'seqRange', 5, 85], [SYNTH, 'seqSlide', 5, 55], [SYNTH, 'seqAccent', 15, 60]] },
   ]);
 })();
 
-// ---------------------------------------------------------------- con i modulatori
+// ---------------------------------------------------------------- with the modulators
 
-/** Il wobble del dubstep e della neuro: il Neuro "Reese scuro" con un LFO a tempo che apre
- *  cutoff, fold e vocale insieme. Wobble è quanto, Velocità da 1/4 a 1/16 (a scatti), Forma da
- *  seno a quadra; poi OTT e i bassi in mono. */
+/** The dubstep and neuro wobble: the Neuro "Reese scuro" with a synced LFO opening
+ *  cutoff, fold and vowel together. Wobble is how much, Rate from 1/4 to 1/16 (in steps), Shape from
+ *  sine to square; then OTT and the lows in mono. */
 export const WOBBLE: RackPreset = (() => {
   const SYNTH = 0, LFO = 1, OTT = 2;
-  return rack('Wobble', device(NEURO, 'Reese scuro', { cutoff: 300, volume: -10 }), [
+  return rack('Wobble', device(NEURO, 'Dark reese', { cutoff: 300, volume: -10 }), [
     modulator(LFO_DEVICE, 'Wobble 1/8', {}, [[on(SYNTH, 'cutoff'), 30], [on(SYNTH, 'fold'), 25], [on(SYNTH, 'vowel'), 40]]),
     effect(MULTIBAND, 'OTT'),
-    effect(STEREO, 'Basso mono'),
+    effect(STEREO, 'Mono bass'),
   ], [
     { name: 'Cutoff', value: 50, moves: [[SYNTH, 'cutoff', 120, 3000]] },
     { name: 'Wobble', value: 90, moves: [[LFO, 'depth', 0, 100]] },
-    { name: 'Velocità', value: 76, moves: [[LFO, 'division', TEMPO_RATE['1/4'], TEMPO_RATE['1/16']]] },
-    { name: 'Forma', moves: [[LFO, 'l1Shape', MOD_SHAPE.sine, MOD_SHAPE.square]] },
-    { name: 'Ringhio', value: 40, moves: [[SYNTH, 'fm', 0, 60], [SYNTH, 'fold', 0, 45]] },
-    { name: 'Distorsione', value: 50, moves: [[SYNTH, 'dist', 0, 80], [SYNTH, 'drive', 20, 80]] },
-    { name: 'Vocale', value: 40, moves: [[SYNTH, 'formant', 0, 80]] },
+    { name: 'Rate', value: 76, moves: [[LFO, 'division', TEMPO_RATE['1/4'], TEMPO_RATE['1/16']]] },
+    { name: 'Shape', moves: [[LFO, 'l1Shape', MOD_SHAPE.sine, MOD_SHAPE.square]] },
+    { name: 'Growl', value: 40, moves: [[SYNTH, 'fm', 0, 60], [SYNTH, 'fold', 0, 45]] },
+    { name: 'Distortion', value: 50, moves: [[SYNTH, 'dist', 0, 80], [SYNTH, 'drive', 20, 80]] },
+    { name: 'Vocal', value: 40, moves: [[SYNTH, 'formant', 0, 80]] },
     { name: 'OTT', value: 50, moves: [[OTT, 'depth', 0, 100], [SYNTH, 'sub', 90, 50]] },
   ]);
 })();
 
-/** Il pad che pompa come in sidechain sulla cassa, senza la cassa: un Inviluppo a tempo che
- *  abbassa il volume a ogni battito e lo lascia risalire. Sotto, un LFO casuale lentissimo
- *  sposta cutoff e pan: il pad non sta mai fermo. */
-export const POMPA: RackPreset = (() => {
+/** The pad pumping as if sidechained to the kick, without the kick: a synced Envelope that
+ *  lowers the volume at every beat and lets it rise again. Underneath, a very slow random LFO
+ *  moves cutoff and pan: the pad never stands still. */
+export const PUMP_RACK: RackPreset = (() => {
   const SYNTH = 0, PUMP = 1, DRIFT = 2, ECHO = 4, ROOM = 5;
-  return rack('Pompa', device(ANALOG, 'Pad scuro', { attack: 0.3, cutoff: 900 }), [
-    modulator(ENVELOPE_DEVICE, 'Pompa 1/4', {}, [[VOLUME, -95]]),
-    modulator(LFO_DEVICE, 'Deriva lenta', {}, [[on(SYNTH, 'cutoff'), 12], [PAN, 30]]),
-    effect(CHORUS, 'Chorus largo'),
-    effect(DELAY, 'Eco lungo', { mix: 15 }),
-    effect(REVERB, 'Sala', { decay: 5, mix: 30 }),
+  return rack('Pump', device(ANALOG, 'Dark pad', { attack: 0.3, cutoff: 900 }), [
+    modulator(ENVELOPE_DEVICE, 'Pump 1/4', {}, [[VOLUME, -95]]),
+    modulator(LFO_DEVICE, 'Slow drift', {}, [[on(SYNTH, 'cutoff'), 12], [PAN, 30]]),
+    effect(CHORUS, 'Wide chorus'),
+    effect(DELAY, 'Long echo', { mix: 15 }),
+    effect(REVERB, 'Hall', { decay: 5, mix: 30 }),
   ], [
-    { name: 'Pompa', value: 100, moves: [[PUMP, 'depth', 0, 100]] },
-    // quanto ci mette a risalire
-    { name: 'Risalita', value: 50, moves: [[PUMP, 'e1D', 0.08, 0.5]] },
-    { name: 'Ritmo', value: 51, moves: [[PUMP, 'division', TEMPO_RATE['1/2'], TEMPO_RATE['1/8']]] },
-    { name: 'Apri', value: 55, moves: [[SYNTH, 'cutoff', 200, 5000]] },
-    { name: 'Deriva', value: 60, moves: [[DRIFT, 'depth', 0, 100]] },
-    { name: 'Lentezza', value: 30, moves: [[SYNTH, 'attack', 0.005, 3], [SYNTH, 'release', 0.3, 5]] },
-    { name: 'Eco', value: 30, moves: [[ECHO, 'mix', 0, 40]] },
-    { name: 'Spazio', value: 50, moves: [[ROOM, 'mix', 5, 60]] },
+    { name: 'Pump', value: 100, moves: [[PUMP, 'depth', 0, 100]] },
+    // how long it takes to come back up
+    { name: 'Climb back', value: 50, moves: [[PUMP, 'e1D', 0.08, 0.5]] },
+    { name: 'Rhythm', value: 51, moves: [[PUMP, 'division', TEMPO_RATE['1/2'], TEMPO_RATE['1/8']]] },
+    { name: 'Open', value: 55, moves: [[SYNTH, 'cutoff', 200, 5000]] },
+    { name: 'Drift', value: 60, moves: [[DRIFT, 'depth', 0, 100]] },
+    { name: 'Slowness', value: 30, moves: [[SYNTH, 'attack', 0.005, 3], [SYNTH, 'release', 0.3, 5]] },
+    { name: 'Echo', value: 30, moves: [[ECHO, 'mix', 0, 40]] },
+    { name: 'Space', value: 50, moves: [[ROOM, 'mix', 5, 60]] },
   ]);
 })();
 
-/** Il trance gate: il Supersaw tagliato a sedicesimi da un Inviluppo a tempo sul volume
- *  (bipolare: chiuso tra un colpo e l'altro, aperto sul colpo), con il cutoff che si apre un po'
- *  a ogni colpo; un LFO S&H butta i colpi a destra e a sinistra. */
-export const CANCELLO: RackPreset = (() => {
+/** The trance gate: the Supersaw cut into sixteenths by a synced Envelope on the volume
+ *  (bipolar: closed between one hit and the next, open on the hit), with the cutoff opening a little
+ *  at every hit; an S&H LFO throws the hits left and right. */
+export const GATED: RackPreset = (() => {
   const SYNTH = 0, GATE_ = 1, SCATTER = 2, ECHO = 3, ROOM = 4;
-  return rack('Cancello', device(WAVETABLE, 'Supersaw', { cutoff: 7000, release: 0.4 }), [
-    modulator(ENVELOPE_DEVICE, 'Gate a tempo', { pol: POLARITY.bi }, [[VOLUME, 100], [on(SYNTH, 'cutoff'), 8]]),
-    modulator(LFO_DEVICE, 'Casuale 1/16', {}, [[PAN, 60], [on(SYNTH, 'posA'), 12]]),
+  return rack('Gated', device(WAVETABLE, 'Supersaw', { cutoff: 7000, release: 0.4 }), [
+    modulator(ENVELOPE_DEVICE, 'Tempo gate', { pol: POLARITY.bi }, [[VOLUME, 100], [on(SYNTH, 'cutoff'), 8]]),
+    modulator(LFO_DEVICE, 'Random 1/16', {}, [[PAN, 60], [on(SYNTH, 'posA'), 12]]),
     effect(DELAY, 'Ping-pong 1/8.', { mix: 20 }),
-    effect(REVERB, 'Sala', { mix: 25 }),
+    effect(REVERB, 'Hall', { mix: 25 }),
   ], [
     { name: 'Gate', value: 127, moves: [[GATE_, 'depth', 0, 100]] },
-    { name: 'Lunghezza', value: 45, moves: [[GATE_, 'gate', 15, 90]] },
-    { name: 'Ritmo', value: 64, moves: [[GATE_, 'division', TEMPO_RATE['1/8'], TEMPO_RATE['1/32']]] },
-    { name: 'Sparpaglia', value: 50, moves: [[SCATTER, 'depth', 0, 100]] },
+    { name: 'Length', value: 45, moves: [[GATE_, 'gate', 15, 90]] },
+    { name: 'Rhythm', value: 64, moves: [[GATE_, 'division', TEMPO_RATE['1/8'], TEMPO_RATE['1/32']]] },
+    { name: 'Scatter', value: 50, moves: [[SCATTER, 'depth', 0, 100]] },
     { name: 'Cutoff', value: 85, moves: [[SYNTH, 'cutoff', 400, 14000]] },
-    { name: 'Larghezza', value: 60, moves: [[SYNTH, 'detune', 5, 45]] },
-    { name: 'Eco', value: 45, moves: [[ECHO, 'mix', 0, 45]] },
-    { name: 'Spazio', value: 40, moves: [[ROOM, 'mix', 5, 55]] },
+    { name: 'Width', value: 60, moves: [[SYNTH, 'detune', 5, 45]] },
+    { name: 'Echo', value: 45, moves: [[ECHO, 'mix', 0, 45]] },
+    { name: 'Space', value: 40, moves: [[ROOM, 'mix', 5, 55]] },
   ]);
 })();
 
-/** La 303 che si gira le manopole da sola: un LFO lento a triangolo fa il giro del cutoff (come
- *  la mano sulla scatoletta), un S&H a sedicesimi sporca cutoff e env mod nota per nota. */
-export const ACIDO_VIVO: RackPreset = (() => {
+/** The 303 turning its own knobs: a slow triangle LFO sweeps the cutoff (like
+ *  the hand on the box), a sixteenth S&H dirties cutoff and env mod note by note. */
+export const LIVELY_ACID: RackPreset = (() => {
   const SYNTH = 0, SWEEP = 1, CHAOS = 2, DRIVE_ = 3;
-  return rack('Acido vivo', device(ANALOG, 'Acid'), [
-    modulator(LFO_DEVICE, 'Respiro 2 battute', {}, [[on(SYNTH, 'cutoff'), 22], [on(SYNTH, 'resonance'), 8]]),
-    modulator(LFO_DEVICE, 'Casuale 1/16', {}, [[on(SYNTH, 'cutoff'), 12], [on(SYNTH, 'filterEnv'), 25]]),
-    effect(DRIVE, 'Calda', { mix: 0 }),
+  return rack('Lively acid', device(ANALOG, 'Acid'), [
+    modulator(LFO_DEVICE, '2-bar breath', {}, [[on(SYNTH, 'cutoff'), 22], [on(SYNTH, 'resonance'), 8]]),
+    modulator(LFO_DEVICE, 'Random 1/16', {}, [[on(SYNTH, 'cutoff'), 12], [on(SYNTH, 'filterEnv'), 25]]),
+    effect(DRIVE, 'Warm', { mix: 0 }),
     effect(DELAY, 'Ping-pong 1/8.', { highCut: 3500, lowCut: 200 }),
   ], [
     { name: 'Cutoff', value: 45, moves: [[SYNTH, 'cutoff', 120, 3500]] },
-    { name: 'Risonanza', value: 80, moves: [[SYNTH, 'resonance', 40, 90]] },
+    { name: 'Resonance', value: 80, moves: [[SYNTH, 'resonance', 40, 90]] },
     { name: 'Env Mod', value: 64, moves: [[SYNTH, 'filterEnv', 20, 100]] },
     { name: 'Decay', value: 50, moves: [[SYNTH, 'fDecay', 0.05, 1.2]] },
-    { name: 'Giro', value: 70, moves: [[SWEEP, 'depth', 0, 100]] },
-    // da 4 battute a 1/2 per giro, a scatti
-    { name: 'Velocità giro', value: 42, moves: [[SWEEP, 'division', TEMPO_RATE['4 battute'], TEMPO_RATE['1/2']]] },
-    { name: 'Caos', value: 35, moves: [[CHAOS, 'depth', 0, 100]] },
-    { name: 'Sporco', value: 40, moves: [[DRIVE_, 'mix', 0, 100], [DRIVE_, 'drive', 4, 30], [DRIVE_, 'output', 0, -4]] },
+    { name: 'Spin', value: 70, moves: [[SWEEP, 'depth', 0, 100]] },
+    // from 4 bars to 1/2 per cycle, in steps
+    { name: 'Spin speed', value: 42, moves: [[SWEEP, 'division', TEMPO_RATE['4 bars'], TEMPO_RATE['1/2']]] },
+    { name: 'Chaos', value: 35, moves: [[CHAOS, 'depth', 0, 100]] },
+    { name: 'Dirty', value: 40, moves: [[DRIVE_, 'mix', 0, 100], [DRIVE_, 'drive', 4, 30], [DRIVE_, 'output', 0, -4]] },
   ]);
 })();
 
-/** La sirena dei rave: il Neuro a un dente di sega, il Trasporto mosso da un LFO a triangolo
- *  (fino a un'ottava su e giù) e, con Allarme, da una quadra a ottavi che salta di un'ottava:
- *  la sirena a due toni. Basta tenere una nota. */
-export const SIRENA: RackPreset = (() => {
+/** The rave siren: the Neuro with one saw, the Transpose moved by a triangle LFO
+ *  (up to an octave up and down) and, with Allarme, by an eighth-note square jumping an octave:
+ *  the two-tone siren. Just hold a note. */
+export const SIREN_RACK: RackPreset = (() => {
   const SYNTH = 0, SIREN = 1, ALARM = 2, WIDE = 3, ECHO = 4, ROOM = 5;
-  return rack('Sirena', device(NEURO, null, {
+  return rack('Siren', device(NEURO, null, {
     oscA: 0, mix: 0, unison: 2, detune: 12, cutoff: 3000, resonance: 20, drive: 30, dist: 15, sub: 0,
     voiceMode: 0, attack: 0.01, decay: 0.5, sustain: 100, release: 0.4, volume: -14,
   }), [
-    modulator(LFO_DEVICE, null, { division: TEMPO_RATE['1 battuta'], l1Shape: MOD_SHAPE.triangle }, [[on(SYNTH, 'transpose'), 25], [on(SYNTH, 'cutoff'), 6]]),
-    modulator(LFO_DEVICE, 'Quadra 1/16', { division: TEMPO_RATE['1/8'], depth: 0 }, [[on(SYNTH, 'transpose'), 25]]),
-    effect(CHORUS, 'Chorus largo', { mix: 30 }),
+    modulator(LFO_DEVICE, null, { division: TEMPO_RATE['1 bar'], l1Shape: MOD_SHAPE.triangle }, [[on(SYNTH, 'transpose'), 25], [on(SYNTH, 'cutoff'), 6]]),
+    modulator(LFO_DEVICE, 'Square 1/16', { division: TEMPO_RATE['1/8'], depth: 0 }, [[on(SYNTH, 'transpose'), 25]]),
+    effect(CHORUS, 'Wide chorus', { mix: 30 }),
     effect(DELAY, 'Ping-pong 1/8.', { mix: 30 }),
-    effect(REVERB, 'Sala', { mix: 30 }),
+    effect(REVERB, 'Hall', { mix: 30 }),
   ], [
-    { name: 'Sirena', value: 80, moves: [[SIREN, 'depth', 0, 100]] },
-    { name: 'Velocità', value: 18, moves: [[SIREN, 'division', TEMPO_RATE['2 battute'], TEMPO_RATE['1/8']]] },
-    { name: 'Allarme', moves: [[ALARM, 'depth', 0, 100]] },
+    { name: 'Siren', value: 80, moves: [[SIREN, 'depth', 0, 100]] },
+    { name: 'Rate', value: 18, moves: [[SIREN, 'division', TEMPO_RATE['2 bars'], TEMPO_RATE['1/8']]] },
+    { name: 'Alarm', moves: [[ALARM, 'depth', 0, 100]] },
     { name: 'Cutoff', value: 70, moves: [[SYNTH, 'cutoff', 400, 10000]] },
-    { name: 'Grinta', value: 40, moves: [[SYNTH, 'dist', 0, 70], [SYNTH, 'drive', 20, 80]] },
-    { name: 'Larghezza', value: 50, moves: [[WIDE, 'mix', 0, 70]] },
-    { name: 'Eco', value: 50, moves: [[ECHO, 'mix', 0, 50]] },
-    { name: 'Spazio', value: 50, moves: [[ROOM, 'mix', 5, 60]] },
+    { name: 'Grit', value: 40, moves: [[SYNTH, 'dist', 0, 70], [SYNTH, 'drive', 20, 80]] },
+    { name: 'Width', value: 50, moves: [[WIDE, 'mix', 0, 70]] },
+    { name: 'Echo', value: 50, moves: [[ECHO, 'mix', 0, 50]] },
+    { name: 'Space', value: 50, moves: [[ROOM, 'mix', 5, 60]] },
   ]);
 })();
 
-/** Lo stab che morde: il Neuro "Stab neuro" con un Inviluppo a ogni nota che apre cutoff e FM
- *  per un attimo (più forte con le note più forti), un vibrato che arriva sulle note lunghe, e
- *  l'eco dub. */
-export const COLPO: RackPreset = (() => {
+/** The biting stab: the Neuro "Stab neuro" with an Envelope at every note opening cutoff and FM
+ *  for a moment (stronger with louder notes), a vibrato arriving on long notes, and
+ *  the dub echo. */
+export const HIT: RackPreset = (() => {
   const SYNTH = 0, BITE = 1, VIBRATO = 2, ECHO = 3, ROOM = 4;
-  return rack('Colpo', device(NEURO, 'Stab neuro'), [
+  return rack('Hit', device(NEURO, 'Neuro stab'), [
     modulator(ENVELOPE_DEVICE, 'Pluck', { e1D: 0.2, vel: 50 }, [[on(SYNTH, 'cutoff'), 30], [on(SYNTH, 'fm'), 40]]),
     modulator(LFO_DEVICE, 'Vibrato', { depth: 0 }, [[on(SYNTH, 'transpose'), 1]]),
     effect(DELAY, 'Dub', { mix: 25 }),
-    effect(REVERB, 'Sala', { mix: 20 }),
+    effect(REVERB, 'Hall', { mix: 20 }),
   ], [
-    { name: 'Morso', value: 70, moves: [[BITE, 'depth', 0, 100]] },
-    { name: 'Coda morso', value: 40, moves: [[BITE, 'e1D', 0.05, 0.8]] },
+    { name: 'Bite', value: 70, moves: [[BITE, 'depth', 0, 100]] },
+    { name: 'Bite tail', value: 40, moves: [[BITE, 'e1D', 0.05, 0.8]] },
     { name: 'Cutoff', value: 50, moves: [[SYNTH, 'cutoff', 200, 4000]] },
-    { name: 'Vocale', value: 30, moves: [[SYNTH, 'vowel', 0, 100]] },
-    { name: 'Distorsione', value: 50, moves: [[SYNTH, 'dist', 0, 80], [SYNTH, 'drive', 20, 80]] },
+    { name: 'Vocal', value: 30, moves: [[SYNTH, 'vowel', 0, 100]] },
+    { name: 'Distortion', value: 50, moves: [[SYNTH, 'dist', 0, 80], [SYNTH, 'drive', 20, 80]] },
     { name: 'Vibrato', moves: [[VIBRATO, 'depth', 0, 100]] },
-    { name: 'Eco', value: 40, moves: [[ECHO, 'mix', 0, 50]] },
-    { name: 'Spazio', value: 30, moves: [[ROOM, 'mix', 0, 50]] },
+    { name: 'Echo', value: 40, moves: [[ECHO, 'mix', 0, 50]] },
+    { name: 'Space', value: 30, moves: [[ROOM, 'mix', 0, 50]] },
   ]);
 })();
 
-// ---------------------------------------------------------------- batteria
+// ---------------------------------------------------------------- drums
 
-/** Il kit Rave con la colla: saturazione, compressione e una stanza piccola. Le macro scavano
- *  nella cassa (coda, rumble, nota), nel rullante (la stanza) e negli hi-hat. */
-export const BATTERIA_RAVE: RackPreset = (() => {
+/** The Rave kit with the glue: saturation, compression and a small room. The macros dig
+ *  into the kick (tail, rumble, note), into the snare (the room) and into the hi-hats. */
+export const RAVE_DRUMS: RackPreset = (() => {
   const KIT = 0, HEAT = 1, GLUE = 2, ROOM = 3;
-  return rack('Batteria rave', device(DRUMS, 'Rave', { volume: -9 }), [
-    effect(DRIVE, 'Calda', { mix: 0 }),
-    effect(COMPRESSOR, 'Punch batteria'),
-    effect(REVERB, 'Stanza', { mix: 0 }),
+  return rack('Rave drums', device(DRUMS, 'Rave', { volume: -9 }), [
+    effect(DRIVE, 'Warm', { mix: 0 }),
+    effect(COMPRESSOR, 'Drum punch'),
+    effect(REVERB, 'Room', { mix: 0 }),
   ], [
-    { name: 'Coda cassa', value: 50, moves: [[KIT, 'p1.kick.decay', 0.12, 0.4], [KIT, 'p1.kick.tailDecay', 0.2, 1.2]] },
+    { name: 'Kick tail', value: 50, moves: [[KIT, 'p1.kick.decay', 0.12, 0.4], [KIT, 'p1.kick.tailDecay', 0.2, 1.2]] },
     { name: 'Rumble', value: 90, moves: [[KIT, 'p1.kick.rumble', 0, 100], [KIT, 'p1.kick.rumbleTime', 0.6, 2.5]] },
-    // la cassa accordata: da C0 a C1, a semitoni
-    { name: 'Nota cassa', value: 42, moves: [[KIT, 'p1.kick.note', 0, 12], [KIT, 'p13.kick.note', 0, 12]] },
-    { name: 'Stanza rullante', value: 50, moves: [[KIT, 'p3.snare.room', 10, 90], [KIT, 'p3.snare.roomTime', 0.5, 2.5]] },
-    { name: 'Hat aperto', value: 35, moves: [[KIT, 'p11.cymbals.openDecay', 0.12, 1.5]] },
+    // the tuned kick: from C0 to C1, in semitones
+    { name: 'Kick note', value: 42, moves: [[KIT, 'p1.kick.note', 0, 12], [KIT, 'p13.kick.note', 0, 12]] },
+    { name: 'Snare room', value: 50, moves: [[KIT, 'p3.snare.room', 10, 90], [KIT, 'p3.snare.roomTime', 0.5, 2.5]] },
+    { name: 'Open hat', value: 35, moves: [[KIT, 'p11.cymbals.openDecay', 0.12, 1.5]] },
     {
-      name: 'Brillantezza', value: 70,
+      name: 'Brightness', value: 70,
       moves: [[KIT, 'p7.cymbals.closedTone', 40, 90], [KIT, 'p9.cymbals.pedalTone', 40, 90], [KIT, 'p11.cymbals.openTone', 40, 90]],
     },
-    { name: 'Saturazione', moves: [[HEAT, 'mix', 0, 100], [HEAT, 'drive', 6, 16]] },
-    { name: 'Colla', value: 80, moves: [[GLUE, 'mix', 0, 100], [ROOM, 'mix', 0, 15]] },
+    { name: 'Saturation', moves: [[HEAT, 'mix', 0, 100], [HEAT, 'drive', 6, 16]] },
+    { name: 'Glue', value: 80, moves: [[GLUE, 'mix', 0, 100], [ROOM, 'mix', 0, 15]] },
   ]);
 })();
 
-/** Il kit Dub techno nell'eco e nella sala, con il filtro davanti: tutto si allontana. */
-export const BATTERIA_DUB: RackPreset = (() => {
+/** The Dub techno kit in the echo and the hall, with the filter in front: everything moves away. */
+export const DUB_DRUMS: RackPreset = (() => {
   const KIT = 0, FILTER = 1, ECHO = 2, HALL = 3;
-  return rack('Batteria dub', device(DRUMS, 'Dub techno'), [
+  return rack('Dub drums', device(DRUMS, 'Dub techno'), [
     effect(AUTO_FILTER, null, { freq: 20000, resonance: 25, slope: 1 }),
     effect(DELAY, 'Dub', { mix: 0 }),
-    effect(REVERB, 'Sala', { mix: 0 }),
+    effect(REVERB, 'Hall', { mix: 0 }),
   ], [
-    { name: 'Filtro', moves: [[FILTER, 'freq', 20000, 250]] },
-    { name: 'Eco', value: 45, moves: [[ECHO, 'mix', 0, 45]] },
-    { name: 'Ritorni', value: 60, moves: [[ECHO, 'feedback', 20, 85]] },
-    { name: 'Sala', value: 40, moves: [[HALL, 'mix', 0, 45], [HALL, 'decay', 2, 8]] },
-    { name: 'Stanza rim', value: 50, moves: [[KIT, 'p2.snare.room', 10, 90], [KIT, 'p2.snare.roomTime', 0.8, 3]] },
+    { name: 'Filter', moves: [[FILTER, 'freq', 20000, 250]] },
+    { name: 'Echo', value: 45, moves: [[ECHO, 'mix', 0, 45]] },
+    { name: 'Returns', value: 60, moves: [[ECHO, 'feedback', 20, 85]] },
+    { name: 'Hall', value: 40, moves: [[HALL, 'mix', 0, 45], [HALL, 'decay', 2, 8]] },
+    { name: 'Rim room', value: 50, moves: [[KIT, 'p2.snare.room', 10, 90], [KIT, 'p2.snare.roomTime', 0.8, 3]] },
     { name: 'Rumble', value: 45, moves: [[KIT, 'p1.kick.rumble', 0, 80], [KIT, 'p1.kick.tailDecay', 0.5, 2]] },
-    { name: 'Hat aperto', value: 60, moves: [[KIT, 'p11.cymbals.openDecay', 0.3, 2.5]] },
-    { name: 'Larghezza hat', value: 80, moves: [[KIT, 'p7.cymbals.width', 20, 100], [KIT, 'p11.cymbals.width', 20, 100]] },
+    { name: 'Open hat', value: 60, moves: [[KIT, 'p11.cymbals.openDecay', 0.3, 2.5]] },
+    { name: 'Hat width', value: 80, moves: [[KIT, 'p7.cymbals.width', 20, 100], [KIT, 'p11.cymbals.width', 20, 100]] },
   ]);
 })();
 
-/** Il kit Lo-fi nel campionatore vecchio: bit e frequenza che calano, il rullante che si sgrana,
- *  lo stutter a pulsante. */
-export const BATTERIA_ROTTA: RackPreset = (() => {
+/** The Lo-fi kit in the old sampler: bits and rate dropping, the snare crumbling,
+ *  the button stutter. */
+export const BROKEN_DRUMS: RackPreset = (() => {
   const KIT = 0, BITS = 1, STUTTER = 2, GLUE = 3;
-  return rack('Batteria rotta', device(DRUMS, 'Lo-fi', { volume: -6 }), [
-    effect(REDUX, 'Campionatore 12 bit', { mix: 0 }),
+  return rack('Broken drums', device(DRUMS, 'Lo-fi', { volume: -6 }), [
+    effect(REDUX, '12-bit sampler', { mix: 0 }),
     repeatButton('1/16'),
-    effect(COMPRESSOR, 'Schiaccia', { mix: 0 }),
+    effect(COMPRESSOR, 'Squash', { mix: 0 }),
   ], [
     { name: 'Bit', value: 40, moves: [[BITS, 'mix', 0, 100], [BITS, 'bits', 16, 5], [BITS, 'rate', 30000, 5000]] },
-    { name: 'Grana', value: 60, moves: [[KIT, 'p3.snare.grain', 0, 100], [KIT, 'p5.snare.grain', 30, 100]] },
+    { name: 'Grain', value: 60, moves: [[KIT, 'p3.snare.grain', 0, 100], [KIT, 'p5.snare.grain', 30, 100]] },
     { name: 'Stutter', mode: 'button', moves: [[STUTTER, 'repeat', 0, 1]] },
-    { name: 'Schiaccia', value: 50, moves: [[GLUE, 'mix', 0, 80]] },
-    { name: 'Cassa', value: 64, moves: [[KIT, 'p1.kick.drive', 0, 80], [KIT, 'p1.kick.decay', 0.06, 0.3]] },
-    { name: 'Metallo', value: 64, moves: [[KIT, 'p7.cymbals.variation', 10, 100], [KIT, 'p11.cymbals.variation', 10, 100]] },
-    { name: 'Hat aperto', value: 40, moves: [[KIT, 'p11.cymbals.openDecay', 0.15, 1.5]] },
-    { name: 'Stanza', value: 30, moves: [[KIT, 'p5.snare.room', 0, 80], [KIT, 'p5.snare.roomTime', 0.3, 2]] },
+    { name: 'Squash', value: 50, moves: [[GLUE, 'mix', 0, 80]] },
+    { name: 'Kick', value: 64, moves: [[KIT, 'p1.kick.drive', 0, 80], [KIT, 'p1.kick.decay', 0.06, 0.3]] },
+    { name: 'Metal', value: 64, moves: [[KIT, 'p7.cymbals.variation', 10, 100], [KIT, 'p11.cymbals.variation', 10, 100]] },
+    { name: 'Open hat', value: 40, moves: [[KIT, 'p11.cymbals.openDecay', 0.15, 1.5]] },
+    { name: 'Room', value: 30, moves: [[KIT, 'p5.snare.room', 0, 80], [KIT, 'p5.snare.roomTime', 0.3, 2]] },
   ]);
 })();
 
-/** Il kit Industriale ancora più duro: distorsione, OTT, una sala di cemento. */
-export const BATTERIA_INDUSTRIALE: RackPreset = (() => {
+/** The Industrial kit even harder: distortion, OTT, a concrete hall. */
+export const INDUSTRIAL_DRUMS: RackPreset = (() => {
   const KIT = 0, BREAK = 1, OTT = 2, HALL = 3;
-  return rack('Batteria industriale', device(DRUMS, 'Industriale', { volume: -10 }), [
-    effect(DRIVE, 'Rotto', { mix: 0 }),
+  return rack('Industrial drums', device(DRUMS, 'Industrial', { volume: -10 }), [
+    effect(DRIVE, 'Broken', { mix: 0 }),
     effect(MULTIBAND, 'OTT', { mix: 0, output: 0 }),
-    effect(REVERB, 'Sala', { mix: 0, damping: 3000 }),
+    effect(REVERB, 'Hall', { mix: 0, damping: 3000 }),
   ], [
-    { name: 'Distruzione', moves: [[BREAK, 'mix', 0, 50], [BREAK, 'output', 0, -6]] },
+    { name: 'Destruction', moves: [[BREAK, 'mix', 0, 50], [BREAK, 'output', 0, -6]] },
     { name: 'OTT', value: 40, moves: [[OTT, 'mix', 0, 60]] },
-    { name: 'Cemento', value: 30, moves: [[HALL, 'mix', 0, 40], [HALL, 'decay', 1.5, 6]] },
+    { name: 'Concrete', value: 30, moves: [[HALL, 'mix', 0, 40], [HALL, 'decay', 1.5, 6]] },
     { name: 'Rumble', value: 64, moves: [[KIT, 'p13.kick.rumble', 0, 100], [KIT, 'p13.kick.rumbleDrive', 40, 100]] },
-    { name: 'Stanza rullante', value: 40, moves: [[KIT, 'p3.snare.room', 0, 90], [KIT, 'p3.snare.roomTime', 0.5, 3]] },
-    { name: 'Rullante sporco', value: 50, moves: [[KIT, 'p3.snare.drive', 20, 100], [KIT, 'p3.snare.grain', 0, 80]] },
-    { name: 'Piatti lunghi', value: 40, moves: [[KIT, 'p14.cymbals.crashDecay', 1, 8], [KIT, 'p16.cymbals.rideDecay', 1, 8]] },
-    { name: 'Hat aperto', value: 40, moves: [[KIT, 'p11.cymbals.openDecay', 0.2, 2]] },
+    { name: 'Snare room', value: 40, moves: [[KIT, 'p3.snare.room', 0, 90], [KIT, 'p3.snare.roomTime', 0.5, 3]] },
+    { name: 'Dirty snare', value: 50, moves: [[KIT, 'p3.snare.drive', 20, 100], [KIT, 'p3.snare.grain', 0, 80]] },
+    { name: 'Long cymbals', value: 40, moves: [[KIT, 'p14.cymbals.crashDecay', 1, 8], [KIT, 'p16.cymbals.rideDecay', 1, 8]] },
+    { name: 'Open hat', value: 40, moves: [[KIT, 'p11.cymbals.openDecay', 0.2, 2]] },
   ]);
 })();
 
-/** Una cassa da costruire a manopole: il Kick "Techno", un EQ e il clipper. */
-export const CASSA: RackPreset = (() => {
+/** A kick to build with knobs: the "Techno" Kick, an EQ and the clipper. */
+export const KICK_RACK: RackPreset = (() => {
   const KICK_ = 0, CLIP = 2;
-  return rack('Cassa', device(KICK, 'Techno', { rumbleOn: 1, rumble: 0 }), [
+  return rack('Kick', device(KICK, 'Techno', { rumbleOn: 1, rumble: 0 }), [
     eqOf(25, [[60, 2, 1], [300, -3, 1.2], [4000, 1.5, 1]]),
-    effect(CLIPPER, 'Cassa', { drive: 0 }),
+    effect(CLIPPER, 'Kick', { drive: 0 }),
   ], [
-    { name: 'Nota', value: 53, moves: [[KICK_, 'note', 0, 12]] },
+    { name: 'Note', value: 53, moves: [[KICK_, 'note', 0, 12]] },
     { name: 'Punch', value: 60, moves: [[KICK_, 'snapLevel', 10, 90], [KICK_, 'pitch', 15, 45]] },
-    { name: 'Caduta', value: 40, moves: [[KICK_, 'pitchTime', 15, 90]] },
-    { name: 'Corpo', value: 50, moves: [[KICK_, 'decay', 0.1, 0.5], [KICK_, 'hold', 5, 60]] },
-    { name: 'Coda', value: 45, moves: [[KICK_, 'tailLevel', 0, 80], [KICK_, 'tailDecay', 0.2, 2]] },
+    { name: 'Fall', value: 40, moves: [[KICK_, 'pitchTime', 15, 90]] },
+    { name: 'Body', value: 50, moves: [[KICK_, 'decay', 0.1, 0.5], [KICK_, 'hold', 5, 60]] },
+    { name: 'Tail', value: 45, moves: [[KICK_, 'tailLevel', 0, 80], [KICK_, 'tailDecay', 0.2, 2]] },
     { name: 'Rumble', moves: [[KICK_, 'rumble', 0, 100], [KICK_, 'rumbleDrive', 30, 90]] },
-    { name: 'Saturazione', value: 30, moves: [[KICK_, 'drive', 0, 70]] },
+    { name: 'Saturation', value: 30, moves: [[KICK_, 'drive', 0, 70]] },
     { name: 'Clip', value: 40, moves: [[CLIP, 'drive', 0, 10]] },
   ]);
 })();
 
-/** Un rullante da costruire a manopole, con la sala da lanciare. */
-export const RULLANTE: RackPreset = (() => {
+/** A snare to build with knobs, with the hall to throw. */
+export const SNARE_RACK: RackPreset = (() => {
   const SNARE_ = 0, GLUE = 1, THROW = 2;
-  return rack('Rullante', device(SNARE, 'Techno', { volume: -12 }), [
-    effect(COMPRESSOR, 'Punch batteria', { mix: 0 }),
-    effect(REVERB, 'Lancio voce', { mix: 0 }),
+  return rack('Snare', device(SNARE, 'Techno', { volume: -12 }), [
+    effect(COMPRESSOR, 'Drum punch', { mix: 0 }),
+    effect(REVERB, 'Vocal throw', { mix: 0 }),
   ], [
-    { name: 'Nota', value: 40, moves: [[SNARE_, 'note', 0, 24]] },
-    { name: 'Bacchetta', value: 50, moves: [[SNARE_, 'snapLevel', 10, 90]] },
-    { name: 'Pelle', value: 55, moves: [[SNARE_, 'bodyLevel', 20, 90], [SNARE_, 'decay', 0.06, 0.3]] },
-    { name: 'Cordiera', value: 64, moves: [[SNARE_, 'wiresLevel', 20, 100], [SNARE_, 'wiresDecay', 0.1, 0.6]] },
-    { name: 'Grana', moves: [[SNARE_, 'grain', 0, 100]] },
-    { name: 'Stanza', value: 45, moves: [[SNARE_, 'room', 0, 90], [SNARE_, 'roomTime', 0.3, 2.5]] },
+    { name: 'Note', value: 40, moves: [[SNARE_, 'note', 0, 24]] },
+    { name: 'Stick', value: 50, moves: [[SNARE_, 'snapLevel', 10, 90]] },
+    { name: 'Skin', value: 55, moves: [[SNARE_, 'bodyLevel', 20, 90], [SNARE_, 'decay', 0.06, 0.3]] },
+    { name: 'Snares', value: 64, moves: [[SNARE_, 'wiresLevel', 20, 100], [SNARE_, 'wiresDecay', 0.1, 0.6]] },
+    { name: 'Grain', moves: [[SNARE_, 'grain', 0, 100]] },
+    { name: 'Room', value: 45, moves: [[SNARE_, 'room', 0, 90], [SNARE_, 'roomTime', 0.3, 2.5]] },
     { name: 'Punch', value: 50, moves: [[GLUE, 'mix', 0, 100]] },
-    { name: 'Lancio', moves: [[THROW, 'mix', 0, 60]] },
+    { name: 'Throw', moves: [[THROW, 'mix', 0, 60]] },
   ]);
 })();
 
-/** Gli hi-hat che si muovono: pan a tempo, eco ping-pong e il flanger metallico. */
-export const HAT_IN_MOVIMENTO: RackPreset = (() => {
+/** The moving hi-hats: synced pan, ping-pong echo and the metallic flanger. */
+export const MOVING_HATS: RackPreset = (() => {
   const HATS = 0, PAN = 1, ECHO = 2, JET = 3;
-  return rack('Hat in movimento', device(CYMBALS, 'Techno secca'), [
-    effect(AUTO_PAN, 'Pan in ottavi', { amount: 0 }),
+  return rack('Moving hats', device(CYMBALS, 'Dry techno'), [
+    effect(AUTO_PAN, 'Eighths pan', { amount: 0 }),
     effect(DELAY, 'Ping-pong 1/8.', { mix: 0 }),
-    effect(PHASER, 'Hat metallici', { mix: 0 }),
+    effect(PHASER, 'Metallic hats', { mix: 0 }),
   ], [
-    { name: 'Chiuso', value: 40, moves: [[HATS, 'closedDecay', 0.02, 0.15]] },
-    { name: 'Aperto', value: 40, moves: [[HATS, 'openDecay', 0.15, 1.5]] },
-    { name: 'Brillantezza', value: 70, moves: [[HATS, 'closedTone', 30, 95], [HATS, 'pedalTone', 30, 95], [HATS, 'openTone', 30, 95]] },
-    { name: 'Variazione', value: 30, moves: [[HATS, 'variation', 0, 100]] },
-    { name: 'Rumore', value: 50, moves: [[HATS, 'closedNoise', 10, 90], [HATS, 'openNoise', 10, 90]] },
+    { name: 'Closed', value: 40, moves: [[HATS, 'closedDecay', 0.02, 0.15]] },
+    { name: 'Open', value: 40, moves: [[HATS, 'openDecay', 0.15, 1.5]] },
+    { name: 'Brightness', value: 70, moves: [[HATS, 'closedTone', 30, 95], [HATS, 'pedalTone', 30, 95], [HATS, 'openTone', 30, 95]] },
+    { name: 'Variation', value: 30, moves: [[HATS, 'variation', 0, 100]] },
+    { name: 'Noise', value: 50, moves: [[HATS, 'closedNoise', 10, 90], [HATS, 'openNoise', 10, 90]] },
     { name: 'Pan', value: 50, moves: [[PAN, 'amount', 0, 100]] },
-    { name: 'Eco', value: 30, moves: [[ECHO, 'mix', 0, 40]] },
+    { name: 'Echo', value: 30, moves: [[ECHO, 'mix', 0, 40]] },
     { name: 'Jet', moves: [[JET, 'mix', 0, 60]] },
   ]);
 })();
 
-/** Un effetto regolato a mano: solo questi valori, con il nome del suono da cui era partito. */
+/** An effect set by hand: only these values, with the name of the sound it started from. */
 const tuned = (type: DeviceType, preset: string, params: Readonly<Record<string, number>>): SavedEffect =>
   ({ type: type.type, preset, params, enabled: true });
 
-/** Per il master: compressione, nastro, OTT, EQ e clipper in una manopola per idea. Parte già
- *  regolato e alza di 3 dB (macro Volume). */
+/** For the master: compression, tape, OTT, EQ and clipper with one knob per idea. It starts already
+ *  set and raises by 3 dB (Volume macro). */
 export const SALSICCIA: RackPreset = (() => {
   const COMP = 0, TAPE = 1, OTT = 2, TONE = 3, CLIP = 4;
   return rack('Salsiccia', null, [
-    tuned(COMPRESSOR, 'Grasso', { threshold: -15.5, ratio: 4, knee: 10, attack: 6.300000000000001, release: 109, detector: 1, auto: 1, mix: 43 }),
-    tuned(DRIVE, 'Nastro', { shape: 2, drive: 10.5, bias: 13, color: 0, low: 60, tone: 18000, auto: 1, mix: 24 }),
+    tuned(COMPRESSOR, 'Fat', { threshold: -15.5, ratio: 4, knee: 10, attack: 6.300000000000001, release: 109, detector: 1, auto: 1, mix: 43 }),
+    tuned(DRIVE, 'Tape', { shape: 2, drive: 10.5, bias: 13, color: 0, low: 60, tone: 18000, auto: 1, mix: 24 }),
     tuned(MULTIBAND, 'OTT', { depth: 100, time: 50, input: 0, output: 0, mix: 13 }),
-    tuned(EQ, 'Corpo e aria', { b2on: 1, b2freq: 70, b2gain: 0, b7on: 1, b7freq: 9000, b7gain: 0 }),
+    tuned(EQ, 'Body and air', { b2on: 1, b2freq: 70, b2gain: 0, b7on: 1, b7freq: 9000, b7gain: 0 }),
     tuned(CLIPPER, 'Clip', { drive: 0, ceiling: -0.3, knee: 40, output: 3 }),
   ], [
-    { name: 'Grasso', value: 55, moves: [[COMP, 'mix', 0, 100], [COMP, 'threshold', -6, -28], [TAPE, 'mix', 0, 55], [OTT, 'mix', 0, 30]] },
-    { name: 'Colore', value: 64, moves: [[TAPE, 'color', -60, 60], [TAPE, 'bias', 0, 25]] },
-    { name: 'Spinta', value: 45, moves: [[TAPE, 'drive', 4, 22]] },
-    { name: 'Corpo', moves: [[TONE, 'b2gain', 0, 5]] },
-    { name: 'Aria', moves: [[TONE, 'b7gain', 0, 5]] },
-    { name: 'Pompa', value: 55, moves: [[COMP, 'release', 260, 35], [COMP, 'attack', 15, 2]] },
+    { name: 'Fat', value: 55, moves: [[COMP, 'mix', 0, 100], [COMP, 'threshold', -6, -28], [TAPE, 'mix', 0, 55], [OTT, 'mix', 0, 30]] },
+    { name: 'Colour', value: 64, moves: [[TAPE, 'color', -60, 60], [TAPE, 'bias', 0, 25]] },
+    { name: 'Push', value: 45, moves: [[TAPE, 'drive', 4, 22]] },
+    { name: 'Body', moves: [[TONE, 'b2gain', 0, 5]] },
+    { name: 'Air', moves: [[TONE, 'b7gain', 0, 5]] },
+    { name: 'Pump', value: 55, moves: [[COMP, 'release', 260, 35], [COMP, 'attack', 15, 2]] },
     { name: 'Clip', moves: [[CLIP, 'drive', 0, 8]] },
     { name: 'Volume', value: 106, moves: [[CLIP, 'output', -12, 6]] },
   ]);
 })();
 
-/** I rack di fabbrica, in ordine. */
+/** The factory racks, in order. */
 export const FACTORY_RACKS: readonly RackPreset[] = [
-  TORNADO, FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTA, MURO, ACIDO_FX, MACCHINA, SALSICCIA,
-  ACIDO, NEBBIA, RINGHIO, NUOVA_ONDA, OSSIGENO, HOOVER, JUMP, LEVARE, TRECENTOTRE,
-  WOBBLE, POMPA, CANCELLO, ACIDO_VIVO, SIRENA, COLPO,
-  BATTERIA_RAVE, BATTERIA_DUB, BATTERIA_ROTTA, BATTERIA_INDUSTRIALE, CASSA, RULLANTE, HAT_IN_MOVIMENTO,
+  TORNADO, FADE_TO_GREY, DUB, FRENCH_TOUCH, CASSETTE, WALL, ACID_FX, MACHINE, SALSICCIA,
+  ACID, FOG, GROWL, NEW_WAVE, OXYGEN, HOOVER, JUMP, OFFBEAT, THREE_OH_THREE,
+  WOBBLE, PUMP_RACK, GATED, LIVELY_ACID, SIREN_RACK, HIT,
+  RAVE_DRUMS, DUB_DRUMS, BROKEN_DRUMS, INDUSTRIAL_DRUMS, KICK_RACK, SNARE_RACK, MOVING_HATS,
 ];

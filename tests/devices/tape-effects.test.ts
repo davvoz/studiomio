@@ -11,7 +11,7 @@ const SR = 48000, BLOCK = 128, BPM = 120;
 const BEAT = 24000, SIXTEENTH = 6000;
 const BPS = BPM / 60 / SR;
 
-/** Il campione n vale n + 1: dall'uscita si legge da dove viene il suono. */
+/** Sample n is n + 1: from the output you read where the sound comes from. */
 const ramp = (n: number) => n + 1;
 const sine = (n: number) => 0.5 * Math.sin((2 * Math.PI * 220 * n) / SR);
 
@@ -29,7 +29,7 @@ interface Run {
   readonly frames: number;
   readonly input?: (n: number) => number;
   readonly transport?: Transport;
-  /** Parametri che cambiano dall'inizio del blocco che contiene il campione dato. */
+  /** Parameters changing from the start of the block containing the given sample. */
   readonly changes?: readonly (readonly [frame: number, params: Record<string, number>])[];
 }
 
@@ -58,29 +58,29 @@ function play(core: Core, resolve: (v: Record<string, number>) => Record<string,
 const tapeStop = (params: Record<string, number>, o: Run) => play(new TapeStopCore(SR), v => resolveParams(TAPE_STOP, v), params, o);
 const reverse = (params: Record<string, number>, o: Run) => play(new ReverseCore(SR), v => resolveParams(REVERSE, v), params, o);
 
-/** Il salto più grande tra due campioni vicini in [from, to). */
+/** The biggest jump between two neighbouring samples in [from, to). */
 function maxJump(x: Float32Array, from = 1, to = x.length): number {
   let j = 0;
   for (let n = Math.max(1, from); n < to; n++) j = Math.max(j, Math.abs(x[n] - x[n - 1]));
   return j;
 }
 
-describe('Nastro', () => {
-  it('rilegge i campioni registrati; fra due campioni interpola (una rampa resta una rampa)', () => {
+describe('Tape', () => {
+  it('rereads the recorded samples; between two samples it interpolates (a ramp stays a ramp)', () => {
     const tape = new TapeBuffer(1000), out = new Float32Array(2);
     for (let n = 0; n < 2500; n++) tape.write(n, -n);
     tape.read(2000, out);
     expect([...out]).toEqual([2000, -2000]);
     tape.read(1999.25, out);
     expect(out[0]).toBeCloseTo(1999.25, 6);
-    // troppo indietro (il nastro ricorda 1000 campioni) o nel futuro: silenzio
+    // too far back (the tape remembers 1000 samples) or in the future: silence
     tape.read(1000, out);
     expect(out[0]).toBe(0);
     tape.read(2500, out);
     expect(out[0]).toBe(0);
   });
 
-  it('allungato, tiene il passato che aveva', () => {
+  it('lengthened, it keeps the past it had', () => {
     const tape = new TapeBuffer(100), out = new Float32Array(2);
     for (let n = 0; n < 250; n++) tape.write(n, n);
     tape.ensure(1000);
@@ -91,7 +91,7 @@ describe('Nastro', () => {
     }
   });
 
-  it('la testina che salta sfuma dalla lettura vecchia a quella nuova', () => {
+  it('the jumping head fades from the old reading to the new one', () => {
     const tape = new TapeBuffer(1000), out = new Float32Array(2);
     for (let n = 0; n < 1000; n++) tape.write(n < 500 ? 1 : 0, 0);
     const reader = new TapeReader(10);
@@ -109,42 +109,42 @@ describe('Nastro', () => {
 });
 
 describe('Tape Stop', () => {
-  /** Lo Stop si accende all'inizio di un blocco. */
+  /** The Stop turns on at the start of a block. */
   const on = 47 * BLOCK;
 
-  it('spento il suono passa identico', () => {
+  it('off the sound passes identical', () => {
     const out = tapeStop({}, { frames: 10000 });
     expect(out.every((y, n) => y === ramp(n))).toBe(true);
   });
 
-  it('Stop: rallenta fino a fermarsi nella Durata (1/2 a 120 BPM = 1 s), poi tace', () => {
+  it('Stop: slows down until it stops within the Duration (1/2 at 120 BPM = 1 s), then it\'s silent', () => {
     const out = tapeStop({}, { frames: on + SR + 2000, changes: [[on, { stop: 1 }]] });
     expect(out[on - 1]).toBe(ramp(on - 1));
-    // la velocità è quanto avanza la testina a ogni campione: cala in linea retta
+    // the speed is how much the head advances at each sample: it drops in a straight line
     const speed = (n: number) => out[n + 1] - out[n];
     expect(speed(on + 10)).toBeCloseTo(1, 2);
     expect(speed(on + SR / 4)).toBeCloseTo(0.75, 2);
     expect(speed(on + SR / 2)).toBeCloseTo(0.5, 2);
-    // ferma: silenzio
+    // stopped: silence
     expect(out[on + SR + 100]).toBe(0);
   });
 
-  it('Durata in ms e curva rapida: a metà va già piano', () => {
+  it('Duration in ms and fast curve: halfway it\'s already slow', () => {
     const out = tapeStop({ sync: TAPE_SYNC.ms, time: 200, curve: 2 }, { frames: on + SR / 2, changes: [[on, { stop: 1 }]] });
     expect(out[on + 4800 + 1] - out[on + 4800]).toBeCloseTo(0.25, 2);
     expect(out[on + 9700]).toBe(0);
   });
 
-  it('spento lo Stop, senza ripartenza torna subito il suono di adesso', () => {
+  it('with the Stop off, without restart the sound of now comes back right away', () => {
     const off = 500 * BLOCK;
     const out = tapeStop({}, { frames: off + 2000, changes: [[on, { stop: 1 }], [off, { stop: 0 }]] });
     expect(out[off - 1]).toBe(0);
-    // sale in 5 ms (niente click), poi è il suono di adesso
+    // it rises in 5 ms (no click), then it's the sound of now
     expect(out[off]).toBeLessThan(ramp(off) / 100);
     expect(out[off + 1000]).toBe(ramp(off + 1000));
   });
 
-  it('con la ripartenza accelera da fermo e poi torna al vivo', () => {
+  it('with the restart it speeds up from standstill and then goes back to live', () => {
     const off = 500 * BLOCK, spin = SR / 2;
     const out = tapeStop({ spin: 500 }, { frames: off + spin + 3000, changes: [[on, { stop: 1 }], [off, { stop: 0 }]] });
     const speed = (n: number) => out[n + 1] - out[n];
@@ -153,27 +153,27 @@ describe('Tape Stop', () => {
     expect(out[off + spin + 2000]).toBe(ramp(off + spin + 2000));
   });
 
-  it('Partenza 1/4: la frenata aspetta il prossimo quarto', () => {
+  it('Start 1/4: the braking waits for the next quarter', () => {
     const quarter = STARTS.findIndex(([l]) => l === '1/4');
     const out = tapeStop({ start: quarter }, { frames: BEAT + 1000, changes: [[10 * BLOCK, { stop: 1 }]] });
     expect(out[BEAT - 1]).toBe(ramp(BEAT - 1));
     expect(out[BEAT + 501] - out[BEAT + 500]).toBeLessThan(1);
   });
 
-  it('da fermo la Partenza non aspetta', () => {
+  it('when stopped the Start doesn\'t wait', () => {
     const quarter = STARTS.findIndex(([l]) => l === '1/4');
     const out = tapeStop({ start: quarter }, { frames: 4000, transport: () => null, changes: [[10 * BLOCK, { stop: 1 }]] });
     expect(out[10 * BLOCK + 2001] - out[10 * BLOCK + 2000]).toBeLessThan(1);
   });
 
-  it('niente click: frenata, silenzio, ripartenza e Stop spento a metà frenata', () => {
+  it('no clicks: braking, silence, restart and Stop turned off halfway through braking', () => {
     const quick = BRAKE_DIVISIONS.findIndex(([l]) => l === '1/8');
     const cases: Run[] = [
       { frames: 3 * SR, input: sine, changes: [[on, { stop: 1 }], [SR + 100 * BLOCK, { stop: 0 }]] },
       { frames: 2 * SR, input: sine, changes: [[on, { stop: 1 }], [on + 40 * BLOCK, { stop: 0 }]] },
     ];
     for (const spin of [0, 300]) {
-      for (const run of cases) expect(maxJump(tapeStop({ division: quick, spin }, run))).toBeLessThan(0.06); // il seno: 0.014
+      for (const run of cases) expect(maxJump(tapeStop({ division: quick, spin }, run))).toBeLessThan(0.06); // the sine: 0.014
     }
   });
 });
@@ -181,20 +181,20 @@ describe('Tape Stop', () => {
 describe('Reverse', () => {
   const sixteenths = REVERSE_LENGTHS.findIndex(([l]) => l === '1/16');
 
-  it('durante un pezzo si sente quello prima, dalla fine all\'inizio', () => {
+  it('during a piece you hear the previous one, from the end to the start', () => {
     const out = reverse({ length: sixteenths }, { frames: 3 * SIXTEENTH });
-    // a 1000 campioni dall'inizio del secondo pezzo: 2000 campioni indietro
+    // 1000 samples from the start of the second piece: 2000 samples back
     expect(out[SIXTEENTH + 1000]).toBe(ramp(SIXTEENTH - 1000));
     expect(out[SIXTEENTH + 5000]).toBe(ramp(SIXTEENTH - 5000));
     expect(out[2 * SIXTEENTH + 3000]).toBe(ramp(2 * SIXTEENTH - 3000));
   });
 
-  it('Dry/Wet mescola il suono diritto', () => {
+  it('Dry/Wet mixes in the straight sound', () => {
     const out = reverse({ length: sixteenths, mix: 50 }, { frames: 2 * SIXTEENTH });
     expect(out[SIXTEENTH + 1000]).toBeCloseTo((ramp(SIXTEENTH + 1000) + ramp(SIXTEENTH - 1000)) / 2, 2);
   });
 
-  it('acceso e spento al volo, con una sfumatura', () => {
+  it('turned on and off on the fly, with a fade', () => {
     const off = 50 * BLOCK, on = 140 * BLOCK;
     const out = reverse({ length: sixteenths }, { frames: 4 * SIXTEENTH, changes: [[off, { reverse: 0 }], [on, { reverse: 1 }]] });
     expect(out[off + 1000]).toBe(ramp(off + 1000));
@@ -202,23 +202,23 @@ describe('Reverse', () => {
     expect(out[on + 1000]).toBe(ramp(on + 1000 - 2 * u));
   });
 
-  it('dopo un salto del trasporto i pezzi ripartono dal punto giusto', () => {
-    // a 3072 il trasporto salta a 1/8 + 1000 campioni: siamo a 1000 campioni dal pezzo che inizia lì
+  it('after a transport jump the pieces restart from the right point', () => {
+    // at 3072 the transport jumps to 1/8 + 1000 samples: we're 1000 samples from the piece starting there
     const jump: Transport = f => ({ beat: f < 3072 ? f * BPS : 0.5 + (1000 + f - 3072) * BPS, bpm: BPM, beatsPerBar: 4 });
     const out = reverse({ length: sixteenths }, { frames: 6000, transport: jump });
     const n = 3072 + 1000, u = 2000;
     expect(out[n]).toBe(ramp(n - 2 * u));
   });
 
-  it('una battuta segue il metro; da fermo i pezzi girano liberi', () => {
-    const bar = REVERSE_LENGTHS.findIndex(([l]) => l === '1 battuta');
+  it('a bar follows the time signature; when stopped the pieces run free', () => {
+    const bar = REVERSE_LENGTHS.findIndex(([l]) => l === '1 bar');
     const waltz = reverse({ length: bar }, { frames: 3 * BEAT + 2000, transport: f => ({ beat: f * BPS, bpm: BPM, beatsPerBar: 3 }) });
     expect(waltz[3 * BEAT + 1000]).toBe(ramp(3 * BEAT - 1000));
     const free = reverse({ length: sixteenths }, { frames: 2 * SIXTEENTH, transport: () => null });
     expect(free[SIXTEENTH + 1000]).toBe(ramp(SIXTEENTH - 1000));
   });
 
-  it('niente click tra un pezzo e l\'altro', () => {
+  it('no clicks between one piece and the next', () => {
     for (const length of [sixteenths, REVERSE_LENGTHS.findIndex(([l]) => l === '1/4')]) {
       expect(maxJump(reverse({ length }, { frames: 2 * BEAT, input: sine }))).toBeLessThan(0.06);
     }

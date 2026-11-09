@@ -6,8 +6,8 @@ export interface EditContext {
   readonly ids: IdFactory;
 }
 
-/** Una modifica del progetto: funzione pura dal progetto vecchio a quello nuovo, con il
- *  nome che compare in "Annulla …". */
+/** A project edit: pure function from the old project to the new one, with the
+ *  name appearing in "Undo …". */
 export interface Edit {
   readonly label: string;
   apply(project: Project, ctx: EditContext): Project;
@@ -18,11 +18,11 @@ export const edit = (label: string, apply: (p: Project, ctx: EditContext) => Pro
 export type ChangeCause = 'edit' | 'undo' | 'redo' | 'load';
 
 export interface ApplyOptions {
-  /** Modifiche consecutive con la stessa chiave (es. un trascinamento) diventano un solo
-   *  passo di annullamento, finché non si chiama `endMerge()`. */
+  /** Consecutive edits with the same key (e.g. a drag) become a single
+   *  undo step, until `endMerge()` is called. */
   readonly mergeKey?: string;
-  /** Un cambio che si disfa da solo (un pulsante tenuto premuto e poi lasciato): non diventa un
-   *  passo di annullamento e non toglie quelli da rifare. */
+  /** A change that undoes itself (a button held down and then released): it doesn't become an
+   *  undo step and doesn't remove those to redo. */
   readonly transient?: boolean;
 }
 
@@ -35,8 +35,8 @@ type StoreEvents = {
   change: [project: Project, previous: Project, cause: ChangeCause];
 };
 
-/** Contenitore del progetto corrente con cronologia. Le viste leggono `project` e si
- *  iscrivono a `change`; nessuno modifica il progetto se non attraverso `apply`. */
+/** Container of the current project with history. The views read `project` and
+ *  subscribe to `change`; nobody changes the project except through `apply`. */
 export class ProjectStore {
   private current: Project;
   private past: Step[] = [];
@@ -54,14 +54,14 @@ export class ProjectStore {
     return this.current;
   }
 
-  /** Fabbrica degli id, per chi prepara dati da inserire con una modifica (es. un sample). */
+  /** Id factory, for whoever prepares data to insert with an edit (e.g. a sample). */
   get ids(): IdFactory {
     return this.ctx.ids;
   }
 
   get canUndo(): boolean { return this.past.length > 0; }
   get canRedo(): boolean { return this.future.length > 0; }
-  /** Nome della modifica che "Annulla" toglierebbe. */
+  /** Name of the edit "Undo" would remove. */
   get undoLabel(): string | null { return this.past.at(-1)?.label ?? null; }
   get redoLabel(): string | null { return this.future.at(-1)?.label ?? null; }
 
@@ -69,7 +69,7 @@ export class ProjectStore {
     return this.events.on('change', listener);
   }
 
-  /** Applica una modifica. Se la modifica lancia un errore il progetto resta com'era. */
+  /** Applies an edit. If the edit throws an error the project stays as it was. */
   apply(e: Edit, opts: ApplyOptions = {}): Project {
     const previous = this.current;
     const next = e.apply(previous, this.ctx);
@@ -91,7 +91,7 @@ export class ProjectStore {
     return next;
   }
 
-  /** Chiude la modifica continua in corso (es. al rilascio del mouse). */
+  /** Closes the continuous edit in progress (e.g. on mouse release). */
   endMerge(): void {
     this.mergeKey = null;
   }
@@ -104,7 +104,7 @@ export class ProjectStore {
     this.travel(this.future, this.past, 'redo');
   }
 
-  /** Sostituisce il progetto (apertura di un file): la cronologia riparte da zero. */
+  /** Replaces the project (opening a file): the history restarts from zero. */
   load(project: Project): void {
     const previous = this.current;
     this.current = project;

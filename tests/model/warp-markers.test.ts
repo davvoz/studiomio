@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WarpMarkers, type WarpMarker } from '../../src/model/warp-markers';
 
-/** beatOf/timeOf come in WarpMio (js/app.js), per confronto. */
+/** beatOf/timeOf as in WarpMio (js/app.js), for comparison. */
 function legacyBeatOf(ms: WarpMarker[], origBpm: number, t: number): number {
   const n = ms.length, k = origBpm / 60;
   if (n === 0) return t * k;
@@ -22,44 +22,44 @@ const irregular = WarpMarkers.of([
 ], 118);
 
 describe('WarpMarkers', () => {
-  it('beatOf coincide con WarpMio, anche fuori dai marker', () => {
+  it('beatOf matches WarpMio, also outside the markers', () => {
     for (const ms of [irregular, WarpMarkers.of([], 97), WarpMarkers.of([{ t: 1, b: 3 }], 97)]) {
       for (let t = -1; t <= 5; t += 0.137) expect(ms.beatOf(t)).toBeCloseTo(legacyBeatOf([...ms.markers], ms.baseBpm, t), 12);
     }
   });
 
-  it('timeOf è l\'inverso di beatOf', () => {
+  it('timeOf is the inverse of beatOf', () => {
     for (let t = -1; t <= 5; t += 0.21) expect(irregular.timeOf(irregular.beatOf(t))).toBeCloseTo(t, 9);
   });
 
-  it('straight mette 1.1.1 sul primo colpo e copre tutto il sample', () => {
+  it('straight puts 1.1.1 on the first hit and covers the whole sample', () => {
     const m = WarpMarkers.straight(120, 4, 0.25);
     expect(m.markers).toEqual([{ t: 0, b: -0.5 }, { t: 0.25, b: 0 }, { t: 4, b: 7.5 }]);
     expect(m.globalBpm).toBeCloseTo(120, 9);
   });
 
-  it('of ordina e scarta i doppioni', () => {
+  it('of sorts and discards the duplicates', () => {
     const m = WarpMarkers.of([{ t: 2, b: 4 }, { t: 0, b: 0 }, { t: 2.000001, b: 4.5 }, { t: 1, b: 2 }], 120);
     expect(m.markers.map(x => x.t)).toEqual([0, 1, 2]);
   });
 
-  it('aggiungere un marker non cambia la mappa', () => {
+  it('adding a marker doesn\'t change the map', () => {
     const { markers, index } = irregular.withMarkerAt(1.5);
     expect(markers.length).toBe(irregular.length + 1);
     expect(markers.markers[index].t).toBe(1.5);
     for (let t = 0; t <= 4; t += 0.1) expect(markers.beatOf(t)).toBeCloseTo(irregular.beatOf(t), 9);
-    // vicino a un marker esistente: nessun doppione
+    // near an existing marker: no duplicate
     expect(irregular.withMarkerAt(1.1005).markers).toBe(irregular);
   });
 
-  it('servono almeno due marker', () => {
+  it('at least two markers are needed', () => {
     const two = WarpMarkers.straight(120, 4);
     expect(two.canRemove(0)).toBe(false);
     expect(() => two.without(0)).toThrow();
     expect(irregular.without(2).length).toBe(4);
   });
 
-  it('trascinare un marker resta tra i vicini', () => {
+  it('dragging a marker stays between the neighbours', () => {
     const m = irregular.withMarkerBeat(2, 100);
     expect(m.markers[2].b).toBeCloseTo(4 - 0.01, 9);
     expect(m.markers[2].t).toBe(1.1);
@@ -68,17 +68,17 @@ describe('WarpMarkers', () => {
     expect(s.markers[2].b).toBe(2);
   });
 
-  it('tempo del segmento e tempo globale', () => {
+  it('segment tempo and global tempo', () => {
     const m = irregular.withSegmentBpm(1, 150);
     expect(m.segmentBpm(1)).toBeCloseTo(150, 9);
     expect(m.markers[1]).toEqual(irregular.markers[1]);
-    expect(m.segmentBpm(2)).toBeCloseTo(irregular.segmentBpm(2), 9); // i successivi scorrono soltanto
+    expect(m.segmentBpm(2)).toBeCloseTo(irregular.segmentBpm(2), 9); // the following ones only shift
     const g = irregular.withGlobalBpm(90);
     expect(g.globalBpm).toBeCloseTo(90, 9);
     expect(g.markers[0]).toEqual(irregular.markers[0]);
   });
 
-  it('origine, quantizzazione e azzeramento', () => {
+  it('origin, quantization and reset', () => {
     expect(irregular.withOrigin(1.1).beatOf(1.1)).toBeCloseTo(0, 12);
     const q = WarpMarkers.of([{ t: 0, b: 0.1 }, { t: 1, b: 1.9 }, { t: 1.05, b: 2.05 }, { t: 2, b: 4.2 }], 120).quantized(1);
     expect(q.markers.map(m => m.b)).toEqual([0, 2, 4]);
@@ -88,7 +88,7 @@ describe('WarpMarkers', () => {
     expect(c.globalBpm).toBeCloseTo(irregular.globalBpm, 9);
   });
 
-  it('cropped: i secondi ripartono dal taglio, i battiti restano', () => {
+  it('cropped: the seconds restart from the cut, the beats stay', () => {
     const m = WarpMarkers.of([{ t: 0, b: 0 }, { t: 1, b: 2 }, { t: 3, b: 5 }], 120);
     const c = m.cropped(0.5, 2);
     expect(c.markers.map(x => x.t)).toEqual([0, 0.5, 1.5]);

@@ -1,59 +1,59 @@
-/* Il suono del Beat Repeat. Ogni ripetizione è una "voce": all'attacco copia gli ultimi
- * millisecondi dell'ingresso (la dissolvenza ne ha bisogno), poi registra il pezzo mentre lo si
- * sente passare dal vivo e da lì lo rilegge, un giro dopo l'altro, fino alla fine del Gate.
- * Un giro sfuma nel successivo in pochi millisecondi (niente click), e così l'inizio e la fine;
- * una ripetizione nuova lascia sfumare quella vecchia, per questo le voci sono due.
- * Gli attacchi cadono sulla battuta del trasporto, al campione. Con "Solo Repeat" niente
- * ripetizioni a tempo, e in Gate il suono passa come in Inserisci: spento il pulsante, l'effetto
- * non si sente. Gira nell'AudioWorklet; qui niente Web Audio. */
+/* The Beat Repeat's sound. Each repetition is a "voice": at the attack it copies the last
+ * milliseconds of the input (the crossfade needs them), then records the piece while it's
+ * heard passing live and reads it back from there, one round after another, until the end of the Gate.
+ * One round fades into the next in a few milliseconds (no clicks), and so do the start and the end;
+ * a new repetition lets the old one fade out, that's why there are two voices.
+ * The attacks fall on the transport's bar, sample-accurate. With "Repeat Only" no
+ * timed repetitions, and in Gate the sound passes as in Insert: with the button off, the effect
+ * isn't heard. Runs in the AudioWorklet; no Web Audio here. */
 import { MIN_BPM } from '../../../core/music-time';
 import { dbToGain, type EffectCore, type TransportFollower, type TransportPosition } from '../../dsp/core';
 import { Noise } from '../../dsp/noise';
 import { Svf } from '../../dsp/svf';
 import { GRIDS, INTERVALS, MAX_VARIATION_HALVINGS, MIN_REPEAT_PITCH, REPEAT_MODE } from './beat-repeat';
 
-/** Le dissolvenze tra un giro e l'altro, all'inizio e alla fine, in secondi. */
+/** The fades between one round and the next, at the start and at the end, in seconds. */
 const FADE = 0.003;
-/** Tolleranza sulle linee della griglia, in frazioni di griglia (gli errori di arrotondamento). */
+/** Tolerance on the grid lines, in fractions of the grid (rounding errors). */
 const EPS = 1e-9;
-/** Il pezzo più lungo che si cattura, in quarti. */
+/** The longest piece captured, in quarters. */
 const MAX_GRID_BEATS = Math.max(...GRIDS.map(([, b]) => b));
 
-/** Tipi dell'Svf usati per il passa-banda. */
+/** Svf types used for the band-pass. */
 const LOW_PASS = 0, HIGH_PASS = 2;
 
 const HALF_PI = Math.PI / 2;
 
-/** Lo stato del pulsante Repeat. */
+/** The state of the Repeat button. */
 const MANUAL = { off: 0, waiting: 1, playing: 2 } as const;
 type Manual = (typeof MANUAL)[keyof typeof MANUAL];
 
-/** Ciò che una voce vuole sapere dei parametri, letto a ogni campione. */
+/** What a voice wants to know about the parameters, read at every sample. */
 interface Shape {
   pitch: number;
   pitchDecay: number;
-  /** Quanto resta del volume a ogni giro (1 = niente decadimento). */
+  /** How much volume is left at each round (1 = no decay). */
   keep: number;
   volume: number;
 }
 
-/** Una ripetizione: il pezzo catturato (preceduto da `fade` campioni di prima) e dove si trova. */
+/** A repetition: the captured piece (preceded by `fade` samples from before) and where it is. */
 class Voice {
   readonly left: Float32Array;
   readonly right: Float32Array;
   active = false;
-  /** Campioni dall'attacco. */
+  /** Samples since the attack. */
   private t = 0;
   private len = 0;
   private gate = 0;
   private fade = 0;
-  /** Velocità e volume dei giri `turn` e `turn + 1`, ricalcolati quando cambia il giro. */
+  /** Speed and volume of rounds `turn` and `turn + 1`, recomputed when the round changes. */
   private turn = -1;
   private speed0 = 1;
   private level0 = 0;
   private speed1 = 1;
   private level1 = 0;
-  /** Quanto suono diretto lascia passare (Inserisci), dopo l'ultimo `render`. */
+  /** How much direct sound it lets through (Insert), after the last `render`. */
   dry = 1;
 
   constructor(size: number) {
@@ -61,7 +61,7 @@ class Voice {
     this.right = new Float32Array(size);
   }
 
-  /** Parte adesso: `ring` contiene gli ultimi campioni dell'ingresso, il più recente prima di `pos`. */
+  /** Starts now: `ring` holds the last input samples, the most recent before `pos`. */
   start(ringL: Float32Array, ringR: Float32Array, pos: number, fade: number, len: number, gate: number): void {
     const mask = ringL.length - 1;
     for (let j = 0; j < fade; j++) {
@@ -77,17 +77,17 @@ class Voice {
     this.turn = -1;
   }
 
-  /** Smette sfumando (subito, se non si sente ancora). */
+  /** Stops fading (right away, if it isn't heard yet). */
   release(): void {
     if (this.active) this.gate = Math.min(this.gate, this.t + this.fade);
   }
 
-  /** I parametri sono cambiati: velocità e volumi si ricalcolano. */
+  /** The parameters changed: speeds and volumes are recomputed. */
   touch(): void {
     this.turn = -1;
   }
 
-  /** Un campione: registra l'ingresso se sta ancora catturando e somma le ripetizioni in `out`. */
+  /** One sample: records the input if it's still capturing and adds the repetitions into `out`. */
   render(xL: number, xR: number, s: Shape, out: Float32Array): void {
     const { t, len, fade } = this;
     if (t < len) {
@@ -96,7 +96,7 @@ class Voice {
     }
     const turn = Math.floor(t / len), ph = t - turn * len;
     if (turn !== this.turn) this.prepare(turn, s);
-    // negli ultimi `fade` campioni di un giro si sfuma nel successivo (a potenza costante)
+    // in the last `fade` samples of a round it fades into the next (at constant power)
     let old = 1, next = 0;
     if (ph >= len - fade) {
       const a = (ph - (len - fade)) / fade;
@@ -104,7 +104,7 @@ class Voice {
       next = Math.sin(a * HALF_PI);
     }
     let wL = 0, wR = 0;
-    // il giro 0 è il pezzo che passa dal vivo: è il suono diretto, non una ripetizione
+    // round 0 is the piece passing live: it's the direct sound, not a repetition
     if (turn > 0) {
       const g = old * this.level0;
       wL += this.read(this.left, ph, this.speed0) * g;
@@ -139,7 +139,7 @@ class Voice {
     this.level1 = level(turn + 1);
   }
 
-  /** Il pezzo a `ph` campioni dal suo inizio (negativo: nei campioni di prima), letto a `speed`. */
+  /** The piece `ph` samples from its start (negative: in the samples before), read at `speed`. */
   private read(buf: Float32Array, ph: number, speed: number): number {
     const pos = this.fade + ph * speed;
     const i = Math.floor(pos), frac = pos - i;
@@ -152,7 +152,7 @@ class Voice {
 export class BeatRepeatCore implements EffectCore, TransportFollower {
   private readonly voices: [Voice, Voice];
   private current = 0;
-  /** Gli ultimi campioni dell'ingresso (per la dissolvenza d'attacco). */
+  /** The last input samples (for the attack crossfade). */
   private readonly ringL: Float32Array;
   private readonly ringR: Float32Array;
   private ringPos = 0;
@@ -165,9 +165,9 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
 
   private bpm = 120;
   private transport: TransportPosition | null = null;
-  /** Il battito atteso all'inizio del prossimo blocco: se non torna, il trasporto è saltato. */
+  /** The beat expected at the start of the next block: if it doesn't match, the transport jumped. */
   private expected = NaN;
-  /** L'ultimo intervallo e l'ultima linea della griglia passati (per riconoscere i nuovi). */
+  /** The last interval and the last grid line passed (to recognize the new ones). */
   private lastInterval = 0;
   private lastGrid = 0;
   private manual: Manual = MANUAL.off;
@@ -206,7 +206,7 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
     this.gateBeats = v('gate', 8) / 4;
     this.repeat = v('repeat', 0) === 1;
     const only = v('only', 0) === 1;
-    // acceso "Solo Repeat", la ripetizione a tempo che suonava smette
+    // with "Repeat Only" on, the timed repetition that was playing stops
     if (only && !this.only && this.manual === MANUAL.off) this.voices[this.current].release();
     this.only = only;
     this.gridBeats = (GRIDS[v('grid', 3)] ?? GRIDS[3])[1];
@@ -238,8 +238,8 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
     const interval = pos ? this.intervalBeats || this.intervalBars * pos.beatsPerBar : 1;
     const offset = this.offsetBeats % interval, grid = this.gridBeats;
     if (pos) {
-      // partito, o saltato (loop, cursore): le linee si contano da qui, e una che cade
-      // esattamente qui vale
+      // started, or jumped (loop, cursor): the lines are counted from here, and one falling
+      // exactly here counts
       if (!(Math.abs(pos.beat - this.expected) <= 4 * bps)) {
         this.lastInterval = Math.floor((pos.beat - bps - offset) / interval + EPS);
         this.lastGrid = Math.floor((pos.beat - bps) / grid + EPS);
@@ -287,8 +287,8 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
     }
   }
 
-  /** Una ripetizione da questo campione: quella che suonava sfuma. Con Repeat dura finché
-   *  resta acceso. */
+  /** A repetition from this sample: the one playing fades out. With Repeat it lasts while it
+   *  stays on. */
   private trigger(manual: boolean, bpm: number): void {
     if (manual) this.manual = MANUAL.playing;
     const samplesPerBeat = (this.sampleRate * 60) / bpm;

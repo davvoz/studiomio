@@ -1,32 +1,32 @@
-/* I preset salvati da chi usa l'app, per tipo di dispositivo. Non sono nel progetto: valgono
- * per tutti i progetti, come quelli di fabbrica. Nell'app desktop sono file, uno per preset, in
- * Documenti\studiomio\Preset (li scrive il processo principale); nel browser restano nello
- * spazio locale. Si salvano solo i parametri: i sample caricati (es. i pad della Drum Machine)
- * sono file del progetto. */
+/* The presets saved by whoever uses the app, by device type. They're not in the project: they apply
+ * to all projects, like the factory ones. In the desktop app they're files, one per preset, in
+ * Documents\studiomio\Preset (the main process writes them); in the browser they stay in
+ * local storage. Only the parameters are saved: the loaded samples (e.g. the Drum Machine's pads)
+ * are project files. */
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { ParamValues } from '../model/device';
 import { paramsOf, resolveParams, type DeviceType, type Preset } from './device-type';
 import { effectType, instrumentType } from './registry';
 import type { RackBackend } from './user-racks';
 
-/** Un preset con il suo tipo di dispositivo, come lo scrive e lo rilegge chi lo conserva. */
+/** A preset with its device type, as whoever keeps it writes and reads it back. */
 export interface StoredPreset extends Preset {
   readonly type: string;
 }
 
-/** Chi conserva i preset: i file (app desktop) o lo spazio locale (browser). */
+/** Who keeps the presets: the files (desktop app) or local storage (browser). */
 export interface PresetBackend {
-  /** Tutti i preset salvati; ciò che non è un preset si salta qui. */
+  /** All the saved presets; what isn't a preset is skipped here. */
   load(): Promise<unknown[]>;
-  /** Scrive il preset (sopra quello con lo stesso tipo e nome); `folder` è la cartella dove
-   *  metterlo se è nuovo (il nome del dispositivo). */
+  /** Writes the preset (over the one with the same type and name); `folder` is the folder to
+   *  put it in if it's new (the device's name). */
   save(folder: string, preset: StoredPreset): Promise<void>;
   remove(type: string, name: string): Promise<void>;
-  /** Mostra dove sono (la cartella in Esplora file), se si può. */
+  /** Shows where they are (the folder in File Explorer), if possible. */
   reveal?(): Promise<void>;
 }
 
-/** Lo spazio locale del browser: localStorage nell'app, una mappa nei test. */
+/** The browser's local storage: localStorage in the app, a map in tests. */
 export interface PresetStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -34,21 +34,21 @@ export interface PresetStorage {
 
 declare global {
   interface Window {
-    /** Dal preload di Electron (electron/preload.cts); assente nel browser. */
+    /** From Electron's preload (electron/preload.cts); absent in the browser. */
     readonly studiomioDesktop?: { readonly presets: Required<PresetBackend>; readonly racks: Required<RackBackend> };
   }
 }
 
 const KEY = 'studiomio.presets';
 
-/** I valori da salvare: solo quelli diversi dai predefiniti, come nei preset di fabbrica. */
+/** The values to save: only those different from the defaults, as in the factory presets. */
 export function presetParams(t: DeviceType, values: ParamValues): ParamValues {
   const all = resolveParams(t, values);
-  // ciò che un preset non cambia (la mappa delle zone del Sampler) non ci va
+  // what a preset doesn't change (the Sampler's zone map) doesn't go in
   return Object.fromEntries(paramsOf(t).filter(p => all[p.id] !== p.default && !t.keepsOnPreset?.(p.id)).map(p => [p.id, all[p.id]]));
 }
 
-/** Un preset da dati letti da fuori (file, spazio locale), o null se non lo è. */
+/** A preset from data read from outside (file, local storage), or null if it isn't one. */
 export function storedPreset(raw: unknown): StoredPreset | null {
   if (!raw || typeof raw !== 'object') return null;
   const { type, name, params } = raw as Record<string, unknown>;
@@ -57,7 +57,7 @@ export function storedPreset(raw: unknown): StoredPreset | null {
   return { type, name, params: values };
 }
 
-/** I preset nello spazio locale, tutti in una voce: { tipo: [{ name, params }] }. */
+/** The presets in local storage, all in one entry: { type: [{ name, params }] }. */
 export class StoragePresets implements PresetBackend {
   constructor(private readonly storage: PresetStorage) {}
 
@@ -91,7 +91,7 @@ export class StoragePresets implements PresetBackend {
     try {
       this.storage.setItem(KEY, JSON.stringify(all));
     } catch {
-      throw new Error('lo spazio locale dell\'app è pieno o bloccato.');
+      throw new Error('the app\'s local storage is full or blocked.');
     }
   }
 }
@@ -100,23 +100,23 @@ export class UserPresets {
   private presets = new Map<string, Preset[]>();
   private readonly events = new Emitter<{ change: [] }>();
 
-  /** `backend` conserva i preset; `folderOf` dà la cartella di un preset nuovo dal suo tipo. */
+  /** `backend` keeps the presets; `folderOf` gives the folder of a new preset from its type. */
   constructor(
     private readonly backend: PresetBackend | null,
     private readonly folderOf: (type: string) => string = type => type,
   ) {}
 
-  /** I preset sono cambiati (letti, salvati, eliminati): per chi li elenca, come il browser. */
+  /** The presets changed (read, saved, deleted): for whoever lists them, like the browser. */
   onChange(fn: () => void): Unsubscribe {
     return this.events.on('change', fn);
   }
 
-  /** Si apre la cartella dei preset (solo nell'app desktop). */
+  /** Opens the presets folder (desktop app only). */
   get canReveal(): boolean {
     return !!this.backend?.reveal;
   }
 
-  /** Legge i preset salvati (all'avvio, prima di mostrare i dispositivi). */
+  /** Reads the saved presets (at startup, before showing the devices). */
   async load(): Promise<void> {
     if (!this.backend) return;
     this.presets = new Map();
@@ -127,7 +127,7 @@ export class UserPresets {
     this.events.emit('change');
   }
 
-  /** I preset salvati per il tipo, in ordine di nome. */
+  /** The saved presets for the type, in name order. */
   list(type: string): Preset[] {
     return [...(this.presets.get(type) ?? [])];
   }
@@ -136,9 +136,9 @@ export class UserPresets {
     return this.presets.get(type)?.find(p => p.name === name);
   }
 
-  /** Salva (o sostituisce, se il nome c'è già) un preset per il tipo. */
+  /** Saves (or replaces, if the name already exists) a preset for the type. */
   async save(type: string, preset: Preset): Promise<void> {
-    if (!this.backend) throw new Error('lo spazio locale dell\'app non è disponibile.');
+    if (!this.backend) throw new Error('the app\'s local storage isn\'t available.');
     const stored: StoredPreset = { type, name: preset.name, params: { ...preset.params } };
     await this.backend.save(this.folderOf(type), stored);
     this.put(stored);
@@ -170,7 +170,7 @@ const localStorageOrNull = (): PresetStorage | null => {
   try { return globalThis.localStorage ?? null; } catch { return null; }
 };
 
-/** I preset dell'utente di questa app: i file nell'app desktop, lo spazio locale nel browser. */
+/** This app's user presets: the files in the desktop app, local storage in the browser. */
 export const userPresets = ((): UserPresets => {
   const desktop = typeof window === 'undefined' ? undefined : window.studiomioDesktop?.presets;
   if (desktop) return new UserPresets(desktop, type => (instrumentType(type) ?? effectType(type))?.label ?? type);

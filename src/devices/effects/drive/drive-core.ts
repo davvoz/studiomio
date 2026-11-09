@@ -1,36 +1,36 @@
-/* Il suono del Drive. Per ogni canale, alla frequenza sovracampionata:
+/* The Drive's sound. For each channel, at the oversampled rate:
  *
- *   ingresso ─┬─ crossover LR4 ─ bassi ─────────────────────────────┐ (la parte pulita)
- *             │                  alti + bassi non puliti            │
- *             │                    → colore (enfasi) → drive → curva (+ bias, con antialiasing ADAA)
- *             │                    → via la continua → colore inverso → tono → auto gain ─┤
- *             └─ dry ────────────────────────────────────── mix ──────────────────────────┘ → uscita
+ *   input ─┬─ LR4 crossover ─ lows ─────────────────────────────┐ (the clean part)
+ *          │                  highs + non-clean lows            │
+ *          │                    → colour (emphasis) → drive → curve (+ bias, with ADAA antialiasing)
+ *          │                    → DC removal → inverse colour → tone → auto gain ─┤
+ *          └─ dry ────────────────────────────────────── mix ──────────────────────┘ → output
  *
- * Tutto (anche il dry e i bassi puliti) passa per lo stesso sovracampionamento, quindi i rami
- * restano allineati al campione: il mix parallelo e il crossover non fanno filtri a pettine.
- * Il ciclo per campione è scritto per la velocità (filtri in linea, niente chiamate indirette):
- * gira 4 volte per campione e per canale. Gira nell'AudioWorklet; qui niente Web Audio, così si
- * prova anche in Node. */
+ * Everything (also the dry and the clean lows) goes through the same oversampling, so the branches
+ * stay sample-aligned: the parallel mix and the crossover don't make comb filters.
+ * The per-sample loop is written for speed (inline filters, no indirect calls):
+ * it runs 4 times per sample and per channel. Runs in the AudioWorklet; no Web Audio here, so it's
+ * also tested in Node. */
 import { dbToGain, type EffectCore } from '../../dsp/core';
 import { Oversampler } from '../../dsp/oversampler';
 import { Tpt } from '../../dsp/tpt';
 import { OVERSAMPLING } from './drive';
 import { autoGain, fastIntegral, MAX_BIAS, SHAPES, type Shape } from './drive-math';
 
-/** Il Q di un Butterworth: due in fila fanno un Linkwitz-Riley (bassi + alti = suono intero). */
+/** The Q of a Butterworth: two in a row make a Linkwitz-Riley (lows + highs = whole sound). */
 const BUTTERWORTH_Q = Math.SQRT1_2;
-/** Il "Colore" inclina lo spettro attorno a questa frequenza, fino a ±COLOR_DB tra bassi e alti. */
+/** The "Colour" tilts the spectrum around this frequency, up to ±COLOR_DB between lows and highs. */
 const COLOR_HZ = 700, COLOR_DB = 9;
-/** Il filtro che toglie la continua lasciata dalla curva asimmetrica. */
+/** The filter removing the DC left by the asymmetric curve. */
 const DC_HZ = 8;
-/** Tempo con cui i guadagni seguono le manopole. */
+/** Time with which the gains follow the knobs. */
 const SMOOTH = 0.02;
-/** Dopo quanto silenzio in ingresso (secondi) il Drive smette di calcolare: le code dei filtri
- *  sono finite da un pezzo. Torna a lavorare al primo campione non nullo. */
+/** After how much input silence (seconds) the Drive stops computing: the filters' tails
+ *  ended long ago. It starts working again at the first non-zero sample. */
 const IDLE_AFTER = 0.5;
 const ADAA_EPS = 1e-5;
 
-/** Le primitive in tabella, fatte una volta per forma (servono a tutte le istanze). */
+/** The tabulated antiderivatives, made once per shape (shared by all instances). */
 const INTEGRALS = new Map<string, (x: number) => number>();
 const integralOf = (s: Shape) => {
   let F = INTEGRALS.get(s.id);
@@ -38,11 +38,11 @@ const integralOf = (s: Shape) => {
   return F;
 };
 
-/** I valori che scorrono senza scalini: dove sono e dove vanno. */
+/** The values gliding without steps: where they are and where they're going. */
 class Gains {
   constructor(
     public drive = 1,
-    /** Compensazione del ramo distorto. */
+    /** Makeup of the distorted branch. */
     public wet = 1,
     public mix = 1,
     public output = 1,
@@ -54,7 +54,7 @@ class Gains {
     return new Gains(this.drive, this.wet, this.mix, this.output, this.clean, this.bias);
   }
 
-  /** Un passo verso `target`, di una frazione `k`. */
+  /** A step towards `target`, by a fraction `k`. */
   approach(target: Gains, k: number): void {
     this.drive += (target.drive - this.drive) * k;
     this.wet += (target.wet - this.wet) * k;
@@ -67,7 +67,7 @@ class Gains {
 
 class Channel {
   readonly os: Oversampler;
-  /** Il crossover: il primo filtro dà bassi e alti, il secondo li rende ripidi (LR4). */
+  /** The crossover: the first filter gives lows and highs, the second makes them steep (LR4). */
   readonly split1 = new Tpt();
   readonly splitLow = new Tpt();
   readonly splitHigh = new Tpt();
@@ -76,7 +76,7 @@ class Channel {
   post = 0;
   dcX = 0;
   dcY = 0;
-  /** Il campione prima della curva (per l'antialiasing). */
+  /** The sample before the curve (for antialiasing). */
   u = 0;
 
   constructor(factor: 2 | 4 | 8) {
@@ -98,14 +98,14 @@ export class DriveCore implements EffectCore {
   private colorHigh = 1;
   private split = 120;
   private tone = 16000;
-  /** Campioni di silenzio in ingresso di fila. */
+  /** Samples of input silence in a row. */
   private silent = 0;
 
   constructor(private readonly sampleRate: number) {
     this.build();
   }
 
-  /** Ritardo dell'effetto in campioni (dal sovracampionamento). */
+  /** The effect's delay in samples (from the oversampling). */
   get latency(): number {
     return this.channels[0].os.latency;
   }
@@ -160,15 +160,15 @@ export class DriveCore implements EffectCore {
     const shape = this.shape, F = integralOf(shape);
     const preK = 1 - Math.exp((-2 * Math.PI * COLOR_HZ) / rate), dcR = Math.exp((-2 * Math.PI * DC_HZ) / rate);
     const gHigh = this.colorHigh, gLow = 1 / gHigh;
-    // il bias cambia per blocchi (la sua continua la toglie il filtro): la curva in 0 una volta sola
+    // the bias changes per block (its DC is removed by the filter): the curve at 0 once only
     const b = to.bias * MAX_BIAS, f0 = shape.fn(b);
-    // rampe lineari lungo il blocco: valore all'inizio e passo per campione
+    // linear ramps along the block: value at the start and per-sample step
     let drive = from.drive, clean = from.clean, mix = from.mix, wetGain = from.wet, out = from.output;
     const dDrive = (to.drive - drive) / m, dClean = (to.clean - clean) / m, dMix = (to.mix - mix) / m;
     const dWet = (to.wet - wetGain) / m, dOut = (to.output - out) / m;
     const { split1, splitLow, splitHigh, tone } = ch;
     let { pre, post, dcX, dcY, u: uPrev } = ch;
-    // la primitiva del campione prima, con la curva di adesso (la forma può essere appena cambiata)
+    // the previous sample's antiderivative, with the current curve (the shape may have just changed)
     let fPrev = F(uPrev);
     for (let i = 0; i < m; i++) {
       drive += dDrive;
@@ -181,11 +181,11 @@ export class DriveCore implements EffectCore {
       splitLow.tick(split1.low);
       splitHigh.tick(split1.high);
       const low = splitLow.low, high = splitHigh.high;
-      // colore: alti su e bassi giù (o il contrario) prima della curva…
+      // colour: highs up and lows down (or the opposite) before the curve…
       let d = high + low * (1 - clean);
       pre += preK * (d - pre);
       d = pre * gLow + (d - pre) * gHigh;
-      // antialiasing: la pendenza media della curva tra il campione prima e questo
+      // antialiasing: the curve's average slope between the previous sample and this one
       const u = drive * d + b, fu = F(u), du = u - uPrev;
       const y = (du > ADAA_EPS || du < -ADAA_EPS ? (fu - fPrev) / du : shape.fn((u + uPrev) * 0.5)) - f0;
       uPrev = u;
@@ -193,7 +193,7 @@ export class DriveCore implements EffectCore {
       const dc = y - dcX + dcR * dcY;
       dcX = y;
       dcY = dc;
-      // …e il contrario dopo: il timbro torna, la distorsione resta dove si è scelto
+      // …and the opposite after: the timbre comes back, the distortion stays where it was chosen
       post += preK * (dc - post);
       tone.tick(post * gHigh + (dc - post) * gLow);
       const wet = tone.low * wetGain + low * clean;

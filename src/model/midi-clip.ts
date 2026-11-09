@@ -4,7 +4,7 @@ import { Clip, fullRange, type ClipProps, type Color } from './clip';
 import type { InstrumentSettings } from './device';
 
 export interface Note {
-  /** 0..127 (60 = do centrale) */
+  /** 0..127 (60 = middle C) */
   readonly pitch: number;
   readonly start: Beats;
   readonly duration: Beats;
@@ -13,24 +13,24 @@ export interface Note {
 }
 
 export interface MidiClipProps extends ClipProps {
-  /** Ordinate per inizio, poi per altezza. */
+  /** Sorted by start, then by pitch. */
   readonly notes: readonly Note[];
-  /** Il suono che lo strumento della traccia prende quando la clip parte (una fotografia dei
-   *  suoi parametri, come un program change). Assente: lo strumento resta com'è. */
+  /** The sound the track's instrument takes when the clip starts (a snapshot of its
+   *  parameters, like a program change). Absent: the instrument stays as it is. */
   readonly sound?: InstrumentSettings;
 }
 
 const byStartThenPitch = (a: Note, b: Note) => a.start - b.start || a.pitch - b.pitch;
 
 function validNote(n: Note): Note {
-  if (!Number.isInteger(n.pitch) || n.pitch < 0 || n.pitch > 127) throw new RangeError(`altezza non valida: ${n.pitch}`);
-  if (!(n.duration > 0)) throw new RangeError(`durata non valida: ${n.duration}`);
+  if (!Number.isInteger(n.pitch) || n.pitch < 0 || n.pitch > 127) throw new RangeError(`invalid pitch: ${n.pitch}`);
+  if (!(n.duration > 0)) throw new RangeError(`invalid duration: ${n.duration}`);
   const velocity = Math.max(1, Math.min(127, Math.round(n.velocity)));
-  // la stessa nota se è già valida: l'editor riconosce le note selezionate per identità
+  // the same note if it's already valid: the editor recognizes the selected notes by identity
   return velocity === n.velocity ? n : { ...n, velocity };
 }
 
-/** Clip di note, da modificare nel piano roll e far suonare allo strumento della traccia. */
+/** Clip of notes, to edit in the piano roll and play with the track's instrument. */
 export class MidiClip extends Clip<MidiClipProps> {
   readonly kind = 'midi';
 
@@ -38,7 +38,7 @@ export class MidiClip extends Clip<MidiClipProps> {
     return new MidiClip({ ...props, notes: props.notes.map(validNote).sort(byStartThenPitch) });
   }
 
-  /** Clip vuota (in loop) lunga `length` battiti. */
+  /** Empty clip (looping), `length` beats long. */
   static empty(id: ClipId, name: string, color: Color, length: Beats = 4): MidiClip {
     return new MidiClip({ id, name, color, ...fullRange(0, length, true), notes: [] });
   }
@@ -50,13 +50,13 @@ export class MidiClip extends Clip<MidiClipProps> {
   get notes(): readonly Note[] { return this.props.notes; }
   get sound(): InstrumentSettings | null { return this.props.sound ?? null; }
 
-  /** Il suono da dare allo strumento quando la clip parte (null: nessuno). */
+  /** The sound to give the instrument when the clip starts (null: none). */
   withSound(sound: InstrumentSettings | null): MidiClip {
     const { sound: _old, ...rest } = this.props;
     return MidiClip.create(sound ? { ...rest, sound } : rest);
   }
 
-  /** Note che iniziano in [from, to). */
+  /** Notes starting in [from, to). */
   notesIn(from: Beats, to: Beats): Note[] {
     return this.notes.filter(n => n.start >= from && n.start < to);
   }
@@ -77,10 +77,10 @@ export class MidiClip extends Clip<MidiClipProps> {
     return this.withNotes(this.notes.map(fn));
   }
 
-  /** Il tempo della clip moltiplicato per `factor` (×2: tutto dura il doppio, come a metà
-   *  velocità; ×0.5: il contrario): note, regione, loop e modulazioni. */
+  /** The clip's time multiplied by `factor` (×2: everything lasts twice as long, as at half
+   *  speed; ×0.5: the opposite): notes, region, loop and modulations. */
   scaledTime(factor: number): MidiClip {
-    if (!(factor > 0)) throw new RangeError(`fattore non valido: ${factor}`);
+    if (!(factor > 0)) throw new RangeError(`invalid factor: ${factor}`);
     const at = (b: Beats) => b * factor;
     return this.with({
       notes: this.notes.map(n => ({ ...n, start: at(n.start), duration: at(n.duration) })),
@@ -92,8 +92,8 @@ export class MidiClip extends Clip<MidiClipProps> {
     });
   }
 
-  /** "Dupl. Loop" di Live: il loop (senza loop, la clip) raddoppia e la sua copia va subito dopo.
-   *  Note e modulazioni copiate prendono il posto di quelle che c'erano in quel tratto. */
+  /** Live's "Dupl. Loop": the loop (without loop, the clip) doubles and its copy goes right after.
+   *  Copied notes and modulations take the place of those that were in that stretch. */
   duplicatingLoop(): MidiClip {
     const { start, end } = this.loop.enabled ? this.loop : this.region;
     const len = end - start, to = end + len;
@@ -101,8 +101,8 @@ export class MidiClip extends Clip<MidiClipProps> {
       ...this.notes.filter(n => n.start < end || n.start >= to),
       ...this.notesIn(start, end).map(n => ({ ...n, start: n.start + len })),
     ];
-    // i punti agli estremi restano tutti e due: alla fine del loop originale la curva fa uno
-    // scalino dal suo ultimo valore al primo della copia (come quando il loop ricomincia)
+    // the points at the ends both stay: at the end of the original loop the curve makes a
+    // step from its last value to the copy's first (as when the loop restarts)
     const envelopes = this.envelopes.map(e => ({
       ...e,
       points: [
@@ -119,7 +119,7 @@ export class MidiClip extends Clip<MidiClipProps> {
     });
   }
 
-  /** Traspone tutte le note, lasciando fuori quelle che uscirebbero da 0..127. */
+  /** Transposes all the notes, leaving out those that would go beyond 0..127. */
   transposed(semitones: number): MidiClip {
     return this.withNotes(this.notes
       .map(n => ({ ...n, pitch: n.pitch + semitones }))

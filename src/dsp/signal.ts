@@ -2,7 +2,7 @@ import type { Channels, Samples } from './types';
 
 const windows = new Map<number, Float64Array>();
 
-/** Finestra di Hann periodica (memorizzata: per ogni dimensione è sempre la stessa). */
+/** Periodic Hann window (memoized: for each size it's always the same). */
 export function hann(n: number): Float64Array {
   let w = windows.get(n);
   if (!w) {
@@ -20,7 +20,7 @@ export function mixMono(channels: Channels): Float32Array {
   return m;
 }
 
-/** Copia in `dst` il frame che parte da `start`, moltiplicato per la finestra (zeri fuori). */
+/** Copies into `dst` the frame starting at `start`, multiplied by the window (zeros outside). */
 export function readFrame(x: Samples, start: number, win: Float64Array, dst: Float64Array): void {
   const n = win.length, len = x.length;
   if (start >= 0 && start + n <= len) {
@@ -33,12 +33,12 @@ export function readFrame(x: Samples, start: number, win: Float64Array, dst: Flo
   }
 }
 
-/** Fase riportata in [-π, π]. */
+/** Phase wrapped into [-π, π]. */
 export const princarg = (p: number): number => p - 2 * Math.PI * Math.round(p / (2 * Math.PI));
 
 export const sampleAt = (x: Samples, i: number): number => (i >= 0 && i < x.length ? x[i] : 0);
 
-/** Interpolazione cubica di Hermite. */
+/** Hermite cubic interpolation. */
 export function readCubic(x: Samples, pos: number): number {
   const i = Math.floor(pos), f = pos - i;
   const xm1 = sampleAt(x, i - 1), x0 = sampleAt(x, i), x1 = sampleAt(x, i + 1), x2 = sampleAt(x, i + 2);
@@ -48,7 +48,7 @@ export function readCubic(x: Samples, pos: number): number {
   return ((c3 * f + c2) * f + c1) * f + x0;
 }
 
-/** Passa-basso FIR (sinc finestrata Blackman); cutoff in frazione di Nyquist. */
+/** FIR low-pass (Blackman-windowed sinc); cutoff as a fraction of Nyquist. */
 export function lowpass(x: Samples, cutoff: number): Float32Array {
   const half = 16, taps = 2 * half + 1, h = new Float64Array(taps);
   let sum = 0;
@@ -73,7 +73,7 @@ export function lowpass(x: Samples, cutoff: number): Float32Array {
   return y;
 }
 
-/** Ricampiona leggendo l'ingresso a velocità `factor` (>1 = più acuto e più corto). */
+/** Resamples by reading the input at speed `factor` (>1 = higher and shorter). */
 export function resample(channels: Channels, factor: number, outLength: number): Float32Array[] {
   return channels.map(x => {
     const src = factor > 1.001 ? lowpass(x, 0.95 / factor) : x;
@@ -83,7 +83,7 @@ export function resample(channels: Channels, factor: number, outLength: number):
   });
 }
 
-/** Overlap-add normalizzato: divide ogni canale per la somma delle finestre. */
+/** Normalized overlap-add: divides each channel by the sum of the windows. */
 export function normalizeOverlap(outs: readonly Float32Array[], wsum: Float32Array): void {
   for (const y of outs) for (let i = 0; i < y.length; i++) if (wsum[i] > 1e-3) y[i] /= wsum[i];
 }

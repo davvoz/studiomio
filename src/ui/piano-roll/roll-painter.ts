@@ -6,13 +6,13 @@ import type { BeatAxis } from '../clip-editor/clip-geometry';
 import { COLORS, withAlpha } from '../timeline/painters';
 import { isBlackKey, type PitchAxis } from './pitch-axis';
 
-/** Fasce verticali del piano roll: righello, note, corsia della velocity. */
+/** Vertical bands of the piano roll: ruler, notes, velocity lane. */
 export const ROLL = {
   ...FRAME,
   velocity: 64,
 } as const;
 
-/** Dove finisce l'area delle note in una vista alta `height`. */
+/** Where the note area ends in a view `height` tall. */
 export const notesBottom = (height: number): number => height - ROLL.velocity;
 
 const C = {
@@ -30,13 +30,13 @@ export interface RollPaint {
   readonly selection: ReadonlySet<Note>;
   readonly signature: TimeSignature;
   readonly grid: Beats;
-  /** Battito della clip sotto la testina, se la clip sta suonando. */
+  /** Clip beat under the playhead, if the clip is playing. */
   readonly playhead: Beats | null;
-  /** Punto d'inserimento (dove si incolla). */
+  /** Insertion point (where pasting goes). */
   readonly insert: Beats | null;
-  /** La selezione di tempo (il riquadro con cui si sono scelte le note), o null. */
+  /** The time selection (the box the notes were chosen with), or null. */
   readonly time: TimeRange | null;
-  /** Le note con un nome (i pad della drum machine): le loro righe sono più chiare. */
+  /** The notes with a name (the drum machine's pads): their rows are lighter. */
   readonly named: ReadonlyMap<number, string> | null;
 }
 
@@ -49,13 +49,13 @@ export function paintRoll(p: RollPaint): void {
   g.clip();
   paintRows(p, bottom);
   paintBeatGrid(g, axis, width, ROLL.ruler, bottom, p.grid, p.signature);
-  // fuori dalla regione che suona: più scuro
+  // outside the playing region: darker
   const rx0 = axis.beatToX(clip.region.start), rx1 = axis.beatToX(clip.region.end);
   g.fillStyle = C.outside;
   g.fillRect(0, ROLL.ruler, Math.max(0, rx0), bottom - ROLL.ruler);
   g.fillRect(rx1, ROLL.ruler, width - rx1, bottom - ROLL.ruler);
   if (p.time) {
-    // la selezione di tempo: una fascia chiara, sotto le note
+    // the time selection: a light band, under the notes
     const x0 = axis.beatToX(p.time.start), x1 = axis.beatToX(p.time.end);
     g.fillStyle = 'rgba(232,234,238,0.07)';
     g.fillRect(x0, ROLL.ruler, x1 - x0, bottom - ROLL.ruler);
@@ -77,14 +77,14 @@ export function paintRoll(p: RollPaint): void {
 }
 
 function paintRows({ g, width, pitches, named }: RollPaint, bottom: number): void {
-  // con il Fold sotto l'ultima riga può restare spazio vuoto
+  // with Fold some empty space may remain under the last row
   g.fillStyle = C.unnamed;
   g.fillRect(0, ROLL.ruler, width, bottom - ROLL.ruler);
   for (const pitch of pitches.visible(ROLL.ruler, bottom)) {
     const y = pitches.pitchToY(pitch);
     g.fillStyle = named ? (named.has(pitch) ? C.named : C.unnamed) : isBlackKey(pitch) ? C.black : C.white;
     g.fillRect(0, y, width, pitches.rowHeight);
-    // una linea sotto ogni Do separa le ottave
+    // a line under each C separates the octaves
     g.fillStyle = pitch % 12 === 0 ? C.octave : 'rgba(0,0,0,0.25)';
     g.fillRect(0, Math.round(y + pitches.rowHeight) - 1, width, 1);
   }
@@ -122,7 +122,7 @@ function paintVelocity({ g, width, height, axis, clip, selection }: RollPaint, b
   }
 }
 
-/** Il riquadro di selezione. */
+/** The selection box. */
 export function paintSelectionBox(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number): void {
   const x = Math.min(x0, x1), y = Math.min(y0, y1), w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
   g.fillStyle = C.boxFill;

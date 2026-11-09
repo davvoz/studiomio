@@ -2,8 +2,8 @@ import type { Beats } from '../core/music-time';
 import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
 
-/** Un tratto continuo di una clip sulla timeline: da `start` a `end` suona il contenuto
- *  della clip a partire dal battito `contentStart`, senza salti. */
+/** A continuous stretch of a clip on the timeline: from `start` to `end` it plays the clip's
+ *  content starting from beat `contentStart`, without jumps. */
 export interface Segment {
   readonly start: Beats;
   readonly end: Beats;
@@ -12,8 +12,8 @@ export interface Segment {
 
 const EPS = 1e-9;
 
-/** Scompone una clip posata nei suoi tratti continui: uno se la clip non è in loop,
- *  uno per ogni giro (più l'eventuale attacco prima del loop) se lo è. */
+/** Breaks a placed clip into its continuous stretches: one if the clip isn't looping,
+ *  one for each round (plus the possible attack before the loop) if it is. */
 export function placementSegments(p: Placement): Segment[] {
   const { clip } = p;
   const out: Segment[] = [];
@@ -22,7 +22,7 @@ export function placementSegments(p: Placement): Segment[] {
   while (endElapsed - elapsed > EPS) {
     const c = clip.contentBeatAt(elapsed);
     if (c === null) break;
-    // fino al prossimo salto: la fine del loop o la fine della regione
+    // up to the next jump: the end of the loop or the end of the region
     const limit = clip.loop.enabled ? clip.loop.end : clip.region.end;
     const len = Math.min(limit - c, endElapsed - elapsed);
     if (len <= EPS) break;
@@ -33,10 +33,10 @@ export function placementSegments(p: Placement): Segment[] {
   return out;
 }
 
-/** Tratto di `s` da far partire in una finestra di programmazione, o null.
- *  `runStart`/`runEnd` delimitano la corsa continua del trasporto (dal play o dall'inizio
- *  del giro di loop fino alla fine del loop): un tratto già in corso all'inizio della corsa
- *  parte da lì, e niente suona oltre la fine della corsa. */
+/** Stretch of `s` to start in a scheduling window, or null.
+ *  `runStart`/`runEnd` bound the transport's continuous run (from play or from the start
+ *  of the loop round to the end of the loop): a stretch already running at the start of the run
+ *  starts from there, and nothing plays beyond the end of the run. */
 export function segmentToStart(
   s: Segment, window: { readonly from: Beats; readonly to: Beats; readonly runStart: Beats; readonly runEnd: Beats },
 ): Segment | null {
@@ -46,13 +46,13 @@ export function segmentToStart(
   return { start, end, contentStart: s.contentStart + (start - s.start) };
 }
 
-/** I tratti di una clip lanciata nella session: suona da `origin` (dove parte il suo inizio)
- *  e, se è in loop, ripete senza fine. Restituisce solo i tratti che toccano [lo, hi), così
- *  una clip che gira da ore costa come una appena partita. */
+/** The stretches of a clip launched in the session: it plays from `origin` (where its start starts)
+ *  and, if it's looping, repeats endlessly. Returns only the stretches touching [lo, hi), so
+ *  a clip running for hours costs as much as one just started. */
 export function clipSegmentsBetween(clip: Clip, origin: number, lo: number, hi: number): Segment[] {
   const { region, loop } = clip;
   const out: Segment[] = [];
-  // il primo tratto va dall'inizio della clip alla fine del loop (o della clip); poi i giri
+  // the first stretch goes from the start of the clip to the end of the loop (or of the clip); then the rounds
   const firstLen = (loop.enabled ? loop.end : region.end) - region.start;
   if (!loop.enabled) {
     if (origin < hi && origin + firstLen > lo) out.push({ start: origin, end: origin + firstLen, contentStart: region.start });

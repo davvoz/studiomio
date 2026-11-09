@@ -1,8 +1,8 @@
-/* Il browser, a sinistra come in Live: la ricerca in alto, le fonti (categorie e luoghi) in una
- * colonna, il loro contenuto ad albero accanto, l'anteprima dei sample in fondo. Un clic sceglie
- * una voce (e ascolta il sample, con 🎧 acceso), il doppio clic o Invio la carica dove si sta
- * lavorando, trascinarla la porta su una traccia, uno slot o la catena dei dispositivi. Il
- * browser non sa cosa sia una traccia: carica e anteprima sono dell'app (`BrowserViewDeps`). */
+/* The browser, on the left as in Live: the search at the top, the sources (categories and places) in a
+ * column, their content as a tree next to it, the sample preview at the bottom. A click chooses
+ * an item (and plays the sample, with 🎧 on), a double click or Enter loads it where you're
+ * working, dragging it takes it to a track, a slot or the device chain. The
+ * browser doesn't know what a track is: loading and preview belong to the app (`BrowserViewDeps`). */
 import type { BrowserCatalog } from '../../browser/catalog';
 import { childrenOf, type BrowserItem, type BrowserPayload, type BrowserSource } from '../../browser/item';
 import { searchSources } from '../../browser/search';
@@ -11,9 +11,9 @@ import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
 import { endBrowserDrag, startBrowserDrag } from './browser-drag';
 
-/** L'ascolto dei sample (l'app lo fa con il suo contesto audio). */
+/** Previewing samples (the app does it with its audio context). */
 export interface BrowserPreview {
-  /** L'audio di una voce da ascoltare (un sample del progetto, un file), o null. */
+  /** The audio of an item to preview (a project sample, a file), or null. */
   audio(payload: BrowserPayload): Promise<AudioData | null>;
   play(audio: AudioData): void;
   stop(): void;
@@ -21,15 +21,15 @@ export interface BrowserPreview {
 
 export interface BrowserViewDeps {
   readonly catalog: BrowserCatalog;
-  /** Carica la voce dove si sta lavorando (doppio clic, Invio). */
+  /** Loads the item where you're working (double click, Enter). */
   readonly load: (item: BrowserItem) => void;
-  /** Fa scegliere una cartella del disco e la aggiunge ai luoghi; null se si rinuncia. */
+  /** Lets the user choose a disk folder and adds it to the places; null if they give up. */
   readonly addFolder: () => Promise<BrowserSource | null>;
   readonly preview?: BrowserPreview;
   readonly say: (text: string) => void;
 }
 
-/** Ciò che il browser ricorda tra un avvio e l'altro. */
+/** What the browser remembers from one start to the next. */
 interface BrowserSettings {
   open: boolean;
   width: number;
@@ -41,13 +41,13 @@ const SETTINGS_KEY = 'studiomio.browser';
 const MIN_WIDTH = 250, MAX_WIDTH = 640;
 const DEFAULTS: BrowserSettings = { open: true, width: 330, source: 'instruments', preview: true };
 
-/** Una riga della lista: una voce (a una profondità, e da dove viene se è un risultato della
- *  ricerca) oppure un avviso (caricamento, lista vuota, permesso da dare). */
+/** A row of the list: an item (at a depth, and where it comes from if it's a search
+ *  result) or a notice (loading, empty list, permission to give). */
 type Row =
   | { readonly item: BrowserItem; readonly depth: number; readonly path?: readonly string[] }
   | { readonly note: string; readonly depth: number; readonly action?: { readonly label: string; readonly run: () => void } };
 
-/** Il contenuto di una cartella: le voci, oppure a che punto è. */
+/** A folder's content: the items, or how far along it is. */
 type Loaded = readonly BrowserItem[] | 'loading' | 'locked' | Error;
 
 const ICONS: Readonly<Record<BrowserItem['icon'], string>> = {
@@ -57,20 +57,20 @@ const ICONS: Readonly<Record<BrowserItem['icon'], string>> = {
 export class BrowserView {
   readonly element = el('aside', { className: 'browser' });
   private readonly searchInput = el<HTMLInputElement>('input', {
-    type: 'search', className: 'browser-search', placeholder: 'Cerca (Ctrl+F)', spellcheck: false,
+    type: 'search', className: 'browser-search', placeholder: 'Search (Ctrl+F)', spellcheck: false,
   });
   private readonly sourceList = el('nav', { className: 'browser-sources' });
   private readonly list = el('div', { className: 'browser-list', tabIndex: 0 });
   private readonly previewToggle = el<HTMLButtonElement>('button', { className: 'mini browser-preview-toggle', textContent: '🎧' });
-  private readonly previewName = el('span', { className: 'browser-preview-name muted', textContent: 'Scegli un sample per ascoltarlo' });
+  private readonly previewName = el('span', { className: 'browser-preview-name muted', textContent: 'Choose a sample to hear it' });
   private readonly wave = el<HTMLCanvasElement>('canvas', { className: 'browser-wave' });
   private settings: BrowserSettings;
-  /** Il contenuto delle cartelle già lette: "fonte:id" per il primo livello, l'id della voce per le altre. */
+  /** The content of the folders already read: "source:id" for the first level, the item's id for the others. */
   private readonly loaded = new Map<string, Loaded>();
   private readonly expanded = new Set<string>();
   private selected: string | null = null;
   private rows: Row[] = [];
-  /** I risultati della ricerca (null: niente ricerca, si vede l'albero). */
+  /** The search results (null: no search, the tree is shown). */
   private hits: Row[] | null = null;
   private searchRun = 0;
   private previewRun = 0;
@@ -78,7 +78,7 @@ export class BrowserView {
 
   constructor(private readonly deps: BrowserViewDeps) {
     this.settings = loadSettings();
-    const resize = el('div', { className: 'browser-resize', title: 'Trascina per allargare o stringere il browser' });
+    const resize = el('div', { className: 'browser-resize', title: 'Drag to widen or narrow the browser' });
     this.bindResize(resize);
     this.previewToggle.onclick = () => this.setPreview(!this.settings.preview);
     this.element.append(
@@ -110,19 +110,19 @@ export class BrowserView {
     this.show(!this.isOpen);
   }
 
-  /** Ctrl+F: apre il browser e porta il cursore nella ricerca. */
+  /** Ctrl+F: opens the browser and brings the cursor into the search. */
   focusSearch(): void {
     this.show(true);
     this.searchInput.focus();
     this.searchInput.select();
   }
 
-  /** La fonte scelta a sinistra (per i test automatici). */
+  /** The source chosen on the left (for automated tests). */
   get source(): BrowserSource | undefined {
     return this.deps.catalog.source(this.settings.source) ?? this.deps.catalog.sources[0];
   }
 
-  /** Sceglie una fonte a sinistra e mostra il suo contenuto. */
+  /** Chooses a source on the left and shows its content. */
   selectSource(id: string): void {
     if (!this.deps.catalog.source(id)) return;
     this.save({ source: id });
@@ -131,12 +131,12 @@ export class BrowserView {
     if (this.searchInput.value.trim()) this.runSearch();
   }
 
-  // ---------------------------------------------------------------- fonti
+  // ---------------------------------------------------------------- sources
 
   private renderSources(): void {
     const { catalog } = this.deps;
     const current = this.source;
-    // ogni fonte si rilegge quando cambia (un preset salvato, un sample importato)
+    // each source is reread when it changes (a preset saved, a sample imported)
     for (const s of catalog.sources) {
       if (this.unsubscribe.has(s.id) || !s.onChange) continue;
       this.unsubscribe.set(s.id, s.onChange(() => this.invalidate(s.id)));
@@ -148,25 +148,25 @@ export class BrowserView {
       if (s.removable) {
         b.oncontextmenu = e => {
           e.preventDefault();
-          showContextMenu(e.clientX, e.clientY, [{ label: 'Togli dal browser', run: () => void this.deps.catalog.removeFolder(s.id) }]);
+          showContextMenu(e.clientX, e.clientY, [{ label: 'Remove from the browser', run: () => void this.deps.catalog.removeFolder(s.id) }]);
         };
-        b.title = `${s.label} (tasto destro: togli dal browser)`;
+        b.title = `${s.label} (right click: remove from the browser)`;
       }
       return b;
     };
     const section = (title: string, sources: readonly BrowserSource[]) =>
       [el('div', { className: 'browser-section', textContent: title }), ...sources.map(button)];
-    const add = el<HTMLButtonElement>('button', { className: 'browser-source browser-add', textContent: '+ Cartella…', title: 'Aggiungi ai luoghi una cartella di sample del disco' });
+    const add = el<HTMLButtonElement>('button', { className: 'browser-source browser-add', textContent: '+ Folder…', title: 'Add a disk folder of samples to the places' });
     add.onclick = () => void this.deps.addFolder().then(s => s && this.selectSource(s.id)).catch(e => {
-      if (!(e instanceof DOMException && e.name === 'AbortError')) this.deps.say(`Non è stato possibile aggiungere la cartella: ${message(e)}`);
+      if (!(e instanceof DOMException && e.name === 'AbortError')) this.deps.say(`Couldn't add the folder: ${message(e)}`);
     });
     this.sourceList.replaceChildren(
-      ...section('Categorie', catalog.sources.filter(s => s.section === 'categories')),
-      ...section('Luoghi', catalog.sources.filter(s => s.section === 'places')), add);
+      ...section('Categories', catalog.sources.filter(s => s.section === 'categories')),
+      ...section('Places', catalog.sources.filter(s => s.section === 'places')), add);
     this.renderList();
   }
 
-  /** Il contenuto di una fonte va riletto. */
+  /** A source's content must be reread. */
   private invalidate(sourceId: string): void {
     for (const key of [...this.loaded.keys()]) if (key === rootKey(sourceId) || key.startsWith(`${sourceId}/`)) this.loaded.delete(key);
     if (this.source?.id === sourceId) {
@@ -175,9 +175,9 @@ export class BrowserView {
     }
   }
 
-  // ---------------------------------------------------------------- lista
+  // ---------------------------------------------------------------- list
 
-  /** Il contenuto di una cartella: quello già letto, oppure lo legge e ridisegna. */
+  /** A folder's content: the one already read, or it reads it and redraws. */
   private contents(key: string, read: () => Promise<readonly BrowserItem[]>, source?: BrowserSource): Loaded {
     const known = this.loaded.get(key);
     if (known) return known;
@@ -198,16 +198,16 @@ export class BrowserView {
     if (!source) return [];
     const rows: Row[] = [];
     const add = (state: Loaded, depth: number, empty: string) => {
-      if (state === 'loading') rows.push({ note: 'Lettura…', depth });
-      else if (state === 'locked') rows.push({ note: 'Per leggere questa cartella serve il tuo permesso.', depth, action: { label: 'Consenti', run: () => void this.unlock(source) } });
-      else if (state instanceof Error) rows.push({ note: `Non si legge: ${state.message}`, depth });
+      if (state === 'loading') rows.push({ note: 'Reading…', depth });
+      else if (state === 'locked') rows.push({ note: 'Reading this folder needs your permission.', depth, action: { label: 'Allow', run: () => void this.unlock(source) } });
+      else if (state instanceof Error) rows.push({ note: `Can't read it: ${state.message}`, depth });
       else if (!state.length) rows.push({ note: empty, depth });
       else for (const item of state) {
         rows.push({ item, depth });
-        if (item.children && this.expanded.has(item.id)) add(this.contents(item.id, () => childrenOf(item)), depth + 1, 'Vuota');
+        if (item.children && this.expanded.has(item.id)) add(this.contents(item.id, () => childrenOf(item)), depth + 1, 'Empty');
       }
     };
-    add(this.contents(rootKey(source.id), () => source.items(), source), 0, source.empty ?? 'Vuota');
+    add(this.contents(rootKey(source.id), () => source.items(), source), 0, source.empty ?? 'Empty');
     return rows;
   }
 
@@ -231,7 +231,7 @@ export class BrowserView {
     const r = el('div', {
       className: `browser-row icon-${item.icon}${item.id === this.selected ? ' selected' : ''}${item.payload ? '' : ' folder'}`,
       draggable: !!item.payload,
-      title: item.payload ? `${path?.length ? `${path.join(' › ')} › ` : ''}${item.name}: doppio clic o Invio per caricarlo, oppure trascinalo` : item.name,
+      title: item.payload ? `${path?.length ? `${path.join(' › ')} › ` : ''}${item.name}: double click or Enter to load it, or drag it` : item.name,
     },
     el('span', { className: 'twist', textContent: item.children && !path ? (open ? '▾' : '▸') : '' }),
     el('span', { className: 'icon', textContent: ICONS[item.icon] }),
@@ -252,7 +252,7 @@ export class BrowserView {
       const row = rowAt(e.target);
       if (!row) return;
       this.select(row.item);
-      // la freccia, o un clic su una cartella che non si carica, la apre e la chiude
+      // the arrow, or a click on a folder that doesn't load, opens and closes it
       if (row.item.children && !row.path && ((e.target as HTMLElement).classList.contains('twist') || !row.item.payload)) this.toggleItem(row.item);
     });
     this.list.addEventListener('dblclick', e => {
@@ -278,14 +278,14 @@ export class BrowserView {
 
   private itemMenu(item: BrowserItem, flat: boolean): MenuItem[] {
     const items: MenuItem[] = [];
-    if (item.payload) items.push({ label: 'Carica', shortcut: 'Invio', run: () => this.deps.load(item) });
-    if (isAudio(item.payload) && this.deps.preview) items.push({ label: 'Ascolta', run: () => void this.preview(item, true) });
-    if (item.children && !flat) items.push(...(items.length ? [SEPARATOR] : []), { label: this.expanded.has(item.id) ? 'Chiudi' : 'Apri', shortcut: this.expanded.has(item.id) ? '◂' : '▸', run: () => this.toggleItem(item) });
+    if (item.payload) items.push({ label: 'Load', shortcut: 'Enter', run: () => this.deps.load(item) });
+    if (isAudio(item.payload) && this.deps.preview) items.push({ label: 'Listen', run: () => void this.preview(item, true) });
+    if (item.children && !flat) items.push(...(items.length ? [SEPARATOR] : []), { label: this.expanded.has(item.id) ? 'Close' : 'Open', shortcut: this.expanded.has(item.id) ? '◂' : '▸', run: () => this.toggleItem(item) });
     return items;
   }
 
-  /** Le frecce scorrono le voci e aprono o chiudono le cartelle, Invio carica. I tasti usati qui
-   *  non arrivano alle scorciatoie dell'app (Invio altrimenti ferma il trasporto). */
+  /** The arrows scroll the items and open or close the folders, Enter loads. The keys used here
+   *  don't reach the app's shortcuts (Enter would otherwise stop the transport). */
   private key(e: KeyboardEvent): void {
     const items = this.rows.flatMap((r, i) => ('item' in r ? [{ row: r, i }] : []));
     const at = items.findIndex(x => x.row.item.id === this.selected);
@@ -311,7 +311,7 @@ export class BrowserView {
         handled();
         if (!current || current.path) return;
         if (current.item.children && this.expanded.has(current.item.id)) return this.toggleItem(current.item);
-        // alla cartella che la contiene
+        // to the folder containing it
         const parent = items.slice(0, at).reverse().find(x => x.row.depth < current.depth);
         if (parent) this.select(parent.row.item, true);
         return;
@@ -344,11 +344,11 @@ export class BrowserView {
   }
 
   private async unlock(source: BrowserSource): Promise<void> {
-    if (!(await source.unlock?.())) return this.deps.say(`Senza permesso il browser non legge "${source.label}".`);
+    if (!(await source.unlock?.())) return this.deps.say(`Without permission the browser doesn't read "${source.label}".`);
     this.invalidate(source.id);
   }
 
-  // ---------------------------------------------------------------- ricerca
+  // ---------------------------------------------------------------- search
 
   private bindSearch(): void {
     let timer = 0;
@@ -369,7 +369,7 @@ export class BrowserView {
     });
   }
 
-  /** Cerca in tutte le fonti, prima in quella scelta; un risultato vecchio arrivato tardi si scarta. */
+  /** Searches all the sources, the chosen one first; an old result arriving late is discarded. */
   private runSearch(): void {
     const query = this.searchInput.value.trim();
     const run = ++this.searchRun;
@@ -378,16 +378,16 @@ export class BrowserView {
       this.hits = null;
       return this.renderList();
     }
-    this.hits = [{ note: 'Ricerca…', depth: 0 }];
+    this.hits = [{ note: 'Searching…', depth: 0 }];
     this.renderList();
     void (async () => {
       let rows: Row[];
       try {
         const others = this.deps.catalog.sources.filter(s => s !== source);
         const found = await searchSources([source, ...others], query);
-        rows = found.length ? found.map(h => ({ item: h.item, depth: 0, path: h.path })) : [{ note: `Niente per «${query}».`, depth: 0 }];
+        rows = found.length ? found.map(h => ({ item: h.item, depth: 0, path: h.path })) : [{ note: `Nothing for «${query}».`, depth: 0 }];
       } catch (e) {
-        rows = [{ note: `Non si legge: ${message(e)}`, depth: 0 }];
+        rows = [{ note: `Can't be read: ${message(e)}`, depth: 0 }];
       }
       if (run !== this.searchRun) return;
       this.hits = rows;
@@ -395,16 +395,16 @@ export class BrowserView {
     })();
   }
 
-  // ---------------------------------------------------------------- anteprima
+  // ---------------------------------------------------------------- preview
 
   private setPreview(on: boolean): void {
     this.save({ preview: on });
     this.previewToggle.classList.toggle('on', on);
-    this.previewToggle.title = on ? 'Anteprima accesa: un clic su un sample lo fa sentire' : 'Anteprima spenta: accendila per sentire i sample quando li scegli';
+    this.previewToggle.title = on ? 'Preview on: a click on a sample plays it' : 'Preview off: turn it on to hear the samples when you choose them';
     if (!on) this.deps.preview?.stop();
   }
 
-  /** Mostra il sample scelto (nome e forma d'onda) e, con `play`, lo fa sentire. */
+  /** Shows the chosen sample (name and waveform) and, with `play`, plays it. */
   private async preview(item: BrowserItem, play: boolean): Promise<void> {
     const preview = this.deps.preview;
     const run = ++this.previewRun;
@@ -416,7 +416,7 @@ export class BrowserView {
     try {
       audio = await preview.audio(item.payload);
     } catch (e) {
-      if (run === this.previewRun) this.deps.say(`Non si ascolta "${item.name}": ${message(e)}`);
+      if (run === this.previewRun) this.deps.say(`Can't preview "${item.name}": ${message(e)}`);
     }
     if (run !== this.previewRun) return;
     this.drawWave(audio);
@@ -439,7 +439,7 @@ export class BrowserView {
     for (let x = 0; x < w; x++) {
       let lo = 0, hi = 0;
       const from = Math.floor(x * per), to = Math.min(n, Math.max(from + 1, Math.floor((x + 1) * per)));
-      // ogni colonna guarda al massimo 64 campioni: un file lungo si disegna lo stesso subito
+      // each column looks at 64 samples at most: a long file is drawn right away anyway
       const step = Math.max(1, Math.floor((to - from) / 64));
       for (const ch of channels) for (let i = from; i < to; i += step) {
         const v = ch[i];
@@ -450,7 +450,7 @@ export class BrowserView {
     }
   }
 
-  // ---------------------------------------------------------------- larghezza e impostazioni
+  // ---------------------------------------------------------------- width and settings
 
   private bindResize(handle: HTMLElement): void {
     handle.addEventListener('pointerdown', e => {
@@ -478,7 +478,7 @@ export class BrowserView {
     this.settings = { ...this.settings, ...patch };
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
-    } catch { /* senza spazio locale si ricorda solo finché l'app è aperta */ }
+    } catch { /* without local storage it's remembered only while the app is open */ }
   }
 }
 

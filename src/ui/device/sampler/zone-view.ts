@@ -1,20 +1,20 @@
-/* L'editor delle zone del Sampler, come quello di Live: in alto la tastiera, sotto una riga per
- * zona con la barra dei suoi tasti (alta quanto le sue velocity) e un punto sulla nota base. Le
- * barre si trascinano tutte (con la nota base) o per un bordo; un clic sulla tastiera suona il
- * tasto. La rotella fa lo zoom sui tasti attorno al puntatore (Maiusc+rotella scorre, sui nomi
- * scorre le righe); doppio clic sul vuoto torna a tutta la tastiera. Le righe delle zone che
- * suonano si accendono e i tasti suonati lampeggiano. */
+/* The Sampler's zone editor, like Live's: at the top the keyboard, below a row per
+ * zone with the bar of its keys (as tall as its velocities) and a dot on the root note. The
+ * bars are dragged whole (with the root note) or by an edge; a click on the keyboard plays the
+ * key. The wheel zooms on the keys around the pointer (Shift+wheel scrolls, on the names
+ * it scrolls the rows); double click on empty space goes back to the whole keyboard. The rows of the zones that
+ * play light up and the played keys blink. */
 import { noteName, zoneMap, zoneParam, type ZoneKey, type ZoneMap } from '../../../devices/instruments/sampler/sampler';
 import type { ParamValues } from '../../../model/device';
 import { ACCENT, BACKGROUND, drag, fit, GRID, LABEL } from '../prisma/canvas';
 
-/** La tastiera in alto, le righe e la colonna dei nomi. */
+/** The keyboard at the top, the rows and the column of names. */
 const KEYS_H = 16, ROW_H = 14, NAME_W = 118;
-/** Quanto si allarga la presa sui bordi di una barra, e la barra più stretta che ha i bordi. */
+/** How much the grip widens on a bar's edges, and the narrowest bar that has edges. */
 const EDGE = 4, MIN_EDGES = 14;
-/** Lo zoom più stretto, in tasti. */
+/** The tightest zoom, in keys. */
 const MIN_KEYS = 12;
-/** Quanto resta acceso un tasto suonato (ms). */
+/** How long a played key stays lit (ms). */
 const FLASH = 180;
 
 export interface ZoneRow {
@@ -24,19 +24,19 @@ export interface ZoneRow {
 
 export interface ZoneHost {
   values(): Readonly<Record<string, number>>;
-  /** Le zone che hanno un sample, in ordine. */
+  /** The zones that have a sample, in order. */
   rows(): readonly ZoneRow[];
   selected(): number;
   select(zone: number): void;
   set(values: ParamValues, final: boolean): void;
   audition(pitch: number): void;
-  /** Le zone che suonano adesso. */
+  /** The zones playing now. */
   sounding(): ReadonlySet<number>;
-  /** Le note suonate dall'ultima volta. */
+  /** The notes played since last time. */
   played(): readonly number[];
-  /** Doppio clic sulla riga vuota in fondo: carica dei file in zone nuove. */
+  /** Double click on the empty row at the bottom: loads files into new zones. */
   add(): void;
-  /** Mostra la nota base (non in Slice). */
+  /** Shows the root note (not in Slice). */
   pitched(): boolean;
   menu(x: number, y: number): void;
 }
@@ -54,19 +54,19 @@ export class ZoneView {
   readonly canvas = document.createElement('canvas');
   private k0 = 0;
   private k1 = 128;
-  /** La prima riga che si vede. */
+  /** The first visible row. */
   private top = 0;
   private hot: Hit | null = null;
   private enabled = true;
   private readonly flashes = new Map<number, number>();
   private lit: ReadonlySet<number> = new Set();
-  /** La zona scelta all'ultimo disegno: quando cambia, la sua riga si porta in vista. */
+  /** The zone chosen at the last drawing: when it changes, its row is brought into view. */
   private revealed = -1;
 
   constructor(private readonly host: ZoneHost) {
     const c = this.canvas;
     c.className = 'smp-zones';
-    c.title = 'Trascina una barra (o un suo bordo) · clic sulla tastiera: suona · rotella: zoom · doppio clic: tutta la tastiera · file audio: zone nuove dal tasto';
+    c.title = 'Drag a bar (or one of its edges) · click on the keyboard: play · wheel: zoom · double click: the whole keyboard · audio files: new zones from the key';
     c.addEventListener('pointerdown', e => this.press(e));
     c.addEventListener('pointermove', e => {
       if (e.buttons) return;
@@ -104,19 +104,19 @@ export class ZoneView {
     this.enabled = enabled;
   }
 
-  /** Il tasto sotto il puntatore (per i file lasciati sopra), o null sulla colonna dei nomi. */
+  /** The key under the pointer (for the files dropped on it), or null on the names column. */
   keyAt(clientX: number): number | null {
     const r = this.canvas.getBoundingClientRect(), x = clientX - r.left;
     if (x < NAME_W) return null;
     return Math.max(0, Math.min(127, Math.floor(this.k0 + ((x - NAME_W) / this.keysWidth) * (this.k1 - this.k0))));
   }
 
-  /** La zona della riga sotto il puntatore, o null. */
+  /** The zone of the row under the pointer, or null. */
   zoneAt(clientY: number): number | null {
     return this.host.rows()[this.rowAt(clientY)]?.index ?? null;
   }
 
-  /** A ogni fotogramma: le zone che suonano e i tasti suonati. */
+  /** At every frame: the playing zones and the played keys. */
   tick(): void {
     const now = performance.now();
     for (const p of this.host.played()) this.flashes.set(p, now);
@@ -128,7 +128,7 @@ export class ZoneView {
     }
   }
 
-  // ---------------------------------------------------------------- misure
+  // ---------------------------------------------------------------- measures
 
   private get keysWidth(): number {
     return Math.max(1, this.canvas.clientWidth - NAME_W);
@@ -165,7 +165,7 @@ export class ZoneView {
     return x >= xa - 1 && x <= xb + 1 ? { kind: 'move', zone: row.index } : { kind: 'row', zone: row.index };
   }
 
-  // ---------------------------------------------------------------- gesti
+  // ---------------------------------------------------------------- gestures
 
   private press(e: PointerEvent): void {
     if (e.button !== 0) return;
@@ -186,7 +186,7 @@ export class ZoneView {
     }, () => { if (last) this.host.set(last, true); });
   }
 
-  /** I valori dopo aver spostato di `d` tasti un bordo della zona, o tutta (con la nota base). */
+  /** The values after moving an edge of the zone by `d` keys, or the whole zone (with the root note). */
   private moved(kind: 'lo' | 'hi' | 'move', z: ZoneMap, d: number): ParamValues {
     const id = (key: ZoneKey) => zoneParam(z.index, key);
     if (kind === 'lo') return { [id('lo')]: Math.max(0, Math.min(z.hi, z.lo + d)), [id('hi')]: z.hi };
@@ -199,7 +199,7 @@ export class ZoneView {
     e.preventDefault();
     const r = this.canvas.getBoundingClientRect();
     if (e.clientX - r.left < NAME_W) {
-      // sui nomi: le righe
+      // on the names: the rows
       const max = Math.max(0, this.host.rows().length + 1 - this.visibleRows());
       this.top = Math.max(0, Math.min(max, this.top + Math.sign(e.deltaY)));
       return this.paint();
@@ -218,7 +218,7 @@ export class ZoneView {
     this.paint();
   }
 
-  // ---------------------------------------------------------------- disegno
+  // ---------------------------------------------------------------- drawing
 
   paint(): void {
     const g = fit(this.canvas);
@@ -238,7 +238,7 @@ export class ZoneView {
     const lo = Math.floor(this.k0), hi = Math.min(127, Math.ceil(this.k1));
     const keyW = this.keysWidth / (this.k1 - this.k0);
 
-    // le colonne dei tasti neri e le ottave, sotto le righe
+    // the columns of the black keys and the octaves, under the rows
     for (let k = lo; k <= hi; k++) {
       const x = this.xOf(k);
       if (isBlack(k)) {
@@ -251,7 +251,7 @@ export class ZoneView {
       }
     }
 
-    // le righe delle zone
+    // the zones' rows
     g.font = '10.5px system-ui, sans-serif';
     g.textBaseline = 'middle';
     const pitched = this.host.pitched();
@@ -262,7 +262,7 @@ export class ZoneView {
         g.fillStyle = this.lit.has(row.index) ? 'rgba(255,157,46,0.16)' : 'rgba(255,255,255,0.06)';
         g.fillRect(0, y, w, ROW_H);
       }
-      // la barra, alta quanto le velocity
+      // the bar, as tall as the velocities
       const xa = Math.max(NAME_W, this.xOf(z.lo)), xb = Math.min(w, this.xOf(z.hi + 1));
       if (xb > xa) {
         const inner = ROW_H - 3, yb = y + ROW_H - 1.5;
@@ -271,7 +271,7 @@ export class ZoneView {
         g.fillRect(xa, y0, Math.max(2, xb - xa - 1), Math.max(2, y1 - y0));
         const range = z.lo === z.hi ? noteName(z.lo) : `${noteName(z.lo)}–${noteName(z.hi)}`;
         const textEnd = xa + 8 + g.measureText(range).width, dot = this.xOf(z.root + 0.5);
-        // il nome dei tasti, se ci sta e non copre il punto della nota base
+        // the keys' name, if it fits and doesn't cover the root note's dot
         if (textEnd < xb && !(pitched && dot > xa && dot < textEnd + 3)) {
           g.fillStyle = on ? '#141414' : 'rgba(255,255,255,0.85)';
           g.fillText(range, xa + 4, y + ROW_H / 2 + 0.5);
@@ -283,31 +283,31 @@ export class ZoneView {
         g.arc(this.xOf(z.root + 0.5), y + ROW_H / 2, Math.min(3, Math.max(1.5, keyW / 3)), 0, 2 * Math.PI);
         g.fill();
       }
-      // il nome sopra tutto, con il fondo della colonna
+      // the name over everything, with the column's background
       g.fillStyle = on ? '#262b31' : BACKGROUND;
       g.fillRect(0, y, NAME_W, ROW_H);
       g.fillStyle = on ? ACCENT : 'rgba(255,255,255,0.8)';
       g.fillText(clip(g, `${row.index + 1}  ${row.name}`, NAME_W - 10), 5, y + ROW_H / 2 + 0.5);
     });
-    // la riga vuota in fondo: si caricano zone nuove
+    // the empty row at the bottom: new zones are loaded
     const free = rows.length - this.top;
     if (free >= 0 && free < shown) {
       const y = KEYS_H + free * ROW_H;
       g.fillStyle = BACKGROUND;
       g.fillRect(0, y, NAME_W, ROW_H);
       g.fillStyle = LABEL;
-      g.fillText(rows.length ? '+ zone (doppio clic o file)' : 'Trascina qui dei file audio', 5, y + ROW_H / 2 + 0.5);
+      g.fillText(rows.length ? '+ zones (double click or files)' : 'Drag audio files here', 5, y + ROW_H / 2 + 0.5);
     }
     g.fillStyle = GRID;
     g.fillRect(NAME_W - 1, KEYS_H, 1, h - KEYS_H);
-    // più righe di quante se ne vedono: dove si è
+    // more rows than are visible: where you are
     if (rows.length + 1 > shown) {
       const span = h - KEYS_H, total = rows.length + 1;
       g.fillStyle = 'rgba(255,255,255,0.3)';
       g.fillRect(NAME_W - 4, KEYS_H + (this.top / total) * span, 2, Math.max(6, (shown / total) * span));
     }
 
-    // la tastiera
+    // the keyboard
     g.fillStyle = BACKGROUND;
     g.fillRect(0, 0, w, KEYS_H);
     const now = performance.now();
@@ -327,7 +327,7 @@ export class ZoneView {
     g.fillStyle = LABEL;
     g.font = '10px system-ui, sans-serif';
     g.fillText('Zone', 5, KEYS_H / 2 + 0.5);
-    // lo zoom: dove si è sulla tastiera
+    // the zoom: where you are on the keyboard
     if (this.k1 - this.k0 < 127.9) {
       g.fillStyle = 'rgba(255,255,255,0.25)';
       g.fillRect(NAME_W + (this.k0 / 128) * this.keysWidth, h - 2, Math.max(2, ((this.k1 - this.k0) / 128) * this.keysWidth), 2);
@@ -337,7 +337,7 @@ export class ZoneView {
   }
 }
 
-/** Il testo accorciato con "…" per stare in `width`. */
+/** The text shortened with "…" to fit in `width`. */
 function clip(g: CanvasRenderingContext2D, text: string, width: number): string {
   if (g.measureText(text).width <= width) return text;
   let s = text;

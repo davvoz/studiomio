@@ -1,32 +1,32 @@
-/* Le forme pronte di una modulazione: un'onda scritta come punti nel tratto [from, to]. Una curva
- * fa solo rette e scalini, quindi quelle tonde sono spezzate fitte. Un ciclo si ripete fino a
- * riempire il tratto; l'ultimo, se non ci sta tutto, si taglia. */
+/* A modulation's ready-made shapes: a wave written as points in the range [from, to]. A curve
+ * makes only straight lines and steps, so the round ones are finely broken. A cycle repeats until it
+ * fills the range; the last, if it doesn't fit entirely, is cut. */
 import type { Beats } from '../../core/music-time';
 import { MOD_SCALES, type EnvelopePoint, type ModScale } from '../../model/envelope';
 
 export type ShapeId = 'sine' | 'triangle' | 'rampUp' | 'rampDown' | 'square' | 'pump' | 'steps' | 'drift';
 
-/** Cosa mettere nel tratto. */
+/** What to put in the range. */
 export interface ShapeChoice {
   readonly shape: ShapeId;
-  /** Durata di un ciclo; 0: un solo ciclo su tutto il tratto. */
+  /** Length of a cycle; 0: a single cycle over the whole range. */
   readonly cycle: Beats;
-  /** Quanta parte della scala usa, da 0 a 1. */
+  /** How much of the scale it uses, from 0 to 1. */
   readonly depth: number;
   readonly invert: boolean;
-  /** Le forme casuali: lo stesso seme ridà gli stessi valori. */
+  /** The random shapes: the same seed gives the same values again. */
   readonly seed: number;
 }
 
-/** Un punto del ciclo: dove (da 0 a 1) e quanto (da −1 a 1). */
+/** A point of the cycle: where (from 0 to 1) and how much (from −1 to 1). */
 type Knot = readonly [phase: number, level: number];
 
 interface Shape {
   readonly id: ShapeId;
   readonly label: string;
-  /** Quanti cicli si vedono nell'icona. */
+  /** How many cycles are seen in the icon. */
   readonly icon: number;
-  /** Un generatore di cicli: `random` dà valori tra −1 e 1, `detail` dice quanto fitte le tonde. */
+  /** A cycle generator: `random` gives values between −1 and 1, `detail` says how dense the round ones are. */
   cycles(random: () => number, detail: number): () => readonly Knot[];
 }
 
@@ -37,19 +37,19 @@ const curve = (level: (phase: number) => number) => (_: unknown, detail: number)
 };
 
 export const SHAPES: readonly Shape[] = [
-  { id: 'sine', label: 'Sinusoide', icon: 1, cycles: curve(p => Math.sin(2 * Math.PI * p)) },
-  { id: 'triangle', label: 'Triangolo', icon: 1, cycles: fixed([[0, 0], [0.25, 1], [0.75, -1], [1, 0]]) },
-  { id: 'rampUp', label: 'Rampa su', icon: 1, cycles: fixed([[0, -1], [1, 1]]) },
-  { id: 'rampDown', label: 'Rampa giù', icon: 1, cycles: fixed([[0, 1], [1, -1]]) },
-  { id: 'square', label: 'Quadra', icon: 1, cycles: fixed([[0, 1], [0.5, 1], [0.5, -1], [1, -1]]) },
-  // giù di colpo, poi risale in fretta: come una cassa in sidechain
-  { id: 'pump', label: 'Pompa', icon: 2, cycles: curve(p => 1 - 2 * (1 - p) ** 4) },
+  { id: 'sine', label: 'Sine wave', icon: 1, cycles: curve(p => Math.sin(2 * Math.PI * p)) },
+  { id: 'triangle', label: 'Triangle', icon: 1, cycles: fixed([[0, 0], [0.25, 1], [0.75, -1], [1, 0]]) },
+  { id: 'rampUp', label: 'Ramp up', icon: 1, cycles: fixed([[0, -1], [1, 1]]) },
+  { id: 'rampDown', label: 'Ramp down', icon: 1, cycles: fixed([[0, 1], [1, -1]]) },
+  { id: 'square', label: 'Square', icon: 1, cycles: fixed([[0, 1], [0.5, 1], [0.5, -1], [1, -1]]) },
+  // down at once, then back up quickly: like a sidechained kick
+  { id: 'pump', label: 'Pump', icon: 2, cycles: curve(p => 1 - 2 * (1 - p) ** 4) },
   {
-    id: 'steps', label: 'Scalini casuali', icon: 5,
+    id: 'steps', label: 'Random steps', icon: 5,
     cycles: random => () => { const v = random(); return [[0, v], [1, v]]; },
   },
   {
-    id: 'drift', label: 'Casuale morbida', icon: 5,
+    id: 'drift', label: 'Smooth random', icon: 5,
     cycles: random => {
       let a = random();
       return () => { const from = a; a = random(); return [[0, from], [1, a]]; };
@@ -57,13 +57,13 @@ export const SHAPES: readonly Shape[] = [
   },
 ];
 
-/** Una forma rotonda ha al massimo tanti punti per ciclo, e al minimo tanti (se i cicli sono molti). */
+/** A round shape has at most this many points per cycle, and at least this many (if the cycles are many). */
 const DETAIL = { max: 32, min: 6, total: 2048 } as const;
-/** La trasposizione ha una scala di 4 ottave: al massimo una forma ne usa una per parte. */
+/** The transposition has a scale of 4 octaves: at most a shape uses one per side. */
 const TRANSPOSE_REACH = 12;
 const EPS = 1e-9;
 
-/** Numeri che dipendono solo dal seme (mulberry32), tra −1 e 1. */
+/** Numbers depending only on the seed (mulberry32), between −1 and 1. */
 function randomFrom(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
@@ -75,8 +75,8 @@ function randomFrom(seed: number): () => number {
   };
 }
 
-/** Dove arriva la forma sulla scala. Il volume ha il neutro in cima: lì usa solo la parte sotto,
- *  tutta intera. */
+/** Where the shape reaches on the scale. The volume has the neutral at the top: there it uses only the part below,
+ *  all of it. */
 function reachOf(scale: ModScale, depth: number): { low: number; high: number } {
   const reach = scale === MOD_SCALES.transpose ? TRANSPOSE_REACH : Infinity;
   return {
@@ -85,7 +85,7 @@ function reachOf(scale: ModScale, depth: number): { low: number; high: number } 
   };
 }
 
-/** I punti della forma in [from, to], in battiti assoluti. */
+/** The shape's points in [from, to], in absolute beats. */
 export function shapePoints(choice: ShapeChoice, from: Beats, to: Beats, scale: ModScale): EnvelopePoint[] {
   const shape = SHAPES.find(s => s.id === choice.shape)!;
   const length = to - from, cycle = choice.cycle > 0 ? choice.cycle : length;
@@ -102,7 +102,7 @@ export function shapePoints(choice: ShapeChoice, from: Beats, to: Beats, scale: 
         out.push({ beat: Math.min(beat, to), value });
         continue;
       }
-      // il ciclo non ci sta: si taglia alla fine del tratto, sulla retta che stava facendo
+      // the cycle doesn't fit: it's cut at the end of the range, on the line it was drawing
       const last = out[out.length - 1];
       out.push({ beat: to, value: last.value + ((value - last.value) * (to - last.beat)) / (beat - last.beat) });
       return out;

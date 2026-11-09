@@ -1,23 +1,23 @@
-/* Il suono del Phaser. Un LFO (seno) per canale, il destro sfasato di "Stereo" gradi.
- *   Phaser:  ingresso + feedback → N allpass del primo ordine (frequenza dall'LFO, in ottave
- *            attorno al centro) → wet
- *   Flanger: ingresso + feedback → linea di ritardo letta a un ritardo che oscilla tra quasi
- *            zero e il doppio di "Ritardo" → wet
- * e poi dry e wet mescolati. Il feedback passa da una tanh: anche al massimo non esplode.
- * Gira nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
+/* The Phaser's sound. One LFO (sine) per channel, the right one offset by "Stereo" degrees.
+ *   Phaser:  input + feedback → N first-order allpasses (frequency from the LFO, in octaves
+ *            around the centre) → wet
+ *   Flanger: input + feedback → delay line read at a delay oscillating between almost
+ *            zero and twice "Delay" → wet
+ * and then dry and wet mixed. The feedback goes through a tanh: even at maximum it doesn't explode.
+ * Runs in the AudioWorklet; no Web Audio here, so it's also tested in Node. */
 import type { EffectCore } from '../../dsp/core';
 import { TEMPO_RATES } from '../../rates';
 import { MAX_FLANGER_MS, PHASER_MODE, PHASER_STAGES, PHASER_SYNC } from './phaser';
 
-/** Ogni quanti campioni si ricalcolano i coefficienti degli allpass. */
+/** Every how many samples the allpass coefficients are recomputed. */
 const CONTROL_RATE = 16;
-/** Di quante ottave si sposta il phaser, sopra e sotto il centro, con Profondità 100. */
+/** How many octaves the phaser moves, above and below the centre, with Depth 100. */
 const PHASER_OCTAVES = 2.5;
 const SMOOTH = 0.02;
 
 const flush = (x: number) => (Math.abs(x) < 1e-20 ? 0 : x);
 
-/** Un canale del phaser: gli allpass in fila e il feedback. */
+/** A phaser channel: the allpasses in a row and the feedback. */
 class PhaserChannel {
   private readonly state = new Float64Array(Math.max(...PHASER_STAGES));
   private last = 0;
@@ -26,7 +26,7 @@ class PhaserChannel {
     let y = x + Math.tanh(this.last * feedback);
     const s = this.state;
     for (let i = 0; i < stages; i++) {
-      // allpass del primo ordine: y = a·x + s; s = x − a·y
+      // first-order allpass: y = a·x + s; s = x − a·y
       const out = a * y + s[i];
       s[i] = flush(y - a * out);
       y = out;
@@ -36,7 +36,7 @@ class PhaserChannel {
   }
 }
 
-/** Un canale del flanger: la linea di ritardo con lettura interpolata (Hermite). */
+/** A flanger channel: the delay line with interpolated reading (Hermite). */
 class FlangerChannel {
   private readonly buffer: Float32Array;
   private write = 0;
@@ -107,7 +107,7 @@ export class PhaserCore implements EffectCore {
     if (bpm > 0) this.bpm = bpm;
   }
 
-  /** L'LFO di un canale, da −1 a 1. */
+  /** A channel's LFO, from −1 to 1. */
   private lfo(channel: number): number {
     return Math.sin(2 * Math.PI * (this.phase + channel * this.offset));
   }
@@ -123,7 +123,7 @@ export class PhaserCore implements EffectCore {
       this.mix += (this.targetMix - this.mix) * this.smoothK;
       let wl: number, wr: number;
       if (flanger) {
-        // il ritardo va da quasi zero (a profondità piena) al doppio del valore
+        // the delay goes from almost zero (at full depth) to twice the value
         const dl = Math.max(2, base * (1 + this.depth * this.lfo(0)));
         const dr = Math.max(2, base * (1 + this.depth * this.lfo(1)));
         wl = fl.process(inL[i], dl, this.feedback);

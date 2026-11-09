@@ -1,7 +1,7 @@
 import type { InstrumentCore } from '../dsp/core';
 
 export interface NoteEvent {
-  /** Campione assoluto del contesto audio. */
+  /** Absolute sample of the audio context. */
   readonly frame: number;
   readonly kind: 'on' | 'off';
   readonly id: number;
@@ -9,8 +9,8 @@ export interface NoteEvent {
   readonly velocity: number;
 }
 
-/** A parità di campione gli spegnimenti vengono prima: una nota che finisce dove ne inizia
- *  un'altra libera la voce in tempo. */
+/** At equal samples the note-offs come first: a note ending where another starts
+ *  frees the voice in time. */
 const ORDER = { off: 0, on: 1 } as const;
 const before = (a: NoteEvent, b: NoteEvent) => a.frame - b.frame || ORDER[a.kind] - ORDER[b.kind];
 
@@ -19,22 +19,22 @@ const APPLY: { readonly [K in NoteEvent['kind']]: (core: InstrumentCore, e: Note
   off: (core, e) => core.noteOff(e.id),
 };
 
-/** Note programmate in anticipo, in ordine di tempo. */
+/** Notes scheduled ahead, in time order. */
 export class NoteQueue {
   private events: NoteEvent[] = [];
   private nextId = 1;
-  /** Le note tenute a mano, per altezza: la loro fine si conosce solo quando il tasto si alza. */
+  /** The notes held by hand, by pitch: their end is known only when the key goes up. */
   private readonly held = new Map<number, { readonly id: number; readonly frame: number }>();
 
-  /** Programma una nota da `onFrame` a `offFrame`. */
+  /** Schedules a note from `onFrame` to `offFrame`. */
   add(pitch: number, velocity: number, onFrame: number, offFrame: number): void {
     const id = this.nextId++;
     this.insert({ frame: onFrame, kind: 'on', id, pitch, velocity });
     this.insert({ frame: Math.max(onFrame + 1, offFrame), kind: 'off', id, pitch, velocity });
   }
 
-  /** Una nota tenuta a mano: parte da `frame` e finisce con `release`. Di una nota tenuta si
-   *  conosce solo l'inizio, quindi i tagli e le riprogrammazioni delle clip non la toccano. */
+  /** A note held by hand: starts at `frame` and ends with `release`. Of a held note only
+   *  the start is known, so the clips' cuts and reschedules don't touch it. */
   press(pitch: number, velocity: number, frame: number): void {
     this.release(pitch, frame);
     const id = this.nextId++;
@@ -42,12 +42,12 @@ export class NoteQueue {
     this.insert({ frame, kind: 'on', id, pitch, velocity });
   }
 
-  /** Il tasto si è alzato. La nota è già spenta se nel frattempo tutto si è fermato. */
+  /** The key went up. The note is already off if meanwhile everything stopped. */
   release(pitch: number, frame: number): void {
     const note = this.held.get(pitch);
     if (!note) return;
     this.held.delete(pitch);
-    // nello stesso blocco di `press`: a parità di campione gli spegnimenti verrebbero prima
+    // in the same block as `press`: at equal samples the note-offs would come first
     this.insert({ frame: Math.max(frame, note.frame + 1), kind: 'off', id: note.id, pitch, velocity: 0 });
   }
 
@@ -56,8 +56,8 @@ export class NoteQueue {
     this.held.clear();
   }
 
-  /** Toglie le note che partirebbero da `frame` in poi e anticipa a `frame` la fine di quelle
-   *  che suonerebbero oltre (anche quelle già partite). */
+  /** Removes the notes that would start from `frame` on and brings forward to `frame` the end of those
+   *  that would play beyond it (also those already started). */
   cutAt(frame: number): void {
     const dropped = new Set(this.events.filter(e => e.kind === 'on' && e.frame >= frame).map(e => e.id));
     this.events = this.events
@@ -66,7 +66,7 @@ export class NoteQueue {
       .sort(before);
   }
 
-  /** Toglie le note che partirebbero da `frame` in poi; quelle già partite restano com'erano. */
+  /** Removes the notes that would start from `frame` on; those already started stay as they were. */
   dropFrom(frame: number): void {
     const dropped = new Set(this.events.filter(e => e.kind === 'on' && e.frame >= frame).map(e => e.id));
     if (dropped.size) this.events = this.events.filter(e => !dropped.has(e.id));
@@ -76,8 +76,8 @@ export class NoteQueue {
     return this.events.length;
   }
 
-  /** Suona il blocco che inizia al campione `start`: il motore lavora a tratti, fermandosi
-   *  sul campione di ogni evento. Gli eventi in ritardo valgono dall'inizio del blocco. */
+  /** Plays the block starting at sample `start`: the engine works in stretches, stopping
+   *  on the sample of each event. Late events apply from the start of the block. */
   renderBlock(core: InstrumentCore, left: Float32Array, right: Float32Array, start: number): void {
     const end = start + left.length;
     let pos = 0, n = 0;
@@ -95,7 +95,7 @@ export class NoteQueue {
   }
 
   private insert(e: NoteEvent): void {
-    // ricerca binaria: di solito le note arrivano già in ordine e finiscono in coda
+    // binary search: usually the notes arrive already in order and end up at the end
     let lo = 0, hi = this.events.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;

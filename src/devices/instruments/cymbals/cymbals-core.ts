@@ -1,13 +1,13 @@
-/* Il suono di Hat e Piatti (vedi cymbals.ts). Di ogni pezzo suonano al massimo due colpi: il
- * terzo fa sfumare in pochi millisecondi il più vecchio (niente click), e il chiuso e il pedale
- * sfumano l'aperto. Una voce synth somma sei quadre stonate tra loro (senza aliasing, PolyBLEP)
- * o, nel metallo "Anello", i loro prodotti a coppie; ci mescola il rumore (diverso a sinistra e
- * a destra quanto è larga) e passa per un passa-banda e un passa-alto che si alzano con la
- * brillantezza; sopra suonano i parziali della campana, con un decadimento più breve. Una voce
- * sample legge il file del pezzo (in stereo), con il filtro della brillantezza. Ogni colpo varia
- * un poco intonazione, livello e brillantezza, quanto dice la Variazione. In fondo la
- * saturazione e il volume. Gira nell'AudioWorklet; qui niente Web Audio, così si prova anche
- * fuori. */
+/* The sound of Hat and Cymbals (see cymbals.ts). Of each piece at most two hits play: the
+ * third fades the oldest out in a few milliseconds (no clicks), and the closed and the pedal
+ * fade the open one. A synth voice sums six squares detuned from each other (without aliasing, PolyBLEP)
+ * or, in the "Ring" metal, their pairwise products; it mixes in the noise (different left and
+ * right as much as it's wide) and goes through a band-pass and a high-pass that rise with the
+ * brightness; on top play the bell's partials, with a shorter decay. A sample
+ * voice reads the piece's file (in stereo), with the brightness filter. Each hit varies
+ * pitch, level and brightness a little, as much as the Variation says. At the end the
+ * saturation and the volume. Runs in the AudioWorklet; no Web Audio here, so it's also tested
+ * outside. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { decayCoef } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
@@ -17,30 +17,30 @@ import { PIECES, pieceOfNote, pieceOfSlot, pieceParam, SOURCE } from './cymbals'
 
 const FLOOR = 1e-5;
 const CHOKE_TIME = 0.004;
-/** L'attacco di ogni colpo: abbastanza per non fare click. */
+/** The attack of each hit: enough not to click. */
 const ATTACK_TIME = 0.0004;
 const TWO_PI = 2 * Math.PI;
 const LP = 0, BP = 1, HP = 2;
-/** Due colpi di un pezzo suonano insieme; il terzo posto è per quello che sfuma. */
+/** Two hits of a piece play together; the third slot is for the one fading. */
 const VOICES_PER_PIECE = 3;
 
-/** Le frequenze delle sei quadre, per metallo (l'Anello usa quelle della 808). */
+/** The frequencies of the six squares, per metal (the Ring uses the 808's). */
 const METAL_HZ: readonly (readonly number[])[] = [
   [205.3, 304.4, 369.6, 522.7, 540, 800],
   [263, 400, 421, 474, 587, 845],
   [205.3, 304.4, 369.6, 522.7, 540, 800],
 ];
 const RING = 2;
-/** I parziali della campana (rapporti stonati come in una campana vera) e la sua nota. */
+/** The bell's partials (detuned ratios as in a real bell) and its note. */
 const BELL_RATIOS = [1, 1.51, 2.76, 4.07];
 const BELL_HZ = 560;
-/** Quanto pesa ciascun parziale della campana. */
+/** How much each bell partial weighs. */
 const BELL_WEIGHTS = [0.5, 0.3, 0.22, 0.14];
 
-/** Ciò che un colpo deve sapere del suo pezzo, già convertito. */
+/** What a hit must know about its piece, already converted. */
 interface Hit {
   readonly synth: boolean;
-  /** Rapporto di frequenza dall'intonazione (con la variazione). */
+  /** Frequency ratio from the pitch (with the variation). */
   readonly ratio: number;
   readonly decay: number;
   /** 0..1. */
@@ -63,7 +63,7 @@ const hermite = (x: Float32Array, k: number, f: number): number => {
 
 class CymbalVoice {
   active = false;
-  /** Quando è partita (in colpi): la voce più vecchia di un pezzo è quella da riusare. */
+  /** When it started (in hits): a piece's oldest voice is the one to reuse. */
   age = 0;
   private fade = 1;
   private choking = false;
@@ -90,7 +90,7 @@ class CymbalVoice {
   private readonly bpR: Svf;
   private readonly hpL: Svf;
   private readonly hpR: Svf;
-  // il sample
+  // the sample
   private data: SampleData | null = null;
   private pos = 0;
   private step = 1;
@@ -131,7 +131,7 @@ class CymbalVoice {
       });
       this.bellAmp = hit.bell;
       this.bellK = decayCoef(Math.min(hit.decay, 0.25 + hit.decay * 0.5), sr);
-      // la brillantezza alza insieme il centro del passa-banda e il passa-alto
+      // the brightness raises the band-pass centre and the high-pass together
       const bright = Math.pow(2, (hit.tone - 0.5) * 2.4);
       for (const f of [this.bpL, this.bpR]) f.set(8000 * bright, 0.2, BP);
       for (const f of [this.hpL, this.hpR]) f.set(5500 * bright, 0.15, HP);
@@ -145,7 +145,7 @@ class CymbalVoice {
       }
       this.pos = 0;
       this.step = (hit.ratio * this.data.sampleRate) / sr;
-      // come i pad Sample della Drum Machine: sotto metà un passa-basso, sopra un passa-alto
+      // like the Drum Machine's Sample pads: below half a low-pass, above a high-pass
       const tone = hit.tone - 0.5;
       this.filtered = Math.abs(tone) > 0.02;
       if (this.filtered) {
@@ -159,7 +159,7 @@ class CymbalVoice {
     if (this.active) this.choking = true;
   }
 
-  /** Suona e non sta sfumando. */
+  /** It plays and isn't fading. */
   get sounding(): boolean {
     return this.active && !this.choking;
   }
@@ -169,7 +169,7 @@ class CymbalVoice {
     else this.renderSample(left, right, from, to);
   }
 
-  /** L'inviluppo di questo campione (sale in un attimo, poi decade), con la sfumatura. */
+  /** The envelope of this sample (rises in an instant, then decays), with the fade. */
   private envelope(): number {
     if (this.rise < 1) this.rise = Math.min(1, this.rise + this.riseStep);
     else this.amp *= this.ampK;
@@ -240,7 +240,7 @@ class CymbalVoice {
   }
 }
 
-/** La quadra `k` (senza aliasing), che avanza di un campione. */
+/** Square `k` (without aliasing), advancing one sample. */
 function square(phases: Float64Array, steps: Float64Array, k: number): number {
   const dt = steps[k];
   let t = phases[k] + dt;
@@ -279,7 +279,7 @@ export class CymbalsCore implements InstrumentCore, SamplePlayer {
     const v = this.values, i = pieceOfNote(pitch);
     if (!v || i < 0) return;
     const at = (key: Parameters<typeof pieceParam>[1]) => v[pieceParam(i, key)];
-    // il chiuso e il pedale fermano l'aperto, come il charleston
+    // the closed and the pedal stop the open one, like the hi-hat
     if (PIECES[i].hat === 'closes') for (const voice of this.voices[PIECES.findIndex(p => p.hat === 'open')]) voice.choke();
     const variation = v.variation / 100, rnd = () => this.random.next() * variation;
     const ratio = Math.pow(2, (at('tune') + rnd() * 0.6) / 12);
@@ -299,14 +299,14 @@ export class CymbalsCore implements InstrumentCore, SamplePlayer {
       width: v.width / 100,
       sample: this.samples[i],
     };
-    // al massimo due colpi del pezzo insieme: il più vecchio sfuma, il nuovo prende una voce libera
+    // at most two hits of the piece together: the oldest fades, the new one takes a free voice
     const voices = this.voices[i], oldest = (list: CymbalVoice[]) => list.reduce((a, b) => (a.age <= b.age ? a : b));
     const sounding = voices.filter(x => x.sounding);
     if (sounding.length >= VOICES_PER_PIECE - 1) oldest(sounding).choke();
     (voices.find(x => !x.active) ?? oldest(voices)).trigger(hit, ++this.hits);
   }
 
-  /** I piatti suonano fino in fondo: il rilascio della nota non conta. */
+  /** Cymbals ring to the end: the note's release doesn't count. */
   noteOff(): void {}
 
   silence(): void {

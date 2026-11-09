@@ -3,10 +3,10 @@ import { hann, mixMono, normalizeOverlap, princarg, readFrame } from '../signal'
 import type { Samples } from '../types';
 import type { StretchInput, TimeStretcher, SettingsOf } from './stretcher';
 
-/** Sopra i 60 kHz la FFT raddoppia, così la risoluzione in Hz resta la stessa. */
+/** Above 60 kHz the FFT doubles, so the resolution in Hz stays the same. */
 export const pvFftSize = (sampleRate: number, base: number): number => (sampleRate > 60000 ? base * 2 : base);
 
-/** Stato di un render del phase vocoder: buffer riusati da un frame all'altro. */
+/** State of a phase vocoder render: buffers reused from one frame to the next. */
 class PhaseVocoder {
   private readonly N: number;
   private readonly H: number;
@@ -15,18 +15,18 @@ class PhaseVocoder {
   private readonly win: Float64Array;
   private readonly re: Float64Array;
   private readonly im: Float64Array;
-  // spettro del mid nel frame corrente (m) e in quello di H campioni prima (p)
+  // spectrum of the mid in the current frame (m) and in the one H samples earlier (p)
   private readonly mr: Float64Array; private readonly mi: Float64Array;
   private readonly pr: Float64Array; private readonly pi: Float64Array;
   private readonly mag: Float64Array;
   private readonly ph: Float64Array;
-  /** Fase di sintesi accumulata. */
+  /** Accumulated synthesis phase. */
   private readonly syn: Float64Array;
   private readonly peaks: Int32Array;
   private readonly ar: Float64Array; private readonly ai: Float64Array;
   private readonly br: Float64Array; private readonly bi: Float64Array;
   private readonly omegaH: Float64Array;
-  /** Rotazione da applicare a ogni bin, e^{i(syn - ph)}: calcolata una volta per frame. */
+  /** Rotation to apply to each bin, e^{i(syn - ph)}: computed once per frame. */
   private readonly rotRe: Float64Array;
   private readonly rotIm: Float64Array;
 
@@ -82,7 +82,7 @@ class PhaseVocoder {
     return outs;
   }
 
-  /** Spettro del mid nel frame corrente e in quello precedente, con una sola FFT. */
+  /** Spectrum of the mid in the current frame and in the previous one, with a single FFT. */
   private analyzeMid(mono: Samples, a: number): number {
     const { re, im, mr, mi, mag, ph, nb } = this;
     readFrame(mono, a, this.win, re);
@@ -98,8 +98,8 @@ class PhaseVocoder {
     return maxMag;
   }
 
-  /** Avanza la fase di sintesi con il phase locking di Laroche-Dolson: i picchi seguono
-   *  la propria frequenza istantanea, i bin vicini restano agganciati al loro picco. */
+  /** Advances the synthesis phase with Laroche-Dolson phase locking: the peaks follow
+   *  their own instantaneous frequency, the nearby bins stay locked to their peak. */
   private advancePhase(maxMag: number): void {
     const { mag, ph, syn, peaks, omegaH, pr, pi, nb } = this;
     const dev = (k: number) => princarg(ph[k] - Math.atan2(pi[k], pr[k]) - omegaH[k]);
@@ -140,9 +140,9 @@ class PhaseVocoder {
     }
   }
 
-  /** Un canale deve suonare col suo modulo e fase syn + (fase del canale − fase del mid):
-   *  basta ruotare ogni bin di e^{i(syn − ph)}, senza atan2/hypot/sin/cos per canale.
-   *  In mono il canale è il mid, quindi la fase risulta proprio syn. */
+  /** A channel must play with its magnitude and phase syn + (channel phase − mid phase):
+   *  it's enough to rotate each bin by e^{i(syn − ph)}, without atan2/hypot/sin/cos per channel.
+   *  In mono the channel is the mid, so the phase comes out exactly syn. */
   private rotate(xr: Float64Array, xi: Float64Array): void {
     const { rotRe, rotIm, nb } = this;
     for (let k = 0; k < nb; k++) {
@@ -152,8 +152,8 @@ class PhaseVocoder {
     }
   }
 
-  /** Sintesi dei canali c e c+1 con una sola FFT diretta e una inversa. La fase stereo
-   *  resta coerente: ogni canale conserva la sua differenza di fase rispetto al mid. */
+  /** Synthesis of channels c and c+1 with a single forward and a single inverse FFT. The stereo phase
+   *  stays coherent: each channel keeps its phase difference relative to the mid. */
   private synthesizePair(
     channels: readonly Float32Array[], c: number, a: number,
     outs: Float32Array[], os: number, outLength: number,
@@ -177,7 +177,7 @@ class PhaseVocoder {
   }
 }
 
-/** Complex: phase vocoder con phase locking, fase stereo coerente e reset sui transienti. */
+/** Complex: phase vocoder with phase locking, coherent stereo phase and reset on transients. */
 export class ComplexStretcher implements TimeStretcher<SettingsOf<'complex'>> {
   readonly shiftsPitch = false;
 

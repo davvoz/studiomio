@@ -1,9 +1,9 @@
-/* Costruisce "Acido crudo" (src/demo/acid-live.ts) come cartella di progetto studiomio, con i
- * sample presi da una cartella di suoni:
- *   node scripts/run.mjs scripts/build-acid-live.ts <cartella dei suoni> <cartella del progetto>
- * La cartella del progetto si apre poi dall'app con "Apri". I file sono quelli della libreria
- * dell'utente (percorsi relativi a <cartella dei suoni>): cambiando questa tabella il live
- * suona con altri sample. */
+/* Builds "Acido crudo" (src/demo/acid-live.ts) as a studiomio project folder, with the
+ * samples taken from a sounds folder:
+ *   node scripts/run.mjs scripts/build-acid-live.ts <sounds folder> <project folder>
+ * The project folder is then opened from the app with "Open". The files are those of the
+ * user's library (paths relative to <sounds folder>): changing this table the live
+ * plays with other samples. */
 import { buildAcidLive, type AcidLiveSound } from '../src/demo/acid-live';
 import { buildLiveFolder } from './live-folder';
 
@@ -36,6 +36,6 @@ const FILES: Readonly<Record<AcidLiveSound, string>> = {
 };
 
 export async function main([soundsDir, projectDir]: string[]): Promise<void> {
-  if (!soundsDir || !projectDir) throw new Error('uso: build-acid-live.ts <cartella dei suoni> <cartella del progetto>');
+  if (!soundsDir || !projectDir) throw new Error('usage: build-acid-live.ts <sounds folder> <project folder>');
   await buildLiveFolder(FILES, soundsDir, projectDir, buildAcidLive);
 }

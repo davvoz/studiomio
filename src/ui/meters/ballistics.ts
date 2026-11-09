@@ -1,25 +1,25 @@
-/* Come si muove un misuratore sullo schermo: scala dei dB e "balistica" (il picco scende
- * piano, il valore massimo resta fermo un attimo, il clip resta acceso finché non lo si
- * azzera). Funzioni pure e una classe senza DOM, così si provano nei test. */
+/* How a meter moves on screen: dB scale and "ballistics" (the peak falls
+ * slowly, the maximum value stays still for a moment, the clip stays lit until it's
+ * reset). Pure functions and a class without DOM, so they're tested in tests. */
 import type { MeterReading } from '../../engine/meters';
 
-/** Sotto questo livello il misuratore è vuoto. */
+/** Below this level the meter is empty. */
 export const FLOOR_DB = -70;
-/** Velocità di discesa del picco, in dB al secondo. */
+/** Falling speed of the peak, in dB per second. */
 const FALL_DB_PER_S = 24;
-/** Per quanto il segno del massimo resta fermo prima di riunirsi al picco, in secondi. */
+/** How long the maximum mark stays still before rejoining the peak, in seconds. */
 const HOLD_S = 1.5;
 
 export const gainToDb = (g: number): number => (g > 0 ? 20 * Math.log10(g) : -Infinity);
 
-/** La scala dei misuratori (simile alla IEC 60268-18 delle DAW): più spazio vicino allo 0,
- *  poco per i livelli molto bassi. Coppie (dB, posizione 0..1), +6 dB in cima. */
+/** The meters' scale (similar to the DAWs' IEC 60268-18): more space near 0,
+ *  little for very low levels. Pairs (dB, position 0..1), +6 dB at the top. */
 const SCALE: readonly (readonly [db: number, pos: number])[] = [
   [FLOOR_DB, 0], [-60, 0.04], [-50, 0.09], [-40, 0.17], [-30, 0.28], [-20, 0.43],
   [-12, 0.58], [-6, 0.71], [0, 0.86], [6, 1],
 ];
 
-/** Posizione (0 in basso, 1 in cima) di un livello in dB. */
+/** Position (0 at the bottom, 1 at the top) of a level in dB. */
 export function meterPosition(db: number): number {
   if (!(db > FLOOR_DB)) return 0;
   for (let i = 1; i < SCALE.length; i++) {
@@ -32,15 +32,15 @@ export function meterPosition(db: number): number {
   return 1;
 }
 
-/** Lo stato mostrato di un misuratore stereo, aggiornato a ogni fotogramma. */
+/** The shown state of a stereo meter, updated at every frame. */
 export class Ballistics {
   readonly peak = [FLOOR_DB, FLOOR_DB];
   readonly rms = [FLOOR_DB, FLOOR_DB];
   readonly hold = [FLOOR_DB, FLOOR_DB];
   private readonly holdAge = [0, 0];
-  /** Il picco più alto dall'ultimo azzeramento (il numero del master). */
+  /** The highest peak since the last reset (the master's number). */
   max = FLOOR_DB;
-  /** Il segnale ha toccato 0 dBFS dall'ultimo azzeramento. */
+  /** The signal touched 0 dBFS since the last reset. */
   clip = false;
 
   update(r: MeterReading, dt: number): void {
@@ -52,13 +52,13 @@ export class Ballistics {
       if (p >= this.hold[c]) {
         this.hold[c] = p;
         this.holdAge[c] = 0;
-      } else if ((this.holdAge[c] += dt) > HOLD_S) this.hold[c] = this.peak[c]; // finita l'attesa, segue il picco
+      } else if ((this.holdAge[c] += dt) > HOLD_S) this.hold[c] = this.peak[c]; // the wait over, it follows the peak
       this.max = Math.max(this.max, p);
       if (r.peak[c] >= 1) this.clip = true;
     }
   }
 
-  /** Vero se non c'è niente da mostrare (tutto a fondo scala). */
+  /** True if there's nothing to show (everything at the bottom of the scale). */
   get idle(): boolean {
     return [...this.peak, ...this.rms, ...this.hold].every(v => v <= FLOOR_DB);
   }

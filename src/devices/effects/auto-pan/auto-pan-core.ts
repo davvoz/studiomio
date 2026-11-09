@@ -1,13 +1,13 @@
-/* Il suono dell'Auto Pan: il volume di ogni canale segue l'LFO (il destro sfasato di "Stereo").
- * Il valore dell'onda va a potenza costante (a metà strada −3 dB, non −6: il suono non si svuota
- * al centro) e il volume scorre morbido, così anche l'onda quadra e i salti del trasporto non
- * fanno click. Gira nell'AudioWorklet; qui niente Web Audio. */
+/* The Auto Pan's sound: each channel's volume follows the LFO (the right one offset by "Stereo").
+ * The wave's value goes at constant power (halfway −3 dB, not −6: the sound doesn't hollow out
+ * in the centre) and the volume glides smoothly, so even the square wave and transport jumps don't
+ * click. Runs in the AudioWorklet; no Web Audio here. */
 import type { EffectCore, TransportFollower, TransportPosition } from '../../dsp/core';
 import { LfoClock, lfoAt, type LfoRate } from '../../dsp/lfo';
 import { TEMPO_RATES } from '../../rates';
 import { AUTO_PAN_SYNC } from './auto-pan';
 
-/** Quanto ci mette il volume ad assestarsi, in secondi. */
+/** How long the volume takes to settle, in seconds. */
 const SMOOTH = 0.002;
 const HALF_PI = Math.PI / 2;
 
@@ -47,7 +47,7 @@ export class AutoPanCore implements EffectCore, TransportFollower {
     this.transport = position;
   }
 
-  /** Il volume di un canale adesso, 0..1 (per i test e per disegnarlo). */
+  /** A channel's volume now, 0..1 (for tests and for drawing it). */
   gain(channel: 0 | 1): number {
     return this.gains[channel];
   }
@@ -58,7 +58,7 @@ export class AutoPanCore implements EffectCore, TransportFollower {
     let [gL, gR] = gains;
     for (let i = 0; i < n; i++) {
       const c = clock.cycles + this.phase;
-      // l'onda (−1..1) diventa 0..1, poi un volume a potenza costante
+      // the wave (−1..1) becomes 0..1, then a constant-power volume
       const tL = 1 - amount * (1 - Math.sin(((lfoAt(shape, c) + 1) / 2) * HALF_PI));
       const tR = 1 - amount * (1 - Math.sin(((lfoAt(shape, c + this.stereo) + 1) / 2) * HALF_PI));
       if (this.fresh) {

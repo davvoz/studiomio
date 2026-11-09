@@ -3,24 +3,24 @@ import type { TimeMap } from '../time-map';
 
 export type BeatsLoopMode = 'off' | 'forward' | 'pingpong';
 
-/** Impostazioni di ogni modalità di warp: un'unione discriminata dal campo `mode`. */
+/** Settings of each warp mode: a union discriminated by the `mode` field. */
 export type StretchSettings =
   | { readonly mode: 'repitch' }
   | {
       readonly mode: 'beats';
-      /** Inizi delle fette, in campioni di ingresso. */
+      /** Slice starts, in input samples. */
       readonly slices: readonly number[];
       readonly loopMode: BeatsLoopMode;
-      /** 0..100: oltre questa percentuale dello spazio disponibile la fetta sfuma. */
+      /** 0..100: beyond this percentage of the available space the slice fades. */
       readonly envelope: number;
     }
   | { readonly mode: 'tones'; readonly grainMs: number }
   | { readonly mode: 'texture'; readonly grainMs: number; /** 0..1 */ readonly flux: number }
   | {
       readonly mode: 'complex';
-      /** Dimensione FFT di base (raddoppiata oltre i 60 kHz). */
+      /** Base FFT size (doubled above 60 kHz). */
       readonly fftSize: number;
-      /** Transienti in campioni di ingresso, dove la fase si azzera; null = nessun reset. */
+      /** Transients in input samples, where the phase is reset; null = no reset. */
       readonly transients: readonly number[] | null;
     };
 
@@ -34,13 +34,13 @@ export interface StretchInput {
   readonly outLength: number;
 }
 
-/** Un algoritmo che porta l'audio sulla nuova griglia temporale descritta da `map`. */
+/** An algorithm bringing the audio onto the new time grid described by `map`. */
 export interface TimeStretcher<S extends StretchSettings = StretchSettings> {
-  /** Vero se l'algoritmo cambia già l'intonazione (niente ricampionamento per il transpose). */
+  /** True if the algorithm already changes the pitch (no resampling for the transpose). */
   readonly shiftsPitch: boolean;
   stretch(input: StretchInput, settings: S): Float32Array[];
 }
 
-/** Tabella completa modalità → algoritmo: se si aggiunge una modalità a `StretchSettings`
- *  il compilatore pretende anche il suo algoritmo. */
+/** Complete mode → algorithm table: if a mode is added to `StretchSettings`
+ *  the compiler also demands its algorithm. */
 export type StretcherTable = { readonly [M in WarpMode]: TimeStretcher<SettingsOf<M>> };

@@ -1,7 +1,7 @@
-/* L'automazione del master sulla timeline, come le corsie di automazione di Live: una riga sotto
- * quella del master, a sinistra i menu (un suo effetto o rack, un parametro o una macro), a
- * destra la corsia con la curva, allineata alla timeline e con il suo zoom. Si apre con il
- * pulsante "A" del master; ha un pallino quando il master ha delle curve. */
+/* The master's automation on the timeline, like Live's automation lanes: a row under
+ * the master's, on the left the menus (one of its effects or racks, a parameter or a macro), on
+ * the right the lane with the curve, aligned with the timeline and with its zoom. It opens with the
+ * master's "A" button; it has a dot when the master has curves. */
 import type { PlaybackEngine } from '../engine/playback-engine';
 import type { ModTarget } from '../model/envelope';
 import type { Project } from '../model/project';
@@ -16,7 +16,7 @@ import { ModulationEditor } from './envelopes/modulation-editor';
 import { gridStep, type TimelineGeometry } from './timeline/geometry';
 import type { UiState } from './ui-state';
 
-/** Il colore delle curve del master (l'arancione è già della testina). */
+/** The colour of the master's curves (orange already belongs to the playhead). */
 const MASTER_CURVE = '#5ec8e5';
 
 export class MasterAutomation {
@@ -45,7 +45,7 @@ export class MasterAutomation {
       chain: () => masterChain(store.project),
       devices: () => masterTargetDevices(store.project),
       layout: visible => { this.hint.hidden = visible; },
-    }, 'Automazione');
+    }, 'Automation');
     this.button = el<HTMLButtonElement>('button', { className: 'auto', textContent: 'A', onclick: () => this.toggle() });
     this.header.append(this.editor.controls);
     this.lane.append(this.editor.lane.element, this.hint);
@@ -68,13 +68,13 @@ export class MasterAutomation {
     this.sync();
   }
 
-  /** Apre la corsia sul parametro `target`. */
+  /** Opens the lane on parameter `target`. */
   show(target: ModTarget): boolean {
     this.toggle(true);
     return this.editor.show(target);
   }
 
-  /** L'asse della corsia: quello della timeline (lo stesso oggetto finché non si muove). */
+  /** The lane's axis: the timeline's (the same object until it moves). */
   private axis(): BeatAxis {
     const geo = this.ui.geometry;
     if (this.axisOf?.geo !== geo) this.axisOf = { geo, axis: new BeatAxis(geo.pxPerBeat, geo.scrollBeat) };
@@ -92,7 +92,7 @@ export class MasterAutomation {
     return this.curvesOf.curves;
   }
 
-  /** La rotella sulla corsia muove la timeline: Ctrl zooma, altrimenti scorre in orizzontale. */
+  /** The wheel on the lane moves the timeline: Ctrl zooms, otherwise it scrolls horizontally. */
   private wheel(e: WheelEvent, x: number): void {
     e.preventDefault();
     const g = this.ui.geometry;
@@ -105,10 +105,10 @@ export class MasterAutomation {
     const p = this.store.project, n = p.masterAutomation.length;
     this.button.classList.toggle('on', this.isOpen);
     this.button.classList.toggle('has', n > 0);
-    this.button.title = `Automazione del master: curve sulla timeline per i suoi effetti e le macro dei suoi rack${n ? ` (${n === 1 ? '1 curva' : `${n} curve`})` : ''}`;
+    this.button.title = `Master automation: curves on the timeline for its effects and the macros of its racks${n ? ` (${n === 1 ? '1 curve' : `${n} curves`})` : ''}`;
     this.hint.textContent = p.masterEffects.length
-      ? 'Scegli a sinistra un effetto del master e un parametro: qui ne disegni la curva sulla timeline'
-      : 'Aggiungi un effetto al master (FX o tasto destro) per automatizzarne i parametri';
+      ? 'Choose a master effect and a parameter on the left: here you draw its curve on the timeline'
+      : 'Add an effect to the master (FX or right click) to automate its parameters';
     if (this.isOpen) this.editor.sync();
   }
 }

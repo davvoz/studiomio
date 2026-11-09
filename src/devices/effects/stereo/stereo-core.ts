@@ -1,12 +1,12 @@
-/* Il suono dello Stereo, in mezzo e lato:
+/* The Stereo's sound, in mid and side:
  *
  *   M = (L + R) / 2, S = (L − R) / 2
- *   S' = S × larghezza, e con i bassi mono passa prima da un passa-alto Linkwitz-Riley a 24 dB
- *        (due Butterworth): sotto la frequenza il lato sparisce, il mezzo non si tocca
- *   L = (M + S') × guadagno, R = (M − S') × guadagno
+ *   S' = S × width, and with mono bass it first goes through a 24 dB Linkwitz-Riley high-pass
+ *        (two Butterworths): below the frequency the side vanishes, the mid isn't touched
+ *   L = (M + S') × gain, R = (M − S') × gain
  *
- * Il mezzo non passa da nessun filtro: un suono già mono esce identico. Gira nell'AudioWorklet;
- * qui niente Web Audio, così si prova anche in Node. */
+ * The mid goes through no filter: an already mono sound comes out identical. Runs in the AudioWorklet;
+ * no Web Audio here, so it's also tested in Node. */
 import { dbToGain, type EffectCore } from '../../dsp/core';
 import { Tpt } from '../../dsp/tpt';
 

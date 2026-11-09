@@ -1,6 +1,6 @@
-/* La barretta delle forme pronte, in alto a destra nella corsia: un pulsante per forma (l'icona è
- * la forma vera), quanto dura un ciclo, quanto è ampia, e al contrario. Un pulsante mette la
- * forma; gli altri comandi rifanno quella appena messa, per provare a orecchio. */
+/* The little bar of ready-made shapes, at the top right of the lane: a button per shape (the icon is
+ * the real shape), how long a cycle lasts, how wide it is, and reversed. A button places the
+ * shape; the other commands redo the one just placed, to try by ear. */
 import type { Beats } from '../../core/music-time';
 import { TEMPO_RATES } from '../../devices/rates';
 import { MOD_SCALES } from '../../model/envelope';
@@ -25,19 +25,19 @@ function iconOf(shape: (typeof SHAPES)[number]): SVGElement {
 export class ShapeStrip {
   readonly element = el('div', { className: 'mod-shapes', hidden: true });
   private readonly buttons = new Map<ShapeId, HTMLButtonElement>();
-  private readonly cycle = el<HTMLSelectElement>('select', { title: 'Ciclo: quanto dura una ripetizione della forma (Tutto: una sola su tutto il tratto)' });
-  private readonly depth = el<HTMLSelectElement>('select', { title: 'Ampiezza: 100% usa tutta la scala' });
+  private readonly cycle = el<HTMLSelectElement>('select', { title: 'Cycle: how long a repetition of the shape lasts (All: a single one over the whole range)' });
+  private readonly depth = el<HTMLSelectElement>('select', { title: 'Amplitude: 100% uses the whole scale' });
   private readonly invertButton = el<HTMLButtonElement>('button', {
-    textContent: '⇅', title: 'Al contrario: capovolge la forma', onclick: () => this.toggleInvert(),
+    textContent: '⇅', title: 'Reverse: flips the shape', onclick: () => this.toggleInvert(),
   });
   private shape: ShapeId = 'sine';
   private invert = false;
   private seed = 1;
 
-  /** `put`: un pulsante premuto, la forma va messa. `tweak`: è cambiato uno degli altri comandi. */
+  /** `put`: a button pressed, the shape must be placed. `tweak`: one of the other commands changed. */
   constructor(private readonly put: (c: ShapeChoice) => void, private readonly tweak: (c: ShapeChoice) => void) {
     this.cycle.append(
-      el('option', { value: String(WHOLE), textContent: 'Tutto' }),
+      el('option', { value: String(WHOLE), textContent: 'All' }),
       ...TEMPO_RATES.map(([label, beats]) => el('option', { value: String(beats), textContent: label })));
     this.depth.append(...DEPTHS.map(d => el('option', { value: String(d), textContent: `${d}%` })));
     this.cycle.onchange = this.depth.onchange = () => this.tweak(this.choice);
@@ -54,7 +54,7 @@ export class ShapeStrip {
     return { shape: this.shape, cycle: Number(this.cycle.value), depth: Number(this.depth.value) / 100, invert: this.invert, seed: this.seed };
   }
 
-  /** Ripremere una forma casuale tira fuori altri valori. */
+  /** Pressing a random shape again draws other values. */
   private press(shape: ShapeId): void {
     this.shape = shape;
     this.seed = Math.floor(Math.random() * 2 ** 31);

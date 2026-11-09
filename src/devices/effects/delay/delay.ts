@@ -1,16 +1,16 @@
-/* "Delay": il primo effetto di studiomio. Eco a tempo (frazioni di battito, anche puntate e
- * terzine) o in millisecondi, feedback con filtri passa-alto e passa-basso, stereo o
- * ping-pong. Qui c'è solo la descrizione; il suono è in delay-core.ts. */
+/* "Delay": studiomio's first effect. Tempo-synced echo (beat fractions, also dotted and
+ * triplets) or in milliseconds, feedback with high-pass and low-pass filters, stereo or
+ * ping-pong. Here there's only the description; the sound is in delay-core.ts. */
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam } from '../../params';
 
-/** Le divisioni del tempo, in battiti. */
+/** The time divisions, in beats. */
 export const DIVISIONS: readonly (readonly [label: string, beats: number])[] = [
   ['1/32', 1 / 8], ['1/16T', 1 / 6], ['1/16', 1 / 4], ['1/8T', 1 / 3], ['1/16.', 3 / 8], ['1/8', 1 / 2],
   ['1/4T', 2 / 3], ['1/8.', 3 / 4], ['1/4', 1], ['1/4.', 3 / 2], ['1/2', 2], ['1/1', 4],
 ];
 
-/** Valori della scelta "Sincro". */
+/** Values of the "Sync" choice. */
 export const SYNC = { tempo: 0, ms: 1 } as const;
 
 export const MAX_DELAY_SECONDS = 2.5;
@@ -27,10 +27,10 @@ export const DELAY: DeviceType = {
     {
       label: 'Tempo',
       params: [
-        choice('sync', 'Sincro', ['Tempo', 'ms']),
-        choice('division', 'Divisione', DIVISIONS.map(([l]) => l), 7, { when: { param: 'sync', is: SYNC.tempo } }),
+        choice('sync', 'Sync', ['Tempo', 'ms']),
+        choice('division', 'Division', DIVISIONS.map(([l]) => l), 7, { when: { param: 'sync', is: SYNC.tempo } }),
         num('time', 'Tempo', 1, MAX_DELAY_SECONDS * 1000, 300, 'ms', { scale: 'log', step: 1, when: { param: 'sync', is: SYNC.ms } }),
-        choice('pingPong', 'Modo', ['Stereo', 'Ping-pong']),
+        choice('pingPong', 'Mode', ['Stereo', 'Ping-pong']),
       ],
     },
     {
@@ -41,13 +41,13 @@ export const DELAY: DeviceType = {
         num('highCut', 'High cut', 500, 20000, 6000, 'Hz', { scale: 'log' }),
       ],
     },
-    { label: 'Uscita', params: [num('mix', 'Dry/Wet', 0, 100, 30, '%', { step: 1 })] },
+    { label: 'Output', params: [num('mix', 'Dry/Wet', 0, 100, 30, '%', { step: 1 })] },
   ],
   presets: [
     { name: 'Init', params: {} },
     { name: 'Ping-pong 1/8.', params: { pingPong: 1, division: 7, feedback: 45, mix: 30 } },
     { name: 'Slapback', params: { sync: SYNC.ms, time: 110, feedback: 0, mix: 25, highCut: 5000 } },
-    { name: 'Eco lungo', params: { division: 8, feedback: 60, highCut: 3000, mix: 35 } },
+    { name: 'Long echo', params: { division: 8, feedback: 60, highCut: 3000, mix: 35 } },
     { name: 'Dub', params: { division: 9, pingPong: 1, feedback: 75, lowCut: 300, highCut: 1800, mix: 40 } },
   ],
 };

@@ -31,14 +31,14 @@ import { WAVETABLE } from './instruments/wavetable/wavetable';
 import { ARP } from './arp/arp';
 import { ENVELOPE_DEVICE, LFO_DEVICE } from './modulators/modulators';
 
-/** Gli strumenti disponibili (lato interfaccia). Il motore DSP di ciascuno è registrato con
- *  lo stesso nome in worklet/cores.ts. */
+/** The available instruments (interface side). Each one's DSP engine is registered with
+ *  the same name in worklet/cores.ts. */
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS, KICK, SNARE, CYMBALS];
 
-/** Gli effetti disponibili, come sopra. */
+/** The available effects, as above. */
 export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, NOISE_GATE, MULTIBAND, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER, LFO_DEVICE, ENVELOPE_DEVICE, ARP];
 
-/** Gli effetti che si possono aggiungere a una catena: quelli sulle note solo se c'è uno strumento. */
+/** The effects that can be added to a chain: the note ones only if there's an instrument. */
 export const chainEffectTypes = (midi: boolean): readonly DeviceType[] => (midi ? EFFECT_TYPES : EFFECT_TYPES.filter(t => !t.notes));
 
 const instruments = new Map(INSTRUMENT_TYPES.map(t => [t.type, t]));

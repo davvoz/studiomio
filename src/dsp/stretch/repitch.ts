@@ -1,7 +1,7 @@
 import { readCubic } from '../signal';
 import type { StretchInput, TimeStretcher, SettingsOf } from './stretcher';
 
-/** Re-Pitch: lettura a velocità variabile, come un giradischi (cambia l'intonazione). */
+/** Re-Pitch: variable-speed reading, like a turntable (it changes the pitch). */
 export class RepitchStretcher implements TimeStretcher<SettingsOf<'repitch'>> {
   readonly shiftsPitch = true;
 

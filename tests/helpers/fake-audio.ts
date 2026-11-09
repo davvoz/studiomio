@@ -10,7 +10,7 @@ import type {
   OscillatorNodeLike, PannerNodeLike,
 } from '../../src/engine/audio-graph';
 
-/** Grafo audio finto: non suona, registra cosa viene creato, collegato e programmato. */
+/** Fake audio graph: it doesn't play, it records what's created, connected and scheduled. */
 
 export class FakeParam implements AudioParamLike {
   readonly events: { type: string; value: number; time: number }[] = [];
@@ -22,7 +22,7 @@ export class FakeParam implements AudioParamLike {
   cancelAndHoldAtTime(time: number) { this.events.push({ type: 'hold', value: NaN, time }); }
 }
 
-/** Modulazioni finte di un dispositivo: registrano gli eventi per parametro. */
+/** Fake modulations of a device: they record the events per parameter. */
 export class FakeModulation implements DeviceModulation {
   readonly events: { param: string; type: string; value: number; time: number; channel?: string }[] = [];
   sink(param: string, channel?: string): ModSink {
@@ -40,7 +40,7 @@ export class FakeNode implements AudioNodeLike {
   connected = true;
   constructor(readonly kind: string) {}
   connect(d: AudioNodeLike) { this.outputs.push(d); return d; }
-  /** Come Web Audio: con una destinazione stacca solo quella, ed è un errore se non è collegata. */
+  /** Like Web Audio: with a destination it disconnects only that, and it's an error if it isn't connected. */
   disconnect(d?: AudioNodeLike) {
     if (!d) {
       this.connected = false;
@@ -48,7 +48,7 @@ export class FakeNode implements AudioNodeLike {
       return;
     }
     const i = this.outputs.indexOf(d);
-    if (i < 0) throw new Error('InvalidAccessError: non collegati');
+    if (i < 0) throw new Error('InvalidAccessError: not connected');
     this.outputs.splice(i, 1);
   }
 }
@@ -87,7 +87,7 @@ abstract class FakeScheduled extends FakeNode {
   onended: ((this: never, ev: Event) => unknown) | null = null;
   start(when = 0, offset?: number, duration?: number) { this.started = { when, offset, duration }; }
   stop(when?: number) { this.stoppedAt = when ?? -1; }
-  /** Simula la fine naturale del nodo. */
+  /** Simulates the node's natural end. */
   end() { (this.onended as (() => void) | null)?.(); }
 }
 
@@ -121,13 +121,13 @@ export class FakeGraph implements AudioGraph {
   createConstantSource() { const c = new FakeConstantSource(); this.constants.push(c); return c; }
   createBuffer(c: number, l: number, sr: number) { return new FakeBuffer(c, l, sr); }
 
-  /** Sorgenti avviate e non fermate prima di partire. */
+  /** Sources started and not stopped before starting. */
   started() {
     return this.sources.filter(s => s.started && !(s.stoppedAt === -1));
   }
 }
 
-/** Strumento finto: registra note, parametri, tempo e stop. */
+/** Fake instrument: it records notes, parameters, tempo and stop. */
 export class FakeInstrument implements Instrument {
   readonly output = new FakeGain();
   readonly tempos: number[] = [];
@@ -140,21 +140,21 @@ export class FakeInstrument implements Instrument {
   constructor(readonly type: string, readonly bpm = 120) {}
   cut(at: number) { this.cuts.push(at); }
   readonly retakes: number[] = [];
-  /** Come lo strumento vero: le note da `at` in poi non ci sono più. */
+  /** Like the real instrument: the notes from `at` on are gone. */
   retake(at: number) {
     this.retakes.push(at);
     this.notes.splice(0, this.notes.length, ...this.notes.filter(n => n.when < at));
   }
   setTempo(bpm: number) { this.tempos.push(bpm); }
   play(pitch: number, velocity: number, when: number, duration: number) { this.notes.push({ pitch, velocity, when, duration }); }
-  /** Gli ultimi parametri dell'arpeggiatore. */
+  /** The arpeggiator's latest parameters. */
   arp: Readonly<Record<string, number>> = {};
   setArp(params: Readonly<Record<string, number>>) { this.arp = params; }
-  /** Le note tenute a mano adesso, per altezza, con la loro velocity. */
+  /** The notes held by hand now, by pitch, with their velocity. */
   readonly held = new Map<number, number>();
   press(pitch: number, velocity: number) { this.held.set(pitch, velocity); }
   release(pitch: number) { this.held.delete(pitch); }
-  /** L'istante di ogni aggiornamento (undefined: subito). */
+  /** The instant of each update (undefined: right away). */
   readonly updateTimes: (number | undefined)[] = [];
   update(s: InstrumentSettings, at?: number) { this.updates.push(s); this.updateTimes.push(at); }
   stopAll() { this.stops++; }
@@ -172,8 +172,8 @@ export class FakeInstruments implements InstrumentHost {
   }
 }
 
-/** Effetto finto: registra aggiornamenti e tempo; ingresso e uscita sono nodi finti (e il
- *  sidechain, per i tipi che lo accettano). */
+/** Fake effect: it records updates and tempo; input and output are fake nodes (and the
+ *  sidechain, for the types accepting it). */
 export class FakeEffect implements Effect {
   readonly input = new FakeGain();
   readonly output = new FakeGain();
@@ -192,7 +192,7 @@ export class FakeEffect implements Effect {
 
 export class FakeEffects implements EffectHost {
   readonly created: FakeEffect[] = [];
-  /** Gli ancoraggi del trasporto ricevuti (null: fermo). */
+  /** The transport anchors received (null: stopped). */
   readonly anchors: (TransportAnchor | null)[] = [];
   transport(_g: AudioGraph, anchor: TransportAnchor | null) { this.anchors.push(anchor); }
   create(_g: AudioGraph, s: EffectSettings, bpm: number) {
@@ -202,7 +202,7 @@ export class FakeEffects implements EffectHost {
   }
 }
 
-/** Misuratore finto: legge i livelli che il test gli dà. */
+/** Fake meter: it reads the levels the test gives it. */
 export class FakeMeter implements Meter {
   readonly input = new FakeGain();
   readonly output = new FakeGain();

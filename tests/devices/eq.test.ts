@@ -6,7 +6,7 @@ import { bandResponseDb, butterworthQs, responseDb } from '../../src/devices/eff
 
 const SR = 48000, BLOCK = 128;
 
-/** Elabora `input` (mono, uguale sui due canali) a blocchi; restituisce il canale sinistro. */
+/** Processes `input` (mono, the same on both channels) in blocks; returns the left channel. */
 function run(core: EqCore, input: Float32Array, onBlock?: (frame: number) => void): Float32Array {
   const out = new Float32Array(input.length);
   for (let f = 0; f < input.length; f += BLOCK) {
@@ -21,7 +21,7 @@ function run(core: EqCore, input: Float32Array, onBlock?: (frame: number) => voi
 
 const impulse = (n: number) => Object.assign(new Float32Array(n), { 0: 1 });
 
-/** |H(f)| in dB dalla risposta all'impulso (DFT a una frequenza). */
+/** |H(f)| in dB from the impulse response (DFT at one frequency). */
 function measuredDb(h: Float32Array, freq: number): number {
   let re = 0, im = 0;
   const w = (2 * Math.PI * freq) / SR;
@@ -32,7 +32,7 @@ function measuredDb(h: Float32Array, freq: number): number {
   return 10 * Math.log10(re * re + im * im);
 }
 
-/** Parametri con una sola banda (la 3) e le altre spente. */
+/** Parameters with a single band (the 3rd) and the others off. */
 function oneBand(band: Record<string, number>): Record<string, number> {
   const p: Record<string, number> = {};
   for (let i = 0; i < 8; i++) p[bandParam(i, 'on')] = 0;
@@ -51,38 +51,38 @@ const FREQS = [30, 60, 100, 200, 500, 1000, 2000, 5000, 10000, 16000];
 
 describe('EQ', () => {
   it.each([
-    ['campana +6 dB a 1 kHz', { type: BAND.bell, freq: 1000, gain: 6, q: 1 }],
-    ['campana −12 dB stretta', { type: BAND.bell, freq: 300, gain: -12, q: 6 }],
+    ['bell +6 dB at 1 kHz', { type: BAND.bell, freq: 1000, gain: 6, q: 1 }],
+    ['narrow bell −12 dB', { type: BAND.bell, freq: 300, gain: -12, q: 6 }],
     ['low shelf −6 dB a 200 Hz', { type: BAND.lowShelf, freq: 200, gain: -6, q: 0.71 }],
     ['high shelf +4 dB a 5 kHz', { type: BAND.highShelf, freq: 5000, gain: 4, q: 1.5 }],
     ['low cut 48 dB a 100 Hz', { type: BAND.lowCut, freq: 100, q: 0.71, slope: 2 }],
-    ['high cut 12 dB risonante a 3 kHz', { type: BAND.highCut, freq: 3000, q: 2, slope: 0 }],
+    ['resonant high cut 12 dB at 3 kHz', { type: BAND.highCut, freq: 3000, q: 2, slope: 0 }],
     ['notch a 1 kHz', { type: BAND.notch, freq: 1000, q: 2 }],
-  ])('il suono è la curva disegnata: %s', (_name, band) => {
+  ])('the sound is the drawn curve: %s', (_name, band) => {
     const params = resolveParams(EQ, oneBand(band));
     const h = run(eq(params), impulse(1 << 15));
     for (const f of FREQS) {
       const expected = responseDb(bandsOf(params), 0, f, SR);
-      // vicino agli zeri (notch, tagli ripidi) basta essere molto in basso
+      // near the zeros (notch, steep cuts) it's enough to be very low
       if (expected < -40) expect(measuredDb(h, f)).toBeLessThan(-35);
       else expect(measuredDb(h, f)).toBeCloseTo(expected, 1);
     }
   });
 
-  it('le forme: campana al centro, tagli Butterworth a −3 dB e pendenza giusta', () => {
+  it('the shapes: bell in the centre, Butterworth cuts at −3 dB and the right slope', () => {
     const band = (o: Record<string, number>) => bandsOf(resolveParams(EQ, oneBand(o)))[2];
     expect(bandResponseDb(band({ type: BAND.bell, freq: 1000, gain: 6 }), 1000, SR)).toBeCloseTo(6, 5);
     expect(bandResponseDb(band({ type: BAND.lowShelf, freq: 200, gain: -6 }), 25, SR)).toBeCloseTo(-6, 1);
     for (const slope of [0, 1, 2]) {
       const cut = band({ type: BAND.lowCut, freq: 1000, q: Math.SQRT1_2, slope });
       expect(bandResponseDb(cut, 1000, SR)).toBeCloseTo(-3.01, 1);
-      // un'ottava sotto: circa 12, 24, 48 dB in meno
+      // an octave below: about 12, 24, 48 dB less
       expect(bandResponseDb(cut, 250, SR) - bandResponseDb(cut, 500, SR)).toBeCloseTo(-12 * [1, 2, 4][slope], 0);
     }
     expect(butterworthQs(2).map(q => +q.toFixed(3))).toEqual([0.541, 1.307]);
   });
 
-  it('appena aggiunto non cambia il suono; l\'uscita è un guadagno', () => {
+  it('just added it doesn\'t change the sound; the output is a gain', () => {
     const x = Float32Array.from({ length: 4096 }, (_, i) => Math.sin(i * 0.05) * 0.5);
     const y = run(eq({}), x);
     expect(Math.max(...y.map((v, i) => Math.abs(v - x[i])))).toBeLessThan(1e-6);
@@ -91,30 +91,30 @@ describe('EQ', () => {
     expect(responseDb(bandsOf(resolveParams(EQ, {})), 0, 1234, SR)).toBe(0);
   });
 
-  it('trascinare un punto non fa scatti: il guadagno scorre, la banda si accende in dissolvenza', () => {
+  it('dragging a point doesn\'t jump: the gain glides, the band turns on with a crossfade', () => {
     const core = eq(oneBand({ type: BAND.bell, freq: 1000, gain: 0 }));
     const x = Float32Array.from({ length: 48000 }, (_, i) => Math.sin((2 * Math.PI * 1000 * i) / SR) * 0.5);
     const y = run(core, x, f => {
       if (f === 4992) core.setParams(resolveParams(EQ, oneBand({ type: BAND.bell, freq: 1000, gain: 12 })));
       if (f === 24960) core.setParams(resolveParams(EQ, { ...oneBand({ type: BAND.bell, freq: 1000, gain: 12 }), b3on: 0 }));
     });
-    // il passo massimo tra due campioni resta quello di un seno (2π·f/fs·ampiezza) anche durante i cambi
+    // the maximum step between two samples stays that of a sine (2π·f/fs·amplitude) even during the changes
     let jump = 0;
     for (let i = 1; i < y.length; i++) jump = Math.max(jump, Math.abs(y[i] - y[i - 1]));
     expect(jump).toBeLessThan((2 * Math.PI * 1000 / SR) * 0.5 * 4 * 1.05);
     const amp = (from: number) => Math.max(...y.subarray(from, from + 480).map(Math.abs));
     expect(amp(20000)).toBeCloseTo(0.5 * 4, 1); // +12 dB
-    expect(amp(40000)).toBeCloseTo(0.5, 2); // spenta
+    expect(amp(40000)).toBeCloseTo(0.5, 2); // off
   });
 
-  it('guadagno solo per shelf e campane, pendenza solo per i tagli', () => {
+  it('gain only for shelves and bells, slope only for the cuts', () => {
     const values = (type: number) => resolveParams(EQ, { b1type: type });
     const gain = paramSpec(EQ, 'b1gain')!, slope = paramSpec(EQ, 'b1slope')!;
     expect([BAND.lowCut, BAND.bell, BAND.notch, BAND.highShelf].map(t => paramActive(gain, values(t)))).toEqual([false, true, false, true]);
     expect([BAND.lowCut, BAND.bell, BAND.highCut].map(t => paramActive(slope, values(t)))).toEqual([true, false, true]);
   });
 
-  it('i preset usano solo parametri che esistono', () => {
+  it('the presets use only parameters that exist', () => {
     const ids = new Set(EQ.sections.flatMap(s => s.params.map(p => p.id)));
     for (const p of EQ.presets) for (const id of Object.keys(p.params)) expect(ids.has(id), `${p.name}: ${id}`).toBe(true);
   });

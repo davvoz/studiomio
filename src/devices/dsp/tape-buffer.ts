@@ -1,14 +1,14 @@
-/* Il nastro degli effetti che giocano con il tempo (Tape Stop, Reverse, e domani Scratch e
- * Vinyl): un buffer circolare che registra sempre l'ingresso e una testina che lo rilegge dove
- * e alla velocità che si vuole (più piano, ferma, all'indietro). Le posizioni sono campioni
- * assoluti: 0 è il primo campione registrato, `written − 1` l'ultimo, cioè il suono di adesso.
- * Quando la testina salta, la lettura vecchia continua per pochi millisecondi e sfuma in quella
- * nuova: niente click. Puro: niente Web Audio. */
+/* The tape of the effects that play with time (Tape Stop, Reverse, and tomorrow Scratch and
+ * Vinyl): a circular buffer always recording the input and a head reading it back wherever
+ * and at whatever speed you like (slower, stopped, backwards). The positions are absolute
+ * samples: 0 is the first recorded sample, `written − 1` the last, i.e. the sound of now.
+ * When the head jumps, the old reading continues for a few milliseconds and fades into the
+ * new one: no clicks. Pure: no Web Audio. */
 
 export class TapeBuffer {
   private left: Float32Array;
   private right: Float32Array;
-  /** Quanti campioni sono stati registrati. */
+  /** How many samples have been recorded. */
   written = 0;
 
   constructor(frames: number) {
@@ -20,7 +20,7 @@ export class TapeBuffer {
     return this.left.length;
   }
 
-  /** Fa spazio ad almeno `frames` campioni di passato, tenendo quelli che ci sono. */
+  /** Makes room for at least `frames` samples of past, keeping the ones there. */
   ensure(frames: number): void {
     const need = Math.ceil(frames) + 8, size = this.size;
     if (need <= size) return;
@@ -41,8 +41,8 @@ export class TapeBuffer {
     this.written++;
   }
 
-  /** Il suono alla posizione `pos` (anche fra due campioni: interpolazione di Hermite) in
-   *  out[0] e out[1]. Prima dell'inizio, o più indietro di quanto il nastro ricordi, è silenzio. */
+  /** The sound at position `pos` (also between two samples: Hermite interpolation) into
+   *  out[0] and out[1]. Before the start, or further back than the tape remembers, it's silence. */
   read(pos: number, out: Float32Array): void {
     const last = this.written - 1, first = this.written - this.size;
     const i = Math.floor(pos), t = pos - i;
@@ -56,7 +56,7 @@ export class TapeBuffer {
       out[1] = this.right[k];
       return;
     }
-    // i vicini fuori dal nastro valgono come il campione più vicino che c'è
+    // neighbours outside the tape count as the nearest sample there is
     const at = (j: number) => Math.max(Math.max(0, first), Math.min(last, j)) % this.size;
     const a = at(i - 1), b = at(i), c = at(i + 1), d = at(i + 2);
     out[0] = hermite(this.left[a], this.left[b], this.left[c], this.left[d], t);
@@ -71,10 +71,10 @@ function hermite(y0: number, y1: number, y2: number, y3: number, t: number): num
 
 const HALF_PI = Math.PI / 2;
 
-/** Una testina sul nastro. `jump` la sposta altrove sfumando: la lettura di prima continua per
- *  la sua strada e si spegne in `fade` campioni, mentre quella nuova sale (a potenza costante). */
+/** A head on the tape. `jump` moves it elsewhere with a fade: the previous reading continues on
+ *  its way and dies out in `fade` samples, while the new one rises (at constant power). */
 export class TapeReader {
-  /** Dove legge adesso. */
+  /** Where it reads now. */
   pos = 0;
   private oldPos = 0;
   private oldStep = 0;
@@ -84,13 +84,13 @@ export class TapeReader {
 
   constructor(private readonly fade: number) {}
 
-  /** Sta ancora sfumando da un salto. */
+  /** It's still fading from a jump. */
   get fading(): boolean {
     return this.left > 0;
   }
 
-  /** Salta a `pos`; la lettura vecchia continua ad andare di `oldStep` campioni per campione e
-   *  si spegne in `fade` campioni. */
+  /** Jumps to `pos`; the old reading keeps going at `oldStep` samples per sample and
+   *  dies out in `fade` samples. */
   jump(pos: number, oldStep: number, fade = this.fade): void {
     this.oldPos = this.pos;
     this.oldStep = oldStep;
@@ -98,7 +98,7 @@ export class TapeReader {
     this.pos = pos;
   }
 
-  /** Legge in out[0..1] dove si trova (con la sfumatura, se c'è), poi avanza di `step`. */
+  /** Reads into out[0..1] where it is (with the fade, if any), then advances by `step`. */
   read(tape: TapeBuffer, step: number, out: Float32Array): void {
     tape.read(this.pos, out);
     if (this.left > 0) {

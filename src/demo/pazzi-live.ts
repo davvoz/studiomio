@@ -1,18 +1,18 @@
-/* "Siete pazzi": drum & bass a 175 BPM in Sol# minore, con l'amen affettato e glitchato, stacchi
- * di voce, riser e tagli. Le batterie e le voci sono i sample dell'utente sui pad:
+/* "Siete pazzi": drum & bass at 175 BPM in G# minor, with the amen sliced and glitched, vocal
+ * stabs, risers and cuts. The drums and vocals are the user's samples on the pads:
  *
- *   Amen      l'amen (4 battute a 175) in 16 fette da un ottavo, in choke tra loro come lo slice
- *             mode di Live: in fila ricompongono il loop, rimontate fanno i chop;
- *   Glitch    colpi dell'amen al contrario, intonati su e giù, la versione "decimated" e quella
- *             già glitchata: rulli a trentaduesimi, swell al contrario, tagli;
- *   Voci      la frase cantata intera, le sue sillabe (dove cadono gli attacchi), la frase al
- *             contrario, la seconda frase e le frasi parlate per gli stacchi.
+ *   Amen      the amen (4 bars at 175) in 16 eighth-note slices, choked to each other like Live's slice
+ *             mode: in a row they rebuild the loop, reassembled they make the chops;
+ *   Glitch    amen hits reversed, pitched up and down, the "decimated" version and the
+ *             already glitched one: thirty-second rolls, reverse swells, cuts;
+ *   Voci      the whole sung phrase, its syllables (where the attacks fall), the phrase
+ *             reversed, the second phrase and the spoken phrases for the stabs.
  *
- * Il reese sono due denti di sega scordati in Analog, piegati dal Drive e compressi; il sub un
- * seno a parte, così il basso resta pulito e il reese può sporcarsi. La pompa del sidechain è
- * fatta con le modulazioni di volume sulle casse e sui rullanti; gli stutter con modulazioni di
- * volume a scatti (gate). Sul master EQ, compressore "colla" e limiter. Il montaggio è in
- * live-builder.ts; i file, in scripts/build-pazzi-live.ts. */
+ * The reese is two detuned saws in Analog, bent by the Drive and compressed; the sub a
+ * separate sine, so the bass stays clean and the reese can get dirty. The sidechain pump is
+ * done with volume modulations on the kicks and snares; the stutters with chopped volume
+ * modulations (gate). On the master EQ, "glue" compressor and limiter. The assembly is in
+ * live-builder.ts; the files, in scripts/build-pazzi-live.ts. */
 import type { Beats } from '../core/music-time';
 import { DETECTOR } from '../devices/effects/compressor/compressor';
 import { SHAPE } from '../devices/effects/drive/drive';
@@ -31,7 +31,7 @@ import { acid, BAR, bars, chop, curve, duck, gate, repeat, roll, steps } from '.
 
 export const PAZZI_LIVE_BPM = 175;
 
-/** I suoni che il live usa, per ruolo (chi costruisce il progetto dà il file di ognuno). */
+/** The sounds the live uses, by role (whoever builds the project gives the file for each). */
 export const PAZZI_LIVE_SOUNDS = [
   'kick', 'snare', 'snareBody', 'hatClosed', 'hatOpen', 'ride', 'shaker',
   'amen', 'amenCrush', 'amenGlitch',
@@ -43,13 +43,13 @@ export type PazziLiveSound = (typeof PAZZI_LIVE_SOUNDS)[number];
 
 type TrackKey = 'kick' | 'snare' | 'amen' | 'glitch' | 'hats' | 'sub' | 'reese' | 'pad' | 'vox' | 'fx';
 
-/** Un ottavo e una battuta a 175 BPM, in secondi (per affettare i file). */
+/** An eighth and a bar at 175 BPM, in seconds (to slice the files). */
 const EIGHTH_S = 30 / PAZZI_LIVE_BPM;
 const BAR_S = 240 / PAZZI_LIVE_BPM;
 
 // ------------------------------------------------------------------ i kit
 
-/** Le sillabe della frase cantata: dove cominciano, in secondi (misurate sugli attacchi). */
+/** The syllables of the sung phrase: where they start, in seconds (measured on the attacks). */
 const SYLLABLES = [0.116, 0.969, 1.353, 1.736, 2.456, 2.827, 3.077, 3.431];
 
 const KITS = {
@@ -65,7 +65,7 @@ const KITS = {
     { sound: 'ride', tone: 60, pan: -15, level: -8 },
     { sound: 'shaker', pan: -20, level: 6 },
   ],
-  // 16 ottavi delle prime due battute; ognuno può durare fino a quattro ottavi
+  // 16 eighths of the first two bars; each can last up to four eighths
   amen: Array.from({ length: 16 }, (_, k) => ({ sound: 'amen', at: k * EIGHTH_S, decay: 4 * EIGHTH_S, choke: 1 })),
   glitch: [
     { sound: 'amen', at: 0, tune: -5, decay: 0.15, choke: 1 },
@@ -107,21 +107,21 @@ const KITS = {
   ],
 } satisfies Record<string, readonly PadSound<PazziLiveSound>[]>;
 
-/** I pad per nome. */
+/** The pads by name. */
 const SNARE = { main: 0, body: 1, roll: 2 } as const;
 const HATS = { closed: 0, open: 1, ride: 2, shaker: 3 } as const;
 const VOX = { phrase: 0, syllable: 1, reverse: 9, phrase2: 10, pazzi: 11, aiutarmi: 12, cut: 13, vox: 14, stacco: 15 } as const;
 const FX = { riser: 0, sweepUp: 1, downlifter: 2, crash: 3, impact: 4, laser: 5, tension: 6 } as const;
 const G = { kick: 0, snare: 1, snareHi: 2, snareRev: 3, barRev: 4, tick: 5, crush: 6, crushBar: 7, glitchA: 8, glitchB: 9, drop: 10, snareLo: 11, snareRevHi: 12, bar4: 13, tickHi: 14, snare4: 15 } as const;
 
-// ------------------------------------------------------------------ i suoni di Analog
+// ------------------------------------------------------------------ the Analog sounds
 
 const ANALOG_SOUNDS = {
   sub: {
     oscA: 3, mix: 0, voiceMode: VOICE_MODE.legato, glide: 25, cutoff: 300, resonance: 0, filterEnv: 0, keyTrack: 0,
     attack: 0.004, decay: 0.3, sustain: 100, release: 0.06, velocity: 0, volume: -4,
   },
-  // due denti di sega scordati di 35 centesimi: il battimento lento è il reese
+  // two saws detuned by 35 cents: the slow beating is the reese
   reese: {
     oscA: 0, oscB: 0, oscBSemi: 0, oscBFine: 35, mix: 50, voiceMode: VOICE_MODE.legato, glide: 60,
     cutoff: 2600, resonance: 20, filterEnv: 15, fDecay: 0.4, fSustain: 60, keyTrack: 35,
@@ -135,8 +135,8 @@ const ANALOG_SOUNDS = {
 
 // ------------------------------------------------------------------ tracce ed effetti
 
-/** L'EQ dell'amen: taglia i bassi (sono di cassa e sub) e ha il passa-basso pronto per le
- *  aperture (la banda 8, modulata dalle clip). */
+/** The amen's EQ: cuts the lows (they belong to kick and sub) and has the low-pass ready for the
+ *  openings (band 8, modulated by the clips). */
 const AMEN_FILTER = { [bandParam(0, 'on')]: 1, [bandParam(0, 'freq')]: 160, [bandParam(7, 'on')]: 1, [bandParam(7, 'freq')]: 20000 };
 
 const TRACKS: readonly TrackSpec<PazziLiveSound, TrackKey>[] = [
@@ -152,7 +152,7 @@ const TRACKS: readonly TrackSpec<PazziLiveSound, TrackKey>[] = [
     key: 'amen', name: 'Amen', volumeDb: -5, kit: KITS.amen,
     effects: [
       eq('Filtro amen', AMEN_FILTER),
-      // compressione parallela forte: il suono "schiacciato" classico della jungle
+      // heavy parallel compression: jungle's classic "squashed" sound
       compressor('Schiaccia', { threshold: -30, ratio: 10, attack: 1, release: 50, mix: 45, makeup: 6, auto: 0 }),
       drive('Nastro', { shape: SHAPE.tape, drive: 6, low: 100, mix: 50 }),
       delay('Largo', { sync: 1, time: 11, feedback: 0, pingPong: 1, lowCut: 800, mix: 18 }),
@@ -170,7 +170,7 @@ const TRACKS: readonly TrackSpec<PazziLiveSound, TrackKey>[] = [
       drive('Piega', { shape: SHAPE.fold, drive: 18, color: 30, low: 0, tone: 10000, mix: 80 }),
       lowCut(110),
       compressor('Basso', { threshold: -20, ratio: 5, attack: 8, release: 90, detector: DETECTOR.rms, auto: 0, makeup: 3 }),
-      // un'eco cortissima da una parte sola (Haas): gli armonici si allargano, il centro resta
+      // a very short echo on one side only (Haas): the harmonics widen, the centre stays
       delay('Largo', { sync: 1, time: 14, feedback: 0, pingPong: 1, lowCut: 700, highCut: 12000, mix: 22 }),
     ],
   },
@@ -189,7 +189,7 @@ const TRACKS: readonly TrackSpec<PazziLiveSound, TrackKey>[] = [
 
 // ------------------------------------------------------------------ le parti
 
-/** Le battute di un loop affettato, una stringa per battuta. */
+/** The bars of a sliced loop, one string per bar. */
 const chops = (lines: readonly string[], velocity = 110): Note[] => lines.flatMap((l, k) => chop(l, k * BAR, velocity));
 
 const AMEN = {
@@ -198,8 +198,8 @@ const AMEN = {
   chopB: ['0 . 0 . 2 . 3 . 0 . 5 . 6 . 6 2', '8 . 9 . 10 . 11 . 4 4 13 . 14 . 14 14'],
 };
 
-/** Il glitch di otto battute: l'amen già glitchato, quello "decimated", swell al contrario,
- *  rulli di rullanti intonati. */
+/** The eight-bar glitch: the already glitched amen, the "decimated" one, reverse swells,
+ *  pitched snare rolls. */
 const GLITCH_SECTION = [
   ...chops([
     '8 . . . . . . . . . . . 2 2 2 2',
@@ -214,33 +214,33 @@ const GLITCH_SECTION = [
   ...roll(G.snareHi, 31, 8, 0.125, [90, 127]),
 ];
 
-/** Due riempimenti di una battuta (da mettere a fine giro): uno swell al contrario con un
- *  rullo, uno con la cassa che crolla e gli stutter. */
+/** Two one-bar fills (to put at the end of a round): a reverse swell with a
+ *  roll, one with the collapsing kick and the stutters. */
 const fillA = (at: Beats): Note[] => [...steps(G.barRev, 'x', at), ...roll(G.snareHi, at + 3, 8, 0.125, [80, 127])];
 const fillB = (at: Beats): Note[] => [
   ...steps(G.drop, 'X', at), ...steps(G.snareLo, 'x', at + 1), ...roll(G.tickHi, at + 2, 8, 0.125, [70, 120]), ...steps(G.snareRev, 'x', at + 3.5),
 ];
 
-/** Le note di Sol# minore che servono (MIDI). */
+/** The G# minor notes needed (MIDI). */
 const N = { E1: 28, Fs1: 30, Gs1: 32, B1: 35 };
 
-/** Il reese: quattro battute in Sol#, slide sulle code (le note "~" scivolano nella prossima). */
+/** The reese: four bars in G#, slides on the tails (the "~" notes slide into the next). */
 const REESE = acid(`
   g#2 -  -  -   -  -  -  -    -  -  g#2 -   -  -  b2~ a#2 |
   g#2 -  -  -   -  -  -  -    -  -  d#3~ c#3 -  -  b2 -  |
   g#2 -  -  -   -  -  -  -    -  -  g#2 -   -  -  b2~ a#2 |
   e2  -  -  -   -  -  -  -    f#2 -  -  -   d#2~ e2 -  -`);
 
-/** Il sub: le stesse note un'ottava sotto, senza slide (resta fermo e pulito). */
+/** The sub: the same notes an octave down, without slides (it stays still and clean). */
 const SUB = REESE.map(n => ({ ...n, pitch: n.pitch - 12, duration: Math.max(n.duration, 0.4) }));
 
-/** Gli accordi: Sol#m per due battute, Si, poi Mi e Fa#. */
+/** The chords: G#m for two bars, B, then E and F#. */
 const chord = (pitches: readonly number[], start: Beats, duration: Beats): Note[] => pitches.map(pitch => ({ pitch, start, duration, velocity: 90 }));
 const CHORDS = [...chord([56, 59, 63], 0, 8), ...chord([54, 59, 63], 8, 4), ...chord([52, 56, 59], 12, 2), ...chord([54, 58, 61], 14, 2)];
 
 const KICK_BAR = 'X.........X.....';
 const SNARE_BAR = '....X.......X...';
-/** Dove cadono cassa e rullante in quattro battute (per la pompa). */
+/** Where kick and snare fall in four bars (for the pump). */
 const KICKS = [0, 1, 2, 3].flatMap(b => [b * 4, b * 4 + 2.5]);
 const SNARES = [0, 1, 2, 3].flatMap(b => [b * 4 + 1, b * 4 + 3]);
 
@@ -249,7 +249,7 @@ const PARTS = {
   kickHalf: bars(0, 'X...............', 4, 'X.......X.X.....'),
   snare: [...bars(SNARE.main, SNARE_BAR, 4, '....X.......X.xx'), ...bars(SNARE.body, SNARE_BAR, 4)],
   snareHalf: [...bars(SNARE.main, '........X.......', 4), ...bars(SNARE.body, '........X.......', 4)],
-  /** Il rullo della salita: quarti, ottavi, sedicesimi, trentaduesimi, sempre più forte. */
+  /** The roll of the rise: quarters, eighths, sixteenths, thirty-seconds, louder and louder. */
   snareRoll: [
     ...roll(SNARE.roll, 0, 8, 1, [60, 80]), ...roll(SNARE.roll, 8, 16, 0.5, [80, 96]),
     ...roll(SNARE.roll, 16, 32, 0.25, [96, 112]), ...roll(SNARE.roll, 24, 64, 0.125, [110, 127]),
@@ -259,7 +259,7 @@ const PARTS = {
     ...bars(HATS.closed, 'x.X.x.Xox.X.x.Xo', 4, 'x.X.x.Xox.X.x.X.'), ...steps(HATS.open, '..............x.', 12),
     ...bars(HATS.ride, 'x...x...x...x...', 4), ...bars(HATS.shaker, 'oooooooooooooooo', 4),
   ],
-  /** Le sillabe nel drop: l'aggancio a metà del secondo giro, un trillo di sillabe alla fine. */
+  /** The syllables in the drop: the hook halfway through the second round, a trill of syllables at the end. */
   voxDrop: [
     ...steps(VOX.syllable, 'X..x', 6), ...steps(VOX.syllable + 4, 'x.x.x..x', 13),
   ],
@@ -274,7 +274,7 @@ const PARTS = {
 
 // ------------------------------------------------------------------ modulazioni
 
-/** La pompa: reese e pad respirano su casse e rullanti, il sub solo sulle casse. */
+/** The pump: reese and pad breathe on kicks and snares, the sub only on the kicks. */
 const pump = (length: Beats, depth: number, release: Beats, hits: readonly Beats[]): ModSpec => ({
   target: VOLUME, points: duck(Array.from({ length: length / 16 }, (_, k) => hits.map(h => h + 16 * k)).flat(), depth, release),
 });
@@ -282,8 +282,8 @@ const REESE_PUMP = (length: Beats) => pump(length, 0.6, 0.4, [...KICKS, ...SNARE
 const SUB_PUMP = (length: Beats) => pump(length, 0.5, 0.35, KICKS);
 const PAD_PUMP = (length: Beats) => pump(length, 0.5, 0.6, [...KICKS, ...SNARES]);
 
-/** Il passa-basso dell'amen (banda 8 dell'EQ, effetto 1): valori in frazioni della manopola,
- *  −0,45 ≈ 900 Hz, −0,55 ≈ 450 Hz. */
+/** The amen's low-pass (EQ band 8, effect 1): values in fractions of the knob,
+ *  −0.45 ≈ 900 Hz, −0.55 ≈ 450 Hz. */
 const AMEN_LP = (...points: (readonly [Beats, number])[]): ModSpec => ({ target: effectParam(0, bandParam(7, 'freq')), points: curve(...points) });
 
 // ------------------------------------------------------------------ clip e scene
@@ -298,7 +298,7 @@ const C = {
   sub: clip('Sub', SUB, 16, [SUB_PUMP(16)]),
   reese: clip('Reese', REESE, 16, [REESE_PUMP(16)]),
   pad: clip('Accordi', CHORDS, 16, [PAD_PUMP(16)]),
-  /** I riempimenti glitch alla fine dell'ottava e della sedicesima battuta. */
+  /** The glitch fills at the end of the eighth and sixteenth bar. */
   glitchFills: clip('Riempimenti', [...fillA(28), ...fillB(60)], 64),
   crash: clip('Crash', [...steps(FX.crash, 'X'), ...steps(FX.impact, 'x')], 64),
 };
@@ -306,7 +306,7 @@ const C = {
 const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Intro', bars: 16, clips: {
-      // l'amen chiuso dal passa-basso, che si apre nelle ultime otto battute
+      // the amen closed by the low-pass, which opens in the last eight bars
       amen: clip('Amen chiuso', repeat(chops([...AMEN.straight, ...AMEN.straight]), 16, 4), 64, [AMEN_LP([0, -0.45], [32, -0.4], [64, -0.12])]),
       pad: clip('Accordi', repeat(CHORDS, 16, 4), 64),
       vox: clip('Frase', [...steps(VOX.phrase, 'x', 0), ...steps(VOX.phrase, 'x', 32)], 64),
@@ -319,7 +319,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
       snare: clip('Rullo', PARTS.snareRoll, 32, [{ target: instrumentParam(padParam(SNARE.roll, 'tune')), points: curve([0, 0], [16, 0.05], [32, 0.25]) }]),
       pad: clip('Accordi', repeat(CHORDS, 16, 2), 32),
       vox: clip('Sillabe in salita', [...steps(VOX.phrase, 'x', 0), ...roll(VOX.syllable, 28, 8, 0.25, [80, 110]), ...roll(VOX.syllable, 30, 16, 0.125, [100, 127])], 32),
-      // il riser dura esattamente otto battute a 175
+      // the riser lasts exactly eight bars at 175
       fx: clip('Riser', steps(FX.riser, 'x'), 32),
     },
   },
@@ -342,7 +342,7 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
     name: 'Glitch', bars: 8, clips: {
       kick: clip('Cassa a metà', PARTS.kickHalf, 16), snare: clip('Rullante a metà', PARTS.snareHalf, 16),
       glitch: clip('Glitch', GLITCH_SECTION, 32),
-      // l'amen a scatti: trentaduesimi nella terza e quarta battuta, sedicesimi nella settima
+      // the chopped amen: thirty-seconds in the third and fourth bar, sixteenths in the seventh
       amen: clip('Amen a scatti', chops([...AMEN.chopB, ...AMEN.chopB, ...AMEN.chopB, ...AMEN.chopB], 100), 32, [{ target: VOLUME, points: [...gate(8, 16, 0.125), ...gate(24, 28, 0.25)] }]),
       reese: clip('Reese a scatti', repeat(REESE, 16, 2), 32, [{ target: VOLUME, points: [...gate(4, 8, 0.25), ...gate(12, 16, 0.125), ...gate(28, 32, 0.0625)] }]),
       sub: clip('Sub', repeat(SUB, 16, 2), 32, [SUB_PUMP(32)]),
@@ -353,9 +353,9 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   {
     name: 'Pausa', bars: 16, clips: {
       pad: clip('Accordi', repeat(CHORDS, 16, 4), 64),
-      // la frase al contrario arriva dentro la frase vera
+      // the reversed phrase arrives inside the real phrase
       vox: clip('Frase e ritorno', [...steps(VOX.phrase, 'x', 0), ...steps(VOX.reverse, 'x', 18.875), ...steps(VOX.phrase, 'x', 32), ...steps(VOX.phrase2, 'x', 48)], 64),
-      // il sub tenuto sotto la pausa, più basso che nei drop
+      // the sub held under the pause, lower than in the drops
       sub: clip('Sub lungo', [
         { pitch: N.Gs1, start: 0, duration: 8, velocity: 100 }, { pitch: N.B1, start: 8, duration: 4, velocity: 100 },
         { pitch: N.E1, start: 12, duration: 2, velocity: 100 }, { pitch: N.Fs1, start: 14, duration: 2, velocity: 100 },
@@ -393,8 +393,8 @@ const SCENES: readonly SceneSpec<TrackKey>[] = [
   },
 ];
 
-/** La "registrazione": salita, stacco, due drop, il glitch, la pausa, il secondo stacco, il
- *  secondo drop e la fine. */
+/** The "recording": rise, stab, two drops, the glitch, the pause, the second stab, the
+ *  second drop and the end. */
 const ARRANGEMENT = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export const PAZZI_LIVE: LiveSpec<PazziLiveSound, TrackKey> = {
@@ -413,7 +413,7 @@ export const PAZZI_LIVE: LiveSpec<PazziLiveSound, TrackKey> = {
   arrangement: ARRANGEMENT,
 };
 
-/** Costruisce il live nel progetto (vuoto) dello store. */
+/** Builds the live in the store's (empty) project. */
 export function buildPazziLive(store: ProjectStore, sounds: Readonly<Record<PazziLiveSound, SampleRef>>): void {
   buildLive(store, PAZZI_LIVE, sounds);
 }

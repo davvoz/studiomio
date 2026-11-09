@@ -25,7 +25,7 @@ import { FakeEffects, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
 const VOLUME: ModTarget = { kind: 'mixer', param: 'volume' };
 const CUTOFF: ModTarget = { kind: 'device', device: INSTRUMENT_DEVICE, param: 'cutoff' };
 
-/** Il valore all'istante `t` rifacendo gli eventi con le regole degli AudioParam. */
+/** The value at instant `t` replaying the events with the AudioParam rules. */
 function replay(events: readonly { type: string; value: number; time: number }[], neutral: number, t: number): number {
   const line = new ModTimeline(neutral);
   for (const e of events) {
@@ -35,8 +35,8 @@ function replay(events: readonly { type: string; value: number; time: number }[]
   return line.valueAt(t);
 }
 
-/** 120 BPM (il battito b suona a 0.05 + b/2): una traccia MIDI con una clip di 4 battiti in loop
- *  posata per 8, e un modulatore `type` in fondo alla catena. */
+/** 120 BPM (beat b plays at 0.05 + b/2): a MIDI track with a 4-beat looping clip
+ *  placed for 8, and a modulator `type` at the end of the chain. */
 function rig(type: 'lfo' | 'envelope', params: Record<string, number> = {}) {
   const ids = sequentialIds();
   const store = new ProjectStore(Project.empty('t', ids, 2), ids);
@@ -63,26 +63,26 @@ function rig(type: 'lfo' | 'envelope', params: Record<string, number> = {}) {
   };
   const at = (beat: number) => 0.05 + beat / 2;
   const editClip = (fn: (c: MidiClip) => MidiClip) => store.apply(updateClip<MidiClip>('m', t, pl.id, fn));
-  /** Gli eventi del canale della destinazione `slot` su un parametro dello strumento. */
+  /** The events of the channel of target `slot` on a parameter of the instrument. */
   const synth = (param: string, slot = 0) =>
     instruments.created[0].modulation.events.filter(e => e.param === param && e.channel === modChannel(mod, slot));
   return { store, engine, graph, instruments, effects, t, mod, runUntil, at, editClip, synth };
 }
 
-describe('modulatori: le forme', () => {
-  it('l\'LFO usa le forme di Prisma (da 0 a 1) e quella disegnata', () => {
+describe('modulators: the shapes', () => {
+  it('the LFO uses Prisma\'s shapes (from 0 to 1) and the drawn one', () => {
     expect(lfoUnit(LFO_SHAPE.sine, [], 0)).toBeCloseTo(0, 9);
     expect(lfoUnit(LFO_SHAPE.sine, [], 2.5)).toBeCloseTo(1, 9);
     expect(lfoUnit(LFO_SHAPE.sawUp, [], 0.25)).toBeCloseTo(0.25, 9);
     expect(lfoUnit(LFO_SHAPE.square, [], 0.75)).toBe(0);
     const drawn = [{ x: 0, y: 1, curve: 0 }, { x: 1, y: 0, curve: 0 }];
     expect(lfoUnit(LFO_SHAPE.drawn, drawn, 3.5)).toBeCloseTo(0.5, 9);
-    // le forme casuali: lo stesso giro dà lo stesso valore, un altro seme altri valori
+    // the random shapes: the same cycle gives the same value, another seed other values
     expect(lfoUnit(LFO_SHAPE.sampleHold, [], 4.2)).toBe(lfoUnit(LFO_SHAPE.sampleHold, [], 4.9));
     expect(lfoUnit(LFO_SHAPE.sampleHold, [], 4.2, 3)).not.toBe(lfoUnit(LFO_SHAPE.sampleHold, [], 4.2));
   });
 
-  it('l\'inviluppo: attacco dal livello che c\'era, hold, decay fino al sustain, rilascio', () => {
+  it('the envelope: attack from the level there was, hold, decay to the sustain, release', () => {
     const times = { attack: 0.1, hold: 0.1, decay: 0.2, sustain: 0.5, release: 0.4, attackCurve: 0, decayCurve: 0, releaseCurve: 0 };
     const g = { on: 1, off: 2, from: 0.2, level: 1, times };
     expect(envValue(g, 1)).toBeCloseTo(0.2, 9);
@@ -95,38 +95,38 @@ describe('modulatori: le forme', () => {
     expect(envValue({ ...g, level: 0.5 }, 1.9)).toBe(0.25);
   });
 
-  it('nel worklet le fonti di un parametro si sommano: le curve e ogni destinazione di un modulatore', () => {
+  it('in the worklet the sources of a parameter add up: the curves and each target of a modulator', () => {
     const cutoff = paramSpec(ANALOG, 'cutoff')!;
     const m = new ParamModulation(new Map([['cutoff', cutoff]]), { cutoff: 1000 });
     m.event('cutoff', 'set', 0.1, 0);
     m.event('cutoff', 'set', 0.05, 0, 'lfo/0');
     m.event('cutoff', 'set', -0.02, 0, 'env/1');
     expect(m.paramsAt(0)!.cutoff).toBeCloseTo(paramFromUnit(cutoff, paramToUnit(cutoff, 1000) + 0.13), 6);
-    // la curva torna neutra: resta il modulatore
+    // the curve goes back to neutral: the modulator remains
     m.event('cutoff', 'set', 0, 1);
     m.event('cutoff', 'set', 0, 1, 'env/1');
     expect(m.paramsAt(1)!.cutoff).toBeCloseTo(paramFromUnit(cutoff, paramToUnit(cutoff, 1000) + 0.05), 6);
   });
 });
 
-describe('modulatori nel motore', () => {
-  it('un LFO a tempo muove il cutoff agganciato alla battuta, della sua quantità', () => {
-    const r = rig('lfo', { division: TEMPO_RATE['1 battuta'], [linkAmount(1)]: 40 });
+describe('modulators in the engine', () => {
+  it('a synced LFO moves the cutoff locked to the bar, by its amount', () => {
+    const r = rig('lfo', { division: TEMPO_RATE['1 bar'], [linkAmount(1)]: 40 });
     r.store.apply(setModTarget(r.t, r.mod, 0, CUTOFF));
     r.engine.play(0);
     r.runUntil(2.2);
     const ev = r.synth('cutoff');
-    // il seno di Prisma parte dal basso: bipolare va da −1 (battito 0) a +1 (battito 2)
+    // Prisma's sine starts from the bottom: bipolar it goes from −1 (beat 0) to +1 (beat 2)
     expect(replay(ev, 0, r.at(0))).toBeCloseTo(-0.4, 3);
     expect(replay(ev, 0, r.at(1))).toBeCloseTo(0, 2);
     expect(replay(ev, 0, r.at(2))).toBeCloseTo(0.4, 3);
     expect(replay(ev, 0, r.at(4))).toBeCloseTo(-0.4, 3);
-    // il modulatore non è un effetto nel suono
+    // the modulator isn't an effect in the sound
     expect(r.effects.created).toEqual([]);
   });
 
-  it('la manopola segue la somma delle fonti; allo stop torna neutra', () => {
-    const r = rig('lfo', { division: TEMPO_RATE['1 battuta'], pol: POLARITY.uni, [linkAmount(1)]: 50 });
+  it('the knob follows the sum of the sources; at the stop it goes back to neutral', () => {
+    const r = rig('lfo', { division: TEMPO_RATE['1 bar'], pol: POLARITY.uni, [linkAmount(1)]: 50 });
     r.store.apply(setModTarget(r.t, r.mod, 0, CUTOFF));
     r.engine.play(0);
     r.runUntil(r.at(2));
@@ -135,23 +135,23 @@ describe('modulatori nel motore', () => {
     expect(r.engine.modulationAt(r.t, CUTOFF)).toBe(0);
   });
 
-  it('un inviluppo a tempo sul volume con quantità −100 % fa la pompa a ogni quarto', () => {
+  it('a synced envelope on the volume with amount −100 % makes the pump at every quarter', () => {
     const r = rig('envelope', { trig: ENV_TRIG.tempo, e1A: 0.001, e1H: 0.001, e1D: 0.2, e1S: 0, e1Dc: 0, [linkAmount(1)]: -100 });
     r.store.apply(setModTarget(r.t, r.mod, 0, VOLUME));
     r.engine.play(0);
     r.runUntil(2.4);
-    // il guadagno del canale del modulatore: tra il fader e quello delle curve
+    // the gain of the modulator's channel: between the fader and the curves'
     const curves = r.graph.gains.find(g => g.outputs.includes(r.graph.panners[0]))!;
     const vol = r.graph.gains.find(g => g.outputs.includes(curves))!.gain;
     expect(curves.gain.events).toEqual([]);
     const v = (beat: number) => replay(vol.events, 1, r.at(beat));
-    expect(v(0.004)).toBeLessThan(0.01); // appena partito: silenzio
-    expect(v(0.2)).toBeCloseTo((1 - 0.5) ** 2, 1); // a metà del decay
-    expect(v(0.9)).toBe(1); // finito: il volume torna tutto
-    expect(v(1.004)).toBeLessThan(0.01); // il quarto dopo
+    expect(v(0.004)).toBeLessThan(0.01); // just started: silence
+    expect(v(0.2)).toBeCloseTo((1 - 0.5) ** 2, 1); // halfway through the decay
+    expect(v(0.9)).toBe(1); // finished: the volume comes all back
+    expect(v(1.004)).toBeLessThan(0.01); // the next quarter
   });
 
-  it('un inviluppo a nota parte con le note della clip e rilascia quando finiscono', () => {
+  it('a note envelope starts with the clip\'s notes and releases when they end', () => {
     const r = rig('envelope', { e1A: 0.001, e1H: 0.001, e1D: 0.001, e1S: 100, e1R: 0.1, e1Rc: 0, [linkAmount(1)]: 100 });
     r.store.apply(setModTarget(r.t, r.mod, 0, CUTOFF));
     r.editClip(c => c.withNotes([{ pitch: 60, start: 1, duration: 1, velocity: 100 }]));
@@ -162,12 +162,12 @@ describe('modulatori nel motore', () => {
     expect(replay(ev, 0, r.at(1.5))).toBeCloseTo(1, 3);
     expect(replay(ev, 0, r.at(2) + 0.05)).toBeCloseTo(0.5, 2);
     expect(replay(ev, 0, r.at(2) + 0.2)).toBe(0);
-    // al secondo giro del loop di nuovo
+    // at the second round of the loop again
     expect(replay(ev, 0, r.at(5.5))).toBeCloseTo(1, 3);
   });
 
-  it('un LFO che riparte con le note: a ogni nota il giro ricomincia', () => {
-    const r = rig('lfo', { division: TEMPO_RATE['1 battuta'], trig: LFO_TRIG.note, l1Shape: LFO_SHAPE.sawUp, pol: POLARITY.uni, [linkAmount(1)]: 100 });
+  it('an LFO restarting with the notes: at every note the cycle restarts', () => {
+    const r = rig('lfo', { division: TEMPO_RATE['1 bar'], trig: LFO_TRIG.note, l1Shape: LFO_SHAPE.sawUp, pol: POLARITY.uni, [linkAmount(1)]: 100 });
     r.store.apply(setModTarget(r.t, r.mod, 0, CUTOFF));
     r.editClip(c => c.withNotes([{ pitch: 60, start: 1, duration: 0.5, velocity: 100 }]));
     r.engine.play(0);
@@ -177,8 +177,8 @@ describe('modulatori nel motore', () => {
     expect(replay(ev, 0, r.at(3))).toBeCloseTo(0.5, 2);
   });
 
-  it('una destinazione su una macro muove i parametri mappati; un altro modulatore si somma', () => {
-    const r = rig('lfo', { division: TEMPO_RATE['1 battuta'], pol: POLARITY.uni, [linkAmount(1)]: 100 });
+  it('a target on a macro moves the mapped parameters; another modulator adds up', () => {
+    const r = rig('lfo', { division: TEMPO_RATE['1 bar'], pol: POLARITY.uni, [linkAmount(1)]: 100 });
     r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE]));
     const rack = r.store.project.tracks[0].racks[0].id;
     r.store.apply(mapMacro(r.t, rack, 0, INSTRUMENT_DEVICE, 'cutoff'));
@@ -186,12 +186,12 @@ describe('modulatori nel motore', () => {
     r.engine.play(0);
     r.runUntil(1.2);
     const ev = r.synth('cutoff');
-    expect(replay(ev, 0, r.at(2))).toBeGreaterThan(0.1); // mappata su tutta la corsa: si muove
+    expect(replay(ev, 0, r.at(2))).toBeGreaterThan(0.1); // mapped over the whole travel: it moves
     expect(r.engine.modulationAt(r.t, { kind: 'device', device: rack, param: macroParam(0) })).not.toBeNull();
   });
 
-  it('spento o senza la destinazione: dopo la riprogrammazione il parametro torna neutro', () => {
-    const r = rig('lfo', { division: TEMPO_RATE['1 battuta'], pol: POLARITY.uni, [linkAmount(1)]: 100 });
+  it('off or without the target: after the rescheduling the parameter goes back to neutral', () => {
+    const r = rig('lfo', { division: TEMPO_RATE['1 bar'], pol: POLARITY.uni, [linkAmount(1)]: 100 });
     r.store.apply(setModTarget(r.t, r.mod, 0, CUTOFF));
     r.engine.play(0);
     r.runUntil(1);
@@ -200,10 +200,10 @@ describe('modulatori nel motore', () => {
     expect(replay(r.synth('cutoff'), 0, 1.5)).toBe(0);
   });
 
-  it('una curva della clip sulla quantità di un LFO la cambia mentre suona', () => {
-    const r = rig('lfo', { division: TEMPO_RATE['1 battuta'], pol: POLARITY.uni, [linkAmount(1)]: 0 });
+  it('a clip curve on the amount of an LFO changes it while playing', () => {
+    const r = rig('lfo', { division: TEMPO_RATE['1 bar'], pol: POLARITY.uni, [linkAmount(1)]: 0 });
     r.store.apply(setModTarget(r.t, r.mod, 0, CUTOFF));
-    // la quantità va da −100 a +100: metà corsa in su la porta da 0 a +100
+    // the amount goes from −100 to +100: half travel up takes it from 0 to +100
     r.editClip(c => c.withEnvelope({ kind: 'device', device: r.mod, param: linkAmount(1) }, [{ beat: 0, value: 0.5 }]));
     r.engine.play(0);
     r.runUntil(1.2);
@@ -211,14 +211,14 @@ describe('modulatori nel motore', () => {
     expect(replay(r.synth('cutoff'), 0, r.at(2))).toBeCloseTo(1, 2);
   });
 
-  it('cambiando lo strumento, le destinazioni sui suoi parametri si liberano', () => {
+  it('changing the instrument, the targets on its parameters are freed', () => {
     const r = rig('lfo');
     r.store.apply(setModTarget(r.t, r.mod, 0, CUTOFF));
     r.store.apply(setInstrument(r.t, { type: 'wavetable', preset: null, params: {} }));
     expect(r.store.project.tracks[0].effects[0].targets).toBeUndefined();
   });
 
-  it('le destinazioni si salvano con il progetto', () => {
+  it('the targets are saved with the project', () => {
     const r = rig('lfo');
     r.store.apply(setModTarget(r.t, r.mod, 2, VOLUME, -30));
     const codec = new ProjectCodec();

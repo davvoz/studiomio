@@ -1,26 +1,26 @@
-/* Menu contestuale (tasto destro). Le voci sono dati: chi apre il menu dice cosa mostrare,
- * il menu si occupa di posizione, tastiera e chiusura. Uno solo aperto alla volta. */
+/* Context menu (right click). The items are data: whoever opens the menu says what to show,
+ * the menu takes care of position, keyboard and closing. Only one open at a time. */
 
 export interface MenuAction {
   readonly label: string;
-  /** Scorciatoia da mostrare a destra (solo testo). */
+  /** Shortcut to show on the right (text only). */
   readonly shortcut?: string;
   readonly disabled?: boolean;
-  /** Per le voci che si accendono e spengono. */
+  /** For the items that turn on and off. */
   readonly checked?: boolean;
   readonly run: () => void;
 }
 
-/** Una riga di campioni di colore, più uno per togliere il colore. */
+/** A row of colour swatches, plus one to remove the colour. */
 export interface MenuColors {
   readonly colors: readonly string[];
-  /** Il colore attuale (assente: nessuno), segnato nella riga. */
+  /** The current colour (absent: none), marked in the row. */
   readonly current?: string;
-  /** Senza il campione «nessun colore»: un colore ci vuole (per esempio per le tracce). */
+  /** Without the «no colour» swatch: a colour is required (for example for tracks). */
   readonly required?: boolean;
-  /** Il suggerimento del campione «nessun colore» (cosa succede sceglendolo). */
+  /** The tooltip of the «no colour» swatch (what happens choosing it). */
   readonly noneTitle?: string;
-  /** Riceve il colore scelto, o undefined per «nessun colore». */
+  /** Receives the chosen colour, or undefined for «no colour». */
   readonly pick: (color: string | undefined) => void;
 }
 
@@ -28,17 +28,17 @@ export const SEPARATOR = 'separator' as const;
 
 export type MenuItem = MenuAction | MenuColors | typeof SEPARATOR;
 
-/** Per chi apre il menu da una barra (i menu a tendina). */
+/** For whoever opens the menu from a bar (the drop-down menus). */
 export interface MenuOptions {
-  /** Chiamata quando il menu si chiude, per qualunque motivo. */
+  /** Called when the menu closes, for whatever reason. */
   readonly onClose?: () => void;
-  /** Tasti in più gestiti da chi ha aperto il menu (per esempio ← e → per passare al menu vicino). */
+  /** Extra keys handled by whoever opened the menu (for example ← and → to go to the next menu). */
   readonly keys?: Readonly<Record<string, () => void>>;
 }
 
 let current: { close(): void } | null = null;
 
-/** Apre il menu nel punto (x, y) della finestra. */
+/** Opens the menu at point (x, y) of the window. */
 export function showContextMenu(x: number, y: number, items: readonly MenuItem[], options: MenuOptions = {}): void {
   current?.close();
   const menu = Object.assign(document.createElement('div'), { className: 'context-menu', role: 'menu', tabIndex: -1 });
@@ -52,7 +52,7 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
       const row = Object.assign(document.createElement('div'), { className: 'swatches' });
       for (const color of item.required ? item.colors : [...item.colors, undefined]) {
         const s = Object.assign(document.createElement('button'), {
-          className: color ? 'swatch' : 'swatch none', role: 'menuitem', title: color ? color : item.noneTitle ?? 'Nessun colore',
+          className: color ? 'swatch' : 'swatch none', role: 'menuitem', title: color ? color : item.noneTitle ?? 'No colour',
         });
         if (color) s.style.setProperty('--swatch', color);
         s.classList.toggle('current', color?.toLowerCase() === item.current?.toLowerCase());
@@ -82,7 +82,7 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
     menu.append(b);
   }
   document.body.append(menu);
-  // dentro la finestra anche vicino ai bordi
+  // inside the window even near the edges
   const r = menu.getBoundingClientRect();
   menu.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 4))}px`;
   menu.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 4))}px`;
@@ -103,7 +103,7 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
   };
   menu.addEventListener('keydown', e => {
     const action = KEYS[e.key];
-    e.stopPropagation(); // i tasti non arrivano alla timeline mentre il menu è aperto
+    e.stopPropagation(); // keys don't reach the timeline while the menu is open
     if (!action) return;
     e.preventDefault();
     action();
@@ -126,8 +126,8 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
   addEventListener('resize', close);
 }
 
-/** Le scorciatoie come si scrivono nei menu. */
+/** The shortcuts as they're written in the menus. */
 export const KEY = {
-  cut: 'Ctrl+X', copy: 'Ctrl+C', paste: 'Ctrl+V', duplicate: 'Ctrl+D', duplicateLoop: 'Ctrl+Maiusc+D', delete: 'Canc',
+  cut: 'Ctrl+X', copy: 'Ctrl+C', paste: 'Ctrl+V', duplicate: 'Ctrl+D', duplicateLoop: 'Ctrl+Shift+D', delete: 'Del',
   split: 'Ctrl+E', consolidate: 'Ctrl+J', selectAll: 'Ctrl+A', quantize: 'Q', draw: 'B', shapes: 'F',
 } as const;

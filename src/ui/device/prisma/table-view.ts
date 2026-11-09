@@ -1,7 +1,7 @@
-/* La tabella di un oscillatore di Prisma, disegnata come in Serum: tutte le forme in fila una
- * dietro l'altra e quella che suona alla posizione attuale in evidenza, piegata dal warp.
- * Trascinarla in verticale sposta la posizione (Maiusc: fine); un file audio lasciato sopra
- * diventa la tabella dell'oscillatore. */
+/* A Prisma oscillator's table, drawn as in Serum: all the shapes in a row one
+ * behind the other and the one playing at the current position highlighted, bent by the warp.
+ * Dragging it vertically moves the position (Shift: fine); an audio file dropped on it
+ * becomes the oscillator's table. */
 import type { SampleData } from '../../../devices/dsp/core';
 import { WARP, type OscKey } from '../../../devices/instruments/prisma/prisma';
 import { cyclesOf, FRAMES, LEVELS, STRIDE, TABLE_SIZE, wavetable } from '../../../devices/instruments/wavetable/tables';
@@ -9,17 +9,17 @@ import type { ParamValues } from '../../../model/device';
 import { el } from '../../dom';
 import { ACCENT, BACKGROUND, fit, LABEL } from './canvas';
 
-/** Punti per forma nel disegno, e forme disegnate al massimo (di una tabella lunga se ne
- *  saltano alcune). */
+/** Points per shape in the drawing, and shapes drawn at most (of a long table some are
+ *  skipped). */
 const POINTS = 96;
 const MAX_DRAWN = 24;
-/** Quanta altezza vale tutta la posizione, trascinando. */
+/** How much height the whole position is worth, when dragging. */
 const DRAG_PIXELS = 150;
 
-/** Le forme di una tabella, da leggere per disegnarle. */
+/** A table's shapes, to read to draw them. */
 export interface Frames {
   readonly count: number;
-  /** Il campione della forma `f` a `t` (0…1). */
+  /** The sample of shape `f` at `t` (0…1). */
   sample(f: number, t: number): number;
 }
 
@@ -30,7 +30,7 @@ export function builtInFrames(index: number): Frames {
 
 const imported = new WeakMap<SampleData, Frames>();
 
-/** Le forme di un file importato, come le legge il motore (ognuna portata a ±1). */
+/** The shapes of an imported file, as the engine reads them (each brought to ±1). */
 export function importedFrames(sample: SampleData): Frames {
   let frames = imported.get(sample);
   if (!frames) {
@@ -46,8 +46,8 @@ export function importedFrames(sample: SampleData): Frames {
 
 const frac = (x: number) => x - Math.floor(x);
 
-/** La forma piegata dal warp, come la legge il motore (quelli che prendono l'altro
- *  oscillatore si disegnano senza: dipendono da lui). */
+/** The shape bent by the warp, as the engine reads it (those taking the other
+ *  oscillator are drawn without it: they depend on it). */
 export function warped(read: (p: number) => number, warp: number, a: number, p: number): number {
   switch (warp) {
     case WARP.sync: return read(frac(p * (1 + 15 * a)));
@@ -80,7 +80,7 @@ export function warped(read: (p: number) => number, warp: number, a: number, p: 
 
 export class TableView {
   readonly canvas = el<HTMLCanvasElement>('canvas', {
-    className: 'prisma-table', title: 'Trascina in verticale per spostare la posizione (Maiusc: fine) · lascia qui un file WAV per importarlo',
+    className: 'prisma-table', title: 'Drag vertically to move the position (Shift: fine) · drop a WAV file here to import it',
   });
   private drag: { y: number; pos: number } | null = null;
 
@@ -124,14 +124,14 @@ export class TableView {
     });
   }
 
-  /** `hint`: una riga in basso (es. come importare un file). */
+  /** `hint`: a line at the bottom (e.g. how to import a file). */
   paint(enabled: boolean, tableName: string, hint = ''): void {
     const g = fit(this.canvas);
     if (!g) return;
     const v = this.values(), o = this.osc, w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     const frames = this.frames(), pos = v[`${o}Pos`] / 100, on = v[`${o}On`] === 1;
     const count = frames.count, last = Math.max(1, count - 1);
-    // le forme in fila: la prima davanti in basso a sinistra, l'ultima dietro in alto a destra
+    // the shapes in a row: the first in front at the bottom left, the last behind at the top right
     const waveW = w * 0.68, amp = h * 0.2, x0 = 8, y0 = h * 0.7;
     const dx = (w - waveW - 16) / last, dy = (h * 0.42) / last;
     const path = (at: number, value: (t: number) => number) => {
@@ -153,7 +153,7 @@ export class TableView {
       g.strokeStyle = `rgba(255,255,255,${0.06 + 0.08 * (1 - f / last)})`;
       g.stroke(path(f, t => frames.sample(f, t)));
     }
-    // la forma che suona: fra le due vicine, piegata dal warp
+    // the playing shape: between the two neighbours, bent by the warp
     const x = pos * last, f = Math.min(Math.max(0, count - 2), Math.floor(x)), mix = count > 1 ? x - f : 0;
     const read = (t: number) => frames.sample(f, t) * (1 - mix) + (count > 1 ? frames.sample(f + 1, t) * mix : 0);
     const warp = v[`${o}Warp`], amount = v[`${o}WarpAmt`] / 100;

@@ -40,41 +40,41 @@ import { SidechainPicker } from './sidechain-picker';
 
 export interface DeviceViewDeps {
   readonly store: ProjectStore;
-  /** Suona una nota di prova con lo strumento della traccia. */
+  /** Plays a test note with the track's instrument. */
   readonly audition: (track: TrackId, pitch: number, velocity?: number) => void;
   readonly sampleRate: number;
-  /** Lo spettro di un effetto che suona (per i pannelli grafici). */
+  /** The spectrum of a playing effect (for the graphic panels). */
   readonly spectrum: (owner: ChainOwner, id: DeviceId) => SpectrumTap;
-  /** Cosa fa un effetto di dinamica che suona (per il suo pannello). */
+  /** What a playing dynamics effect is doing (for its panel). */
   readonly dynamics?: (owner: ChainOwner, id: DeviceId) => DynamicsTap;
-  /** Per seguire le note che la traccia suona: ogni chiamata della funzione data restituisce
-   *  quelle partite dalla chiamata prima. */
+  /** To follow the notes the track plays: each call of the given function returns
+   *  those started since the previous call. */
   readonly playedNotes: (track: TrackId) => () => readonly number[];
-  /** Copia un file audio nel progetto e lo carica nel motore (per i sample degli strumenti). */
+  /** Copies an audio file into the project and loads it in the engine (for the instruments' samples). */
   readonly importSample: (file: File) => Promise<SampleRef>;
-  /** I campioni di un sample del progetto già caricato (per i pannelli che lo disegnano). */
+  /** The samples of a project sample already loaded (for the panels drawing it). */
   readonly sampleAudio?: (id: SampleId) => SampleData | undefined;
-  /** Dove leggono adesso le voci dello strumento della traccia, se suona un sample. */
+  /** Where the voices of the track's instrument read now, if it plays a sample. */
   readonly playheads?: (track: TrackId) => readonly number[];
-  /** Un messaggio nella barra di stato (es. perché un raggruppamento non si può fare). */
+  /** A message in the status bar (e.g. why a grouping can't be done). */
   readonly say?: (text: string) => void;
-  /** Gli appunti dell'app, per copiare dispositivi da una catena all'altra. */
+  /** The app's clipboard, to copy devices from one chain to another. */
   readonly clipboard?: Clipboard;
-  /** Mostra la curva di un parametro: nella clip della traccia o, sul master, sulla timeline. */
+  /** Shows a parameter's curve: in the track's clip or, on the master, on the timeline. */
   readonly showAutomation?: (owner: ChainOwner, target: ModTarget) => void;
-  /** Una voce del browser lasciata sulla catena aperta. */
+  /** A browser item dropped on the open chain. */
   readonly dropItem?: (item: BrowserItem, target: LoadTarget) => void;
-  /** Per mappare la tastiera del computer (KEY acceso e il bersaglio scelto). */
+  /** To map the computer keyboard (KEY on and the chosen target). */
   readonly ui?: UiState;
-  /** Dove una curva che suona porta adesso un parametro (spostamento della manopola, −1 … +1),
-   *  o null: le manopole la seguono. */
+  /** Where a playing curve takes a parameter now (knob offset, −1 … +1),
+   *  or null: the knobs follow it. */
   readonly modulation?: (owner: ChainOwner, target: ModTarget) => number | null;
-  /** Le macro molla: il mouse dice quando ne tiene una e quando la lascia. */
+  /** The spring macros: the mouse says when it holds one and when it lets it go. */
   readonly springs?: MacroSprings;
 }
 
-/** Ctrl+tasto sui dispositivi scelti. */
-/** Quanto vicino al bordo della catena un trascinamento la fa scorrere, e di quanto a fotogramma. */
+/** Ctrl+key on the chosen devices. */
+/** How close to the chain's edge a drag makes it scroll, and by how much per frame. */
 const EDGE_ZONE = 56;
 const EDGE_STEP = 14;
 
@@ -85,75 +85,75 @@ const DEVICE_KEYS: Readonly<Record<string, (v: DeviceView) => void>> = {
   d: v => v.duplicateSelection(),
 };
 
-/** La chiave del pannello dello strumento (gli effetti usano il loro id). */
+/** The instrument panel's key (the effects use their id). */
 const INSTRUMENT = 'instrument';
 
-/** Colore del master nel titolo. */
+/** The master's colour in the title. */
 export const MASTER_COLOR = 'var(--text)';
 
-/** Ciò che la vista mostra di chi possiede la catena: una traccia o il master. */
+/** What the view shows of whoever owns the chain: a track or the master. */
 interface ChainSource {
   readonly name: string;
   readonly color: string;
-  /** La traccia, se la catena è di una traccia (per lo strumento delle tracce MIDI). */
+  /** The track, if the chain belongs to a track (for the MIDI tracks' instrument). */
   readonly track: Track | null;
   readonly effects: EffectList;
   readonly racks: RackList;
 }
 
-/** La catena dei dispositivi di una traccia o del master, in fila come in Live: lo strumento
- *  (tracce MIDI), poi gli effetti nell'ordine in cui il suono li attraversa; un rack raccoglie i
- *  suoi dispositivi dietro il pannello delle macro. Un clic sul nome sceglie un dispositivo
- *  (Maiusc: più di uno), Ctrl+G li raggruppa in un rack, Ctrl+Maiusc+G lo separa. Ogni modifica
- *  passa dallo store (si annulla) e si sente subito, anche mentre suona. */
+/** The device chain of a track or of the master, in a row as in Live: the instrument
+ *  (MIDI tracks), then the effects in the order the sound goes through them; a rack gathers its
+ *  devices behind the macro panel. A click on the name chooses a device
+ *  (Shift: more than one), Ctrl+G groups them into a rack, Ctrl+Shift+G ungroups it. Every change
+ *  goes through the store (it can be undone) and is heard right away, even while playing. */
 export class DeviceView {
   readonly element = el('section', { className: 'device-view', hidden: true, tabIndex: -1 });
   private owner: ChainOwner | null = null;
   private back: (() => void) | null = null;
-  /** Com'era fatta la catena quando i pannelli sono stati costruiti. */
+  /** What the chain was like when the panels were built. */
   private builtFor = '';
   private readonly panels = new Map<string, DevicePanel>();
-  /** I pannelli grafici, per chiave (per le loro voci nel menu dei parametri). */
+  /** The graphic panels, by key (for their items in the parameters' menu). */
   private readonly displays = new Map<string, DeviceDisplay>();
   private readonly rackPanels = new Map<DeviceId, RackPanel>();
   private readonly sidechains = new Map<DeviceId, SidechainPicker>();
   private readonly title = el('span', { className: 'device-title' });
-  private readonly backButton = el<HTMLButtonElement>('button', { textContent: '◂ Note', title: 'Torna al piano roll' });
+  private readonly backButton = el<HTMLButtonElement>('button', { textContent: '◂ Note', title: 'Back to the piano roll' });
   private readonly chain = el('div', { className: 'device-chain' });
-  /** Il modulatore che sta scegliendo i suoi bersagli con il clic. */
+  /** The modulator choosing its targets with a click. */
   private picking: { readonly host: ModTargetHost; readonly pick: (target: ModTarget) => void; readonly ended: () => void } | null = null;
-  /** Il dispositivo che le manopole di un controller muovono (la "mano blu" di Live). */
+  /** The device a controller's knobs move (Live's "blue hand"). */
   private controlled: ControlledDevice | null = null;
-  /** I dispositivi scelti (per raggrupparli), e da dove si estende la scelta. */
+  /** The chosen devices (to group them), and where the selection extends from. */
   private selection: DeviceKey[] = [];
   private anchor: DeviceKey | null = null;
-  /** Il rack scelto con un clic sul suo nome (i suoi dispositivi sono la scelta). */
+  /** The rack chosen with a click on its name (its devices are the selection). */
   private selectedRack: DeviceId | null = null;
-  /** I rack con i dispositivi nascosti. */
+  /** The racks with hidden devices. */
   private readonly folded = new Set<DeviceId>();
-  /** I dispositivi compressi, per catena ("proprietario/chiave"). */
+  /** The collapsed devices, per chain ("owner/key"). */
   private readonly foldedDevices = new Set<string>();
-  /** Di chi era la catena costruita l'ultima volta: un'altra catena parte dall'inizio. */
+  /** Whose the chain built last time was: another chain starts from the beginning. */
   private builtOwner: ChainOwner | null = null;
-  /** "Map" acceso su un rack, con la macro scelta (null: nessuna). */
+  /** "Map" on on a rack, with the chosen macro (null: none). */
   private mapMode: { readonly rack: DeviceId; readonly macro: number | null } | null = null;
-  /** I controlli che le curve possono muovere, con il loro bersaglio (null: da rifare). */
+  /** The controls the curves can move, with their target (null: to be redone). */
   private curveControls: { readonly control: ParamControl; readonly target: ModTarget }[] | null = null;
 
   constructor(private readonly deps: DeviceViewDeps) {
     this.backButton.onclick = () => this.back?.();
-    const add = el<HTMLButtonElement>('button', { textContent: '+ Effetto', title: 'Aggiungi un effetto in fondo alla catena' });
+    const add = el<HTMLButtonElement>('button', { textContent: '+ Effect', title: 'Add an effect at the end of the chain' });
     add.onclick = () => {
       const r = add.getBoundingClientRect();
       this.chooseEffect(r.left, r.bottom + 2);
     };
     const foldAll = el<HTMLButtonElement>('button', {
-      textContent: '⇤⇥', title: 'Comprimi tutti i dispositivi (o riaprili, se sono già tutti compressi)', onclick: () => this.foldAll(),
+      textContent: '⇤⇥', title: 'Collapse all the devices (or reopen them, if they\'re all collapsed already)', onclick: () => this.foldAll(),
     });
-    const close = el<HTMLButtonElement>('button', { className: 'close', textContent: '×', title: 'Chiudi (Esc)', onclick: () => this.close() });
+    const close = el<HTMLButtonElement>('button', { className: 'close', textContent: '×', title: 'Close (Esc)', onclick: () => this.close() });
     const head = el('div', { className: 'device-head' }, this.backButton, this.title, foldAll, add, close);
     this.element.append(head, this.chain);
-    // trascinata in giù oltre l'altezza minima resta solo l'intestazione; dal bordo si riapre
+    // dragged down past the minimum height only the header remains; it reopens from the edge
     const view = this.element;
     addHeightHandle(view, DEVICE_HEIGHT, {
       get folded() { return view.classList.contains('folded'); },
@@ -176,21 +176,21 @@ export class DeviceView {
         command(this);
       }
     });
-    // le schede dei pannelli vanno a capo nell'altezza della catena: si rifà quando cambia
+    // the panels' tabs wrap within the chain's height: it's redone when it changes
     new ResizeObserver(() => this.fitPanels()).observe(this.chain);
-    // con la rotella la catena scorre, tranne dove la usa una manopola
+    // with the wheel the chain scrolls, except where a knob uses it
     this.chain.addEventListener('wheel', e => {
       if (!e.defaultPrevented && e.deltaY && !e.ctrlKey) this.chain.scrollLeft += e.deltaY;
     });
     for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick', 'wheel']) {
       this.chain.addEventListener(type, e => this.pickEvent(e as MouseEvent), { capture: true, passive: false });
     }
-    // nel vuoto della catena (anche di una catena senza effetti) si può incollare
+    // in the chain's empty space (also of a chain without effects) you can paste
     this.chain.addEventListener('contextmenu', e => {
       if ((e.target as HTMLElement).closest('.device-panel, .rack-panel')) return;
       e.preventDefault();
       showContextMenu(e.clientX, e.clientY, [
-        { label: 'Incolla', shortcut: KEY.paste, disabled: !deps.clipboard?.devices, run: () => this.pasteSelection() },
+        { label: 'Paste', shortcut: KEY.paste, disabled: !deps.clipboard?.devices, run: () => this.pasteSelection() },
       ]);
     });
     deps.store.onChange(() => this.sync());
@@ -200,8 +200,8 @@ export class DeviceView {
     if (deps.modulation) this.followCurves(deps.modulation);
   }
 
-  /** A ogni fotogramma le manopole della catena aperta vanno dove le portano le curve che suonano
-   *  (della clip o del master, anche attraverso le macro). */
+  /** At every frame the knobs of the open chain go where the playing curves take them
+   *  (of the clip or of the master, also through the macros). */
   private followCurves(at: (owner: ChainOwner, target: ModTarget) => number | null): void {
     const frame = () => {
       requestAnimationFrame(frame);
@@ -213,7 +213,7 @@ export class DeviceView {
     requestAnimationFrame(frame);
   }
 
-  /** I controlli dei dispositivi e le macro dei rack della catena costruita. */
+  /** The controls of the devices and the macros of the racks of the built chain. */
   private findCurveControls(): { control: ParamControl; target: ModTarget }[] {
     const out: { control: ParamControl; target: ModTarget }[] = [];
     const add = (device: string, elements: Iterable<HTMLElement>) => {
@@ -231,12 +231,12 @@ export class DeviceView {
     return this.owner !== null;
   }
 
-  /** Di chi è la catena aperta (per i test automatici). */
+  /** Whose the open chain is (for automated tests). */
   get openOwner(): ChainOwner | null {
     return this.owner;
   }
 
-  /** Apre i dispositivi di una traccia o del master; `back` riporta a chi l'ha aperta (il piano roll). */
+  /** Opens the devices of a track or of the master; `back` returns to whoever opened it (the piano roll). */
   open(owner: ChainOwner, back: (() => void) | null = null): boolean {
     if (!this.sourceOf(owner)) return false;
     if (owner !== this.owner) {
@@ -259,8 +259,8 @@ export class DeviceView {
     this.element.hidden = true;
   }
 
-  /** Segna il dispositivo che un controller muove (null: nessuno); se cambia, la catena scorre
-   *  fino a mostrarlo. */
+  /** Marks the device a controller moves (null: none); if it changes, the chain scrolls
+   *  until it shows it. */
   markControlled(device: ControlledDevice | null): void {
     const moved = device?.owner !== this.controlled?.owner || device?.device !== this.controlled?.device;
     this.controlled = device;
@@ -275,8 +275,8 @@ export class DeviceView {
     if (panel) this.reveal(panel.element);
   }
 
-  /** Scorre la catena (e solo lei, non l'area che la contiene) quanto basta a mostrare `element`;
-   *  se è più largo della catena se ne vede l'inizio. */
+  /** Scrolls the chain (and only it, not the area containing it) as much as needed to show `element`;
+   *  if it's wider than the chain its start is shown. */
   private reveal(element: HTMLElement): void {
     const view = this.chain.getBoundingClientRect();
     const r = element.getBoundingClientRect();
@@ -285,7 +285,7 @@ export class DeviceView {
     else if (r.left < view.left + pad) this.chain.scrollLeft += r.left - view.left - pad;
   }
 
-  /** Comprime tutti i dispositivi della catena, o li riapre se lo sono già. */
+  /** Collapses all the chain's devices, or reopens them if they already are. */
   private foldAll(): void {
     const owner = this.owner;
     if (!owner) return;
@@ -301,7 +301,7 @@ export class DeviceView {
     else this.foldedDevices.delete(`${owner}/${key}`);
   }
 
-  /** Le opzioni di un pannello per comprimerlo, ricordando la scelta. */
+  /** A panel's options to collapse it, remembering the choice. */
   private foldOptions(owner: ChainOwner, key: string) {
     return {
       folded: this.foldedDevices.has(`${owner}/${key}`),
@@ -316,7 +316,7 @@ export class DeviceView {
     for (const [key, panel] of this.rackPanels) panel.element.classList.toggle('controlled', mine(key));
   }
 
-  /** Il menu dei tipi di effetto; quello scelto va in fondo alla catena. */
+  /** The menu of effect types; the chosen one goes at the end of the chain. */
   chooseEffect(x: number, y: number): void {
     const owner = this.owner;
     if (!owner) return;
@@ -353,7 +353,7 @@ export class DeviceView {
     this.markModulated();
   }
 
-  /** Pannelli nuovi quando cambia la forma della catena (effetti aggiunti, tolti, spostati, rack). */
+  /** New panels when the chain's shape changes (effects added, removed, moved, racks). */
   private build(owner: ChainOwner, { track, effects, racks }: ChainSource, shape: string): void {
     this.stopPicking();
     const sameOwner = owner === this.builtOwner;
@@ -382,7 +382,7 @@ export class DeviceView {
       if (panel) this.bindPanel(owner, key, panel);
       return node;
     };
-    // i rack con dentro i loro elementi, anche altri rack
+    // the racks with their elements inside, also other racks
     const itemNode = (item: ChainItem): Node => (item.kind === 'device'
       ? panelOf(item.key)
       : this.rackElement(owner, item.rack, labels, () => chainItems(order, racks, item.rack).map(itemNode), {
@@ -390,16 +390,16 @@ export class DeviceView {
         nest: dir => changes(layoutNestRack(order, racks, item.rack.id, dir)),
       }));
     const items = chainItems(order, racks).map(itemNode);
-    if (!effects.length) items.push(el('div', { className: 'device-empty muted', textContent: 'Nessun effetto: "+ Effetto" ne aggiunge uno.' }));
+    if (!effects.length) items.push(el('div', { className: 'device-empty muted', textContent: 'No effects: "+ Effect" adds one.' }));
     this.chain.replaceChildren(...items);
     this.fitPanels();
     this.chain.scrollLeft = scroll;
     this.showControlled();
     this.showSelection();
     this.showMapped(racks);
-    // un'altra catena parte dall'inizio, o dal dispositivo che il controller muove
+    // another chain starts from the beginning, or from the device the controller moves
     if (!sameOwner) this.revealControlled();
-    // un effetto appena aggiunto si vede subito, anche in fondo a una catena lunga
+    // a just-added effect is shown right away, even at the end of a long chain
     const added = sameOwner && known.size ? effects.filter(e => !known.has(e.id)).at(-1) : undefined;
     const panel = added && this.panels.get(added.id);
     if (panel) this.reveal(panel.element);
@@ -418,7 +418,7 @@ export class DeviceView {
 
   // ---------------------------------------------------------------- rack
 
-  /** Un rack: il pannello delle macro e, se non è chiuso, i suoi elementi (`contents`). */
+  /** A rack: the macro panel and, if it isn't closed, its elements (`contents`). */
   private rackElement(owner: ChainOwner, rack: Rack, labels: ReadonlyMap<DeviceKey, string>, contents: () => Node[],
     can: { readonly move: (dir: -1 | 1) => boolean; readonly nest: (dir: -1 | 1) => boolean }): HTMLElement {
     const folded = this.folded.has(rack.id);
@@ -457,8 +457,8 @@ export class DeviceView {
     return element;
   }
 
-  /** Sulle macro di un rack dentro un altro: con "Map" acceso su un rack intorno e una sua macro
-   *  scelta, un clic la mappa lì; mappata su una macro intorno non si tocca (la muove quella). */
+  /** On the macros of a rack inside another: with "Map" on on a surrounding rack and one of its macros
+   *  chosen, a click maps it there; mapped to a surrounding macro it isn't touched (that one moves it). */
   private bindRackPanel(owner: ChainOwner, rack: Rack, panel: RackPanel): void {
     const intercept = (e: Event) => {
       const param = (e.target as HTMLElement | null)?.closest<HTMLElement>('.macro[data-param]')?.dataset.param;
@@ -476,14 +476,14 @@ export class DeviceView {
     }
   }
 
-  /** Il rack `outer` ha dentro il dispositivo o il rack `key` (le sue macro lo possono muovere). */
+  /** Rack `outer` has device or rack `key` inside (its macros can move it). */
   private mapsInto(racks: RackList, outer: DeviceId, key: DeviceKey): boolean {
     const inner = findRack(racks, key as DeviceId);
     return (inner ? outerRacks(racks, inner) : racksWith(racks, key)).some(r => r.id === outer);
   }
 
-  /** Le voci per mappare un parametro (o una macro) sulle macro dei rack `racks`, dal più vicino:
-   *  se i rack sono più d'uno, ognuno sotto il suo nome. */
+  /** The items to map a parameter (or a macro) to the macros of the racks `racks`, from the nearest:
+   *  if there's more than one rack, each under its name. */
   private mapMenu(owner: ChainOwner, racks: readonly Rack[], device: DeviceKey, param: string): MenuItem[] {
     const project = this.deps.store.project;
     const current = macroOf(project.racksOf(owner), device, param);
@@ -493,25 +493,25 @@ export class DeviceView {
       ...rack.macros.map((m, i): MenuItem => {
         const name = macroName(m, i, label);
         return {
-          label: `Mappa su ${name}${name === `Macro ${i + 1}` ? '' : ` (macro ${i + 1})`}`,
+          label: `Map to ${name}${name === `Macro ${i + 1}` ? '' : ` (macro ${i + 1})`}`,
           checked: current?.rack.id === rack.id && current.index === i,
           run: () => this.guard(mapMacro(owner, rack.id, i, device, param)),
         };
       }),
     ]);
     if (!items.length) return [];
-    return [...items, SEPARATOR, { label: 'Togli dalla macro', disabled: !current, run: () => this.guard(unmapParam(owner, device, param)) }];
+    return [...items, SEPARATOR, { label: 'Remove from the macro', disabled: !current, run: () => this.guard(unmapParam(owner, device, param)) }];
   }
 
-  /** Su un dispositivo: il clic sul nome lo sceglie, il menu dell'intestazione raggruppa e
-   *  separa, il menu di un parametro lo mappa su una macro. Un parametro mappato non si tocca
-   *  (lo muove la macro); con "Map" acceso e una macro scelta un clic lo mappa lì; con KEY
-   *  acceso un clic lo sceglie per la tastiera del computer. */
+  /** On a device: the click on the name chooses it, the header's menu groups and
+   *  ungroups, a parameter's menu maps it to a macro. A mapped parameter isn't touched
+   *  (the macro moves it); with "Map" on and a macro chosen a click maps it there; with KEY
+   *  on a click chooses it for the computer keyboard. */
   private bindPanel(owner: ChainOwner, key: DeviceKey, panel: DevicePanel): void {
     const name = panel.element.querySelector<HTMLElement>('.device-name');
     if (name) {
       name.onclick = e => this.select([key], e.shiftKey);
-      name.title = 'Clic: scegli (Maiusc: più di uno), poi Ctrl+G per raggruppare in un rack';
+      name.title = 'Click: choose (Shift: more than one), then Ctrl+G to group into a rack';
     }
     panel.element.querySelector('.device-panel-head')?.addEventListener('contextmenu', e => {
       const ev = e as MouseEvent;
@@ -522,8 +522,8 @@ export class DeviceView {
       showContextMenu(ev.clientX, ev.clientY, [
         ...this.clipboardMenu(owner, keys),
         SEPARATOR,
-        { label: 'Raggruppa in un rack', shortcut: 'Ctrl+G', run: () => this.groupSelection(keys) },
-        { label: 'Separa il rack', shortcut: 'Ctrl+Maiusc+G', disabled: !rack, run: () => rack && this.guard(ungroupRack(owner, rack.id)) },
+        { label: 'Group into a rack', shortcut: 'Ctrl+G', run: () => this.groupSelection(keys) },
+        { label: 'Ungroup the rack', shortcut: 'Ctrl+Shift+G', disabled: !rack, run: () => rack && this.guard(ungroupRack(owner, rack.id)) },
         ...(presets.length ? [SEPARATOR, ...presets] : []),
       ]);
     });
@@ -558,42 +558,42 @@ export class DeviceView {
     });
   }
 
-  /** Il menu di un parametro: su quale macro dei suoi rack mapparlo (prima il rack in cui sta,
-   *  poi quelli intorno). */
+  /** A parameter's menu: which macro of its racks to map it to (first the rack it's in,
+   *  then the surrounding ones). */
   private paramMenu(owner: ChainOwner, key: DeviceKey, param: string): MenuItem[] {
     const mods = [...this.automationMenu(owner, { kind: 'device', device: key, param }), ...this.modulationMenu(owner, { kind: 'device', device: key, param })];
     const racks = racksWith(this.deps.store.project.racksOf(owner), key).reverse();
-    if (!racks.length) return [...mods, { label: 'Raggruppa in un rack per mapparlo su una macro', shortcut: 'Ctrl+G', run: () => this.groupSelection([key]) }];
+    if (!racks.length) return [...mods, { label: 'Group into a rack to map it to a macro', shortcut: 'Ctrl+G', run: () => this.groupSelection([key]) }];
     return [...mods, ...this.mapMenu(owner, racks, key, param)];
   }
 
-  /** "Mostra automazione", se l'app la sa mostrare. */
+  /** "Show automation", if the app knows how to show it. */
   private automationMenu(owner: ChainOwner, target: ModTarget): MenuItem[] {
     const show = this.deps.showAutomation;
-    return show ? [{ label: 'Mostra automazione', run: () => show(owner, target) }, SEPARATOR] : [];
+    return show ? [{ label: 'Show automation', run: () => show(owner, target) }, SEPARATOR] : [];
   }
 
-  // ---------------------------------------------------------------- appunti
+  // ---------------------------------------------------------------- clipboard
 
-  /** Le voci di copia e incolla di un dispositivo (o del rack `rack`). */
+  /** The copy and paste items of a device (or of rack `rack`). */
   private clipboardMenu(owner: ChainOwner, keys: readonly DeviceKey[], rack: DeviceId | null = null): MenuItem[] {
     const onlyInstrument = !rack && keys.every(k => k === INSTRUMENT);
     const content = () => (rack ? copyRack(this.deps.store.project, owner, rack) : copyDevices(this.deps.store.project, owner, keys));
     return [
-      { label: 'Taglia', shortcut: KEY.cut, disabled: onlyInstrument, run: () => this.cut(owner, keys, rack, content()) },
-      { label: 'Copia', shortcut: KEY.copy, run: () => this.copy(content()) },
-      { label: 'Duplica', shortcut: KEY.duplicate, disabled: onlyInstrument, run: () => this.paste(content(), owner, this.lastKey(owner, keys)) },
-      { label: 'Incolla dopo', shortcut: KEY.paste, disabled: !this.deps.clipboard?.devices, run: () => this.paste(this.deps.clipboard?.devices ?? null, owner, this.lastKey(owner, keys)) },
+      { label: 'Cut', shortcut: KEY.cut, disabled: onlyInstrument, run: () => this.cut(owner, keys, rack, content()) },
+      { label: 'Copy', shortcut: KEY.copy, run: () => this.copy(content()) },
+      { label: 'Duplicate', shortcut: KEY.duplicate, disabled: onlyInstrument, run: () => this.paste(content(), owner, this.lastKey(owner, keys)) },
+      { label: 'Paste after', shortcut: KEY.paste, disabled: !this.deps.clipboard?.devices, run: () => this.paste(this.deps.clipboard?.devices ?? null, owner, this.lastKey(owner, keys)) },
     ];
   }
 
-  /** Il dispositivo scelto che viene per ultimo nel suono. */
+  /** The chosen device coming last in the sound. */
   private lastKey(owner: ChainOwner, keys: readonly DeviceKey[]): DeviceKey | null {
     const order = this.deps.store.project.chainKeys(owner);
     return keys.length ? order[Math.max(...keys.map(k => order.indexOf(k)))] : null;
   }
 
-  /** Ciò che è scelto adesso, pronto per gli appunti. */
+  /** What's chosen now, ready for the clipboard. */
   private chosenContent(): CopiedDevices | null {
     const owner = this.owner, rack = this.chosenRack(), p = this.deps.store.project;
     if (!owner) return null;
@@ -604,7 +604,7 @@ export class DeviceView {
     if (!content || !this.deps.clipboard) return false;
     this.deps.clipboard.content = content;
     const n = (content.instrument ? 1 : 0) + content.effects.length;
-    this.deps.say?.(`${content.rack ? `Rack «${content.rack.name}» copiato` : n > 1 ? `${n} dispositivi copiati` : 'Dispositivo copiato'}: scegli una traccia e premi Ctrl+V per incollarlo lì.`);
+    this.deps.say?.(`${content.rack ? `Rack «${content.rack.name}» copied` : n > 1 ? `${n} devices copied` : 'Device copied'}: choose a track and press Ctrl+V to paste it there.`);
     return true;
   }
 
@@ -616,9 +616,9 @@ export class DeviceView {
     if (content) this.guard(pasteDevices(content, owner, after));
   }
 
-  /** Ctrl+C: i dispositivi scelti con un clic sul nome. */
+  /** Ctrl+C: the devices chosen with a click on the name. */
   copySelection(): void {
-    if (!this.copy(this.chosenContent())) this.deps.say?.('Scegli un dispositivo con un clic sul nome, poi Ctrl+C.');
+    if (!this.copy(this.chosenContent())) this.deps.say?.('Choose a device with a click on the name, then Ctrl+C.');
   }
 
   cutSelection(): void {
@@ -629,7 +629,7 @@ export class DeviceView {
   pasteSelection(): void {
     if (!this.owner) return;
     const content = this.deps.clipboard?.devices ?? null;
-    if (!content) return this.deps.say?.('Negli appunti non ci sono dispositivi.');
+    if (!content) return this.deps.say?.('The clipboard has no devices.');
     this.paste(content, this.owner, this.lastKey(this.owner, this.selection));
   }
 
@@ -637,18 +637,18 @@ export class DeviceView {
     if (this.owner && this.selection.length) this.paste(this.chosenContent(), this.owner, this.lastKey(this.owner, this.selection));
   }
 
-  // ---------------------------------------------------------------- modulatori
+  // ---------------------------------------------------------------- modulators
 
-  /** Le destinazioni dei modulatori della catena che muovono `target`, da togliere. */
+  /** The targets of the chain's modulators moving `target`, to remove. */
   private modulationMenu(owner: ChainOwner, target: ModTarget): MenuItem[] {
     const project = this.deps.store.project, labels = deviceLabels(project, owner);
     const items = project.effectsOf(owner).flatMap(e => (e.targets ?? []).flatMap((t, slot): MenuItem[] => (t && sameModTarget(t, target)
-      ? [{ label: `Togli la modulazione di ${labels.get(e.id) ?? e.type} (destinazione ${slot + 1})`, run: () => this.deps.store.apply(setModTarget(owner, e.id, slot, null)) }]
+      ? [{ label: `Remove the modulation of ${labels.get(e.id) ?? e.type} (target ${slot + 1})`, run: () => this.deps.store.apply(setModTarget(owner, e.id, slot, null)) }]
       : [])));
     return items.length ? [...items, SEPARATOR] : [];
   }
 
-  /** Per il pannello del modulatore `id`: i bersagli della catena di `owner`. */
+  /** For the panel of modulator `id`: the targets of `owner`'s chain. */
   private modTargetHost(owner: ChainOwner, id: DeviceId): ModTargetHost {
     const { store } = this.deps;
     const host: ModTargetHost = {
@@ -701,8 +701,8 @@ export class DeviceView {
     this.stopPicking();
   };
 
-  /** Mentre un modulatore sceglie: i clic sui bersagli sono suoi, la rotella scorre la catena
-   *  (non muove la manopola sotto il puntatore), il resto funziona come sempre. */
+  /** While a modulator is choosing: the clicks on the targets are its own, the wheel scrolls the chain
+   *  (it doesn't move the knob under the pointer), the rest works as always. */
   private pickEvent(e: MouseEvent): void {
     const picking = this.picking;
     if (!picking) return;
@@ -725,7 +725,7 @@ export class DeviceView {
     else if (x < view.left + EDGE_ZONE) this.chain.scrollLeft -= EDGE_STEP;
   }
 
-  /** I controlli che un modulatore della catena muove: un segno, e nel titolo chi li muove. */
+  /** The controls a modulator of the chain moves: a mark, and in the title who moves them. */
   private markModulated(): void {
     const owner = this.owner;
     if (!owner) return;
@@ -739,8 +739,8 @@ export class DeviceView {
     for (const [rack, panel] of this.rackPanels) mark(rack, panel.element.querySelectorAll<HTMLElement>('.macro[data-param]'));
   }
 
-  /** I parametri mappati: attenuati, con il numero della macro; con "Map" acceso si vedono quelli
-   *  che si possono mappare e quelli della macro scelta. */
+  /** The mapped parameters: dimmed, with the macro's number; with "Map" on you see those
+   *  that can be mapped and those of the chosen macro. */
   private showMapped(racks: RackList): void {
     for (const key of this.panels.keys()) this.markMapped(key as DeviceKey, racks);
     for (const [id, panel] of this.rackPanels) {
@@ -749,8 +749,8 @@ export class DeviceView {
     }
   }
 
-  /** Le macro di un rack mappate su una macro di un rack intorno; con "Map" acceso su uno di
-   *  quelli, si vede che si possono mappare. */
+  /** The macros of a rack mapped to a macro of a surrounding rack; with "Map" on on one of
+   *  those, you see that they can be mapped. */
   private markRackMapped(rack: Rack, panel: RackPanel, racks: RackList): void {
     const map = this.mapMode;
     const outer = map && map.macro !== null && this.mapsInto(racks, map.rack, rack.id);
@@ -761,12 +761,12 @@ export class DeviceView {
       if (outer) e.classList.toggle('chosen', !!found && found.rack.id === map.rack && found.index === map.macro);
       if (found) {
         e.dataset.macro = String(found.index + 1);
-        e.title += `\nLa muove la macro ${found.index + 1} di ${rackName(found.rack)} (tasto destro per toglierla).`;
+        e.title += `\nMoved by macro ${found.index + 1} of ${rackName(found.rack)} (right click to remove it).`;
       } else delete e.dataset.macro;
     }
   }
 
-  /** I segni delle macro su un pannello (anche quando un pannello grafico rifà i suoi controlli). */
+  /** The macro marks on a panel (also when a graphic panel redoes its controls). */
   private markMapped(key: DeviceKey, racks?: RackList): void {
     const panel = this.panels.get(key);
     if (!panel || !this.owner) return;
@@ -779,21 +779,21 @@ export class DeviceView {
       e.classList.toggle('chosen', !!found && !!map && found.rack.id === map.rack && found.index === map.macro);
       if (found) {
         e.dataset.macro = String(found.index + 1);
-        e.title = `Lo muove la macro ${found.index + 1} di ${rackName(found.rack)} (tasto destro per toglierlo)`;
+        e.title = `Moved by macro ${found.index + 1} of ${rackName(found.rack)} (right click to remove it)`;
       } else delete e.dataset.macro;
     }
   }
 
-  // ---------------------------------------------------------------- tastiera del computer
+  // ---------------------------------------------------------------- computer keyboard
 
-  /** Con KEY acceso: il parametro aspetta il suo tasto (se lo muove una macro, il tasto va alla macro). */
+  /** With KEY on: the parameter waits for its key (if a macro moves it, the key goes to the macro). */
   private chooseKeyParam(owner: ChainOwner, device: DeviceKey, param: string): void {
     const found = macroOf(this.deps.store.project.racksOf(owner), device, param);
-    if (found) return this.deps.say?.(`Lo muove la macro ${found.index + 1} di ${rackName(found.rack)}: dai il tasto alla macro.`);
+    if (found) return this.deps.say?.(`Macro ${found.index + 1} of ${rackName(found.rack)} moves it: give the key to the macro.`);
     this.deps.ui?.chooseKeyTarget({ kind: 'param', owner, device, param });
   }
 
-  /** I tasti sui controlli (macro e parametri) e, con KEY acceso, quello che aspetta il tasto. */
+  /** The keys on the controls (macros and parameters) and, with KEY on, the one waiting for the key. */
   private showKeys(): void {
     const owner = this.owner;
     this.element.classList.toggle('key-mapping', !!this.deps.ui?.keyMapping);
@@ -812,7 +812,7 @@ export class DeviceView {
     for (const e of panel.element.querySelectorAll<HTMLElement>('[data-param]')) this.markKey(e, { kind: 'param', owner, device, param: e.dataset.param! });
   }
 
-  /** Il tasto del controllo e, con MIDI acceso, il bersaglio da scegliere (vedi ui/midi-targets). */
+  /** The control's key and, with MIDI on, the target to choose (see ui/midi-targets). */
   private markKey(e: HTMLElement, target: KeyTarget): void {
     const midi = encodeMidiTarget(target);
     if (e.dataset.midiTarget !== midi) e.dataset.midiTarget = midi;
@@ -823,27 +823,27 @@ export class DeviceView {
     e.classList.toggle('key-chosen', !!chosen && sameTarget(chosen, target));
   }
 
-  // ---------------------------------------------------------------- scelta e gruppi
+  // ---------------------------------------------------------------- selection and groups
 
   private showSelection(): void {
     for (const [key, panel] of this.panels) panel.element.classList.toggle('selected', this.selection.includes(key as DeviceKey));
     const chosen = this.chosenRack();
     for (const [key, panel] of this.rackPanels) {
       const rack = this.owner ? this.deps.store.project.racksOf(this.owner).find(r => r.id === key) : undefined;
-      // di un rack scelto con un clic sul nome si accende lui, non anche quelli che ha dentro
+      // of a rack chosen with a click on the name it lights up itself, not also those it has inside
       const all = !!rack && rack.devices.every(k => this.selection.includes(k));
       panel.element.classList.toggle('selected', all && (!chosen || chosen.id === key));
     }
   }
 
-  /** Il rack scelto con un clic sul suo nome, se la scelta sono ancora i suoi dispositivi. */
+  /** The rack chosen with a click on its name, if the selection is still its devices. */
   private chosenRack(): Rack | undefined {
     const rack = this.owner && this.selectedRack ? findRack(this.deps.store.project.racksOf(this.owner), this.selectedRack) : undefined;
     return rack && rack.devices.length === this.selection.length && rack.devices.every(k => this.selection.includes(k)) ? rack : undefined;
   }
 
-  /** Clic sul nome di un dispositivo (o di un rack, `rack`: i suoi dispositivi); con Maiusc la
-   *  scelta va dal primo scelto fino a qui. Un altro clic sulla stessa scelta la toglie. */
+  /** Click on the name of a device (or of a rack, `rack`: its devices); with Shift the
+   *  selection goes from the first chosen up to here. Another click on the same selection removes it. */
   private select(keys: readonly DeviceKey[], extend: boolean, rack: DeviceId | null = null): void {
     const order = this.owner ? this.deps.store.project.chainKeys(this.owner) : [];
     if (extend && this.anchor && order.includes(this.anchor)) {
@@ -859,24 +859,24 @@ export class DeviceView {
     this.showSelection();
   }
 
-  /** Ctrl+G: i dispositivi scelti in un rack nuovo. */
+  /** Ctrl+G: the chosen devices into a new rack. */
   private groupSelection(keys: readonly DeviceKey[] = this.selection): void {
     const owner = this.owner;
     if (!owner) return;
-    if (!keys.length) return this.deps.say?.('Scegli i dispositivi da raggruppare: clic sul nome, Maiusc+clic per più di uno; poi Ctrl+G.');
+    if (!keys.length) return this.deps.say?.('Choose the devices to group: click on the name, Shift+click for more than one; then Ctrl+G.');
     if (this.guard(groupDevices(owner, keys))) this.selection = [];
     this.showSelection();
   }
 
-  /** Ctrl+Maiusc+G: separa il rack dei dispositivi scelti. */
+  /** Ctrl+Shift+G: ungroups the rack of the chosen devices. */
   private ungroupSelection(): void {
     const owner = this.owner;
     const rack = owner && this.selection.length ? this.chosenRack() ?? rackOf(this.deps.store.project.racksOf(owner), this.selection[0]) : undefined;
-    if (!owner || !rack) return this.deps.say?.('Scegli un rack (clic sul suo nome), poi Ctrl+Maiusc+G per separarlo.');
+    if (!owner || !rack) return this.deps.say?.('Choose a rack (click on its name), then Ctrl+Shift+G to ungroup it.');
     this.guard(ungroupRack(owner, rack.id));
   }
 
-  /** Una modifica che può non essere permessa: il perché va nella barra di stato. */
+  /** A change that may not be allowed: the reason goes in the status bar. */
   private guard(edit: Edit): boolean {
     try {
       this.deps.store.apply(edit);
@@ -887,29 +887,29 @@ export class DeviceView {
     }
   }
 
-  // ---------------------------------------------------------------- pannelli
+  // ---------------------------------------------------------------- panels
 
   private instrumentPanel(track: MidiTrack): HTMLElement | null {
     const type = instrumentType(track.instrument.type);
     if (!type) return null;
     const { store, audition } = this.deps;
-    const select = el<HTMLSelectElement>('select', { title: 'Strumento' },
+    const select = el<HTMLSelectElement>('select', { title: 'Instrument' },
       ...INSTRUMENT_TYPES.map(t => el('option', { value: t.type, textContent: t.label })));
     select.value = type.type;
     select.onchange = () => store.apply(setInstrument(track.id, { ...DEFAULT_INSTRUMENT, type: select.value, preset: null }));
-    // la nota di prova: il Do3, o il primo nome che lo strumento dà alle note (la cassa della drum machine)
+    // the test note: C3, or the first name the instrument gives the notes (the drum machine's kick)
     const testPitch = () => {
       const t = store.project.track(track.id);
       const names = t instanceof MidiTrack
         ? type.noteNames?.(resolveParams(type, t.instrument.params), store.project.sampleNames(t.instrument)) : undefined;
       return names?.size ? Math.min(...names.keys()) : 60;
     };
-    // ciò che un preset non cambia (la mappa delle zone del Sampler) resta com'è
+    // what a preset doesn't change (the Sampler's zone map) stays as it is
     const withKept = (params: ParamValues): ParamValues => {
       const t = store.project.track(track.id);
       return t instanceof MidiTrack ? { ...params, ...keptOnPreset(type, t.instrument.params) } : params;
     };
-    const test = el<HTMLButtonElement>('button', { className: 'mini', textContent: '♪', title: 'Suona una nota di prova', onclick: () => audition(track.id, testPitch()) });
+    const test = el<HTMLButtonElement>('button', { className: 'mini', textContent: '♪', title: 'Play a test note', onclick: () => audition(track.id, testPitch()) });
     const display = DEVICE_DISPLAYS[type.type]?.({
       type, settings: track.instrument, sampleRate: this.deps.sampleRate,
       setParams: (values, final) => this.displayParams(track.id, INSTRUMENT, values, final,
@@ -961,7 +961,7 @@ export class DeviceView {
     const current = () => this.effects().find(x => x.id === id);
     const button = (text: string, title: string, run: () => void, disabled = false) =>
       el<HTMLButtonElement>('button', { className: 'mini', textContent: text, title, disabled, onclick: run });
-    const power = button('⏻', 'Accendi/spegni', () => store.apply(setEffectEnabled(owner, id, !current()?.enabled)));
+    const power = button('⏻', 'On/off', () => store.apply(setEffectEnabled(owner, id, !current()?.enabled)));
     power.classList.add('power');
     const display = DEVICE_DISPLAYS[e.type]?.({
       type, settings: e, sampleRate: this.deps.sampleRate,
@@ -981,9 +981,9 @@ export class DeviceView {
     const panel = new DevicePanel({
       type, settings: e, before: [power], display, extra: sidechain ? [sidechain.element] : [], ...this.foldOptions(owner, id),
       after: [
-        button('◂', 'Sposta prima (dal bordo di un rack ne esce, accanto a un rack ci entra)', () => store.apply(moveDevice(owner, id, -1)), !canMove(-1)),
-        button('▸', 'Sposta dopo (dal bordo di un rack ne esce, accanto a un rack ci entra)', () => store.apply(moveDevice(owner, id, 1)), !canMove(1)),
-        button('×', 'Elimina l\'effetto', () => store.apply(removeEffect(owner, id))),
+        button('◂', 'Move earlier (from a rack\'s edge it leaves it, next to a rack it enters it)', () => store.apply(moveDevice(owner, id, -1)), !canMove(-1)),
+        button('▸', 'Move later (from a rack\'s edge it leaves it, next to a rack it enters it)', () => store.apply(moveDevice(owner, id, 1)), !canMove(1)),
+        button('×', 'Delete the effect', () => store.apply(removeEffect(owner, id))),
       ],
       onParam: (param, v, final) => this.param(setEffectParam(owner, id, param, v), `fx-${id}-${param}`, final),
       onPreset: p => store.apply(loadEffectPreset(owner, id, p.name, p.params)),
@@ -996,8 +996,8 @@ export class DeviceView {
     return panel.element;
   }
 
-  /** I parametri da un pannello grafico (es. un punto dell'EQ trascinato): quelli mappati su una
-   *  macro non si toccano, come le loro manopole. */
+  /** The parameters from a graphic panel (e.g. a dragged EQ point): those mapped to a
+   *  macro aren't touched, like their knobs. */
   private displayParams(owner: ChainOwner, key: DeviceKey, values: ParamValues, final: boolean,
     edit: (values: ParamValues) => Edit, mergeKey: string): void {
     const racks = this.deps.store.project.racksOf(owner);
@@ -1007,20 +1007,20 @@ export class DeviceView {
     else if (final) this.deps.store.endMerge();
   }
 
-  /** Una manopola trascinata è un solo passo di annullamento. */
+  /** A dragged knob is a single undo step. */
   private param(edit: Edit, mergeKey: string, final: boolean): void {
     this.deps.store.apply(edit, { mergeKey });
     if (final) this.deps.store.endMerge();
   }
 }
 
-/** La forma della catena: cambia se cambiano proprietario, strumento, effetti, il loro ordine o
- *  tipo, i rack (dispositivi, nomi, tipi delle macro, mappature) o come si mostrano (`view`). */
+/** The chain's shape: it changes if owner, instrument, effects, their order or
+ *  type, the racks (devices, names, macro kinds, mappings) or how they're shown (`view`) change. */
 const shapeOf = (owner: ChainOwner, { track, effects, racks }: ChainSource, view: string): string =>
   [owner, track instanceof MidiTrack ? track.instrument.type : '-', ...effects.map(e => `${e.id}:${e.type}`), view,
     JSON.stringify(racks.map(r => [r.id, r.name, r.devices, r.macros.map(m => [m.name, m.mode ?? 'knob', m.mappings.map(x => `${x.device}:${x.param}`)])]))].join('|');
 
-/** I nomi dei dispositivi di una catena: "Delay", "Delay 2"…, e dei rack. */
+/** The names of a chain's devices: "Delay", "Delay 2"…, and of the racks. */
 function deviceLabels(p: Project, owner: ChainOwner): Map<DeviceKey, string> {
   const out = new Map<DeviceKey, string>(p.racksOf(owner).map(r => [r.id, rackName(r)]));
   const seen = new Map<string, number>();
@@ -1036,16 +1036,16 @@ function deviceLabels(p: Project, owner: ChainOwner): Map<DeviceKey, string> {
 const sameModTarget = (a: ModTarget, b: ModTarget): boolean =>
   a.kind === b.kind && a.param === b.param && (a.kind !== 'device' || (b.kind === 'device' && a.device === b.device));
 
-/** Il nome di un bersaglio di un modulatore: "Prisma · Cutoff", "Rack · Macro 2", "Volume". */
+/** A modulator target's name: "Prisma · Cutoff", "Rack · Macro 2", "Volume". */
 function modTargetLabel(p: Project, owner: ChainOwner, t: ModTarget): string {
-  if (t.kind === 'mixer') return t.param === 'volume' ? 'Volume della traccia' : 'Pan della traccia';
+  if (t.kind === 'mixer') return t.param === 'volume' ? 'Track volume' : 'Track pan';
   if (t.kind === 'clip') return 'Transpose';
   const device = deviceLabels(p, owner).get(t.device);
-  if (!device) return `(tolto) · ${t.param}`;
+  if (!device) return `(removed) · ${t.param}`;
   return `${device} · ${mappingSpec(p, owner, { device: t.device, param: t.param })?.label ?? t.param}`;
 }
 
-/** I bersagli dei modulatori da un menu: volume e pan della traccia, le macro dei rack. */
+/** The modulators' targets from a menu: the track's volume and pan, the racks' macros. */
 function modTargetChoices(p: Project, owner: ChainOwner): { target: ModTarget; label: string }[] {
   const mixer: ModTarget[] = owner === MASTER ? [] : [{ kind: 'mixer', param: 'volume' }, { kind: 'mixer', param: 'pan' }];
   const macros = p.racksOf(owner).flatMap(r => r.macros.map((_, i): ModTarget => ({ kind: 'device', device: r.id, param: macroParam(i) })));
@@ -1053,4 +1053,4 @@ function modTargetChoices(p: Project, owner: ChainOwner): { target: ModTarget; l
 }
 
 const missing = (type: string) =>
-  el('div', { className: 'device-empty muted', textContent: `"${type}" non è disponibile in questa versione.` });
+  el('div', { className: 'device-empty muted', textContent: `"${type}" isn't available in this version.` });

@@ -11,32 +11,32 @@ import type { DeviceDisplay } from './displays';
 export interface DevicePanelOptions {
   readonly type: DeviceType;
   readonly settings: DeviceSettings;
-  /** Controlli nell'intestazione, accanto al nome (spegnimento, sposta, togli, prova…). */
+  /** Controls in the header, next to the name (on/off, move, remove, test…). */
   readonly before?: readonly Node[];
   readonly after?: readonly Node[];
-  /** `final` alla fine di un gesto: chiude il passo di annullamento. */
+  /** `final` at the end of a gesture: it closes the undo step. */
   readonly onParam: (id: string, value: number, final: boolean) => void;
   readonly onPreset: (preset: Preset) => void;
-  /** Con questa, il pannello permette di salvare i preset dell'utente (★): riceve il preset
-   *  appena salvato, che diventa quello del dispositivo. */
+  /** With this, the panel allows saving user presets (★): it receives the preset
+   *  just saved, which becomes the device's. */
   readonly onPresetSaved?: (preset: Preset) => void;
-  /** Un messaggio per la barra di stato (preset salvato, nome non valido…). */
+  /** A message for the status bar (preset saved, invalid name…). */
   readonly say?: (text: string) => void;
-  /** Un pannello grafico (es. l'EQ) al posto delle manopole generate. */
+  /** A graphic panel (e.g. the EQ) in place of the generated knobs. */
   readonly display?: DeviceDisplay;
-  /** Schede in più, dopo quelle dei parametri (es. il sidechain del compressore). */
+  /** Extra tabs, after the parameters' ones (e.g. the compressor's sidechain). */
   readonly extra?: readonly HTMLElement[];
-  /** Il pannello parte compresso (solo l'intestazione, in verticale). */
+  /** The panel starts collapsed (only the header, vertical). */
   readonly folded?: boolean;
-  /** Il pannello compresso o riaperto (▾/▸ o doppio clic sull'intestazione). */
+  /** The panel collapsed or reopened (▾/▸ or double click on the header). */
   readonly onFold?: (folded: boolean) => void;
 }
 
-/** Lo spazio tra le schede (come `gap` di .device-sections). */
+/** The space between the tabs (like `gap` of .device-sections). */
 const SECTION_GAP = 6;
 
-/** La larghezza più stretta in cui delle schede larghe `widths`, messe in fila e a capo quando
- *  non ci stanno più (come fa flex-wrap), occupano al più `rows` righe. */
+/** The narrowest width in which tabs `widths` wide, put in a row and wrapping when
+ *  they no longer fit (as flex-wrap does), take at most `rows` rows. */
 export function narrowestWidth(widths: readonly number[], gap: number, rows: number): number {
   const rowsAt = (width: number) => {
     let n = 1, x = 0;
@@ -45,7 +45,7 @@ export function narrowestWidth(widths: readonly number[], gap: number, rows: num
     }
     return n;
   };
-  // la più stretta è sempre larga quanto una riga: una fila di schede di seguito (sono poche)
+  // the narrowest is always as wide as one row: a row of tabs in sequence (there are few)
   const widest = Math.max(0, ...widths);
   let best = Infinity;
   for (let i = 0; i < widths.length; i++) {
@@ -56,15 +56,15 @@ export function narrowestWidth(widths: readonly number[], gap: number, rows: num
   return Number.isFinite(best) ? Math.ceil(best) : 0;
 }
 
-/** Un dispositivo (strumento o effetto) nella catena: intestazione con nome e preset, poi una
- *  scheda per sezione e un controllo per parametro, tutto dalla descrizione del tipo; oppure
- *  il pannello grafico del tipo, se ne ha uno. */
+/** A device (instrument or effect) in the chain: header with name and preset, then a
+ *  tab per section and a control per parameter, all from the type's description; or
+ *  the type's graphic panel, if it has one. */
 export class DevicePanel {
   readonly element = el('div', { className: 'device-panel' });
   private readonly controls = new Map<string, { spec: ParamSpec; control: ParamControl }>();
   private readonly presets = el<HTMLSelectElement>('select', { className: 'preset', title: 'Preset' });
   private readonly fold = el<HTMLButtonElement>('button', { className: 'mini fold' });
-  private readonly save = el<HTMLButtonElement>('button', { className: 'mini save-preset', textContent: '★', title: 'Salva come preset (clic destro sull\'intestazione: aggiorna, elimina)' });
+  private readonly save = el<HTMLButtonElement>('button', { className: 'mini save-preset', textContent: '★', title: 'Save as preset (right click on the header: update, delete)' });
   private readonly sections = el('div', { className: 'device-sections' });
   private settings: DeviceSettings;
 
@@ -75,7 +75,7 @@ export class DevicePanel {
       const preset = presetFrom(type, this.presets.value);
       if (preset) options.onPreset(preset);
     };
-    // i preset salvati da un altro pannello dello stesso tipo compaiono appena si apre la tendina
+    // the presets saved from another panel of the same type show up as soon as the drop-down opens
     this.presets.onfocus = this.presets.onpointerenter = () => this.fillPresets();
     this.save.onclick = () => this.askName();
     const values = resolveParams(type, settings.params);
@@ -99,7 +99,7 @@ export class DevicePanel {
         options.onFold!(folded);
       };
       this.fold.onclick = toggle;
-      // doppio clic sul fondo dell'intestazione, come in Live
+      // double click on the header's background, as in Live
       head.ondblclick = e => { if (e.target === head) toggle(); };
     }
     this.sections.append(...sections);
@@ -112,18 +112,18 @@ export class DevicePanel {
     return this.element.classList.contains('folded');
   }
 
-  /** Compresso: resta l'intestazione, in verticale, con il nome e l'accensione. */
+  /** Collapsed: the header remains, vertical, with the name and the on/off. */
   setFolded(folded: boolean): void {
     this.element.classList.toggle('folded', folded);
     this.fold.textContent = folded ? '▸' : '▾';
-    this.fold.title = folded ? 'Mostra il dispositivo' : 'Comprimi il dispositivo';
+    this.fold.title = folded ? 'Show the device' : 'Collapse the device';
     if (!folded) this.fitRows();
   }
 
-  /** Le schede vanno a capo per stare nell'altezza del pannello: tante righe quante ne stanno,
-   *  nella larghezza più stretta che le tiene (nel loro ordine, da sinistra a destra e poi
-   *  sotto), invece di una riga lunga con il vuoto sotto. Da rifare quando cambia l'altezza;
-   *  non fa niente finché il pannello non si vede, né con un pannello grafico. */
+  /** The tabs wrap to fit the panel's height: as many rows as fit,
+   *  in the narrowest width holding them (in their order, from left to right and then
+   *  below), instead of one long row with empty space below. To be redone when the height changes;
+   *  it does nothing while the panel isn't visible, nor with a graphic panel. */
   fitRows(): void {
     if (this.options.display || this.folded) return;
     const box = this.sections, cards = [...box.children] as HTMLElement[];
@@ -137,7 +137,7 @@ export class DevicePanel {
     if (rows > 1) box.style.maxWidth = `${narrowestWidth(sizes.map(r => r.width), SECTION_GAP, rows)}px`;
   }
 
-  /** Valori, parametri attivi, preset e acceso/spento dalle impostazioni attuali. */
+  /** Values, active parameters, preset and on/off from the current settings. */
   update(settings: DeviceSettings, enabled = true): void {
     const { type } = this.options;
     const values = resolveParams(type, settings.params);
@@ -151,25 +151,25 @@ export class DevicePanel {
     this.options.display?.update(settings, enabled);
   }
 
-  /** Le voci dei preset per il menu dell'intestazione: salva, aggiorna, elimina. */
+  /** The presets' items for the header's menu: save, update, delete. */
   presetMenu(): MenuItem[] {
     if (!this.options.onPresetSaved) return [];
     const mine = this.userPreset();
     return [
-      { label: 'Salva come preset…', run: () => this.askName() },
-      { label: mine ? `Aggiorna il preset «${mine}»` : 'Aggiorna il preset', disabled: !mine, run: () => mine && void this.savePreset(mine) },
-      { label: mine ? `Elimina il preset «${mine}»` : 'Elimina il preset', disabled: !mine, run: () => mine && void this.removePreset(mine) },
-      ...(userPresets.canReveal ? [{ label: 'Apri la cartella dei preset', run: () => void this.reveal() }] : []),
+      { label: 'Save as preset…', run: () => this.askName() },
+      { label: mine ? `Update the preset «${mine}»` : 'Update the preset', disabled: !mine, run: () => mine && void this.savePreset(mine) },
+      { label: mine ? `Delete the preset «${mine}»` : 'Delete the preset', disabled: !mine, run: () => mine && void this.removePreset(mine) },
+      ...(userPresets.canReveal ? [{ label: 'Open the presets folder', run: () => void this.reveal() }] : []),
     ];
   }
 
-  /** Il nome del preset attuale, se è uno dell'utente. */
+  /** The current preset's name, if it's a user one. */
   private userPreset(): string | null {
     const name = this.settings.preset;
     return name && userPresets.find(this.options.type.type, name) ? name : null;
   }
 
-  /** La tendina: prima i preset dell'utente, poi quelli di fabbrica. */
+  /** The drop-down: first the user's presets, then the factory ones. */
   private fillPresets(): void {
     const { type } = this.options;
     const { preset } = this.settings;
@@ -180,23 +180,23 @@ export class DevicePanel {
     this.presets.replaceChildren(
       el('option', { value: '', textContent: preset ?? '— preset —', disabled: true, hidden: !!value }),
       ...(mine.length ? [
-        el('optgroup', { label: 'I miei preset' }, ...mine.map(p => option(USER, p))),
-        el('optgroup', { label: 'Di fabbrica' }, ...type.presets.map(p => option(FACTORY, p))),
+        el('optgroup', { label: 'My presets' }, ...mine.map(p => option(USER, p))),
+        el('optgroup', { label: 'Factory' }, ...type.presets.map(p => option(FACTORY, p))),
       ] : type.presets.map(p => option(FACTORY, p))));
     this.presets.value = value;
   }
 
-  /** Il nome del preset si scrive al posto della tendina; quello di un preset dell'utente lo
-   *  aggiorna. */
+  /** The preset's name is typed in place of the drop-down; a user preset's name
+   *  updates it. */
   private askName(): void {
     if (!this.presets.isConnected) return;
-    editInline(this.presets, this.userPreset() ?? '', name => void this.savePreset(name), 'Nome del preset');
+    editInline(this.presets, this.userPreset() ?? '', name => void this.savePreset(name), 'Preset name');
   }
 
   private async savePreset(name: string): Promise<void> {
     const { type, onPresetSaved, say } = this.options;
     if (type.presets.some(p => p.name === name)) {
-      say?.(`«${name}» è un preset di fabbrica di ${type.label}: scegli un altro nome.`);
+      say?.(`«${name}» is a factory preset of ${type.label}: choose another name.`);
       return;
     }
     const existed = !!userPresets.find(type.type, name);
@@ -204,12 +204,12 @@ export class DevicePanel {
     try {
       await userPresets.save(type.type, preset);
     } catch (e) {
-      say?.(`Non è stato possibile salvare il preset «${name}»: ${message(e)}`);
+      say?.(`Couldn't save the preset «${name}»: ${message(e)}`);
       return;
     }
     onPresetSaved?.(preset);
     this.fillPresets();
-    say?.(existed ? `Preset «${name}» aggiornato.` : `Preset «${name}» salvato: lo trovi in ${type.label}, in tutti i progetti.`);
+    say?.(existed ? `Preset «${name}» updated.` : `Preset «${name}» saved: you'll find it in ${type.label}, in all projects.`);
   }
 
   private async removePreset(name: string): Promise<void> {
@@ -217,25 +217,25 @@ export class DevicePanel {
     try {
       await userPresets.remove(type.type, name);
     } catch (e) {
-      say?.(`Non è stato possibile eliminare il preset «${name}»: ${message(e)}`);
+      say?.(`Couldn't delete the preset «${name}»: ${message(e)}`);
       return;
     }
     this.fillPresets();
-    say?.(`Preset «${name}» eliminato.`);
+    say?.(`Preset «${name}» deleted.`);
   }
 
   private async reveal(): Promise<void> {
     try {
       await userPresets.reveal();
     } catch (e) {
-      this.options.say?.(`Non è stato possibile aprire la cartella dei preset: ${message(e)}`);
+      this.options.say?.(`Couldn't open the presets folder: ${message(e)}`);
     }
   }
 }
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-/** Nella tendina, il valore di una voce dice di chi è il preset (dell'utente o di fabbrica). */
+/** In the drop-down, an item's value says whose the preset is (the user's or factory). */
 const USER = 'u';
 const FACTORY = 'f';
 

@@ -1,12 +1,12 @@
-/* Il suono del Kick (vedi kick.ts). Ogni colpo è una voce con i suoi strati: lo snap (un seno
- * acuto che cade, rumore filtrato o il sample dello snap), il corpo (un seno che cade di
- * `pitch` semitoni fino alla nota, piegato dalla Forma, o il sample del corpo) con l'inviluppo
- * attacco · hold · decay, e la coda (lo stesso seno, pulito, che resta sulla nota). Un colpo
- * nuovo fa sfumare in pochi millisecondi quello prima: la cassa è a una voce, senza click. Il
- * rumble è uno solo per tutti i colpi: quattro filtri a pettine (un piccolo riverbero) sul corpo
- * e sulla coda, scuriti, saturati e abbassati finché il corpo suona, così cresce tra un colpo e
- * l'altro. In fondo la saturazione, il taglio dei bassi e il volume. Gira nell'AudioWorklet;
- * qui niente Web Audio, così si prova (e si disegna) anche fuori. */
+/* The Kick's sound (see kick.ts). Each hit is a voice with its layers: the snap (a high
+ * falling sine, filtered noise or the snap sample), the body (a sine falling by
+ * `pitch` semitones to the note, bent by the Shape, or the body sample) with the
+ * attack · hold · decay envelope, and the tail (the same sine, clean, staying on the note). A new
+ * hit fades the previous one out in a few milliseconds: the kick is monophonic, without clicks. The
+ * rumble is a single one for all hits: four comb filters (a small reverb) on the body
+ * and the tail, darkened, saturated and lowered while the body plays, so it grows between one hit and
+ * the next. At the end the saturation, the low cut and the volume. Runs in the AudioWorklet;
+ * no Web Audio here, so it's also tested (and drawn) outside. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { decayCoef } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
@@ -14,16 +14,16 @@ import { driveSample, softClip as soft } from '../../dsp/saturate';
 import { Svf } from '../../dsp/svf';
 import { BODY_SLOT, FOLLOW, kickNote, noteHz, ROOT_NOTE, SNAP_SLOT, SNAP_SOURCE, SOURCE } from './kick';
 
-/** Sotto questo livello uno strato è finito (−100 dB). */
+/** Below this level a layer is finished (−100 dB). */
 const FLOOR = 1e-5;
-/** Quanto dura la sfumatura di un colpo interrotto (colpo nuovo, stop). */
+/** How long the fade of an interrupted hit lasts (new hit, stop). */
 const CHOKE_TIME = 0.004;
 const TWO_PI = 2 * Math.PI;
 const LP = 0, BP = 1, HP = 2;
-/** I ritardi dei pettini del rumble, in secondi (tra loro primi, per non rinforzare le stesse note). */
+/** The rumble combs' delays, in seconds (coprime, so as not to reinforce the same notes). */
 const COMBS = [0.0233, 0.0317, 0.0379, 0.0431];
 
-/** Un sample in mono (la cassa sta al centro) e la sua frequenza di campionamento. */
+/** A mono sample (the kick sits in the centre) and its sample rate. */
 interface MonoSample {
   readonly data: Float32Array;
   readonly rate: number;
@@ -38,7 +38,7 @@ function mono(d: SampleData | null): MonoSample | null {
   return { data, rate: d.sampleRate };
 }
 
-/** Lettura tra i campioni (Hermite a 4 punti). */
+/** Reading between samples (4-point Hermite). */
 function hermite(x: Float32Array, k: number, f: number): number {
   const n = x.length - 1;
   const y0 = x[k > 0 ? k - 1 : 0], y1 = x[k], y2 = x[k + 1 > n ? n : k + 1], y3 = x[k + 2 > n ? n : k + 2];
@@ -48,7 +48,7 @@ function hermite(x: Float32Array, k: number, f: number): number {
 
 export { driveSample } from '../../dsp/saturate';
 
-/** I parametri del motore, già nelle sue unità. */
+/** The engine's parameters, already in its units. */
 interface Settings {
   note: number;
   fine: number;
@@ -85,8 +85,8 @@ interface Settings {
   volume: number;
 }
 
-/** Un colpo. Dopo `step`, `kick` (corpo e coda), `snap` e `body` (l'inviluppo del corpo, per
- *  abbassare il rumble) sono i valori di questo campione. */
+/** A hit. After `step`, `kick` (body and tail), `snap` and `body` (the body's envelope, to
+ *  lower the rumble) are this sample's values. */
 class KickVoice {
   kick = 0;
   snap = 0;
@@ -96,7 +96,7 @@ class KickVoice {
   private choking = false;
   private readonly chokeK: number;
   private gain = 1;
-  // il seno del corpo e della coda
+  // the sine of the body and the tail
   private phase = 0;
   private base = 50;
   private semis = 0;
@@ -108,7 +108,7 @@ class KickVoice {
   private tailGain = 0;
   private tailDrive = 0;
   private synth = true;
-  // inviluppi: campioni dall'inizio, attacco e hold in campioni, livelli in decadimento
+  // envelopes: samples since the start, attack and hold in samples, decaying levels
   private t = 0;
   private attackN = 1;
   private holdEnd = 1;
@@ -182,14 +182,14 @@ class KickVoice {
     this.snapFilter.set(s.snapTone, 0.3, BP);
   }
 
-  /** Sfuma in pochi millisecondi. */
+  /** Fades out in a few milliseconds. */
   choke(): void {
     if (this.active) this.choking = true;
   }
 
   step(): void {
     const sr = this.sampleRate, t = this.t++;
-    // l'inviluppo: sale in `attack`, resta in `hold`, poi il corpo e la coda decadono ciascuno col suo tempo
+    // the envelope: rises in `attack`, stays for `hold`, then body and tail decay each with its own time
     let rise = 1;
     if (t < this.attackN) rise = t / this.attackN;
     else {
@@ -197,7 +197,7 @@ class KickVoice {
       if (t >= this.holdEnd) this.bodyAmp *= this.bodyK;
     }
     const bodyEnv = rise * this.bodyAmp, tailEnv = rise * this.tailAmp;
-    // la caduta d'intonazione, in semitoni: più curva, più cade subito
+    // the pitch drop, in semitones: the more curve, the sooner it drops
     this.pitchEnv *= this.pitchK;
     const hz = this.base * Math.pow(2, (this.semis * Math.pow(this.pitchEnv, this.curve)) / 12);
     this.phase += hz / sr;
@@ -217,7 +217,7 @@ class KickVoice {
     let snap = 0;
     if (this.snapAmp >= FLOOR) {
       if (this.snapSource === SNAP_SOURCE.click) {
-        // un seno acuto che cade di un'ottava mentre si spegne: il "tic"
+        // a high sine falling an octave while dying out: the "tick"
         this.clickPhase += (this.clickHz * (1 + this.snapAmp)) / sr;
         if (this.clickPhase >= 1) this.clickPhase -= 1;
         snap = Math.sin(TWO_PI * this.clickPhase) * this.snapAmp;
@@ -244,7 +244,7 @@ class KickVoice {
   }
 }
 
-/** Un filtro a pettine con lo smorzamento degli acuti nel giro: un pezzo di riverbero. */
+/** A comb filter with high damping in the loop: a piece of reverb. */
 class Comb {
   private readonly buffer: Float32Array;
   private index = 0;
@@ -289,7 +289,7 @@ export class KickCore implements InstrumentCore, SamplePlayer {
   private readonly rumbleLow1: Svf;
   private readonly rumbleLow2: Svf;
   private readonly lowCut: Svf;
-  /** Quanto il corpo suona adesso (sale subito, scende piano): abbassa il rumble. */
+  /** How much the body plays now (rises right away, falls slowly): it lowers the rumble. */
   private duck = 0;
   private readonly duckRelease: number;
   private rumbleWasOn = false;
@@ -321,7 +321,7 @@ export class KickCore implements InstrumentCore, SamplePlayer {
     this.s = s;
     this.volume = s.volume;
     const sr = this.sampleRate, damp = Math.exp((-TWO_PI * Math.min(4000, s.rumbleTone * 4)) / sr);
-    // il tempo del rumble è quanto ci mette a scendere di 60 dB
+    // the rumble's time is how long it takes to fall by 60 dB
     COMBS.forEach((t, i) => this.combs[i].set(t * sr, Math.min(0.97, Math.pow(10, (-3 * t) / s.rumbleTime)), damp));
     this.rumbleIn.set(Math.min(1200, s.rumbleTone * 3), 0, LP);
     this.rumbleLow1.set(s.rumbleTone, 0.15, LP);
@@ -341,7 +341,7 @@ export class KickCore implements InstrumentCore, SamplePlayer {
     this.voices[this.current].trigger(this.s, pitch, velocity, this.bodySample, this.snapSample);
   }
 
-  /** La cassa suona fino in fondo, come un colpo di batteria: il rilascio della nota non conta. */
+  /** The kick rings to the end, like a drum hit: the note's release doesn't count. */
   noteOff(): void {}
 
   silence(): void {
@@ -355,7 +355,7 @@ export class KickCore implements InstrumentCore, SamplePlayer {
     if (!s) return;
     const [a, b] = this.voices;
     const rumbleOn = s.rumbleOn && s.rumble > 0;
-    // riacceso, il rumble riparte pulito
+    // turned on again, the rumble restarts clean
     if (rumbleOn && !this.rumbleWasOn) for (const c of this.combs) c.clear();
     this.rumbleWasOn = rumbleOn;
     if (!a.active && !b.active && !rumbleOn) return;

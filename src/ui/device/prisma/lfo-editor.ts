@@ -1,8 +1,8 @@
-/* La forma di un LFO di Prisma, da disegnare come in Serum. Un clic nel vuoto aggiunge un punto
- * (e lo si può subito trascinare), un punto si trascina, il doppio clic su un punto lo toglie;
- * il pallino a metà di un tratto si trascina in verticale per curvarlo (doppio clic: diritto).
- * La griglia aggancia i punti (Maiusc: libero). Toccare una forma fissa (seno, quadra…) la
- * trasforma in punti, e si continua da lì; le forme casuali si guardano soltanto. */
+/* The shape of a Prisma LFO, to draw as in Serum. A click in empty space adds a point
+ * (and it can be dragged right away), a point is dragged, a double click on a point removes it;
+ * the dot halfway through a segment is dragged vertically to curve it (double click: straight).
+ * The grid snaps the points (Shift: free). Touching a fixed shape (sine, square…)
+ * turns it into points, and you continue from there; the random shapes can only be looked at. */
 import { LFO_POINTS, LFO_SHAPE, LFO_SHAPES, bend, drawnValue, isRandomShape, pointsForShape, pointsOf, pointValues, randomValue, shapeValue, type LfoPoint } from '../../../devices/instruments/prisma/shapes';
 import type { ParamValues } from '../../../model/device';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../../context-menu';
@@ -15,8 +15,8 @@ let grid: number = 8;
 
 type Target = { kind: 'point'; index: number } | { kind: 'curve'; index: number };
 
-/** La forma percorsa dalla fine all'inizio: il tratto nuovo da i a i+1 è quello vecchio da
- *  n−2−i a n−1−i rovesciato nel tempo, quindi con la curva opposta. */
+/** The shape traversed from the end to the start: the new segment from i to i+1 is the old one from
+ *  n−2−i to n−1−i reversed in time, so with the opposite curve. */
 function reversed(points: readonly LfoPoint[]): LfoPoint[] {
   const n = points.length;
   return points.map((_, i) => ({ x: 1 - points[n - 1 - i].x, y: points[n - 1 - i].y, curve: i < n - 1 ? -points[n - 2 - i].curve : 0 }));
@@ -24,11 +24,11 @@ function reversed(points: readonly LfoPoint[]): LfoPoint[] {
 
 export class LfoEditor {
   readonly canvas = el<HTMLCanvasElement>('canvas', {
-    className: 'prisma-lfo', title: 'Clic: aggiungi un punto · trascina punti e pallini (curve) · doppio clic: togli il punto o raddrizza il tratto · Maiusc: senza griglia',
+    className: 'prisma-lfo', title: 'Click: add a point · drag points and dots (curves) · double click: remove the point or straighten the segment · Shift: without grid',
   });
-  readonly gridSelect = el<HTMLSelectElement>('select', { className: 'prisma-grid', title: 'Griglia del disegno' },
-    ...GRIDS.map(g => el('option', { value: String(g), textContent: g ? `Griglia ${g}` : 'Libero' })));
-  readonly menuButton = el<HTMLButtonElement>('button', { className: 'mini', textContent: '≡', title: 'Forme e trasformazioni' });
+  readonly gridSelect = el<HTMLSelectElement>('select', { className: 'prisma-grid', title: 'Drawing grid' },
+    ...GRIDS.map(g => el('option', { value: String(g), textContent: g ? `Grid ${g}` : 'Free' })));
+  readonly menuButton = el<HTMLButtonElement>('button', { className: 'mini', textContent: '≡', title: 'Shapes and transformations' });
   private lfo = 1;
   private hot: Target | null = null;
 
@@ -69,7 +69,7 @@ export class LfoEditor {
     return this.values()[`l${this.lfo}Shape`];
   }
 
-  /** I punti della forma disegnata, o null se la forma è fissa o casuale. */
+  /** The points of the drawn shape, or null if the shape is fixed or random. */
   private points(): LfoPoint[] | null {
     return this.shape === LFO_SHAPE.drawn ? pointsOf(this.values(), this.lfo) : null;
   }
@@ -83,7 +83,7 @@ export class LfoEditor {
     return { w, h, x: (u: number) => PAD + u * (w - 2 * PAD), y: (v: number) => h - PAD - v * (h - 2 * PAD - 10) };
   }
 
-  /** Il punto del disegno sotto il puntatore, in 0…1 (con la griglia, se non c'è Maiusc). */
+  /** The drawing's point under the pointer, in 0…1 (with the grid, if there's no Shift). */
   private at(e: MouseEvent): { x: number; y: number } {
     const r = this.canvas.getBoundingClientRect(), b = this.box();
     let x = (e.clientX - r.left - PAD) / (b.w - 2 * PAD), y = (b.h - PAD - (e.clientY - r.top)) / (b.h - 2 * PAD - 10);
@@ -120,7 +120,7 @@ export class LfoEditor {
     return best;
   }
 
-  /** Il pallino del tratto `i`: a metà, sulla curva. */
+  /** The dot of segment `i`: halfway, on the curve. */
   private curveHandle(points: readonly LfoPoint[], i: number): [number, number] {
     const a = points[i], b = points[i + 1];
     return [(a.x + b.x) / 2, a.y + (b.y - a.y) * bend(0.5, a.curve)];
@@ -132,10 +132,10 @@ export class LfoEditor {
     let points = this.points() ?? pointsForShape(this.shape);
     let target = this.hit(e);
     if (!target) {
-      // un punto nuovo dove si è cliccato, fra quelli che ha accanto
+      // a new point where it was clicked, among those next to it
       if (points.length >= LFO_POINTS) return;
       const p = this.at(e), after = points.findIndex(q => q.x > p.x);
-      // mai prima del primo; se nessuno è più a destra, subito prima dell'ultimo
+      // never before the first; if nobody is further right, right before the last
       const index = after < 1 ? (after === 0 ? 1 : points.length - 1) : after;
       points = [...points.slice(0, index), { x: p.x, y: p.y, curve: 0 }, ...points.slice(index)];
       target = { kind: 'point', index };
@@ -146,13 +146,13 @@ export class LfoEditor {
     drag(e, this.canvas, (_dx, dy, m) => {
       if (t.kind === 'curve') {
         const a = start[t.index], b = start[t.index + 1];
-        // salendo il tratto si gonfia verso l'alto: se sale vuol dire correre all'inizio
+        // going up the segment bulges upwards: if it rises it means running at the start
         const sign = b.y >= a.y ? 1 : -1;
         const curve = Math.max(-100, Math.min(100, a.curve - dy * 1.2 * sign * (m.shiftKey ? 0.25 : 1)));
         last = start.map((p, i) => (i === t.index ? { ...p, curve } : p));
       } else {
         const p = this.at(m), i = t.index, n = start.length;
-        // il primo e l'ultimo restano ai bordi; gli altri non scavalcano i vicini
+        // the first and the last stay at the edges; the others don't jump over their neighbours
         const x = i === 0 ? 0 : i === n - 1 ? 1 : Math.max(start[i - 1].x, Math.min(start[i + 1].x, p.x));
         last = start.map((q, j) => (j === i ? { ...q, x, y: p.y } : q));
       }
@@ -167,10 +167,10 @@ export class LfoEditor {
       ...fixed.map(s => ({ label: LFO_SHAPES[s], checked: this.shape === s, run: () => this.set({ [`l${this.lfo}Shape`]: s }, true) })),
       ...[LFO_SHAPE.sampleHold, LFO_SHAPE.smoothRandom].map(s => ({ label: LFO_SHAPES[s], checked: this.shape === s, run: () => this.set({ [`l${this.lfo}Shape`]: s }, true) })),
       SEPARATOR,
-      { label: 'Disegna da qui (in punti)', disabled: isRandomShape(this.shape), run: () => this.write(points, true) },
-      { label: 'Capovolgi (sopra ↔ sotto)', disabled: isRandomShape(this.shape), run: () => this.write(points.map(p => ({ ...p, y: 1 - p.y })), true) },
-      { label: 'Al contrario (fine ↔ inizio)', disabled: isRandomShape(this.shape), run: () => this.write(reversed(points), true) },
-      { label: 'Ricomincia (triangolo)', run: () => this.write(pointsForShape(LFO_SHAPE.triangle), true) },
+      { label: 'Draw from here (in points)', disabled: isRandomShape(this.shape), run: () => this.write(points, true) },
+      { label: 'Flip (top ↔ bottom)', disabled: isRandomShape(this.shape), run: () => this.write(points.map(p => ({ ...p, y: 1 - p.y })), true) },
+      { label: 'Reverse (end ↔ start)', disabled: isRandomShape(this.shape), run: () => this.write(reversed(points), true) },
+      { label: 'Restart (triangle)', run: () => this.write(pointsForShape(LFO_SHAPE.triangle), true) },
     ];
   }
 
@@ -202,7 +202,7 @@ export class LfoEditor {
       : isRandomShape(shape) ? (p: number) => randomValue(shape, Math.floor(p * 8) + 11, (p * 8) % 1) : (p: number) => shapeValue(shape, p);
     const line = new Path2D(), steps = Math.max(64, Math.round(b.w));
     for (let i = 0; i <= steps; i++) {
-      // gli scalini (due punti alla stessa x) si disegnano verticali
+      // the steps (two points at the same x) are drawn vertical
       const p = Math.min(0.99999, i / steps), x = b.x(p), y = b.y(value(p));
       if (i) line.lineTo(x, y);
       else line.moveTo(x, y);
@@ -237,6 +237,6 @@ export class LfoEditor {
     g.globalAlpha = 1;
     g.font = '10px system-ui, sans-serif';
     g.fillStyle = LABEL;
-    g.fillText(`LFO ${this.lfo} · ${LFO_SHAPES[shape] ?? ''}${points ? ` · ${points.length} punti` : ''}`, 6, 12);
+    g.fillText(`LFO ${this.lfo} · ${LFO_SHAPES[shape] ?? ''}${points ? ` · ${points.length} points` : ''}`, 6, 12);
   }
 }

@@ -1,5 +1,5 @@
-//! Phase vocoder (modalità Complex), port di `src/dsp/stretch/phase-vocoder.ts`:
-//! phase locking di Laroche-Dolson, fase stereo coerente e reset sui transienti.
+//! Phase vocoder (Complex mode), port of `src/dsp/stretch/phase-vocoder.ts`:
+//! Laroche-Dolson phase locking, coherent stereo phase and reset on transients.
 
 use std::f64::consts::PI;
 
@@ -28,7 +28,7 @@ pub struct PhaseVocoder {
     br: Vec<f64>,
     bi: Vec<f64>,
     omega_h: Vec<f64>,
-    /// Rotazione da applicare a ogni bin: e^{i(syn - ph)}, calcolata una volta per frame.
+    /// Rotation to apply to each bin: e^{i(syn - ph)}, computed once per frame.
     rot_re: Vec<f64>,
     rot_im: Vec<f64>,
 }
@@ -64,7 +64,7 @@ impl PhaseVocoder {
         }
     }
 
-    /// `channels`: un slice per canale; restituisce i canali elaborati, lunghi `out_len`.
+    /// `channels`: one slice per channel; returns the processed channels, `out_len` long.
     pub fn run(&mut self, channels: &[&[f32]], map: &TimeMap, out_len: usize, transients: &[f64]) -> Vec<Vec<f32>> {
         let (n, hop) = (self.n, self.hop);
         let h = n / 2;
@@ -122,7 +122,7 @@ impl PhaseVocoder {
         outs
     }
 
-    /// Indici del frame che cadono dentro l'uscita.
+    /// Indices of the frame that fall inside the output.
     fn overlap(os: i64, n: usize, out_len: usize) -> (usize, usize) {
         let i0 = (-os).max(0) as usize;
         let i1 = (out_len as i64 - os).min(n as i64).max(0) as usize;
@@ -199,9 +199,9 @@ impl PhaseVocoder {
         }
         self.fft.forward(&mut self.re, &mut self.im);
         split_pair(&self.re, &self.im, &mut self.ar, &mut self.ai, &mut self.br, &mut self.bi);
-        // Modulo del canale con fase syn + (fase del canale - fase del mid): equivale a
-        // ruotare il bin del canale di e^{i(syn - ph)}, senza atan2/hypot/sin/cos per canale.
-        // In mono il canale è il mid, quindi la fase risulta esattamente syn.
+        // Magnitude of the channel with phase syn + (channel phase - mid phase): equivalent to
+        // rotating the channel's bin by e^{i(syn - ph)}, without atan2/hypot/sin/cos per channel.
+        // In mono the channel is the mid, so the phase comes out exactly syn.
         let (rr, ri) = (&self.rot_re, &self.rot_im);
         let resynth = |xr: &mut [f64], xi: &mut [f64]| {
             for k in 0..xr.len() {

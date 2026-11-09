@@ -17,7 +17,7 @@ import {
 } from '../../src/store/rack-edits';
 import { setup } from '../helpers/fixtures';
 
-/** Una traccia MIDI con tre Delay: [instrument, a, b, c]. */
+/** A MIDI track with three Delays: [instrument, a, b, c]. */
 function rig() {
   const s = setup({ midi: 1 });
   const t = s.track(0);
@@ -30,79 +30,79 @@ function rig() {
   return { ...s, t, track, a, b, c, fx, order, racks };
 }
 
-describe('rack: gruppi', () => {
-  it('Ctrl+G: dispositivi di seguito diventano un rack con 8 macro; si annulla; si separa', () => {
+describe('rack: groups', () => {
+  it('Ctrl+G: consecutive devices become a rack with 8 macros; it can be undone; it can be ungrouped', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.b, r.a]));
     expect(r.racks()).toHaveLength(1);
     const rack = r.racks()[0];
     expect(rack.devices).toEqual([r.a, r.b]);
     expect(rack.macros).toHaveLength(8);
-    expect(r.store.undoLabel).toBe('Raggruppa in un rack');
+    expect(r.store.undoLabel).toBe('Group into a rack');
     expect(chainItems(r.order(), r.racks()).map(x => (x.kind === 'rack' ? 'rack' : x.key))).toEqual([INSTRUMENT_DEVICE, 'rack', r.c]);
     r.store.undo();
     expect(r.racks()).toEqual([]);
     r.store.redo();
     r.store.apply(ungroupRack(r.t, rack.id));
     expect(r.racks()).toEqual([]);
-    expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.a, r.b, r.c]); // i dispositivi restano dove sono
+    expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.a, r.b, r.c]); // the devices stay where they are
   });
 
-  it('Instrument Rack: lo strumento con i suoi effetti', () => {
+  it('Instrument Rack: the instrument with its effects', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE, r.a]));
     expect(r.racks()[0].devices).toEqual([INSTRUMENT_DEVICE, r.a]);
-    expect(() => r.store.apply(removeRack(r.t, r.racks()[0].id))).toThrow(/strumento/);
+    expect(() => r.store.apply(removeRack(r.t, r.racks()[0].id))).toThrow(/instrument/);
   });
 
-  it('◂: un effetto entra in un Instrument Rack con il solo strumento', () => {
+  it('◂: an effect enters an Instrument Rack with only the instrument', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE]));
     r.store.apply(moveDevice(r.t, r.a, -1));
     expect([r.order(), r.racks()[0].devices]).toEqual([[INSTRUMENT_DEVICE, r.a, r.b, r.c], [INSTRUMENT_DEVICE, r.a]]);
-    // fuori da un rack, invece, non si passa davanti allo strumento
+    // outside a rack, instead, it doesn't go in front of the instrument
     r.store.apply(ungroupRack(r.t, r.racks()[0].id));
     r.store.apply(moveDevice(r.t, r.a, -1));
     expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.a, r.b, r.c]);
   });
 
-  it('non si raggruppano dispositivi non di seguito, né un pezzo di un rack con qualcosa fuori', () => {
+  it('non-consecutive devices aren\'t grouped, nor a piece of a rack with something outside', () => {
     const r = rig();
-    expect(() => r.store.apply(groupDevices(r.t, [r.a, r.c]))).toThrow(/di seguito/);
+    expect(() => r.store.apply(groupDevices(r.t, [r.a, r.c]))).toThrow(/consecutive/);
     r.store.apply(groupDevices(r.t, [r.a, r.b]));
-    expect(() => r.store.apply(groupDevices(r.t, [r.b, r.c]))).toThrow(/pezzo di un rack/);
+    expect(() => r.store.apply(groupDevices(r.t, [r.b, r.c]))).toThrow(/piece of a rack/);
   });
 
-  it('le regole: un rack con i dispositivi sparsi non è valido', () => {
+  it('the rules: a rack with scattered devices isn\'t valid', () => {
     const rack = newRack('r' as DeviceId, ['a', 'c'] as DeviceKey[]);
-    expect(() => checkRacks(['a', 'b', 'c'] as DeviceKey[], [rack])).toThrow(/di seguito/);
+    expect(() => checkRacks(['a', 'b', 'c'] as DeviceKey[], [rack])).toThrow(/consecutive/);
     expect(() => checkRacks(['a', 'c', 'b'] as DeviceKey[], [rack])).not.toThrow();
   });
 
-  it('◂ ▸: dentro il rack si scambiano; dal bordo si esce, accanto si entra, e il suono non cambia ordine', () => {
+  it('◂ ▸: inside the rack they swap; from the edge they leave, next to it they enter, and the sound doesn\'t change order', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.a, r.b]));
     const id = r.racks()[0].id;
     r.store.apply(moveDevice(r.t, r.a, 1));
     expect([r.order(), r.racks()[0].devices]).toEqual([[INSTRUMENT_DEVICE, r.b, r.a, r.c], [r.b, r.a]]);
-    r.store.apply(moveDevice(r.t, r.a, 1)); // dal bordo destro: esce
+    r.store.apply(moveDevice(r.t, r.a, 1)); // from the right edge: it leaves
     expect([r.order(), r.racks()[0].devices]).toEqual([[INSTRUMENT_DEVICE, r.b, r.a, r.c], [r.b]]);
-    r.store.apply(moveDevice(r.t, r.c, -1)); // c scambia con a
-    r.store.apply(moveDevice(r.t, r.c, -1)); // c accanto al rack: entra
+    r.store.apply(moveDevice(r.t, r.c, -1)); // c swaps with a
+    r.store.apply(moveDevice(r.t, r.c, -1)); // c next to the rack: it goes in
     expect([r.order(), r.racks()[0].devices]).toEqual([[INSTRUMENT_DEVICE, r.b, r.c, r.a], [r.b, r.c]]);
-    // il rack intero si sposta oltre l'elemento accanto, ma non prima dello strumento
+    // the whole rack moves past the element next to it, but not before the instrument
     r.store.apply(moveRack(r.t, id, 1));
     expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.a, r.b, r.c]);
     r.store.apply(moveRack(r.t, id, -1));
     r.store.apply(moveRack(r.t, id, -1));
     expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.b, r.c, r.a]);
-    // da solo in un rack, un dispositivo si porta dietro il rack
+    // alone in a rack, a device drags the rack along
     const lone = layoutMove([INSTRUMENT_DEVICE, r.a, r.b] as DeviceKey[], [newRack('x' as DeviceId, [r.b])], r.b, -1);
     expect(lone.order).toEqual([INSTRUMENT_DEVICE, r.b, r.a]);
     expect(lone.racks[0].devices).toEqual([r.b]);
   });
 
-  it('un effetto tolto esce dal rack e dalle macro; il rack vuoto sparisce', () => {
+  it('a removed effect leaves the rack and the macros; the empty rack disappears', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.a, r.b]));
     const id = r.racks()[0].id;
@@ -114,7 +114,7 @@ describe('rack: gruppi', () => {
     expect(r.racks()).toEqual([]);
   });
 
-  it('un effetto aggiunto al rack ci va in fondo; un rack eliminato porta via i suoi effetti', () => {
+  it('an effect added to the rack goes at its end; a deleted rack takes its effects away', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.a]));
     const id = r.racks()[0].id;
@@ -126,22 +126,22 @@ describe('rack: gruppi', () => {
     expect(r.racks()).toEqual([]);
   });
 
-  it('spostare un effetto per indice dentro un rack altrui non è permesso', () => {
+  it('moving an effect by index inside someone else\'s rack isn\'t allowed', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.a, r.b]));
-    expect(() => r.store.apply(moveEffect(r.t, r.c, 1))).toThrow(/di seguito/);
+    expect(() => r.store.apply(moveEffect(r.t, r.c, 1))).toThrow(/consecutive/);
   });
 });
 
 describe('rack: macro', () => {
-  it('una macro muove i parametri mappati tra minimo e massimo; il primo mappato non salta', () => {
+  it('a macro moves the mapped parameters between minimum and maximum; the first mapped doesn\'t jump', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.a, r.b]));
     const id = r.racks()[0].id;
-    r.store.apply(mapMacro(r.t, id, 0, r.a, 'mix')); // mix 30 (0..100): la macro va a 30% di 127
+    r.store.apply(mapMacro(r.t, id, 0, r.a, 'mix')); // mix 30 (0..100): the macro goes to 30% of 127
     expect(r.racks()[0].macros[0].value).toBeCloseTo(0.3 * 127, 9);
     expect(r.fx(r.a).params.mix).toBe(30);
-    r.store.apply(mapMacro(r.t, id, 0, r.b, 'feedback')); // il secondo segue la macro
+    r.store.apply(mapMacro(r.t, id, 0, r.b, 'feedback')); // the second follows the macro
     expect(r.fx(r.b).params.feedback).toBe(Math.round(0.3 * 95));
     r.store.apply(setMacro(r.t, id, 0, 127));
     expect([r.fx(r.a).params.mix, r.fx(r.b).params.feedback]).toEqual([100, 95]);
@@ -154,7 +154,7 @@ describe('rack: macro', () => {
     expect(r.store.undoLabel).toBe('Macro');
   });
 
-  it('una macro su un parametro logaritmico segue la manopola (in ottave), e sulle scelte va a scatti', () => {
+  it('a macro on a logarithmic parameter follows the knob (in octaves), and on the choices it snaps', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE, r.a]));
     const id = r.racks()[0].id;
@@ -169,7 +169,7 @@ describe('rack: macro', () => {
     expect(r.fx(r.a).params.pingPong).toBe(0);
   });
 
-  it('un parametro va su una macro sola; si toglie; solo parametri del rack', () => {
+  it('a parameter goes on a single macro; it\'s removed; only parameters of the rack', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.a]));
     const id = r.racks()[0].id;
@@ -178,11 +178,11 @@ describe('rack: macro', () => {
     expect(r.racks()[0].macros.map(m => m.mappings.length)).toEqual([0, 0, 0, 1, 0, 0, 0, 0]);
     r.store.apply(unmapParam(r.t, r.a, 'mix'));
     expect(r.racks()[0].macros[3].mappings).toEqual([]);
-    expect(() => r.store.apply(mapMacro(r.t, id, 0, r.b, 'mix'))).toThrow(/dispositivi del rack/);
-    expect(() => r.store.apply(mapMacro(r.t, id, 0, r.a, 'nessuno'))).toThrow(/non trovato/);
+    expect(() => r.store.apply(mapMacro(r.t, id, 0, r.b, 'mix'))).toThrow(/rack's devices/);
+    expect(() => r.store.apply(mapMacro(r.t, id, 0, r.a, 'none'))).toThrow(/not found/);
   });
 
-  it('un preset non sposta i parametri mappati; un altro strumento perde le mappature', () => {
+  it('a preset doesn\'t move the mapped parameters; another instrument loses the mappings', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE, r.a]));
     const id = r.racks()[0].id;
@@ -196,16 +196,16 @@ describe('rack: macro', () => {
     expect(r.racks()[0].macros[0].mappings).toHaveLength(1);
   });
 
-  it('i nomi delle macro: il loro, o il primo parametro mappato; le macro come parametri', () => {
+  it('the macros\' names: their own, or the first mapped parameter; the macros as parameters', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.a]));
     const id = r.racks()[0].id;
-    r.store.apply(renameMacro(r.t, id, 2, 'Spazio'));
-    expect(r.racks()[0].macros[2].name).toBe('Spazio');
+    r.store.apply(renameMacro(r.t, id, 2, 'Space'));
+    expect(r.racks()[0].macros[2].name).toBe('Space');
     expect([macroParam(0), macroIndex('macro8'), macroIndex('cutoff')]).toEqual(['macro1', 7, -1]);
   });
 
-  it('anche il master ha i rack', () => {
+  it('the master too has the racks', () => {
     const r = rig();
     r.store.apply(addEffect(MASTER, 'delay', 'Delay'));
     const m = r.store.project.masterEffects[0].id;
@@ -218,7 +218,7 @@ describe('rack: macro', () => {
     expect(r.store.project.masterRacks).toEqual([]);
   });
 
-  it('si salvano e si riaprono; un file della versione 7 si apre senza rack', () => {
+  it('they\'re saved and reopened; a version 7 file opens without racks', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [INSTRUMENT_DEVICE, r.a]));
     const id = r.racks()[0].id;
@@ -235,8 +235,8 @@ describe('rack: macro', () => {
   });
 });
 
-describe('rack: macro interruttore e pulsante', () => {
-  /** Un rack con il Delay `a` e il Tape Stop. */
+describe('rack: toggle and button macros', () => {
+  /** A rack with the Delay `a` and the Tape Stop. */
   function rigWithStop() {
     const r = rig();
     r.store.apply(addEffect(r.t, 'tapeStop', 'Tape Stop'));
@@ -245,38 +245,38 @@ describe('rack: macro interruttore e pulsante', () => {
     return { ...r, stop, id: r.racks()[0].id, macro: (i: number) => r.racks()[0].macros[i] };
   }
 
-  it('un interruttore mappato su una macro vuota la fa diventare interruttore', () => {
+  it('a switch mapped to an empty macro turns it into a toggle', () => {
     const r = rigWithStop();
     r.store.apply(mapMacro(r.t, r.id, 0, r.stop, 'stop'));
     expect(r.macro(0)).toMatchObject({ mode: 'toggle', value: 0 });
-    // un altro parametro sulla stessa macro va al capo della sua corsa
+    // another parameter on the same macro goes to the end of its travel
     r.store.apply(mapMacro(r.t, r.id, 0, r.c, 'mix'));
     expect(r.fx(r.c).params.mix).toBe(0);
     r.store.apply(setMacro(r.t, r.id, 0, 127));
     expect([r.fx(r.stop).params.stop, r.fx(r.c).params.mix]).toEqual([1, 100]);
   });
 
-  it('le scelte con più opzioni e le macro già usate restano come sono', () => {
+  it('the choices with more options and the macros already used stay as they are', () => {
     const r = rigWithStop();
-    r.store.apply(mapMacro(r.t, r.id, 0, r.stop, 'curve')); // tre curve
+    r.store.apply(mapMacro(r.t, r.id, 0, r.stop, 'curve')); // three curves
     expect(r.macro(0).mode).toBeUndefined();
     r.store.apply(mapMacro(r.t, r.id, 1, r.c, 'mix'));
     r.store.apply(mapMacro(r.t, r.id, 1, r.stop, 'stop'));
     expect(r.macro(1).mode).toBeUndefined();
   });
 
-  it('interruttore e pulsante scattano: acceso da metà in su, spento sotto', () => {
+  it('toggle and button snap: on from halfway up, off below', () => {
     const r = rigWithStop();
     r.store.apply(mapMacro(r.t, r.id, 0, r.c, 'mix'));
     r.store.apply(setMacro(r.t, r.id, 0, 80));
     r.store.apply(setMacroMode(r.t, r.id, 0, 'toggle'));
     expect([r.macro(0).value, r.fx(r.c).params.mix]).toEqual([127, 100]);
-    expect(r.store.undoLabel).toBe('Macro: Interruttore');
+    expect(r.store.undoLabel).toBe('Macro: Toggle');
     r.store.apply(setMacro(r.t, r.id, 0, 40));
     expect(r.macro(0).value).toBe(0);
     r.store.apply(setMacro(r.t, r.id, 0, 64));
     expect(r.macro(0).value).toBe(127);
-    // il pulsante parte spento; tornata manopola non ha più il tipo
+    // the button starts off; back to a knob it no longer has the kind
     r.store.apply(setMacroMode(r.t, r.id, 0, 'button'));
     expect([r.macro(0).value, r.fx(r.c).params.mix]).toEqual([0, 0]);
     r.store.apply(setMacroMode(r.t, r.id, 0, 'knob'));
@@ -285,7 +285,7 @@ describe('rack: macro interruttore e pulsante', () => {
     expect(r.macro(0).value).toBe(40);
   });
 
-  it('il pulsante tenuto premuto non entra nella cronologia', () => {
+  it('the button held down doesn\'t enter the history', () => {
     const r = rigWithStop();
     r.store.apply(mapMacro(r.t, r.id, 0, r.c, 'mix'));
     r.store.apply(setMacroMode(r.t, r.id, 0, 'button'));
@@ -295,10 +295,10 @@ describe('rack: macro interruttore e pulsante', () => {
     r.store.apply(setMacro(r.t, r.id, 0, 0), { transient: true });
     expect(r.store.undoLabel).toBe(label);
     r.store.undo();
-    expect(r.macro(0).mode).toBeUndefined(); // l'ultimo passo era il cambio di tipo
+    expect(r.macro(0).mode).toBeUndefined(); // the last step was the kind change
   });
 
-  it('il tipo si salva (le manopole non lo scrivono); un tipo sconosciuto è una manopola', () => {
+  it('the kind is saved (the knobs don\'t write it); an unknown kind is a knob', () => {
     const r = rigWithStop();
     r.store.apply(mapMacro(r.t, r.id, 0, r.stop, 'stop'));
     r.store.apply(setMacroMode(r.t, r.id, 1, 'button'));
@@ -307,13 +307,13 @@ describe('rack: macro interruttore e pulsante', () => {
     const macros = json.tracks[0].racks[0].macros;
     expect(macros.slice(0, 3).map((m: { mode?: string }) => m.mode)).toEqual(['toggle', 'button', undefined]);
     expect(codec.decode(json).tracks[0].racks).toEqual(r.racks());
-    macros[0].mode = 'leva';
+    macros[0].mode = 'lever';
     expect(codec.decode(json).tracks[0].racks[0].macros[0].mode).toBeUndefined();
   });
 });
 
-describe('rack dentro i rack', () => {
-  /** Com'è fatta la catena: i dispositivi, e i rack come liste dei loro. */
+describe('racks inside racks', () => {
+  /** What the chain is like: the devices, and the racks as lists of theirs. */
   const shape = (r: ReturnType<typeof rig>): unknown[] => {
     const racks = r.racks();
     const show = (items: ChainItem[]): unknown[] =>
@@ -332,22 +332,22 @@ describe('rack dentro i rack', () => {
     return { ...r, inner, outer, rack };
   }
 
-  it('Ctrl+G su un rack e un dispositivo: il rack va dentro quello nuovo; dentro un rack, il nuovo ci va dentro', () => {
+  it('Ctrl+G on a rack and a device: the rack goes inside the new one; inside a rack, the new one goes inside it', () => {
     const r = nested();
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [[r.a, r.b], r.c]]);
     expect(parentOf(r.racks(), r.rack(r.inner))?.id).toBe(r.outer);
     expect(rackOf(r.racks(), r.a)?.id).toBe(r.inner);
     expect(rackOf(r.racks(), r.c)?.id).toBe(r.outer);
-    // un dispositivo solo, dentro il rack interno
+    // a single device, inside the inner rack
     r.store.apply(groupDevices(r.t, [r.b]));
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [[r.a, [r.b]], r.c]]);
-    // gli stessi dispositivi di un rack: il nuovo gli va intorno
+    // the same devices as a rack: the new one goes around it
     r.store.apply(groupDevices(r.t, [r.a, r.b, r.c]));
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [[[r.a, [r.b]], r.c]]]);
     expect(() => checkRacks(r.order(), r.racks())).not.toThrow();
   });
 
-  it('separato quello fuori, quello dentro resta; separato quello dentro, i suoi restano in quello fuori', () => {
+  it('the outer ungrouped, the inner stays; the inner ungrouped, its devices stay in the outer', () => {
     const r = nested();
     r.store.apply(ungroupRack(r.t, r.inner));
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [r.a, r.b, r.c]]);
@@ -356,11 +356,11 @@ describe('rack dentro i rack', () => {
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [r.a, r.b], r.c]);
   });
 
-  it('una macro fuori muove i parametri dentro e le macro dentro, che muovono i loro', () => {
+  it('an outer macro moves the parameters inside and the inner macros, which move theirs', () => {
     const r = nested();
-    r.store.apply(mapMacro(r.t, r.inner, 0, r.a, 'mix')); // mix 30: la macro dentro va a 30%
+    r.store.apply(mapMacro(r.t, r.inner, 0, r.a, 'mix')); // mix 30: the inner macro goes to 30%
     r.store.apply(mapMacro(r.t, r.outer, 0, r.inner, macroParam(0)));
-    // la macro fuori prende la posizione di quella dentro: niente salti
+    // the outer macro takes the position of the inner one: no jumps
     expect(r.rack(r.outer).macros[0].value).toBeCloseTo(0.3 * 127, 9);
     expect(r.fx(r.a).params.mix).toBeCloseTo(30, 9);
     r.store.apply(setMacro(r.t, r.outer, 0, 127));
@@ -368,21 +368,21 @@ describe('rack dentro i rack', () => {
     expect(r.fx(r.a).params.mix).toBe(100);
     r.store.apply(setMappingRange(r.t, r.inner, macroParam(0), { min: 0, max: 63.5 }));
     expect(r.fx(r.a).params.mix).toBeCloseTo(50, 9);
-    // la macro dentro mappata non si gira da sola: la muove quella fuori
+    // the mapped inner macro can't be turned by itself: the outer one moves it
     r.store.apply(setMacro(r.t, r.inner, 0, 0));
     expect(r.rack(r.inner).macros[0].value).toBe(63.5);
     expect(macroOf(r.racks(), r.inner, macroParam(0))).toMatchObject({ rack: { id: r.outer }, index: 0 });
-    // un parametro dentro anche direttamente; va su una macro sola, anche tra rack diversi
+    // a parameter inside also directly; it goes on a single macro, also between different racks
     r.store.apply(mapMacro(r.t, r.inner, 1, r.b, 'feedback'));
     r.store.apply(mapMacro(r.t, r.outer, 1, r.b, 'feedback'));
     expect(r.rack(r.inner).macros[1].mappings).toEqual([]);
     expect(macroOf(r.racks(), r.b, 'feedback')).toMatchObject({ rack: { id: r.outer }, index: 1 });
-    // non si mappano le macro di un rack fuori, né quelle del rack stesso
-    expect(() => r.store.apply(mapMacro(r.t, r.inner, 2, r.outer, macroParam(0)))).toThrow(/dispositivi del rack/);
-    expect(() => r.store.apply(mapMacro(r.t, r.inner, 2, r.inner, macroParam(1)))).toThrow(/dispositivi del rack/);
+    // the macros of an outer rack aren't mapped, nor those of the rack itself
+    expect(() => r.store.apply(mapMacro(r.t, r.inner, 2, r.outer, macroParam(0)))).toThrow(/rack's devices/);
+    expect(() => r.store.apply(mapMacro(r.t, r.inner, 2, r.inner, macroParam(1)))).toThrow(/rack's devices/);
   });
 
-  it('separato o tolto il rack dentro, le mappature sulle sue macro spariscono', () => {
+  it('the inner rack ungrouped or removed, the mappings on its macros disappear', () => {
     const r = nested();
     r.store.apply(mapMacro(r.t, r.outer, 0, r.inner, macroParam(2)));
     r.store.apply(ungroupRack(r.t, r.inner));
@@ -394,32 +394,32 @@ describe('rack dentro i rack', () => {
     expect(r.rack(r.outer).macros[0].mappings).toEqual([]);
   });
 
-  it('◂ ▸: un dispositivo esce da un rack dentro nel rack fuori, e da lì entra nel rack accanto', () => {
+  it('◂ ▸: a device leaves an inner rack into the outer rack, and from there enters the rack next to it', () => {
     const r = nested();
-    r.store.apply(moveDevice(r.t, r.b, 1)); // dal bordo del rack dentro: esce, resta in quello fuori
+    r.store.apply(moveDevice(r.t, r.b, 1)); // from the edge of the inner rack: it leaves, it stays in the outer
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [[r.a], r.b, r.c]]);
-    r.store.apply(moveDevice(r.t, r.c, -1)); // scambia con b
+    r.store.apply(moveDevice(r.t, r.c, -1)); // swaps with b
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [[r.a], r.c, r.b]]);
-    r.store.apply(moveDevice(r.t, r.c, -1)); // accanto al rack dentro: entra
+    r.store.apply(moveDevice(r.t, r.c, -1)); // next to the inner rack: it enters
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [[r.a, r.c], r.b]]);
     expect(() => checkRacks(r.order(), r.racks())).not.toThrow();
   });
 
-  it('un rack dentro si sposta tra i suoi vicini, ne esce dal bordo, e va dentro il rack accanto', () => {
+  it('an inner rack moves among its neighbours, leaves from the edge, and goes inside the rack next to it', () => {
     const r = nested();
     r.store.apply(moveRack(r.t, r.inner, 1));
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [r.c, [r.a, r.b]]]);
     r.store.apply(mapMacro(r.t, r.outer, 0, r.a, 'mix'));
-    r.store.apply(moveRack(r.t, r.inner, 1)); // dal bordo: esce, e la macro fuori non lo muove più
+    r.store.apply(moveRack(r.t, r.inner, 1)); // from the edge: it leaves, and the outer macro no longer moves it
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [r.c], [r.a, r.b]]);
     expect(r.rack(r.outer).macros[0].mappings).toEqual([]);
-    r.store.apply(nestRack(r.t, r.inner, -1)); // dentro il rack prima, in fondo
+    r.store.apply(nestRack(r.t, r.inner, -1)); // inside the previous rack, at the end
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [r.c, [r.a, r.b]]]);
-    expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.c, r.a, r.b]); // il suono non cambia ordine
-    expect(r.store.undoLabel).toBe('Metti nel rack');
+    expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.c, r.a, r.b]); // the sound doesn't change order
+    expect(r.store.undoLabel).toBe('Put in the rack');
   });
 
-  it('il solo rack di un rack si porta dietro quello fuori', () => {
+  it('the only rack of a rack drags the outer one along', () => {
     const r = rig();
     r.store.apply(groupDevices(r.t, [r.a, r.b]));
     const inner = r.racks()[0].id;
@@ -429,17 +429,17 @@ describe('rack dentro i rack', () => {
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, r.c, [[r.a, r.b]]]);
   });
 
-  it('un effetto aggiunto al rack dentro è anche in quello fuori', () => {
+  it('an effect added to the inner rack is also in the outer one', () => {
     const r = nested();
     r.store.apply(addEffectToRack(r.t, r.inner, 'delay', 'Delay'));
     const added = r.rack(r.inner).devices[2];
     expect(r.order()).toEqual([INSTRUMENT_DEVICE, r.a, r.b, added, r.c]);
     expect(shape(r)).toEqual([INSTRUMENT_DEVICE, [[r.a, r.b, added], r.c]]);
-    r.store.apply(removeRack(r.t, r.outer)); // con tutto quello che ha dentro
+    r.store.apply(removeRack(r.t, r.outer)); // with everything it has inside
     expect([r.order(), r.racks()]).toEqual([[INSTRUMENT_DEVICE], []]);
   });
 
-  it('si salvano e si riaprono', () => {
+  it('they are saved and reopened', () => {
     const r = nested();
     r.store.apply(mapMacro(r.t, r.outer, 0, r.inner, macroParam(0)));
     const codec = new ProjectCodec();

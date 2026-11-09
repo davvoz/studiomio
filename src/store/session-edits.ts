@@ -1,5 +1,5 @@
-/* Modifiche della session: clip negli slot e scene. Come le altre, funzioni pure che
- * restituiscono un Edit (si annullano). Uno slot è (traccia, indice di scena). */
+/* Session edits: clips in the slots and scenes. Like the others, pure functions that
+ * return an Edit (they can be undone). A slot is (track, scene index). */
 import type { ClipId, SceneId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { AudioClip } from '../model/audio-clip';
@@ -18,37 +18,37 @@ export interface SlotRef {
 
 const requireTrack = (p: Project, id: TrackId): Track => {
   const t = p.track(id);
-  if (!t) throw new Error(`traccia ${id} non trovata`);
+  if (!t) throw new Error(`track ${id} not found`);
   return t;
 };
 
-/** Le clip della session suonano in loop, come in Live. */
+/** Session clips loop, as in Live. */
 const looping = <C extends Clip>(clip: C): C => clip.withLoop({ ...clip.loop, enabled: true });
 
-/** Una clip MIDI vuota di una battuta nello slot. */
+/** An empty one-bar MIDI clip in the slot. */
 export const newSlotMidiClip = ({ track, slot }: SlotRef): Edit =>
-  edit('Nuova clip MIDI', (p, { ids }) => {
+  edit('New MIDI clip', (p, { ids }) => {
     const t = requireTrack(p, track);
     return p.updatingTrack(track, x => x.withSlot(slot, MidiClip.empty(ids.next('clip'), 'Clip MIDI', t.color, p.signature.beatsPerBar)));
   });
 
-/** Svuota più slot in un passo solo. */
+/** Empties several slots in a single step. */
 export const clearSlots = (refs: readonly SlotRef[]): Edit =>
-  edit('Elimina clip', p => refs.reduce((q, r) => q.updatingTrack(r.track, t => t.withSlot(r.slot, null)), p));
+  edit('Delete clip', p => refs.reduce((q, r) => q.updatingTrack(r.track, t => t.withSlot(r.slot, null)), p));
 
-/** Sposta (o copia) tutte insieme le clip di `refs`, di `columns` colonne (tra le tracce che si
- *  vedono) e `rows` scene. Non si può uscire dalla griglia né finire su una traccia di un altro
- *  tipo: in quel caso non si muove niente. Quelle che c'erano al loro posto vengono sostituite. */
+/** Moves (or copies) all together the clips of `refs`, by `columns` columns (among the visible
+ *  tracks) and `rows` scenes. You can't leave the grid or end up on a track of another
+ *  kind: in that case nothing moves. Those that were in their place are replaced. */
 export const moveSlots = (refs: readonly SlotRef[], columns: number, rows: number, copy: boolean): Edit =>
-  edit(copy ? 'Copia clip' : 'Sposta clip', (p, { ids }) => {
+  edit(copy ? 'Copy clip' : 'Move clip', (p, { ids }) => {
     const tracks = p.visibleTracks;
     const moves = refs.flatMap(r => {
       const clip = requireTrack(p, r.track).slots[r.slot];
       if (!clip) return [];
       const to = tracks[tracks.findIndex(t => t.id === r.track) + columns];
       const slot = r.slot + rows;
-      if (!to || slot < 0 || slot >= p.scenes.length) throw new Error('La selezione non ci sta: uscirebbe dalla griglia.');
-      if (!to.accepts(clip)) throw new TypeError('la clip non va su questa traccia');
+      if (!to || slot < 0 || slot >= p.scenes.length) throw new Error('The selection doesn\'t fit: it would leave the grid.');
+      if (!to.accepts(clip)) throw new TypeError('the clip doesn\'t go on this track');
       return [{ from: r, clip, track: to.id, slot }];
     });
     if (!columns && !rows) return p;
@@ -56,12 +56,12 @@ export const moveSlots = (refs: readonly SlotRef[], columns: number, rows: numbe
     return moves.reduce((q, m) => q.updatingTrack(m.track, t => t.withSlot(m.slot, copy ? m.clip.withId(ids.next('clip')) : m.clip)), cleared);
   });
 
-/** Una copia delle clip di `refs` subito sotto il blocco che formano. Come per una clip sola, se
- *  anche un solo posto è occupato (o non c'è) si inseriscono prima le scene che servono. */
+/** A copy of the clips of `refs` right below the block they form. As for a single clip, if
+ *  even a single place is taken (or doesn't exist) the needed scenes are inserted first. */
 export const duplicateSlots = (refs: readonly SlotRef[]): Edit =>
-  edit('Duplica clip', (p, { ids }) => {
+  edit('Duplicate clip', (p, { ids }) => {
     const filled = refs.filter(r => requireTrack(p, r.track).slots[r.slot]);
-    if (!filled.length) throw new Error('gli slot sono vuoti');
+    if (!filled.length) throw new Error('the slots are empty');
     const top = Math.min(...filled.map(r => r.slot)), below = Math.max(...filled.map(r => r.slot)) + 1, height = below - top;
     const free = filled.every(r => r.slot + height < p.scenes.length && !requireTrack(p, r.track).slots[r.slot + height]);
     let next = p;
@@ -69,22 +69,22 @@ export const duplicateSlots = (refs: readonly SlotRef[]): Edit =>
     return filled.reduce((q, r) => q.updatingTrack(r.track, t => t.withSlot(r.slot + height, t.slots[r.slot]!.withId(ids.next('clip')))), next);
   });
 
-/** Modifica la clip `clip` negli slot della traccia (note, warp, nome…). */
+/** Changes clip `clip` in the track's slots (notes, warp, name…). */
 export const updateSlotClip = <C extends Clip>(label: string, track: TrackId, clip: ClipId, fn: (c: C) => Clip): Edit =>
   edit(label, p => p.updatingTrack(track, t => {
     const slot = t.slots.findIndex(c => c?.id === clip);
-    if (slot < 0) throw new Error(`clip ${clip} non trovata negli slot`);
+    if (slot < 0) throw new Error(`clip ${clip} not found in the slots`);
     return t.withSlot(slot, fn(t.slots[slot] as C));
   }));
 
-/** Un audio importato nello slot: sulla traccia data se è audio, altrimenti su una nuova. */
+/** An audio imported into the slot: on the given track if it's audio, otherwise on a new one. */
 export const importSampleToSlot = (sample: SampleRef, target: TrackId | null, slot: number): Edit =>
-  edit('Importa audio', (p, { ids }) => {
+  edit('Import audio', (p, { ids }) => {
     let next = p.sample(sample.id) ? p : p.addingSample(sample);
     let track = target && next.track(target)?.kind === 'audio' ? target : null;
     if (!track) {
       const t = AudioTrack.empty(ids.next('track'), sample.name, paletteColor(next.tracks.length), next.scenes.length);
-      // su un gruppo la traccia nuova va in fondo al gruppo
+      // on a group the new track goes at the end of the group
       next = target && next.track(target) instanceof GroupTrack ? next.addingTrack(t.withGroup(target), next.blockEnd(target)) : next.addingTrack(t);
       track = t.id;
     }
@@ -94,28 +94,28 @@ export const importSampleToSlot = (sample: SampleRef, target: TrackId | null, sl
 
 // ------------------------------------------------------------------ scene
 
-/** Una scena vuota in posizione `index` (in fondo se manca). */
+/** An empty scene at position `index` (at the end if missing). */
 export const insertScene = (index?: number): Edit =>
-  edit('Nuova scena', (p, { ids }) => p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, index));
+  edit('New scene', (p, { ids }) => p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, index));
 
-/** Sposta la scena, con le sue clip, in posizione `toIndex` (contata senza di lei). */
+/** Moves the scene, with its clips, to position `toIndex` (counted without it). */
 export const moveScene = (id: SceneId, toIndex: number): Edit =>
-  edit('Sposta scena', p => p.movingScene(id, toIndex));
+  edit('Move scene', p => p.movingScene(id, toIndex));
 
 export const renameScene = (id: SceneId, name: string): Edit =>
-  edit('Rinomina scena', p => p.renamingScene(id, name));
+  edit('Rename scene', p => p.renamingScene(id, name));
 
-export const deleteScene = (id: SceneId): Edit => edit('Elimina scena', p => p.removingScene(id));
+export const deleteScene = (id: SceneId): Edit => edit('Delete scene', p => p.removingScene(id));
 
-/** Colora la scena (senza `color`: nessun colore). */
+/** Colours the scene (without `color`: no colour). */
 export const setSceneColor = (id: SceneId, color?: Color): Edit =>
-  edit(color ? 'Colore della scena' : 'Togli il colore della scena', p => p.recoloringScene(id, color));
+  edit(color ? 'Scene colour' : 'Remove the scene colour', p => p.recoloringScene(id, color));
 
-/** Cattura e inserisci scena, come in Live: una scena nuova sotto la `index` con le clip che
- *  suonano (`playing`: traccia → clip). Nella scena nuova vanno le clip stesse e al loro posto
- *  restano delle copie: chi suona continua senza interruzioni, ma ora dalla riga nuova. */
+/** Capture and insert scene, as in Live: a new scene below `index` with the playing clips
+ *  (`playing`: track → clip). The clips themselves go into the new scene and in their place
+ *  copies remain: whoever plays continues without interruption, but now from the new row. */
 export const captureScene = (index: number, playing: ReadonlyMap<TrackId, ClipId>): Edit =>
-  edit('Cattura e inserisci scena', (p, { ids }) => {
+  edit('Capture and insert scene', (p, { ids }) => {
     const at = index + 1;
     let next = p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, at);
     for (const [track, id] of playing) {
@@ -126,13 +126,13 @@ export const captureScene = (index: number, playing: ReadonlyMap<TrackId, ClipId
     return next;
   });
 
-/** Una copia della scena subito sotto, con copie delle sue clip. */
+/** A copy of the scene right below, with copies of its clips. */
 export const duplicateScene = (id: SceneId): Edit =>
-  edit('Duplica scena', (p, { ids }) => {
+  edit('Duplicate scene', (p, { ids }) => {
     const index = p.scenes.findIndex(s => s.id === id);
-    if (index < 0) throw new Error(`scena ${id} non trovata`);
+    if (index < 0) throw new Error(`scene ${id} not found`);
     const source = p.scenes[index];
-    let next = p.addingScene({ id: ids.next('scene'), name: `${source.name} copia`, ...(source.color ? { color: source.color } : {}) }, index + 1);
+    let next = p.addingScene({ id: ids.next('scene'), name: `${source.name} copy`, ...(source.color ? { color: source.color } : {}) }, index + 1);
     for (const t of p.tracks) {
       const clip = t.slots[index];
       if (clip) next = next.updatingTrack(t.id, x => x.withSlot(index + 1, clip.withId(ids.next('clip'))));
@@ -140,27 +140,27 @@ export const duplicateScene = (id: SceneId): Edit =>
     return next;
   });
 
-/** La scena `index` sulla timeline dal battito `at`: ogni traccia vi posa una copia della clip
- *  del suo slot, lunga `length` (i loop si ripetono, le altre clip suonano una volta). Quello
- *  che c'era sotto viene accorciato o tolto, come incollando. */
+/** Scene `index` on the timeline from beat `at`: each track places there a copy of the clip
+ *  of its slot, `length` long (the loops repeat, the other clips play once). What
+ *  was underneath is shortened or removed, as when pasting. */
 export const sceneToArrangement = (index: number, at: Beats, length: Beats): Edit =>
-  edit('Scena nell\'arrangement', (p, { ids }) => p.tracks.reduce((next, t) => {
+  edit('Scene to the arrangement', (p, { ids }) => p.tracks.reduce((next, t) => {
     const clip = t instanceof GroupTrack ? null : t.slots[index];
     if (!clip) return next;
     const placed = { id: ids.next('placement'), clip: clip.withId(ids.next('clip')), start: Math.max(0, at), length, offset: 0 };
     return next.updatingTrack(t.id, x => x.placing(placed, ids));
   }, p));
 
-/** Una clip per uno slot, con il file renderizzato che suona se è nuovo. */
+/** A clip for a slot, with the rendered file it plays if it's new. */
 export interface SceneClip {
   readonly track: TrackId;
   readonly clip: Clip;
   readonly sample?: SampleRef;
 }
 
-/** Il contrario di sceneToArrangement: una scena nuova in fondo con le clip date, in loop. */
+/** The opposite of sceneToArrangement: a new scene at the bottom with the given clips, looping. */
 export const arrangementToScene = (name: string, clips: readonly SceneClip[]): Edit =>
-  edit('Arrangement nella session', (p, { ids }) => {
+  edit('Arrangement to session', (p, { ids }) => {
     const at = p.scenes.length;
     return clips.reduce((next, { track, clip, sample }) => {
       const withSample = sample && !next.sample(sample.id) ? next.addingSample(sample) : next;

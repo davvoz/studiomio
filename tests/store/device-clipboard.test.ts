@@ -9,16 +9,16 @@ import { setup } from '../helpers/fixtures';
 
 const types = (list: readonly { type: string }[]) => list.map(e => e.type);
 
-describe('dispositivi negli appunti', () => {
+describe('devices on the clipboard', () => {
   const chain = () => {
     const s = setup({ midi: 3 });
     s.store.apply(addEffect(s.track(0), 'delay', 'Delay'));
-    s.store.apply(addEffect(s.track(0), 'reverb', 'Riverbero'));
+    s.store.apply(addEffect(s.track(0), 'reverb', 'Reverb'));
     const effects = () => s.store.project.effectsOf(s.track(0));
     return { ...s, effects };
   };
 
-  it('un effetto si incolla su un\'altra traccia con i suoi valori e un id nuovo', () => {
+  it('an effect is pasted on another track with its values and a new id', () => {
     const { store, track, effects } = chain();
     const delay = effects()[0];
     store.apply(setEffectParam(track(0), delay.id, 'mix', 33));
@@ -32,7 +32,7 @@ describe('dispositivi negli appunti', () => {
     expect(store.project.effectsOf(track(1))).toHaveLength(0);
   });
 
-  it('si incolla dopo il dispositivo scelto, e sul master', () => {
+  it('it\'s pasted after the chosen device, and on the master', () => {
     const { store, track, effects } = chain();
     const [delay, reverb] = effects();
     store.apply(pasteDevices(copyDevices(store.project, track(0), [reverb.id])!, track(0), delay.id));
@@ -41,13 +41,13 @@ describe('dispositivi negli appunti', () => {
     expect(types(store.project.masterEffects)).toEqual(['delay']);
   });
 
-  it('dopo lo strumento gli effetti vanno all\'inizio della catena', () => {
+  it('after the instrument the effects go at the start of the chain', () => {
     const { store, track, effects } = chain();
     store.apply(pasteDevices(copyDevices(store.project, track(0), [effects()[1].id])!, track(0), INSTRUMENT_DEVICE));
     expect(types(effects())).toEqual(['reverb', 'delay', 'reverb']);
   });
 
-  it('non finisce in mezzo a un rack', () => {
+  it('it doesn\'t end up in the middle of a rack', () => {
     const { store, track, effects } = chain();
     const [delay, reverb] = effects();
     store.apply(groupDevices(track(0), [delay.id, reverb.id]));
@@ -56,7 +56,7 @@ describe('dispositivi negli appunti', () => {
     expect(store.project.racksOf(track(0))[0].devices).toEqual([delay.id, reverb.id]);
   });
 
-  it('lo strumento prende il posto di quello della traccia; su una traccia audio non va', () => {
+  it('the instrument takes the place of the track\'s; on an audio track it doesn\'t go', () => {
     const s = setup({ midi: 2, audio: 1 });
     const audio = s.store.project.tracks.find(t => !(t instanceof MidiTrack))!.id;
     const [from, to] = s.store.project.tracks.filter(t => t instanceof MidiTrack).map(t => t.id);
@@ -67,7 +67,7 @@ describe('dispositivi negli appunti', () => {
     expect(() => s.store.apply(pasteDevices(copied, audio))).toThrow('MIDI');
   });
 
-  it('un modulatore si porta dietro il bersaglio copiato con lui, gli altri si perdono altrove', () => {
+  it('a modulator carries along the target copied with it, the others are lost elsewhere', () => {
     const { store, track, effects } = chain();
     store.apply(addEffect(track(0), 'lfo', 'LFO'));
     const [delay, , lfo] = effects();
@@ -80,14 +80,14 @@ describe('dispositivi negli appunti', () => {
     expect(newLfo.targets?.[1]).toEqual({ kind: 'mixer', param: 'pan' });
     store.apply(pasteDevices(copyDevices(store.project, track(0), [lfo.id])!, track(2)));
     expect(store.project.effectsOf(track(2))[0].targets?.[0]).toBeNull();
-    // nella stessa catena resta
+    // in the same chain it stays
     store.apply(pasteDevices(copyDevices(store.project, track(0), [lfo.id])!, track(0)));
     expect(effects().at(-1)!.targets?.[0]).toEqual({ kind: 'device', device: delay.id, param: 'mix' });
   });
 
-  it('una traccia non ascolta sé stessa', () => {
+  it('a track doesn\'t listen to itself', () => {
     const { store, track } = chain();
-    store.apply(addEffect(track(1), 'compressor', 'Compressore'));
+    store.apply(addEffect(track(1), 'compressor', 'Compressor'));
     const [comp] = store.project.effectsOf(track(1));
     store.apply(setEffectSidechain(track(1), comp.id, track(0)));
     const copied = copyDevices(store.project, track(1), [comp.id])!;
@@ -97,7 +97,7 @@ describe('dispositivi negli appunti', () => {
     expect(store.project.effectsOf(track(2))[0].sidechain).toBe(track(0));
   });
 
-  it('un rack si copia con le macro e il sidechain', () => {
+  it('a rack is copied with the macros and the sidechain', () => {
     const { store, track, effects } = chain();
     const [delay, reverb] = effects();
     store.apply(setEffectSidechain(track(0), delay.id, track(2)));
@@ -113,7 +113,7 @@ describe('dispositivi negli appunti', () => {
     expect(added[0].sidechain).toBe(track(2));
   });
 
-  it('tagliare toglie gli effetti in un passo solo e lascia lo strumento', () => {
+  it('cutting removes the effects in a single step and leaves the instrument', () => {
     const { store, track, effects } = chain();
     const [delay, reverb] = effects();
     store.apply(removeDevices(track(0), [INSTRUMENT_DEVICE, delay.id, reverb.id]));

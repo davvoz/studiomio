@@ -6,6 +6,12 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- studiomio is now in English: menus, messages, devices and their parameters, presets, factory
+  racks and the shortcuts help. Projects, presets and racks saved before keep working and sound
+  the same; a preset chosen in an earlier version keeps its old name in the project. The folders
+  under Documents\studiomio keep their names.
+
 ## [0.3.53] - 2026-11-07
 
 ### Fixed
@@ -24,7 +30,7 @@ Sections: Added, Changed, Fixed.
   octave and C V the velocity, as in Live. Notes last as long as the key is held, with the
   transport stopped or running; more tracks can listen at once. On a Drum Machine A starts from
   the first pad. Keys mapped to macros come first, and Ctrl shortcuts and text fields keep working.
-- Arpeggiatore, a new device for MIDI tracks. It takes the notes of the clips and the ones played
+- Arpeggiator, a new device for MIDI tracks. It takes the notes of the clips and the ones played
   by hand, on the beat grid while the transport runs and from the first note when it is stopped.
   Styles: up, down, up and down, down and up, inward, pedal, as played, random, chord. Also octaves,
   repeat, division, gate, swing, chance, Hold, and 12 presets. Random and chance repeat the same
@@ -33,7 +39,7 @@ Sections: Added, Changed, Fixed.
   tape, OTT, EQ and clipper, with one macro per idea.
 
 ### Changed
-- ⊕ Mappa on LFO and Inviluppo can be clicked instead of dragged. The mappable controls light up,
+- ⊕ Map on LFO and Envelope can be clicked instead of dragged. The mappable controls light up,
   then scroll the chain and change tabs calmly and click as many as you want; Esc or another click
   ends it. Dragging still works, and now the chain scrolls by itself near its edges.
 - The mouse wheel scrolls the device chain sideways, except over a control that uses the wheel.
@@ -49,7 +55,7 @@ Sections: Added, Changed, Fixed.
 - Copied devices can really be pasted onto another track. Ctrl+V only worked while the keyboard
   was on the device view: after clicking another track in the Arrangement, a slot in Session or
   the piano roll it said the clipboard was empty. Now it pastes on the selected track and shows
-  its chain. "Incolla dispositivi" is also in the right-click menu of a track, and "Incolla" in
+  its chain. "Paste devices" is also in the right-click menu of a track, and "Paste" in
   the empty part of a chain, even one with no effects.
 
 ## [0.3.50] - 2026-11-05
@@ -68,23 +74,23 @@ Sections: Added, Changed, Fixed.
 - Instruments, effects and whole racks can be copied, cut, pasted and duplicated, also onto
   another track: Ctrl+C/X/V/D on the device chosen by clicking its name, or from its right-click
   menu. A modulator keeps the targets copied with it.
-- "Mostra automazione" in the right-click menu of knobs, macros, volume and pan: it opens the
+- "Show automation" in the right-click menu of knobs, macros, volume and pan: it opens the
   curve of that control in a clip of the track, or on the timeline for the master.
 - Modulation curves can be copied and pasted, onto another parameter or into another clip:
   Shift+drag picks a stretch of the curve, which can then be dragged as a whole, copied, cut or
   deleted; with nothing picked the whole curve is copied.
 - Ready-made modulation shapes (the ∿ button, or F on the lane): sine, triangle, ramps, square,
   pump and two random ones. They fill the picked stretch, or the whole clip, with a cycle from
-  8 bars down to 1/32, or a single one over the whole stretch ("Tutto"); depth and invert too. Change
+  8 bars down to 1/32, or a single one over the whole stretch ("All"); depth and invert too. Change
   the cycle or the depth afterwards and the shape is redrawn in the same place.
 - Drawing modulation: B turns drawing on and off, Alt draws freehand instead of steps on the
   grid. The lane is taller and its top edge changes its height.
 
 ### Fixed
 - The sidechain menu no longer grows with the names of the tracks.
-- The Compressor did not reach the reduction it promised in Picco mode: asked for 9 dB it gave
+- The Compressor did not reach the reduction it promised in Peak mode: asked for 9 dB it gave
   between 5.5 and 8.7, depending on attack and release, so moving the attack changed how much it
-  compressed. Now it follows the curve at any setting. Sets using it in Picco mode compress up to
+  compressed. Now it follows the curve at any setting. Sets using it in Peak mode compress up to
   3.5 dB more than before on sustained sounds: check their balance.
 
 ## [0.3.49] - 2026-11-01
@@ -95,7 +101,7 @@ Sections: Added, Changed, Fixed.
   it (`progetto.recupero.json`; the saved project is never touched). Reopening the folder
   asks whether to restore those changes or throw them away. Saving removes the copy.
 - When the window stops responding or closes by itself, the app notes where it was stuck in
-  `Documenti\studiomio\Blocchi`: send that file along to get the cause fixed.
+  `Documents\studiomio\Blocchi`: send that file along to get the cause fixed.
 
 ## [0.3.48] - 2026-11-01
 
@@ -112,19 +118,19 @@ Sections: Added, Changed, Fixed.
 ## [0.3.47] - 2026-10-31
 
 ### Added
-- Prisma has 69 new presets (111 in all): basses (Rimbombo, Reese sporco, Basso industriale,
-  Growl a macro, Acido quadro, Basso a ottave…), leads (Hoover, Lead trance, Lead stridulo,
-  Lead chiptune…), pads and drones (Pad scuro, Coro scuro, Pad che si apre, Drone di quinte…),
-  keys and plucks (Piano elettrico, Pluck trance, Kalimba, Stab di ferro, Organo house…),
-  sequences living inside the sound (Arpeggio frigio, Sequenza acida, Gate trance, Filtro a
-  passi) and effects (Rumore che sale, Sirena dub, Raffica laser, Impatto, Elicottero, Tom
-  elettronico, Rullante sintetico…). Each sits at the same level as the existing ones.
+- Prisma has 69 new presets (111 in all): basses (Boom, Dirty reese, Industrial bass,
+  Macro growl, Squared acid, Octave bass…), leads (Hoover, Trance lead, Shrill lead,
+  Chiptune lead…), pads and drones (Dark pad, Dark choir, Opening pad, Fifths drone…),
+  keys and plucks (Electric piano, Trance pluck, Kalimba, Iron stab, House organ…),
+  sequences living inside the sound (Phrygian arpeggio, Acid sequence, Trance gate, Step
+  filter) and effects (Rising noise, Dub siren, Laser burst, Impact, Helicopter, Electronic
+  tom, Synthetic snare…). Each sits at the same level as the existing ones.
 
 ## [0.3.46] - 2026-10-30
 
 ### Added
-- A MIDI clip can carry its own sound, like a program change: in the piano roll, "Usa il
-  suono attuale" stores the instrument's current settings (preset and knobs) in the clip, and
+- A MIDI clip can carry its own sound, like a program change: in the piano roll, "Use the
+  current sound" stores the instrument's current settings (preset and knobs) in the clip, and
   when the clip starts the track's instrument switches to that sound, right on the clip's
   first beat. It is applied once per launch, not on every loop, so knob tweaks while the clip
   plays stay; starting playback in the middle of the clip also gives its sound. The
@@ -135,19 +141,19 @@ Sections: Added, Changed, Fixed.
 
 ### Added
 - Recent projects in the File menu: the last eight project folders you opened or saved with
-  "Salva con nome" are listed under "Apri progetto da ZIP…", most recent first; click one to
+  "Save as…" are listed under "Open project from ZIP…", most recent first; click one to
   open it. After a restart the browser may ask again for permission to use the folder. A
-  folder that has been moved or deleted drops out of the list, and "Svuota l'elenco dei
-  recenti" empties it.
+  folder that has been moved or deleted drops out of the list, and "Clear the recent
+  list" empties it.
 
 ## [0.3.44] - 2026-10-29
 
 ### Added
-- Copy to the session, the reverse of "Copia nell'arrangement": select clips in the arrangement
-  (or a stretch of time), right-click › "Copia nella session" (also in the Modifica menu). A new
+- Copy to the session, the reverse of "Copy to the arrangement": select clips in the arrangement
+  (or a stretch of time), right-click › "Copy to session" (also in the Edit menu). A new
   scene appears at the bottom of the session, named after its bars, with one looping clip per
   track covering the whole stretch, so the tracks stay in time with each other. A clip that
-  just repeats its own loop stays as it is; the rest is joined as with Consolida (MIDI notes
+  just repeats its own loop stays as it is; the rest is joined as with Consolidate (MIDI notes
   laid out, audio rendered into a new file).
 - A bigger colour palette for tracks, clips and scenes: 26 colours in two rows by hue, strong
   colours on top (red, orange, yellow, lime, green, emerald, cyan, blue, violet, magenta, pink,
@@ -168,7 +174,7 @@ Sections: Added, Changed, Fixed.
 ## [0.3.42] - 2026-10-29
 
 ### Added
-- Six new Instrument Racks built around LFO and Inviluppo, already connected and moving on
+- Six new Instrument Racks built around LFO and Envelope, already connected and moving on
   their own while the transport plays: Wobble (a tempo LFO opening the Neuro's cutoff, fold and
   vowel, with macros for rate and shape), Pompa (a pad that ducks on every beat like a
   sidechain, drifting in cutoff and pan), Cancello (a supersaw trance gate in sixteenths,
@@ -180,7 +186,7 @@ Sections: Added, Changed, Fixed.
 ## [0.3.41] - 2026-10-29
 
 ### Added
-- Two new devices for any chain, LFO and Inviluppo (envelope). They leave the sound alone and
+- Two new devices for any chain, LFO and Envelope. They leave the sound alone and
   move up to 8 parameters each: any knob of the instrument or of the effects, rack macros, and
   the track's volume and pan. They work like Prisma's LFOs and envelopes: the LFO has the same
   shapes and the same drawable shape with curved segments, a tempo or Hz rate, phase, delay and
@@ -188,7 +194,7 @@ Sections: Added, Changed, Fixed.
   The envelope has attack, hold, decay, sustain and release with curves, and starts on the
   track's notes or on every beat division (with a gate length), so −100 % on the volume pumps
   like a sidechain.
-- To connect one, drag its "⊕ Mappa" chip onto any knob in the chain, or pick volume, pan or a
+- To connect one, drag its "⊕ Map" chip onto any knob in the chain, or pick volume, pan or a
   macro from a destination's menu. Each destination has its own amount (−100 … +100 % of the
   knob's travel) that can itself be mapped to a macro or moved by a clip curve. Knobs moved by a
   modulator are marked with ∿ and follow it while playing; right-click one to remove it.
@@ -210,45 +216,45 @@ Sections: Added, Changed, Fixed.
 - New Drum Machine kits built with the instruments, on the General MIDI notes (kick, side stick,
   snares, closed, pedal and open hats choking each other, second kick, crash, ride): Strumenti,
   Rave (rumble kick in E, snare with room, dry hats), Industriale (everything driven, ring-mod
-  metals), 808 strumenti, Acustica and Lo-fi. They are also in the browser under Batterie.
+  metals), 808 instruments, Acoustic and Lo-fi. They are also in the browser under Drums.
 - New presets: Acustica for the Kick, Industriale for the Snare, Lo-fi for Hat e Piatti.
 - More Drum Machine kits made with the instruments: House, Dub techno, Breakbeat, Trap, Minimal,
   Electro.
-- Drum racks among the factory Instrument Racks: Batteria rave, Batteria dub, Batteria rotta,
-  Batteria industriale (Drum Machine kits with effects, whose macros reach into the instruments
+- Drum racks among the factory Instrument Racks: Rave drums, Dub drums, Broken drums,
+  Industrial drums (Drum Machine kits with effects, whose macros reach into the instruments
   on the pads: the kick's tail and rumble, the snare's room, the hi-hats' decay and brightness),
-  plus Cassa, Rullante and Hat in movimento to build a kick, a snare or moving hi-hats from eight
+  plus Kick, Snare and Moving hats to build a kick, a snare or moving hi-hats from eight
   knobs.
-- Many new synth presets. Analog: Sub, Basso pulsante, Basso in levare and Acid frenetico (with
-  the step sequencer on), Basso funk, Reese analogico, Stab rave, Accordo dub, Archi analogici,
-  Ottoni analogici, Pad scuro, Lead quinta, Lead portamento, Organo analogico, Campanella,
-  Zanzara, Pluck dub. Neuro: Reese che pompa, Wobble neuro, Talkbox, Basso frigio (sequencer),
-  Ringhio lento, Industriale, Sub con morso, Reese scuro, Stab neuro, Glitch S&H, Caduta.
-  Wavetable: Sirena rave, Stab digitale, Pad pulsar, Basso metallico, Lead additivo, Arpeggio a
-  ottave, Vento spettrale, Basso growl a 1/16. Prisma: Sirena, Stab rave, Pad di vocali, Basso
-  comb, Arpa metallica, Accordo dub. Kick: House, Trance, Dub techno, Hardgroove, Electro,
-  Minimal, Breakbeat. Snare: Breakbeat, Trap, Dubstep, Spazzole, Elettro. Hat e Piatti: 909,
+- Many new synth presets. Analog: Sub, Pulsing bass, Offbeat bass and Frantic acid (with
+  the step sequencer on), Funk bass, Analog reese, Rave stab, Dub chord, Analog strings,
+  Analog brass, Dark pad, Fifth lead, Portamento lead, Analog organ, Little bell,
+  Mosquito, Dub pluck. Neuro: Pumping reese, Neuro wobble, Talkbox, Phrygian bass (sequencer),
+  Slow growl, Industrial, Sub with bite, Dark reese, Neuro stab, Glitch S&H, Fall.
+  Wavetable: Rave siren, Digital stab, Pulsar pad, Metallic bass, Additive lead, Octave
+  arpeggio, Spectral wind, 1/16 growl bass. Prisma: Siren, Rave stab, Vowel pad, Comb
+  bass, Metal harp, Dub chord. Kick: House, Trance, Dub techno, Hardgroove, Electro,
+  Minimal, Breakbeat. Snare: Breakbeat, Trap, Dubstep, Brushes, Electric. Hats and Cymbals: 909,
   Trap, Dub, Gong, Minimal.
 
 ## [0.3.39] - 2026-10-29
 
 ### Added
 - Snare, a new instrument for building snares in layers, like the Kick. Colpo: the stick (a click,
-  filtered noise or a sample). Pelle: the drum's tone, the two modes of the head tuned to the note
-  with a small pitch drop (amount, time, overtone, shape), or a sample. Cordiera: the snare wires,
-  filtered noise that starts after a short delay, with Grana to make it crunchy like an old
-  sampler. Stanza: a short stereo room. The head is tuned to a note (A1 to A3, or following the
-  notes played from D1), and soft hits are quieter and, with Vel → tono, darker, as on a real
-  snare. Drop an audio file or a browser sample on the Colpo or Pelle card to use it. Presets:
-  909, 808, Techno, Rimshot, Lo-fi, Stanza grande, Acustica.
+  filtered noise or a sample). Skin: the drum's tone, the two modes of the head tuned to the note
+  with a small pitch drop (amount, time, overtone, shape), or a sample. Snares: the snare wires,
+  filtered noise that starts after a short delay, with Grain to make it crunchy like an old
+  sampler. Room: a short stereo room. The head is tuned to a note (A1 to A3, or following the
+  notes played from D1), and soft hits are quieter and, with Vel → tone, darker, as on a real
+  snare. Drop an audio file or a browser sample on the Hit or Skin card to use it. Presets:
+  909, 808, Techno, Rimshot, Lo-fi, Large room, Acoustic.
 - Hat e Piatti, a new instrument just for hi-hats and cymbals. Six pieces on the General MIDI
   notes, so drum parts written elsewhere play right: closed hat (F#1), pedal hat (G#1), open hat
   (A#1), crash (C#2), ride (D#2) and ride bell (F2). Closed and pedal choke the open hat, like a
   real hi-hat. Each piece is a synth (six detuned squares, noise and bell partials, filtered) or
   a sample, with tuning, decay, brightness, noise, bell, level and pan. For all pieces: three
-  kinds of metal (808, Ruvido, Anello), variation from hit to hit, stereo width, drive. The panel
+  kinds of metal (808, Rough, Ring), variation from hit to hit, stereo width, drive. The panel
   shows the pieces as pads (click to play, drop an audio file or a browser sample on a pad to use
-  it) and draws the hit of the chosen piece. Presets: 808, Techno secca, Industriale, Acustica.
+  it) and draws the hit of the chosen piece. Presets: 808, Dry techno, Industrial, Acoustic.
 
 ## [0.3.38] - 2026-10-29
 
@@ -267,7 +273,7 @@ Sections: Added, Changed, Fixed.
   tail that swells between hits. The kick is tuned to a note (C0 to C2, or following the notes
   played), and the output has soft, hard or folding saturation and a low cut. The panel draws the
   hit as it sounds, with the pitch drop; drop an audio file or a browser sample on the Snap or
-  Body card to use it. Presets: Techno, 909, 808 lunga, Rumble, Industriale, Profonda, Secca.
+  Body card to use it. Presets: Techno, 909, Long 808, Rumble, Industrial, Deep, Dry.
 
 ## [0.3.37] - 2026-10-28
 
@@ -409,7 +415,7 @@ Sections: Added, Changed, Fixed.
 
 ### Added
 - The master automation can now be drawn and seen: the "A" button in the master row (or
-  right-click › "Mostra l'automazione") opens a row under it. On the left pick the effect (or
+  right-click › "Show the automation") opens a row under it. On the left pick the effect (or
   rack) and the parameter (or macro), on the right draw the curve on the timeline, with its zoom
   and scrolling: click adds a point, drag moves it, double-click deletes it, ✎ paints steps on
   the grid, × clears the curve. The "A" button has a dot when the master has curves, and effects
@@ -424,7 +430,7 @@ Sections: Added, Changed, Fixed.
 ### Added
 - Master automation on the timeline: curves in timeline beats on the master's effect parameters
   and on the macros of its racks (Macchina, Tornado…), like clip envelopes but for the whole mix.
-  They move the knob from where it is, play live and in "Esporta il mix in WAV…", restart with
+  They move the knob from where it is, play live and in "Export the mix as WAV…", restart with
   each pass of the timeline loop, flip switch and button macros past halfway as if pressed, and
   go back to neutral when the transport stops. They're saved with the project.
 
@@ -432,8 +438,8 @@ Sections: Added, Changed, Fixed.
 
 ### Added
 - MIDI mapping for any controller, like Live's MIDI Map: turn on MIDI in the control bar (Ctrl+M,
-  or Opzioni › Mappa il MIDI), click a control, then move the knob or fader or hit the pad that
-  will move it (Canc removes it, Esc turns MIDI off). It maps rack macros, instrument and effect
+  or Options › Map MIDI), click a control, then move the knob or fader or hit the pad that
+  will move it (Del removes it, Esc turns MIDI off). It maps rack macros, instrument and effect
   parameters, and the mixer: track volume, pan, sends, mute and solo, master volume and mute.
   A CC sets the control to its position (volume follows Live's fader, 0 dB at about 85%; pan
   centres at 64; mute, solo, switches and buttons are on from 64 up). A note works like a KEY
@@ -447,12 +453,12 @@ Sections: Added, Changed, Fixed.
 ## [0.3.22] - 2026-10-22
 
 ### Added
-- File › Raccogli e salva in ZIP…: puts the whole project in one file you can pass to another
+- File › Collect and save as ZIP…: puts the whole project in one file you can pass to another
   user. The ZIP holds the project and all the audio it uses (and only that: unused files and the
   backup stay out). If the project is already on disk it's saved first. A missing audio file
   stops it and names the file.
-- File › Apri progetto da ZIP… (or drop the ZIP on the window) opens a project received this
-  way, with no need to unzip it. It opens as an unsaved project: Salva asks for the folder to put
+- File › Open project from ZIP… (or drop the ZIP on the window) opens a project received this
+  way, with no need to unzip it. It opens as an unsaved project: Save asks for the folder to put
   it in. ZIPs made by hand also work (compressed by Windows Explorer, 7-Zip or the Finder, with or
   without the project folder inside). Unzipped, the ZIP is an ordinary project folder.
 
@@ -470,18 +476,18 @@ Sections: Added, Changed, Fixed.
   the notes it receives: while a note is held it plays a pattern of steps locked to the bar,
   transposed to that note, so a clip only has to hold the root (or the chords of a progression).
   Pattern picks one of 128 patterns (a new one starts at the top of the loop, as on a 303);
-  Densità adds notes without moving the others (eighth-note offbeats first, the gaps between the
-  kicks), Altezza widens the scale in order (Scala: Frigio, Frigio e tritono, Minore, Ottave,
-  Quinte), Accenti and Slide set how many of each, plus Passi (1–32), Velocità (1/8, 1/16,
-  1/16T, 1/32), Ottava, Gate and Battere › "Lascia alla cassa" (no steps on the beat). Map
-  Pattern and Densità to rack macros and the line changes while you turn them. A clip can switch
+  Density adds notes without moving the others (eighth-note offbeats first, the gaps between the
+  kicks), Height widens the scale in order (Scale: Phrygian, Phrygian and tritone, Minor, Octaves,
+  Fifths), Accents and Slide set how many of each, plus Steps (1–32), Rate (1/8, 1/16,
+  1/16T, 1/32), Octave, Gate and Downbeat › "Leave to the kick" (no steps on the beat). Map
+  Pattern and Density to rack macros and the line changes while you turn them. A clip can switch
   the sequencer on with its own modulation.
 - Factory racks from the "Rave illegale" live:
-  - Levare (Instrument Rack): Neuro offbeat bass with Cutoff, Morso, Coda, Sub, Ringhio,
-    Distorsione, Vocale and Rumble; its sequencer is set up (off) to leave the downbeat to the kick.
-  - 303 (Instrument Rack): Analog in Legato with Cutoff, Risonanza, Env Mod, Decay, Accento,
+  - Offbeat (Instrument Rack): Neuro offbeat bass with Cutoff, Bite, Tail, Sub, Growl,
+    Distortion, Vocal and Rumble; its sequencer is set up (off) to leave the downbeat to the kick.
+  - 303 (Instrument Rack): Analog in Legato with Cutoff, Resonance, Env Mod, Decay, Accent,
     Glide, and Pattern and Follia for the step sequencer (turn it on in the Sequencer section).
-  - Acido FX (Audio Effect Rack): Distorsione, Taglio (step gate), Phaser, Eco, Spazio and a
+  - Acid FX (Audio Effect Rack): Distortion, Cut (step gate), Phaser, Echo, Space and a
     Ripeti button.
   - Macchina (Audio Effect Rack): Ripeti 1/8, 1/16 and 1/32, Al contrario and Stop nastro
     buttons, then Sottrazione (high-pass), Muro (low-pass) and Lo-fi. All at 0, the sound passes
@@ -493,37 +499,37 @@ Sections: Added, Changed, Fixed.
 - Sampler: every zone can now have its own pitch (Transpose, Detune, Key track, Env pitch),
   filter, all three envelopes and LFO, besides loop and Reverse. As before, a zone follows zone 1
   until you change one of these with the zone selected. The card titles say which zone you are
-  editing. Only the mode, the voice (Poli/Mono/Legato with Glide: one voice serves every zone)
-  and the output stay shared; they are in the new "Voce e uscita" card. Existing projects sound
+  editing. Only the mode, the voice (Poly/Mono/Legato with Glide: one voice serves every zone)
+  and the output stay shared; they are in the new "Voice and output" card. Existing projects sound
   as before.
 - Sampler: the Zone card no longer has Tune and Fine, which did the same as the zone's Transpose
   and Detune. Projects and saved racks convert them when they open, so every zone keeps its pitch.
   Projects saved from this version on can't be opened by older versions.
 
 ### Fixed
-- Sampler: the Zone card shows the zone's Pan again, and the "Voce e uscita" card shows the
+- Sampler: the Zone card shows the zone's Pan again, and the "Voice and output" card shows the
   Sampler's own Pan (before, the zone's Pan ended up there and the overall Pan was missing).
 
 ## [0.3.18] - 2026-10-21
 
 ### Added
-- Five new factory Audio Effect Racks in Effetti audio › Audio Effect Rack. With every macro at
+- Five new factory Audio Effect Racks in Audio effects › Audio Effect Rack. With every macro at
   0 the sound passes untouched:
   - Fade to Grey: a transition like Live's. Turn Fade and the sound narrows into a grey wash:
     the filters close in from both sides, echo and reverb grow, the stereo image shrinks and
-    the level drops. Eco, Tempo eco, Coda, Scuro and Risonanza shape the wash.
-  - Dub: a King Tubby send delay with Lancio (feedback that runs away on its own), Tempo, Scuro,
-    a sweeping high-pass, Molla (spring-like reverb) and Nastro.
+    the level drops. Echo, Echo time, Tail, Dark and Resonance shape the wash.
+  - Dub: a King Tubby send delay with Throw (feedback that runs away on its own), Tempo, Dark,
+    a sweeping high-pass, Spring (spring-like reverb) and Tape.
   - French Touch: the resonant filter-house sweep, with Pompa (quarter-note sidechain pump),
-    Phaser, Sporco and Colla.
-  - Cassetta: a worn tape with Wow, Nastro, Bit, Opaco, Stretto and a Stop button that brakes it.
-  - Muro: a shoegaze wall of sound with Fuzz, Leva (vibrato arm), Risucchio (reverse swell), Eco,
-    an endless reverb and Larghezza.
+    Phaser, Dirty and Glue.
+  - Cassette: a worn tape with Wow, Tape, Bit, Dull, Narrow and a Stop button that brakes it.
+  - Wall: a shoegaze wall of sound with Fuzz, Lever (vibrato arm), Suck (reverse swell), Echo,
+    an endless reverb and Width.
 - Four new factory Instrument Racks in Strumenti › Instrument Rack:
-  - Nuova onda: a new-wave polysynth (Analog) with ensemble chorus, ping-pong echo and hall.
-  - Ossigeno: Oxygène-style string machine (Wavetable) through a slow phaser.
-  - Hoover: the rave hoover (Wavetable) with Swoop, Glide, PWM, Larghezza and Ottava sotto.
-  - Jump: 80s polysynth brass (Analog) with Morso, Gonfia (brass swell), Spessore and Colla.
+  - New wave: a new-wave polysynth (Analog) with ensemble chorus, ping-pong echo and hall.
+  - Oxygen: Oxygène-style string machine (Wavetable) through a slow phaser.
+  - Hoover: the rave hoover (Wavetable) with Swoop, Glide, PWM, Width and Octave down.
+  - Jump: 80s polysynth brass (Analog) with Bite, Swell (brass swell), Thickness and Glue.
 
 ### Fixed
 - Sampler: the bottom row of controls was cut off at the bottom of the device panel. The panel
@@ -536,7 +542,7 @@ Sections: Added, Changed, Fixed.
 - Sampler: each zone can have its own loop (mode, crossfade, release), Reverse and volume
   envelope, so a kit can have a short hi-hat and a long crash in one Sampler. A zone follows
   zone 1 until you change one of these controls with it selected; then it keeps its own. The
-  "Come zona 1" button next to the zone menu shows which is which and links the zone back.
+  "Like zone 1" button next to the zone menu shows which is which and links the zone back.
   Existing projects and presets sound as before.
 
 ### Changed
@@ -544,7 +550,7 @@ Sections: Added, Changed, Fixed.
   of squeezing short times into the left corner. The zoom holds still while you drag a handle.
 
 ### Fixed
-- Browser › Batterie lists only the Drum Machine kits, not the Sampler presets.
+- Browser › Drums lists only the Drum Machine kits, not the Sampler presets.
 
 ## [0.3.16] - 2026-10-21
 
@@ -558,43 +564,43 @@ Sections: Added, Changed, Fixed.
 
 ### Added
 - Tornado, a factory Audio Effect Rack to play live like Turnado: eight effects in a row, one
-  macro each (Stutter, Reverse, Gate, Lo-fi, Filtro, Flanger, Pan, Stop). With a macro at 0
+  macro each (Stutter, Reverse, Gate, Lo-fi, Filter, Flanger, Pan, Stop). With a macro at 0
   its effect is out and the sound passes untouched; turning it brings the effect in harder.
-  Stop is a button: hold it to brake the tape, let go and it spins back up. Find it in Effetti
+  Stop is a button: hold it to brake the tape, let go and it spins back up. Find it in Audio
   audio › Audio Effect Rack; on the APC40 the 8 Device Control knobs play the macros.
 - Three factory Instrument Racks in Strumenti › Instrument Rack, each an instrument preset with
   effects and 8 macros that move both:
-  - Acido: Analog's Acid with the 303 knobs (Cutoff, Risonanza, Env Mod, Decay, Accent, Glide),
-    plus Sporco (saturation) and Eco (ping-pong delay and plate).
-  - Nebbia: Wavetable's Pad che respira with Apri, Morph, Respiro, Larghezza, Lentezza, a trance
-    Gate, Eco and Spazio.
-  - Ringhio: Neuro's Neuro ringhio bass with Cutoff, Ringhio, Vocale, a tempo-synced Wobble and
-    its Velocità, Distorsione, Phaser and OTT, with the lows kept mono.
+  - Acid: Analog's Acid with the 303 knobs (Cutoff, Resonance, Env Mod, Decay, Accent, Glide),
+    plus Dirty (saturation) and Echo (ping-pong delay and plate).
+  - Fog: Wavetable's Breathing pad with Open, Morph, Breath, Width, Slowness, a trance
+    Gate, Echo and Space.
+  - Growl: Neuro's Neuro growl bass with Cutoff, Growl, Vocal, a tempo-synced Wobble and
+    its Rate, Distortion, Phaser and OTT, with the lows kept mono.
 
 ## [0.3.14] - 2026-10-21
 
 ### Added
 - Computer keyboard mapping, like Live's Key Map: turn on KEY in the control bar (Ctrl+K, or
-  Opzioni › Mappa la tastiera del computer), click a rack macro or a parameter of an instrument
-  or effect, then press the key that will move it (Canc removes it, Esc turns KEY off). Mapped
+  Options › Map the computer keyboard), click a rack macro or a parameter of an instrument
+  or effect, then press the key that will move it (Del removes it, Esc turns KEY off). Mapped
   keys show on their controls. With KEY off, a key flips a switch macro, holds a button macro on
   while it stays down, jumps a knob macro or a parameter between its two ends and steps a menu
   to its next choice. One key can move several controls. The mappings are saved with the
   project and every press can be undone (except holding a button). Keys that are already
-  shortcuts (Space, Tab, Enter, Canc, +, −, Esc, arrows) can't be mapped; a mapped key takes
+  shortcuts (Space, Tab, Enter, Del, +, −, Esc, arrows) can't be mapped; a mapped key takes
   over the piano roll's Q, B and F.
 - Beat Repeat: the Solo Repeat switch turns off the repeats in time, so the effect repeats only
   while Repeat is on; with Repeat off the sound passes untouched, as if the effect were off,
-  even in Gate mode (which then lets the sound through like Inserisci). Map Repeat to a key or
+  even in Gate mode (which then lets the sound through like Insert). Map Repeat to a key or
   to a rack's button macro to play it live.
 - Saved racks, to reuse them in every project: ★ in a rack's header (or right-click the header ›
-  Salva il rack…) saves its devices, their settings and the 8 macros with their mappings under
+  Save the rack…) saves its devices, their settings and the 8 macros with their mappings under
   the name you type. They show up in the browser, like Live's rack presets: Instrument Racks in
-  Strumenti › Instrument Rack, Audio Effect Racks in Effetti audio › Audio Effect Rack, both in
-  Preset dell'utente. Double-click or drag one onto a track: an Instrument Rack replaces the
+  Instruments › Instrument Rack, Audio Effect Racks in Audio effects › Audio Effect Rack, both in
+  User presets. Double-click or drag one onto a track: an Instrument Rack replaces the
   instrument of a MIDI track (or goes on a new one), an Audio Effect Rack goes at the end of the
   chain, also on the Master. Right-click the header to update or delete the saved rack. In the
-  desktop app every rack is a file in Documenti\studiomio\Rack, so it can be copied to another
+  desktop app every rack is a file in Documents\studiomio\Rack, so it can be copied to another
   computer. Loaded samples and sidechains belong to the project and aren't saved with the rack.
 
 ## [0.3.13] - 2026-10-21
@@ -603,9 +609,9 @@ Sections: Added, Changed, Fixed.
 - Beat Repeat, a new effect like Live's Beat Repeat: in time with the song, every Interval
   (shifted by Offset sixteenths) and with a given Chance, it captures a slice as long as the
   Grid and repeats it for the length of the Gate, for stutters, rolls and fills. Variation
-  makes the slices randomly shorter, the repeats can drop in pitch (Pitch, and Discesa every
-  repeat), fade (Decadimento) and go through a band-pass filter, and they add to the sound
-  (Mix), replace it while they play (Inserisci) or play alone (Gate). The Repeat switch repeats
+  makes the slices randomly shorter, the repeats can drop in pitch (Pitch, and Descent every
+  repeat), fade (Decay) and go through a band-pass filter, and they add to the sound
+  (Mix), replace it while they play (Insert) or play alone (Gate). The Repeat switch repeats
   right away, from the next grid line, for as long as it stays on: map it to a controller
   button to play it live. With the transport stopped only Repeat repeats.
 - Auto Filter, a new effect like Live's Auto Filter: a resonant low-pass, high-pass, band-pass
@@ -617,14 +623,14 @@ Sections: Added, Changed, Fixed.
   that opens the bass.
 - Gate, a new effect: the trance gate. A pattern of up to 32 steps, in time and locked to the
   bar, opens and closes the sound; each step has its own level, and Gate, attack and release
-  shape how long and how softly it opens. Swing delays the odd steps, Profondità lets some of
+  shape how long and how softly it opens. Swing delays the odd steps, Depth lets some of
   the sound through when closed (a stepped tremolo). Click a step to open or close it, drag up
   and down to set its level (across several steps too); right-click for all open, all closed,
   invert, random and shift.
 - Tape Stop, a new effect: turn Stop on and the sound slows down to a halt like a tape or a
   turntable switched off, over a time in beats or milliseconds and with a linear, smooth or
   fast curve; turn it off and it comes back, at once or speeding up from standstill
-  (Ripartenza). With the transport running the brake can wait for the next grid line, so it
+  (Restart). With the transport running the brake can wait for the next grid line, so it
   lands in time.
 - Reverse, a new effect: the sound backwards in slices locked to the bar (1/16 to 1 bar):
   during each slice you hear the previous one from its end to its start, the classic suck
@@ -632,7 +638,7 @@ Sections: Added, Changed, Fixed.
 
 - Chorus, a new effect: slightly delayed copies of the sound with a gently swaying delay, to
   widen and thicken it. Chorus (two voices), Ensemble (three, denser: the strings of '80s
-  synths) or Vibrato (one voice, pitch only); Larghezza offsets the right channel for stereo,
+  synths) or Vibrato (one voice, pitch only); Width offsets the right channel for stereo,
   feedback pushes it toward a flanger, and the movement can run in time with the song.
 - Auto Pan, a new effect like Live's Auto Pan: the same LFO shapes as the Auto Filter, locked
   to the bar, move the sound from side to side (Stereo 180°) or turn it into a tremolo (0°),
@@ -640,10 +646,10 @@ Sections: Added, Changed, Fixed.
 - Redux, a new lo-fi effect: lowers the sample rate (each sample holds until the next, for
   stepped waves and folded-back frequencies) and the bit depth (in fractional steps, so it
   sweeps smoothly). Jitter makes the sample clock uneven; the filter can remove what would fold
-  back (Prima) or smooth the steps (Dopo).
+  back (Before) or smooth the steps (After).
 - Rack macros can be switches and buttons, not only knobs (something Live's racks don't have):
-  right-click a macro and choose Manopola, Interruttore (a click turns it on, another off) or
-  Pulsante (on only while you hold it down). Switches and buttons move every mapped parameter
+  right-click a macro and choose Knob, Toggle (a click turns it on, another off) or
+  Button (on only while you hold it down). Switches and buttons move every mapped parameter
   from one end of its range to the other, so one button can turn on Stop, close a filter and
   raise a reverb at once. Mapping an on/off parameter such as Stop or Repeat to an empty macro
   makes it a switch by itself. Holding a button doesn't fill the undo history, and a clip
@@ -651,7 +657,7 @@ Sections: Added, Changed, Fixed.
 
 ### Changed
 - Clip modulations can now move switches and menus too, not just knobs: draw a curve on
-  Stop, Repeat or Reverse to switch them on and off in time, or on a menu such as Divisione
+  Stop, Repeat or Reverse to switch them on and off in time, or on a menu such as Division
   to step through its options. A switch flips when the curve moves it past halfway; the lane
   shows with a dashed line what is actually heard, and the value under the pointer names the
   option ("On · +60 %").
@@ -678,7 +684,7 @@ Sections: Added, Changed, Fixed.
 ## [0.3.11] - 2026-10-20
 
 ### Added
-- Follow, like Live's: "↦ Segui" in the control bar (Ctrl+Shift+F, Options › Segui la testina).
+- Follow, like Live's: "↦ Follow" in the control bar (Ctrl+Shift+F, Options › Follow the playhead).
   While playing, the arrangement scrolls to keep the playhead in view. Scrolling sideways,
   zooming or editing the timeline pauses it (the button shows an outline), so you can move
   around while the song plays; it comes back when you click the ruler, press Play again or click
@@ -686,7 +692,7 @@ Sections: Added, Changed, Fixed.
 - Duplicate Loop (Ctrl+Shift+D). In the piano roll, like Live's "Dupl. Loop": the clip's loop
   doubles and its notes and modulations repeat in the second half (button next to :2 and ×2, or
   the right-click menu); an arrangement clip that ended with the loop grows with it. In the
-  arrangement (Edit › Duplica loop, right-click on the ruler or on an empty lane): the stretch
+  arrangement (Edit › Duplicate loop, right-click on the ruler or on an empty lane): the stretch
   under the loop region is copied right after it on every track, and the loop moves onto the
   copy, so pressing it again lengthens the song one loop at a time.
 
@@ -712,7 +718,7 @@ Sections: Added, Changed, Fixed.
   to zoom, click a slice to hear it, double-click to add or remove a slice; a cursor follows
   every voice that plays. Drop an audio file or a browser sample on the panel to load it; a
   sample dropped on a MIDI track's device chain loads into a Sampler there.
-- Copy a scene to the arrangement: right-click the scene › "Copia nell'arrangement". Every track
+- Copy a scene to the arrangement: right-click the scene › "Copy to the arrangement". Every track
   gets a copy of its clip at the cursor, as long as the scene needs for its loops to come round
   (what was underneath is trimmed, as when pasting); then the cursor moves to its end, so the
   next scene lines up after it.
@@ -805,7 +811,7 @@ Sections: Added, Changed, Fixed.
   the waveform) keeps only the loop, or the region when the loop is off. That part of the sample
   becomes a new audio file in the project and the clip plays only that, sounding as before.
   The original file stays in the project folder, and Undo brings the old clip back.
-- Export a scene as audio: right-click a scene and choose "Esporta audio…" to get a WAV of
+- Export a scene as audio: right-click a scene and choose "Export audio…" to get a WAV of
   what plays when you launch it. The length is automatic: long enough for all the scene's loops
   to come back to the start together (a 4-bar and a 3-bar loop give 12 bars), and at least as
   long as the longest clip that doesn't loop. When the scene loops, reverb and delay tails
@@ -815,7 +821,7 @@ Sections: Added, Changed, Fixed.
 
 ### Added
 - Your own presets: the ★ button in the header of every instrument and effect saves its
-  current settings as a preset, available in every project under "I miei preset" at the top of
+  current settings as a preset, available in every project under "My presets" at the top of
   the preset menu. Right-click the header to update or delete the preset you're using, or to
   open the presets folder. Each preset is a file in Documents\studiomio\Preset, so presets
   survive uninstalling the app and can be copied to another computer or shared. Drum Machine
@@ -858,9 +864,9 @@ Sections: Added, Changed, Fixed.
   to rack macros and automated from clips.
 - Prisma can use any WAV file as an oscillator's wavetable (Serum-style files with one 2048-sample
   cycle per frame, a single cycle, or any sound sliced into frames): drop it on the table or use
-  "Importa…". It comes with 25 presets (basses, leads, pads, plucks, keys, rhythmic and FX).
-- Eight new wavetables, also available in Wavetable: Formanti, Spettrale, Additiva, Pulsar,
-  Growl, Metallo, Seno caldo, Ottave.
+  "Import…". It comes with 25 presets (basses, leads, pads, plucks, keys, rhythmic and FX).
+- Eight new wavetables, also available in Wavetable: Formants, Spectral, Additive, Pulsar,
+  Growl, Metal, Warm sine, Octaves.
 
 ### Fixed
 - ◂ next to an Instrument Rack that holds only the instrument now moves the effect into the
@@ -951,7 +957,7 @@ Sections: Added, Changed, Fixed.
 ## [0.1.4] - 2026-10-17
 
 ### Added
-- Import audio straight into empty session slots: double click or "Importa audio…" on the slot;
+- Import audio straight into empty session slots: double click or "Import audio…" on the slot;
   with the session open, the Import button uses the selected slot.
 
 ## [0.1.3] - 2026-10-17

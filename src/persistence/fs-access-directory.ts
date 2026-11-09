@@ -1,19 +1,19 @@
 import { FileNotFoundError, splitPath, type Directory } from './directory';
 
-/** Cartella vera sul disco, scelta dall'utente con la File System Access API
- *  (Chrome ed Edge). Il permesso di scrittura viene chiesto alla prima scrittura. */
+/** Real folder on disk, chosen by the user with the File System Access API
+ *  (Chrome and Edge). Write permission is asked at the first write. */
 export class FsAccessDirectory implements Directory {
   constructor(readonly root: FileSystemDirectoryHandle) {}
 
-  /** Chiede all'utente di scegliere (o creare) la cartella del progetto. */
+  /** Asks the user to choose (or create) the project folder. */
   static async pick(): Promise<FsAccessDirectory> {
     const picker = (window as unknown as { showDirectoryPicker?: (o: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker;
-    if (!picker) throw new Error('questo browser non permette di scegliere una cartella: usa Chrome o Edge');
+    if (!picker) throw new Error('this browser doesn\'t allow choosing a folder: use Chrome or Edge');
     return new FsAccessDirectory(await picker({ mode: 'readwrite', id: 'studiomio-project' }));
   }
 
-  /** Una cartella ricordata (un progetto recente): dopo un riavvio il browser può chiedere di
-   *  nuovo il permesso, e chiederlo vuole un clic dell'utente. */
+  /** A remembered folder (a recent project): after a restart the browser may ask
+   *  for permission again, and asking needs a user click. */
   static async reopen(root: FileSystemDirectoryHandle): Promise<FsAccessDirectory> {
     type Permission = 'granted' | 'denied' | 'prompt';
     const h = root as FileSystemDirectoryHandle & {
@@ -22,7 +22,7 @@ export class FsAccessDirectory implements Directory {
     };
     const ok = !h.queryPermission || (await h.queryPermission({ mode: 'readwrite' })) === 'granted'
       || (await h.requestPermission?.({ mode: 'readwrite' })) === 'granted';
-    if (!ok) throw new Error(`permesso negato per la cartella "${root.name}"`);
+    if (!ok) throw new Error(`permission denied for the folder "${root.name}"`);
     return new FsAccessDirectory(root);
   }
 

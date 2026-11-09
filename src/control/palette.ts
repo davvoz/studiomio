@@ -1,9 +1,9 @@
-/* La tavolozza dei pad RGB dei controller: l'APC40 mkII e i Launchpad (X, Mini MK3, Pro MK3,
- * MK2) hanno la stessa, 128 colori scelti dalla velocity di un Note On (o dal valore di un CC).
- * Dalla tavolozza di Live (script novation/colors e APC40_MkII), con il colore di una clip
- * portato al pad della tinta più vicina. Dati e conti puri. */
+/* The controllers' RGB pad palette: the APC40 mkII and the Launchpads (X, Mini MK3, Pro MK3,
+ * MK2) have the same one, 128 colours chosen by the velocity of a Note On (or by a CC's value).
+ * From Live's palette (scripts novation/colors and APC40_MkII), with a clip's colour
+ * brought to the pad of the nearest hue. Pure data and maths. */
 
-/** La tavolozza: l'indice è il valore da mandare (0 = spento). */
+/** The palette: the index is the value to send (0 = off). */
 export const PALETTE: readonly number[] = [
   0x000000, 0x1e1e1e, 0x7f7f7f, 0xffffff, 0xff4c4c, 0xff0000, 0x590000, 0x190000,
   0xffbd6c, 0xff5400, 0x591d00, 0x271b00, 0xffff4c, 0xffff00, 0x595900, 0x191900,
@@ -23,30 +23,30 @@ export const PALETTE: readonly number[] = [
   0xa00000, 0x350000, 0x1ad000, 0x074200, 0xb9b000, 0x3f3100, 0xb35f00, 0x4b1502,
 ];
 
-/** Il bianco: dove un colore non si legge. */
+/** White: where a colour can't be read. */
 const WHITE = 3;
 
 const rgb = (c: number) => [(c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff] as const;
 
-/** I colori abbastanza luminosi da riconoscersi su un pad (i più scuri sembrano spenti). */
+/** The colours bright enough to be recognized on a pad (the darkest look off). */
 const BRIGHT = PALETTE.map((c, i) => [i, rgb(c)] as const).filter(([i, [r, g, b]]) => i > 3 && Math.max(r, g, b) >= 0x99);
 
-/** I colori della tavolozza di studiomio (model/colors), ognuno sul suo pad scelto a mano come
- *  fa Live: tutti diversi, e il carico e il tenue della stessa tinta si distinguono. */
+/** The colours of studiomio's palette (model/colors), each on its pad chosen by hand as
+ *  Live does: all different, and the strong and pale of the same hue can be told apart. */
 export const FIXED: ReadonlyMap<string, number> = new Map([
-  // carichi
+  // strong
   ['#f03c46', 5], ['#ff6a14', 9], ['#ffd60a', 13], ['#a8e01e', 74], ['#2ec944', 21], ['#00c98d', 77], ['#00b4e6', 37],
   ['#3f7cff', 41], ['#9a5cff', 81], ['#e632d8', 53], ['#ff3c82', 57], ['#c0702e', 126], ['#e8eaed', 3],
-  // tenui
+  // pale
   ['#ef6b6b', 4], ['#ff9d2e', 96], ['#ffd64a', 12], ['#d4e157', 113], ['#9ad85b', 16], ['#4fcf9a', 32], ['#4bc3d6', 36],
   ['#5b8def', 40], ['#9b7bf0', 48], ['#e36bd0', 52], ['#ff7aa8', 56], ['#c8a27a', 8], ['#8fa3b8', 119],
 ]);
 
 const cache = new Map<string, number>(FIXED);
 
-/** Il pad di un colore "#rrggbb" (di una clip, una traccia, una scena): quello fisso per i colori
- *  della tavolozza, se no il più vicino portato alla luminosità piena: sui pad conta la tinta,
- *  non quanto è scuro. */
+/** The pad of a "#rrggbb" colour (of a clip, a track, a scene): the fixed one for the palette's
+ *  colours, otherwise the nearest one brought to full brightness: on pads the hue counts,
+ *  not how dark it is. */
 export function paletteIndex(hex: string): number {
   const known = cache.get(hex.toLowerCase());
   if (known !== undefined) return known;
@@ -57,7 +57,7 @@ export function paletteIndex(hex: string): number {
   const [R, G, B] = [r, g, b].map(v => (v * 255) / top);
   let best = WHITE, distance = Infinity;
   for (const [i, [pr, pg, pb]] of BRIGHT) {
-    // pesi della luminosità percepita: il verde conta di più
+    // perceived brightness weights: green counts most
     const d = 2 * (R - pr) ** 2 + 4 * (G - pg) ** 2 + 3 * (B - pb) ** 2;
     if (d < distance) [best, distance] = [i, d];
   }

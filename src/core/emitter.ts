@@ -1,11 +1,11 @@
-/** Mappa evento → argomenti del listener. */
+/** Event → listener arguments map. */
 export type EventMap = { [event: string]: unknown[] };
 
 export type Unsubscribe = () => void;
 
 type AnyListener = (...args: unknown[]) => void;
 
-/** Eventi tipizzati: nome dell'evento e argomenti sono controllati dal compilatore. */
+/** Typed events: event name and arguments are checked by the compiler. */
 export class Emitter<E extends EventMap> {
   private readonly listeners = new Map<keyof E, Set<AnyListener>>();
 
@@ -15,7 +15,7 @@ export class Emitter<E extends EventMap> {
       set = new Set();
       this.listeners.set(event, set);
     }
-    // la mappa conserva listener di tipi diversi: on/emit garantiscono l'abbinamento
+    // the map keeps listeners of different types: on/emit guarantee the pairing
     const l = listener as unknown as AnyListener;
     set.add(l);
     return () => set.delete(l);

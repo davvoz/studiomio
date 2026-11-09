@@ -11,18 +11,18 @@ import type { MidiTrack } from '../../src/model/track';
 import { ProjectCodec } from '../../src/persistence/project-codec';
 import { ProjectStore } from '../../src/store/project-store';
 
-describe('rulli, chop, pompa e gate', () => {
-  it('un rullo: colpi a passo fisso con la velocity che cresce', () => {
+describe('rolls, chop, pump and gate', () => {
+  it('a roll: hits at a fixed step with growing velocity', () => {
     const r = roll(3, 2, 4, 0.25, [60, 120]);
     expect(r.map(n => [n.start, n.velocity, n.pitch])).toEqual([[2, 60, padNote(3)], [2.25, 80, padNote(3)], [2.5, 100, padNote(3)], [2.75, 120, padNote(3)]]);
   });
 
-  it('chop: una fetta per sedicesimo, "." lascia suonare', () => {
+  it('chop: one slice per sixteenth, "." lets it play', () => {
     expect(chop('0 . 1 . 1 2 | . 3', 4).map(n => [n.start, n.pitch - padNote(0)])).toEqual([[4, 0], [4.5, 1], [5, 1], [5.25, 2], [5.75, 3]]);
-    expect(() => chop('x')).toThrow(/fetta/);
+    expect(() => chop('x')).toThrow(/slice/);
   });
 
-  it('la pompa: giù sul colpo, su nel rilascio; il gate: acceso e spento a scatti', () => {
+  it('the pump: down on the hit, up in the release; the gate: on and off in steps', () => {
     const d = duck([2, 0], 0.5, 0.5);
     expect(envelopeValueAt(d, 0)).toBe(0.5);
     expect(envelopeValueAt(d, 0.25)).toBeCloseTo(0.75);
@@ -46,7 +46,7 @@ describe('Siete pazzi', () => {
     return store.project;
   };
 
-  it('tracce, scene, master: compressore e limiter in fondo', () => {
+  it('tracks, scenes, master: compressor and limiter at the end', () => {
     const p = build();
     expect(p.tempo.bpm).toBe(PAZZI_LIVE_BPM);
     expect(p.tracks.map(t => t.name)).toEqual(['Cassa', 'Rullante', 'Amen', 'Glitch', 'Piatti', 'Sub', 'Reese', 'Pad', 'Voci', 'FX']);
@@ -55,20 +55,20 @@ describe('Siete pazzi', () => {
     expect(p.samples).toHaveLength(PAZZI_LIVE_SOUNDS.length);
   });
 
-  it("l'amen è affettato in ottavi: sedici pad in choke, ognuno un ottavo più avanti", () => {
+  it("the amen is sliced in eighths: sixteen pads in choke, each an eighth further on", () => {
     const amen = (build().tracks[2] as MidiTrack).instrument.params;
     const eighth = 30 / PAZZI_LIVE_BPM;
     for (let k = 0; k < 16; k++) {
       expect(amen[padParam(k, 'start')]).toBeCloseTo((k * eighth * 100) / 5.4857, 2);
       expect(amen[padParam(k, 'choke')]).toBe(1);
     }
-    // le sillabe della voce partono dove cominciano nella frase
+    // the voice's syllables start where they begin in the phrase
     const vox = (build().tracks[8] as MidiTrack).instrument.params;
     expect(vox[padParam(1, 'start')]).toBeCloseTo((0.116 * 100) / 5.49, 2);
     expect(vox[padParam(9, 'reverse')]).toBe(1);
   });
 
-  it('le clip: note nel giro, modulazioni su bersagli che esistono; gli stacchi durano una battuta', () => {
+  it('the clips: notes in the loop, modulations on targets that exist; the stabs last one bar', () => {
     const p = build();
     for (const t of p.tracks as MidiTrack[]) {
       const effects = new Set(t.effects.map(e => e.id));
@@ -81,14 +81,14 @@ describe('Siete pazzi', () => {
     }
     const stacco = p.scenes.findIndex(s => s.name === 'Stacco');
     expect(p.tracks.filter(t => t.slots[stacco]).map(t => t.name)).toEqual(['Voci']);
-    // nel drop il reese pompa: la curva del volume scende sulla cassa
+    // in the drop the reese pumps: the volume curve drops on the kick
     const reese = p.tracks[6].slots[3]!;
     const pump = reese.envelopes.find(e => e.target.kind === 'mixer')!;
     expect(envelopeValueAt(pump.points, 0)).toBeLessThan(0.7);
     expect(envelopeValueAt(pump.points, 0.9)).toBe(1);
   });
 
-  it('la registrazione: 130 battute, e il progetto si salva e si riapre uguale', () => {
+  it('the recording: 130 bars, and the project saves and reopens the same', () => {
     const p = build();
     expect(Math.max(...p.tracks.map(t => t.arrangementEnd))).toBe(130 * 4);
     const codec = new ProjectCodec();

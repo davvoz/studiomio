@@ -7,7 +7,7 @@ directories:
   buildResources: build   # icon.png
   output: release
 
-# Nel pacchetto vanno solo l'app compilata e il processo principale; il banco di prova no.
+# Only the compiled app and the main process go in the package; the test bench doesn't.
 files:
   - dist/**
   - "!dist/bench.html"
@@ -19,7 +19,7 @@ win:
   target: nsis
   artifactName: studiomio-setup-${version}.${ext}
 
-# Installazione per l'utente, senza domande né permessi di amministratore.
+# Per-user install, without questions or administrator rights.
 nsis:
   oneClick: true
   perMachine: false
@@ -27,7 +27,7 @@ nsis:
   createDesktopShortcut: always
   createStartMenuShortcut: true
 
-# Gli aggiornamenti si scaricano dalle release del repository.
+# Updates are downloaded from the repository's releases.
 publish:
   provider: github
   owner: davvoz

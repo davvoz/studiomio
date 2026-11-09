@@ -1,6 +1,6 @@
-/* Strumenti ed effetti nel browser: ognuno è un AudioWorkletNode di uno dei due processori
- * (devices/worklet), con il motore del suo tipo. Il thread principale manda note e parametri
- * per messaggio, con il tempo in secondi del contesto. */
+/* Instruments and effects in the browser: each is an AudioWorkletNode of one of the two processors
+ * (devices/worklet), with its type's engine. The main thread sends notes and parameters
+ * by message, with the time in context seconds. */
 import { resolveActiveParams, resolveParams } from '../devices/device-type';
 import { effectType, instrumentType } from '../devices/registry';
 import workletUrl from '../devices/worklet/devices.worklet.ts?worker&url';
@@ -22,8 +22,8 @@ import type { Instrument, InstrumentHost } from './players/instrument';
 
 const contextOf = (graph: AudioGraph) => graph as unknown as BaseAudioContext;
 
-/** Le modulazioni di un dispositivo nell'AudioWorklet: ogni evento è un messaggio al processore,
- *  che lo applica al momento giusto (vedi devices/worklet/mod-timeline.ts). */
+/** A device's modulations in the AudioWorklet: each event is a message to the processor,
+ *  which applies it at the right moment (see devices/worklet/mod-timeline.ts). */
 const workletModulation = (send: (m: ModMessage) => void): DeviceModulation => ({
   sink: (param, channel) => {
     const extra = channel ? { channel } : {};
@@ -35,18 +35,18 @@ const workletModulation = (send: (m: ModMessage) => void): DeviceModulation => (
   },
 });
 
-/** Dove si trovano i campioni dei sample del progetto (la SampleLibrary). */
+/** Where the samples of the project's samples are (the SampleLibrary). */
 export type SampleSource = (id: SampleId) => SampleData | undefined;
 
-/** I campioni dei sample di un dispositivo, per posto (quelli non ancora caricati mancano). */
+/** The samples of a device's samples, by slot (those not loaded yet are missing). */
 const samplesOf = (samples: DeviceSamples | undefined, source: SampleSource): Record<string, SampleData> =>
   Object.fromEntries(Object.entries(samples ?? {}).flatMap(([slot, id]) => {
     const data = source(id);
     return data ? [[slot, { sampleRate: data.sampleRate, channels: [...data.channels] }]] : [];
   }));
 
-/** I parametri completi da mandare al motore (i tipi sconosciuti suonano muti), senza quelli
- *  delle sezioni che non ci sono (gli strumenti dei pad che suonano altro). */
+/** The complete parameters to send to the engine (unknown types play silent), without those
+ *  of the sections that aren't there (the instruments of the pads playing something else). */
 const fullParams = (s: InstrumentSettings) => {
   const t = instrumentType(s.type);
   return t ? resolveActiveParams(t, s.params) : {};
@@ -58,7 +58,7 @@ class WorkletInstrument implements Instrument {
   readonly modulation = workletModulation(m => this.send(m));
   private node: AudioWorkletNode | null = null;
   private settings: InstrumentSettings;
-  /** I parametri dell'arpeggiatore: viaggiano con quelli dello strumento. */
+  /** The arpeggiator's parameters: they travel with the instrument's. */
   private arp: Readonly<Record<string, number>> = {};
   private bpm: number;
   private anchor: TransportAnchor | null;
@@ -76,12 +76,12 @@ class WorkletInstrument implements Instrument {
     this.bpm = bpm;
     this.anchor = transport;
     this.output = ctx.createGain();
-    if (ready) ready.then(() => this.build(), e => console.error('strumento non disponibile', e));
+    if (ready) ready.then(() => this.build(), e => console.error('instrument not available', e));
     else this.build();
   }
 
   play(pitch: number, velocity: number, when: number, duration: number): void {
-    // prima che il modulo sia caricato le note si perdono (succede solo all'avvio)
+    // before the module is loaded the notes are lost (it happens only at startup)
     this.send({ type: 'note', pitch, velocity, on: when, off: when + duration });
   }
 
@@ -144,7 +144,7 @@ class WorkletInstrument implements Instrument {
     this.onDispose();
   }
 
-  /** Si risolve quando il processore ha ricevuto i messaggi mandati finora. */
+  /** Resolves when the processor has received the messages sent so far. */
   settle(): Promise<void> {
     if (!this.node) return Promise.resolve();
     const id = ++this.pings;
@@ -154,7 +154,7 @@ class WorkletInstrument implements Instrument {
     });
   }
 
-  /** Solo i posti cambiati: un sample già nel motore non si rimanda. */
+  /** Only the changed slots: a sample already in the engine isn't sent again. */
   private sendSamples(prev: DeviceSamples | undefined, next: DeviceSamples | undefined, at?: number): void {
     for (const slot of new Set([...Object.keys(prev ?? {}), ...Object.keys(next ?? {})])) {
       const id = next?.[slot];
@@ -190,12 +190,12 @@ class WorkletInstrument implements Instrument {
   }
 }
 
-/** Chi ascolta i guasti dei motori: il tipo del dispositivo e l'errore (null: un campione non
- *  finito). */
+/** Who listens to the engines' failures: the device type and the error (null: a non-finite
+ *  sample). */
 export type FaultListener = (type: string, error: string | null) => void;
 
-/** Il modulo AudioWorklet dei dispositivi, caricato una volta per contesto audio. Riceve anche
- *  i guasti dei motori, che il processore ha già azzerato e riavviato (vedi worklet/guard.ts). */
+/** The devices' AudioWorklet module, loaded once per audio context. It also receives
+ *  the engines' failures, which the processor has already zeroed and restarted (see worklet/guard.ts). */
 export class DeviceWorklet {
   private readonly loading = new WeakMap<BaseAudioContext, Promise<void>>();
   private readonly loaded = new WeakSet<BaseAudioContext>();
@@ -207,7 +207,7 @@ export class DeviceWorklet {
   }
 
   fault(type: string, error: string | null): void {
-    console.error(`motore "${type}" guasto, riavviato`, error ?? 'campione non finito (NaN)');
+    console.error(`engine "${type}" broke, restarted`, error ?? 'non-finite sample (NaN)');
     for (const fn of this.faultListeners) fn(type, error);
   }
 
@@ -221,19 +221,19 @@ export class DeviceWorklet {
     return p;
   }
 
-  /** null se il modulo è già pronto (si crea subito), altrimenti l'attesa. */
+  /** null if the module is already ready (it's created right away), otherwise the wait. */
   pending(graph: AudioGraph): Promise<void> | null {
     return this.loaded.has(contextOf(graph)) ? null : this.prepare(graph);
   }
 }
 
-/** Gli strumenti vivi di un contesto e dove si trova il suo trasporto. */
+/** A context's live instruments and where its transport is. */
 interface InstrumentContext {
   readonly instruments: Set<WorkletInstrument>;
   transport: TransportAnchor | null;
 }
 
-/** Strumenti AudioWorklet, per qualunque contesto (dal vivo o offline). */
+/** AudioWorklet instruments, for any context (live or offline). */
 export class WorkletInstruments implements InstrumentHost {
   private readonly contexts = new WeakMap<BaseAudioContext, InstrumentContext>();
 
@@ -271,18 +271,18 @@ export class WorkletInstruments implements InstrumentHost {
   }
 }
 
-// ------------------------------------------------------------------ effetti
+// ------------------------------------------------------------------ effects
 
 const fullEffectParams = (s: EffectSettings) => {
   const t = effectType(s.type);
   return t ? resolveParams(t, s.params) : {};
 };
 
-/** Un effetto: un AudioWorkletNode del processore degli effetti tra due nodi fissi, così si
- *  può collegare subito (passa il suono diretto finché il modulo non è pronto). In mezzo c'è
- *  `post`, il punto da cui ascoltare il suono elaborato:
- *  input → processore → post → output. I tipi con il sidechain hanno anche `sidechain`, un nodo
- *  fisso che va nel secondo ingresso del processore. */
+/** An effect: an AudioWorkletNode of the effects processor between two fixed nodes, so it
+ *  can be connected right away (it passes the direct sound until the module is ready). In the middle there's
+ *  `post`, the point to listen to the processed sound from:
+ *  input → processor → post → output. The types with sidechain also have `sidechain`, a fixed
+ *  node going into the processor's second input. */
 class WorkletEffect implements Effect {
   readonly type: string;
   readonly input: GainNode;
@@ -320,10 +320,10 @@ class WorkletEffect implements Effect {
         this.send({ type: 'watch', on: !!listener });
       },
     };
-    // suono diretto finché il processore non c'è
+    // direct sound until the processor is there
     this.input.connect(this.post);
     if (!ready) this.build();
-    else ready.then(() => this.build(), e => console.error('effetto non disponibile', e));
+    else ready.then(() => this.build(), e => console.error('effect not available', e));
   }
 
   update(settings: EffectSettings): void {
@@ -344,7 +344,7 @@ class WorkletEffect implements Effect {
     this.send({ type: 'transport', anchor });
   }
 
-  /** Si risolve quando il processore ha ricevuto i messaggi mandati finora. */
+  /** Resolves when the processor has received the messages sent so far. */
   settle(): Promise<void> {
     if (!this.node) return Promise.resolve();
     const id = ++this.pings;
@@ -383,7 +383,7 @@ class WorkletEffect implements Effect {
       this.waiting.delete(m.id);
     };
     if (this.watcher) this.send({ type: 'watch', on: true });
-    // solo il collegamento diretto: quelli verso lo spettro restano
+    // only the direct connection: those towards the spectrum stay
     this.input.disconnect(this.post);
     this.input.connect(this.node);
     this.sidechain?.connect(this.node, 0, 1);
@@ -395,13 +395,13 @@ class WorkletEffect implements Effect {
   }
 }
 
-/** Gli effetti vivi di un contesto e dove si trova il suo trasporto. */
+/** A context's live effects and where its transport is. */
 interface EffectContext {
   readonly effects: Set<WorkletEffect>;
   transport: TransportAnchor | null;
 }
 
-/** Effetti AudioWorklet, per qualunque contesto. */
+/** AudioWorklet effects, for any context. */
 export class WorkletEffects implements EffectHost {
   private readonly contexts = new WeakMap<BaseAudioContext, EffectContext>();
 
@@ -435,20 +435,20 @@ export class WorkletEffects implements EffectHost {
   }
 }
 
-// ------------------------------------------------------------------ misuratori
+// ------------------------------------------------------------------ meters
 
-/** Quanti misuratori stanno nella memoria condivisa (oltre, vanno per messaggio). */
+/** How many meters fit in shared memory (beyond that, they go by message). */
 const METER_CAPACITY = 512;
 
-/** I valori di tutti i misuratori di un contesto: in memoria condivisa con l'AudioWorklet se
- *  il browser lo permette (pagina isolata, COOP/COEP), così leggerli non costa nulla. */
+/** The values of all of a context's meters: in memory shared with the AudioWorklet if
+ *  the browser allows it (isolated page, COOP/COEP), so reading them costs nothing. */
 class MeterBank {
   readonly buffer = typeof SharedArrayBuffer !== 'undefined' && globalThis.crossOriginIsolated
     ? new SharedArrayBuffer(METER_CAPACITY * METER_VALUES * 4) : null;
   private readonly values = this.buffer ? new Float32Array(this.buffer) : null;
   private readonly free = Array.from({ length: this.buffer ? METER_CAPACITY : 0 }, (_, i) => METER_CAPACITY - 1 - i);
 
-  /** Un posto nella memoria condivisa, o null (allora i valori arrivano per messaggio). */
+  /** A slot in shared memory, or null (then the values arrive by message). */
   take(): { offset: number; values: Float32Array } | null {
     const slot = this.free.pop();
     if (slot === undefined || !this.values) return null;
@@ -463,7 +463,7 @@ class MeterBank {
   }
 }
 
-/** Un misuratore: il processore dei misuratori tra due nodi fissi (come gli effetti). */
+/** A meter: the meters' processor between two fixed nodes (like the effects). */
 class WorkletMeter implements Meter {
   readonly input: GainNode;
   readonly output: GainNode;
@@ -480,7 +480,7 @@ class WorkletMeter implements Meter {
     if (!ready) this.build();
     else {
       this.input.connect(this.output);
-      ready.then(() => this.build(), e => console.error('misuratore non disponibile', e));
+      ready.then(() => this.build(), e => console.error('meter not available', e));
     }
   }
 
@@ -522,7 +522,7 @@ class WorkletMeter implements Meter {
   }
 }
 
-/** Misuratori AudioWorklet per il contesto dal vivo. */
+/** AudioWorklet meters for the live context. */
 export class WorkletMeters implements MeterHost {
   private readonly banks = new WeakMap<BaseAudioContext, MeterBank>();
 

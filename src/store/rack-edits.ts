@@ -1,7 +1,7 @@
-/* Modifiche dei rack: raggruppare e separare dispositivi, spostarli dentro e fuori, girare le
- * macro e mapparle sui parametri. Una macro scrive i parametri che muove nei dispositivi (e le
- * macro dei rack che ha dentro, che a loro volta muovono i loro): il motore suona i parametri
- * come sempre e non sa nulla dei rack. */
+/* Rack edits: grouping and ungrouping devices, moving them in and out, turning the
+ * macros and mapping them to parameters. A macro writes the parameters it moves into the devices (and the
+ * macros of the racks it has inside, which in turn move theirs): the engine plays the parameters
+ * as always and knows nothing of the racks. */
 import type { DeviceId } from '../core/id';
 import { clampParam, paramToUnit } from '../devices/params';
 import { mappedParamValue, mappedValue, mappingSpec } from '../devices/rack-params';
@@ -18,18 +18,18 @@ import {
 import { MidiTrack } from '../model/track';
 import { edit, type Edit } from './project-store';
 
-/** Scrive dei parametri in un dispositivo della catena. */
+/** Writes some parameters into a device of the chain. */
 function withDeviceParams(p: Project, owner: ChainOwner, key: DeviceKey, values: ParamValues): Project {
   if (key !== INSTRUMENT_DEVICE) return p.updatingEffects(owner, list => chain.update(list, key, e => withParams(e, values)));
-  if (owner === MASTER) throw new TypeError('il master non ha uno strumento');
+  if (owner === MASTER) throw new TypeError('the master has no instrument');
   return p.updatingTrack(owner, t => {
-    if (!(t instanceof MidiTrack)) throw new TypeError(`la traccia ${t.name} non ha uno strumento`);
+    if (!(t instanceof MidiTrack)) throw new TypeError(`the track ${t.name} has no instrument`);
     return t.withInstrument(withParams(t.instrument, values));
   });
 }
 
-/** Porta i parametri mappati di una macro al valore che la macro dà loro; le macro dei rack
- *  dentro portano a loro volta i loro. */
+/** Brings a macro's mapped parameters to the value the macro gives them; the macros of the inner racks
+ *  in turn bring theirs. */
 function applyMacro(p: Project, owner: ChainOwner, macro: Macro): Project {
   const byDevice = new Map<DeviceKey, Record<string, number>>();
   const inner: [rack: DeviceId, index: number, value: number][] = [];
@@ -51,15 +51,15 @@ function applyMacro(p: Project, owner: ChainOwner, macro: Macro): Project {
   return p;
 }
 
-/** La macro a `value` (un interruttore o un pulsante scatta), senza toccare i parametri. */
+/** The macro at `value` (a toggle or a button snaps), without touching the parameters. */
 const withValue = (p: Project, owner: ChainOwner, id: DeviceId, index: number, value: number): Project =>
   p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
     const v = macroValueFor(macroMode(m), value);
     return m.value === v ? m : { ...m, value: v };
   })));
 
-/** Riporta i parametri mappati ai valori delle macro di tutti i rack della catena (es. dopo un
- *  preset che li ha cambiati). */
+/** Brings the mapped parameters back to the values of the macros of all the chain's racks (e.g. after a
+ *  preset that changed them). */
 export function reapplyMacros(p: Project, owner: ChainOwner): Project {
   for (const r of p.racksOf(owner)) for (const m of r.macros) p = applyMacro(p, owner, m);
   return p;
@@ -67,11 +67,11 @@ export function reapplyMacros(p: Project, owner: ChainOwner): Project {
 
 function requireRack(p: Project, owner: ChainOwner, id: DeviceId): Rack {
   const r = findRack(p.racksOf(owner), id);
-  if (!r) throw new RangeError(`rack ${id} non trovato`);
+  if (!r) throw new RangeError(`rack ${id} not found`);
   return r;
 }
 
-/** Una nuova disposizione della catena: gli effetti nel nuovo ordine e i rack. */
+/** A new layout of the chain: the effects in the new order and the racks. */
 function layingOut(p: Project, owner: ChainOwner, fn: (order: readonly DeviceKey[], racks: RackList) => Layout): Project {
   const { order, racks } = fn(p.chainKeys(owner), p.racksOf(owner));
   return p.updatingChain(owner, c => {
@@ -82,40 +82,40 @@ function layingOut(p: Project, owner: ChainOwner, fn: (order: readonly DeviceKey
   });
 }
 
-// ------------------------------------------------------------------ gruppi
+// ------------------------------------------------------------------ groups
 
-/** Raggruppa in un rack dei dispositivi di seguito (Ctrl+G in Live). */
+/** Groups some consecutive devices into a rack (Ctrl+G in Live). */
 export const groupDevices = (owner: ChainOwner, keys: readonly DeviceKey[]): Edit =>
-  edit('Raggruppa in un rack', (p, { ids }) => p.updatingRacks(owner, racks => group(p.chainKeys(owner), racks, keys, ids.next('device'))));
+  edit('Group into a rack', (p, { ids }) => p.updatingRacks(owner, racks => group(p.chainKeys(owner), racks, keys, ids.next('device'))));
 
-/** Separa un rack: i dispositivi restano dove sono, le macro e le mappature spariscono. */
+/** Ungroups a rack: the devices stay where they are, the macros and the mappings disappear. */
 export const ungroupRack = (owner: ChainOwner, id: DeviceId): Edit =>
-  edit('Separa il rack', p => p.updatingRacks(owner, racks => ungroup(racks, id)));
+  edit('Ungroup the rack', p => p.updatingRacks(owner, racks => ungroup(racks, id)));
 
-/** Elimina un rack con i suoi effetti e i rack che ha dentro (un rack con lo strumento si può
- *  solo separare). */
+/** Deletes a rack with its effects and the racks it has inside (a rack with the instrument can
+ *  only be ungrouped). */
 export const removeRack = (owner: ChainOwner, id: DeviceId): Edit =>
-  edit('Elimina rack', p => {
+  edit('Delete rack', p => {
     const rack = requireRack(p, owner, id);
-    if (rack.devices.includes(INSTRUMENT_DEVICE)) throw new Error('un rack con lo strumento non si elimina: si può separare');
+    if (rack.devices.includes(INSTRUMENT_DEVICE)) throw new Error('a rack with the instrument can\'t be deleted: it can be ungrouped');
     const gone = new Set<DeviceKey>(rack.devices);
     return p.updatingEffects(owner, list => list.filter(e => !gone.has(e.id)));
   });
 
-/** Sposta un dispositivo di un posto, entrando e uscendo dai rack (vedi rack.moveDevice). */
+/** Moves a device by one place, entering and leaving racks (see rack.moveDevice). */
 export const moveDevice = (owner: ChainOwner, key: DeviceKey, dir: -1 | 1): Edit =>
-  edit('Sposta dispositivo', p => layingOut(p, owner, (order, racks) => moveInLayout(order, racks, key, dir)));
+  edit('Move device', p => layingOut(p, owner, (order, racks) => moveInLayout(order, racks, key, dir)));
 
 export const moveRack = (owner: ChainOwner, id: DeviceId, dir: -1 | 1): Edit =>
-  edit('Sposta rack', p => layingOut(p, owner, (order, racks) => moveRackInLayout(order, racks, id, dir)));
+  edit('Move rack', p => layingOut(p, owner, (order, racks) => moveRackInLayout(order, racks, id, dir)));
 
-/** Mette un rack dentro il rack accanto, prima (−1) o dopo (+1). */
+/** Puts a rack inside the rack next to it, before (−1) or after (+1). */
 export const nestRack = (owner: ChainOwner, id: DeviceId, dir: -1 | 1): Edit =>
-  edit('Metti nel rack', p => layingOut(p, owner, (order, racks) => nestRackInLayout(order, racks, id, dir)));
+  edit('Put in the rack', p => layingOut(p, owner, (order, racks) => nestRackInLayout(order, racks, id, dir)));
 
-/** Aggiunge un effetto in fondo al rack. */
+/** Adds an effect at the end of the rack. */
 export const addEffectToRack = (owner: ChainOwner, id: DeviceId, type: string, label: string): Edit =>
-  edit(`Aggiungi ${label}`, (p, { ids }) => {
+  edit(`Add ${label}`, (p, { ids }) => {
     const rack = requireRack(p, owner, id);
     const effect = newEffect(ids.next('device'), type);
     const last = rack.devices.at(-1)!;
@@ -126,25 +126,25 @@ export const addEffectToRack = (owner: ChainOwner, id: DeviceId, type: string, l
   });
 
 export const renameRack = (owner: ChainOwner, id: DeviceId, name: string | null): Edit =>
-  edit('Rinomina rack', p => p.updatingRacks(owner, racks => updateRack(racks, id, r => ({ ...r, name }))));
+  edit('Rename rack', p => p.updatingRacks(owner, racks => updateRack(racks, id, r => ({ ...r, name }))));
 
 // ------------------------------------------------------------------ macro
 
-/** Gira una macro (0 … 127): i parametri mappati la seguono. Un interruttore o un pulsante
- *  scatta: da metà in su è acceso (127), sotto spento (0). */
+/** Turns a macro (0 … 127): the mapped parameters follow it. A toggle or a button
+ *  snaps: from halfway up it's on (127), below off (0). */
 export const setMacro = (owner: ChainOwner, id: DeviceId, index: number, value: number): Edit =>
   edit('Macro', p => withMacroValue(p, owner, id, index, value));
 
-/** Una macro mappata su una macro di un rack intorno non si gira: la muove quella. */
+/** A macro mapped to a macro of a surrounding rack can't be turned: that one moves it. */
 function withMacroValue(p: Project, owner: ChainOwner, id: DeviceId, index: number, value: number): Project {
   if (macroOf(p.racksOf(owner), id, macroParam(index))) return p;
   const next = withValue(p, owner, id, index, value);
   return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
 }
 
-/** Cambia il tipo di una macro. Diventando interruttore scatta al capo più vicino; un pulsante
- *  parte spento (si accende solo mentre lo si tiene premuto); una molla riposa dov'è (e torna in
- *  1/4), e smettendo di esserlo resta al suo riposo. */
+/** Changes a macro's kind. Becoming a toggle it snaps to the nearest end; a button
+ *  starts off (it lights up only while held down); a spring rests where it is (and returns in
+ *  1/4), and when it stops being one it stays at its rest. */
 export const setMacroMode = (owner: ChainOwner, id: DeviceId, index: number, mode: MacroMode): Edit =>
   edit(`Macro: ${MACRO_MODES.find(([m]) => m === mode)?.[1] ?? mode}`, p => {
     const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
@@ -158,13 +158,13 @@ export const setMacroMode = (owner: ChainOwner, id: DeviceId, index: number, mod
     return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
   });
 
-/** Il riposo o il tempo di ritorno di una macro molla. Il riposo nuovo è anche il suo valore:
- *  una molla ferma sta al riposo. */
+/** The rest or the return time of a spring macro. The new rest is also its value:
+ *  a still spring sits at rest. */
 export const setMacroSpring = (owner: ChainOwner, id: DeviceId, index: number, patch: Partial<MacroSpring>): Edit =>
-  edit(patch.rest !== undefined ? 'Riposo della molla' : 'Ritorno della molla', p => {
+  edit(patch.rest !== undefined ? 'Spring rest' : 'Spring return', p => {
     const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
       const s = springOf(m);
-      if (!s) throw new TypeError('la macro non è una molla');
+      if (!s) throw new TypeError('the macro isn\'t a spring');
       const spring = springFor(patch.rest ?? s.rest, patch.time ?? s.time, patch.sync ?? s.sync);
       if (spring.rest === s.rest && spring.time === s.time && spring.sync === s.sync && m.spring) return m;
       return { ...m, spring, ...(patch.rest !== undefined ? { value: spring.rest } : {}) };
@@ -172,8 +172,8 @@ export const setMacroSpring = (owner: ChainOwner, id: DeviceId, index: number, p
     return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
   });
 
-/** Il progetto con ogni macro molla al suo riposo (e i parametri dove li porta): ciò che si
- *  salva, anche se nel frattempo una molla è tirata o sta tornando. */
+/** The project with every spring macro at its rest (and the parameters where it takes them): what's
+ *  saved, even if meanwhile a spring is pulled or returning. */
 export function springsAtRest(p: Project): Project {
   const owners: ChainOwner[] = [...p.channels.map(t => t.id), MASTER];
   for (const owner of owners) {
@@ -188,21 +188,21 @@ export function springsAtRest(p: Project): Project {
 }
 
 export const renameMacro = (owner: ChainOwner, id: DeviceId, index: number, name: string | null): Edit =>
-  edit('Rinomina macro', p => p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => ({ ...m, name })))));
+  edit('Rename macro', p => p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => ({ ...m, name })))));
 
-/** Mappa un parametro di un dispositivo del rack (anche dentro un rack che ha dentro), o la
- *  macro di un rack che ha dentro (`device` il rack, `param` "macroN"), su una macro, su tutta la
- *  sua corsa. Se la macro non muoveva ancora niente prende la posizione del parametro (niente
- *  salti); altrimenti il parametro va dove la macro lo porta. Un parametro mappato su un'altra
- *  macro ci si sposta. Un interruttore (una scelta Off/On) su una manopola vuota la fa diventare
- *  un interruttore. */
+/** Maps a parameter of a device of the rack (also inside a rack it has inside), or the
+ *  macro of a rack it has inside (`device` the rack, `param` "macroN"), to a macro, over its whole
+ *  travel. If the macro didn't move anything yet it takes the parameter's position (no
+ *  jumps); otherwise the parameter goes where the macro takes it. A parameter mapped to another
+ *  macro moves over. A switch (an Off/On choice) on an empty knob turns it into
+ *  a toggle. */
 export const mapMacro = (owner: ChainOwner, id: DeviceId, index: number, device: DeviceKey, param: string): Edit =>
-  edit('Mappa sulla macro', p => {
+  edit('Map to the macro', p => {
     const rack = requireRack(p, owner, id);
     const inner = innerRacks(p.racksOf(owner), rack).some(r => r.id === device);
-    if (!rack.devices.includes(device) && !inner) throw new Error('si mappano solo parametri dei dispositivi del rack, o le macro dei rack che ha dentro');
+    if (!rack.devices.includes(device) && !inner) throw new Error('only parameters of the rack\'s devices can be mapped, or the macros of the racks it has inside');
     const spec = mappingSpec(p, owner, { device, param });
-    if (!spec) throw new RangeError(`parametro ${param} non trovato`);
+    if (!spec) throw new RangeError(`parameter ${param} not found`);
     const mapping: MacroMapping = spec.kind === 'number'
       ? { device, param, min: spec.min, max: spec.max }
       : { device, param, min: 0, max: spec.options.length - 1 };
@@ -222,9 +222,9 @@ export const mapMacro = (owner: ChainOwner, id: DeviceId, index: number, device:
     return applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
   });
 
-/** Toglie un parametro dalla sua macro (resta al valore che ha). */
+/** Removes a parameter from its macro (it stays at the value it has). */
 export const unmapParam = (owner: ChainOwner, device: DeviceKey, param: string): Edit =>
-  edit('Togli dalla macro', p => {
+  edit('Remove from the macro', p => {
     const found = macroOf(p.racksOf(owner), device, param);
     if (!found) return p;
     return p.updatingRacks(owner, racks => updateRack(racks, found.rack.id, r => updateMacro(r, found.index, m => ({
@@ -232,11 +232,11 @@ export const unmapParam = (owner: ChainOwner, device: DeviceKey, param: string):
     }))));
   });
 
-/** Cambia minimo e/o massimo di una mappatura; il parametro segue subito. */
+/** Changes minimum and/or maximum of a mapping; the parameter follows right away. */
 export const setMappingRange = (owner: ChainOwner, device: DeviceKey, param: string, range: { min?: number; max?: number }): Edit =>
-  edit('Corsa della macro', p => {
+  edit('Macro range', p => {
     const found = macroOf(p.racksOf(owner), device, param);
-    if (!found) throw new RangeError(`il parametro ${param} non è mappato`);
+    if (!found) throw new RangeError(`parameter ${param} isn't mapped`);
     const next = p.updatingRacks(owner, racks => updateRack(racks, found.rack.id, r => updateMacro(r, found.index, m => ({
       ...m, mappings: m.mappings.map(x => (x.device === device && x.param === param ? { ...x, ...range } : x)),
     }))));

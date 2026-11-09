@@ -6,18 +6,18 @@ import {
 } from '../../src/store/edits';
 import { setup } from '../helpers/fixtures';
 
-describe('catena degli effetti', () => {
+describe('effect chain', () => {
   const rig = () => {
     const s = setup({ audio: 1, midi: 1 });
     const fx = (t = 0) => s.store.project.tracks[t].effects;
     return { ...s, fx };
   };
 
-  it('aggiungere, regolare, spegnere: ogni passo si annulla', () => {
+  it('adding, adjusting, turning off: each step can be undone', () => {
     const { store, track, fx } = rig();
     store.apply(addEffect(track(0), 'delay', 'Delay'));
     expect(fx()).toEqual([{ id: fx()[0].id, type: 'delay', enabled: true, preset: null, params: {} }]);
-    expect(store.undoLabel).toBe('Aggiungi Delay');
+    expect(store.undoLabel).toBe('Add Delay');
     const id = fx()[0].id;
     store.apply(setEffectParam(track(0), id, 'feedback', 60));
     store.apply(setEffectEnabled(track(0), id, false));
@@ -27,7 +27,7 @@ describe('catena degli effetti', () => {
     expect(fx()[0]).toMatchObject({ enabled: true, params: {} });
   });
 
-  it('su tracce audio e MIDI; preset; ordine e rimozione', () => {
+  it('on audio and MIDI tracks; presets; order and removal', () => {
     const { store, track, fx } = rig();
     store.apply(addEffect(track(1), 'delay', 'Delay'));
     store.apply(addEffect(track(1), 'delay', 'Delay'));
@@ -38,10 +38,10 @@ describe('catena degli effetti', () => {
     expect(fx(1).map(e => e.id)).toEqual([b, a]);
     store.apply(removeEffect(track(1), b));
     expect(fx(1).map(e => e.id)).toEqual([a]);
-    expect(() => store.apply(removeEffect(track(1), b))).toThrow(/non trovato/);
+    expect(() => store.apply(removeEffect(track(1), b))).toThrow(/not found/);
   });
 
-  it('si salvano; un file della versione 2 si apre senza effetti', () => {
+  it('they\'re saved; a version 2 file opens without effects', () => {
     const { store, track } = rig();
     store.apply(addEffect(track(0), 'delay', 'Delay'));
     const id = store.project.tracks[0].effects[0].id;
@@ -57,7 +57,7 @@ describe('catena degli effetti', () => {
     expect(codec.decode(json).tracks.map(t => t.effects)).toEqual([[], []]);
   });
 
-  it('anche il master ha la sua catena: stesse modifiche, si annullano, si salvano', () => {
+  it('the master too has its chain: same edits, they\'re undone, they\'re saved', () => {
     const { store, fx } = rig();
     const master = () => store.project.masterEffects;
     store.apply(addEffect(MASTER, 'delay', 'Delay'));
@@ -67,7 +67,7 @@ describe('catena degli effetti', () => {
     store.apply(moveEffect(MASTER, b, 0));
     store.apply(setEffectEnabled(MASTER, a, false));
     expect(master().map(e => [e.id, e.enabled, e.params])).toEqual([[b, true, {}], [a, false, { mix: 20 }]]);
-    expect(fx(0)).toEqual([]); // le tracce non cambiano
+    expect(fx(0)).toEqual([]); // the tracks don't change
     store.apply(setMasterMixer({ volumeDb: -3, mute: true }));
     expect(store.project.master).toMatchObject({ volumeDb: -3, mute: true });
 
@@ -82,7 +82,7 @@ describe('catena degli effetti', () => {
     expect(master()).toEqual([]);
   });
 
-  it('un file della versione 3 si apre con il master senza effetti', () => {
+  it('a version 3 file opens with the master without effects', () => {
     const { store } = rig();
     const codec = new ProjectCodec();
     const json = JSON.parse(codec.stringify(store.project));

@@ -7,8 +7,8 @@ import type { UiState } from './ui-state';
 const button = (text: string, title: string, onclick: () => void, className = '') =>
   Object.assign(document.createElement('button'), { textContent: text, title, onclick, className });
 
-/** La barra di controllo: ciò che serve per suonare (trasporto, tempo, loop, metronomo, segui).
- *  Tutto il resto sta nella barra dei menu. */
+/** The control bar: what's needed to play (transport, tempo, loop, metronome, follow).
+ *  Everything else is in the menu bar. */
 export class TransportBar {
   readonly element = Object.assign(document.createElement('header'), { className: 'transport' });
   private readonly play: HTMLButtonElement;
@@ -21,7 +21,7 @@ export class TransportBar {
   private readonly midi: HTMLButtonElement;
 
   constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, commands: Commands) {
-    this.play = button('▶', 'Play / Stop (Spazio)', () => commands.togglePlay(), 'play');
+    this.play = button('▶', 'Play / Stop (Space)', () => commands.togglePlay(), 'play');
     this.bpm = Object.assign(document.createElement('input'), { type: 'number', min: '20', max: '999', step: '0.01', title: 'Tempo (BPM)' });
     this.bpm.onchange = () => {
       const v = Number(this.bpm.value);
@@ -30,14 +30,14 @@ export class TransportBar {
     };
     this.bpm.onkeydown = e => { if (e.key === 'Enter') this.bpm.blur(); };
     this.loop = button('⟲ Loop', 'Loop (Ctrl+L)', () => commands.toggleLoop());
-    this.metro = button('♩ Metro', 'Metronomo (Ctrl+Maiusc+M)', () => commands.toggleMetronome());
-    this.follow = button('↦ Segui', '', () => commands.toggleFollow(), 'follow');
-    this.keys = button('KEY', 'Mappa la tastiera del computer sulle macro dei rack e sui parametri dei dispositivi (Ctrl+K)',
+    this.metro = button('♩ Metro', 'Metronome (Ctrl+Shift+M)', () => commands.toggleMetronome());
+    this.follow = button('↦ Follow', '', () => commands.toggleFollow(), 'follow');
+    this.keys = button('KEY', 'Map the computer keyboard to the racks\' macros and the devices\' parameters (Ctrl+K)',
       () => commands.toggleKeyMap(), 'key-map');
-    this.midi = button('MIDI', 'Mappa il MIDI di un controller qualsiasi sulle macro, sui parametri e sul mixer (Ctrl+M)',
+    this.midi = button('MIDI', 'Map any controller\'s MIDI to the macros, the parameters and the mixer (Ctrl+M)',
       () => commands.toggleMidiMap(), 'midi-map');
     this.element.append(
-      group(this.play, button('■', 'Stop e torna all\'inizio (Invio)', () => commands.stopAndRewind()), this.pos, this.follow),
+      group(this.play, button('■', 'Stop and return to the start (Enter)', () => commands.stopAndRewind()), this.pos, this.follow),
       group(labelled('BPM', this.bpm), this.loop, this.metro, this.keys, this.midi),
     );
     store.onChange(() => this.render());
@@ -51,7 +51,7 @@ export class TransportBar {
     tick();
   }
 
-  /** Aggiunge un gruppo di controlli in fondo a destra. */
+  /** Adds a group of controls at the far right. */
   addGroup(...nodes: Node[]): void {
     const g = group(...nodes);
     g.classList.add('end');
@@ -71,8 +71,8 @@ export class TransportBar {
     this.follow.classList.toggle('on', this.ui.following);
     this.follow.classList.toggle('paused', paused);
     this.follow.title = paused
-      ? 'Segui è in pausa perché hai spostato la vista: clic qui, sul righello o di nuovo Play per riprendere (Ctrl+Maiusc+F)'
-      : 'Segui la testina mentre suona (Ctrl+Maiusc+F)';
+      ? 'Follow is paused because you moved the view: click here, on the ruler or Play again to resume (Ctrl+Shift+F)'
+      : 'Follow the playhead while playing (Ctrl+Shift+F)';
   }
 }
 

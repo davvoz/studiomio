@@ -1,8 +1,8 @@
-/* Il suono del Gate: il volume segue il pattern. A ogni campione si guarda quale step suona (dal
- * battito del trasporto, con lo swing) e se è nella sua parte aperta; il volume ci va in linea
- * retta, alla velocità dell'attacco quando sale e del rilascio quando scende: niente click,
- * neanche quando il trasporto salta. Da fermo il pattern gira libero al tempo del progetto.
- * Gira nell'AudioWorklet; qui niente Web Audio. */
+/* The Gate's sound: the volume follows the pattern. At each sample it checks which step plays (from the
+ * transport's beat, with swing) and whether it's in its open part; the volume goes there in a straight
+ * line, at the attack's speed when it rises and the release's when it falls: no clicks,
+ * not even when the transport jumps. When stopped the pattern runs free at the project's tempo.
+ * Runs in the AudioWorklet; no Web Audio here. */
 import type { EffectCore, TransportFollower, TransportPosition } from '../../dsp/core';
 import { LfoClock } from '../../dsp/lfo';
 import { StepPosition } from '../../dsp/steps';
@@ -14,7 +14,7 @@ export class GateCore implements EffectCore, TransportFollower {
   private readonly levels = new Float32Array(MAX_STEPS);
   private transport: TransportPosition | null = null;
   private bpm = 120;
-  /** Quanto è aperto adesso (0..1). */
+  /** How open it is now (0..1). */
   private env = 1;
   private stepBeats = 0.25;
   private length = 16;
@@ -48,14 +48,14 @@ export class GateCore implements EffectCore, TransportFollower {
     this.transport = position;
   }
 
-  /** Quanto è aperto adesso, 0..1 (per i test e per disegnarlo). */
+  /** How open it is now, 0..1 (for tests and for drawing it). */
   get level(): number {
     return this.env;
   }
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     const { clock, position, levels, length, swing, gate, up, down, depth } = this;
-    // un giro dell'orologio è l'intero pattern: gli step cadono sulla battuta
+    // one round of the clock is the whole pattern: the steps fall on the bar
     clock.start({ beats: this.stepBeats * length, hz: 0 }, this.transport, this.bpm);
     let env = this.env;
     for (let i = 0; i < n; i++) {

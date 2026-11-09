@@ -1,20 +1,20 @@
-/* La session nel motore: per ogni traccia, cosa suona e da quando, sull'orologio continuo
- * del trasporto (battiti che scorrono senza mai saltare, anche quando la timeline torna
- * all'inizio del loop). Una traccia segue l'arrangement finché non le si lancia una clip;
- * da lì suona la clip (o niente, se la si ferma) finché non si torna all'arrangement.
- * Fermando il trasporto le clip che suonano si ricordano, e ripartono con il play.
- * È stato della riproduzione, non del progetto: non si salva e non si annulla. */
+/* The session in the engine: for each track, what it plays and since when, on the transport's
+ * continuous clock (beats flowing without ever jumping, even when the timeline goes back
+ * to the start of the loop). A track follows the arrangement until a clip is launched on it;
+ * from there it plays the clip (or nothing, if it's stopped) until it goes back to the arrangement.
+ * Stopping the transport the playing clips are remembered, and restart with play.
+ * It's playback state, not project state: it isn't saved and can't be undone. */
 import type { ClipId, TrackId } from '../core/id';
 import type { Clip } from '../model/clip';
 import type { Track } from '../model/track';
 
-/** Cosa suona una traccia in un tratto dell'orologio: la sua timeline, o una clip della
- *  session lanciata all'istante `origin`. */
+/** What a track plays in a stretch of the clock: its timeline, or a session clip
+ *  launched at instant `origin`. */
 export type ProgramSource =
   | { readonly kind: 'arrangement' }
   | { readonly kind: 'clip'; readonly clip: ClipId; readonly origin: number };
 
-/** Un tratto della scaletta di una traccia: `source` suona in [from, until). */
+/** A stretch of a track's schedule: `source` plays in [from, until). */
 export interface Program {
   readonly source: ProgramSource;
   readonly from: number;
@@ -24,28 +24,28 @@ export interface Program {
 const ARRANGEMENT: ProgramSource = { kind: 'arrangement' };
 const ALWAYS_ARRANGEMENT: readonly Program[] = [{ source: ARRANGEMENT, from: -Infinity, until: Infinity }];
 
-/** Lo stato di una traccia da mostrare nella session. */
+/** A track's state to show in the session. */
 export interface TrackSessionState {
-  /** La clip che suona: slot, e da quanti battiti (dal suo inizio). */
+  /** The playing clip: slot, and for how many beats (since its start). */
   readonly playing: { readonly slot: number; readonly elapsed: number } | null;
-  /** Cosa succederà al prossimo confine: un'altra clip, lo stop o il ritorno all'arrangement. */
+  /** What will happen at the next boundary: another clip, the stop or the return to the arrangement. */
   readonly queued: { readonly slot: number } | 'stop' | 'arrangement' | null;
-  /** La traccia suona la sua timeline (non è stata presa dalla session). */
+  /** The track plays its timeline (it wasn't taken by the session). */
   readonly followsArrangement: boolean;
 }
 
-/** La scaletta di una traccia: tratti in ordine, che non si sovrappongono. */
+/** A track's schedule: stretches in order, not overlapping. */
 export class TrackSchedule {
   private list: readonly Program[] = ALWAYS_ARRANGEMENT;
-  /** La clip che suonava quando il trasporto si è fermato: ripartirà con il play. */
+  /** The clip that was playing when the transport stopped: it will restart with play. */
   private paused: ClipId | null = null;
 
   get programs(): readonly Program[] {
     return this.list;
   }
 
-  /** Da `at` in poi suona `source` (niente se null): ciò che suonava si chiude in `at`, ciò che
-   *  era in coda dopo `at` si cancella. */
+  /** From `at` on `source` plays (nothing if null): what was playing closes at `at`, what
+   *  was queued after `at` is cancelled. */
   switchAt(at: number, source: ProgramSource | null): void {
     this.paused = null;
     const kept = this.list.filter(p => p.from < at).map(p => (p.until > at ? { ...p, until: at } : p));
@@ -56,32 +56,32 @@ export class TrackSchedule {
     return this.list.find(p => p.from <= clock && clock < p.until);
   }
 
-  /** Il primo tratto che inizia dopo `clock` (in coda). */
+  /** The first stretch starting after `clock` (queued). */
   after(clock: number): Program | undefined {
     return this.list.find(p => p.from > clock);
   }
 
-  /** Dimentica i tratti finiti prima di `clock`. */
+  /** Forgets the stretches finished before `clock`. */
   prune(clock: number): void {
     if (this.list.some(p => p.until <= clock)) this.list = this.list.filter(p => p.until > clock);
   }
 
-  /** Trasporto fermo: le clip si fermano e ciò che era in coda si cancella. Una traccia che
-   *  seguiva l'arrangement continua a seguirlo; una presa dalla session tace, e se suonava
-   *  la clip `resume` la riprende dall'inizio al prossimo play (come in Live). L'orologio
-   *  ripartirà da capo. */
+  /** Transport stopped: the clips stop and what was queued is cancelled. A track that
+   *  followed the arrangement keeps following it; one taken by the session goes silent, and if it was playing
+   *  clip `resume` restarts it from the start at the next play (as in Live). The clock
+   *  will restart from the top. */
   reset(clock: number, resume: ClipId | null): void {
     this.list = this.at(clock)?.source.kind === 'arrangement' ? ALWAYS_ARRANGEMENT : [];
     this.paused = resume;
   }
 
-  /** Il trasporto riparte all'istante `clock`: la clip ricordata allo stop suona da lì. */
+  /** The transport restarts at instant `clock`: the clip remembered at the stop plays from there. */
   start(clock: number): void {
     if (this.paused) this.list = [{ source: { kind: 'clip', clip: this.paused, origin: clock }, from: clock, until: Infinity }];
     this.paused = null;
   }
 
-  /** A trasporto fermo: la clip ricordata non ripartirà. */
+  /** With the transport stopped: the remembered clip won't restart. */
   forget(): void {
     this.paused = null;
   }
@@ -94,7 +94,7 @@ export class TrackSchedule {
 export class Session {
   private readonly tracks = new Map<TrackId, TrackSchedule>();
 
-  /** La scaletta della traccia (all'inizio: segue l'arrangement). */
+  /** The track's schedule (at the start: it follows the arrangement). */
   schedule(track: TrackId): TrackSchedule {
     let s = this.tracks.get(track);
     if (!s) this.tracks.set(track, (s = new TrackSchedule()));
@@ -113,7 +113,7 @@ export class Session {
     this.schedule(track).switchAt(at, null);
   }
 
-  /** Le tracce prese dalla session tornano alla loro timeline da `at`; restituisce quali. */
+  /** The tracks taken by the session go back to their timeline from `at`; returns which. */
   backToArrangement(at: number): TrackId[] {
     const moved: TrackId[] = [];
     for (const [id, s] of this.tracks) {
@@ -125,7 +125,7 @@ export class Session {
     return moved;
   }
 
-  /** Le tracce che, finiti i cambi in coda, non seguiranno la loro timeline. */
+  /** The tracks that, once the queued changes are done, won't follow their timeline. */
   get taken(): ReadonlySet<TrackId> {
     return new Set([...this.tracks].filter(([, s]) => s.programs.at(-1)?.source.kind !== 'arrangement').map(([id]) => id));
   }
@@ -142,8 +142,8 @@ export class Session {
     };
   }
 
-  /** Trasporto fermo: vedi TrackSchedule.reset. Le clip che suonano ancora (non quelle
-   *  senza loop già finite) ripartiranno con il play. */
+  /** Transport stopped: see TrackSchedule.reset. The clips still playing (not those
+   *  without loop already finished) will restart with play. */
   reset(tracks: readonly Track[], clock: number): void {
     for (const [id, s] of this.tracks) {
       const track = tracks.find(t => t.id === id);
@@ -152,13 +152,13 @@ export class Session {
     }
   }
 
-  /** Il trasporto riparte: vedi TrackSchedule.start. */
+  /** The transport starts again: see TrackSchedule.start. */
   start(clock: number): void {
     for (const s of this.tracks.values()) s.start(clock);
   }
 
-  /** A trasporto fermo: le clip ricordate di `tracks` (tutte se omesso) non ripartiranno;
-   *  restituisce se ce n'erano. */
+  /** With the transport stopped: the remembered clips of `tracks` (all if omitted) won't restart;
+   *  returns whether there were any. */
   forget(tracks?: readonly TrackId[]): boolean {
     let any = false;
     for (const [id, s] of this.tracks) {
@@ -178,8 +178,8 @@ export class Session {
   }
 }
 
-/** Lo stato di un gruppo dalle sue tracce: suona la clip della prima che suona, è in coda ciò
- *  che una aspetta (una clip prima dello stop), segue l'arrangement se lo seguono tutte. */
+/** A group's state from its tracks: it plays the clip of the first that plays, it queues what
+ *  one is waiting for (a clip before the stop), it follows the arrangement if they all follow it. */
 export function mergedState(states: readonly TrackSessionState[]): TrackSessionState {
   const clip = states.find(s => typeof s.queued === 'object' && s.queued)?.queued;
   return {
@@ -189,13 +189,13 @@ export function mergedState(states: readonly TrackSessionState[]): TrackSessionS
   };
 }
 
-/** Uno slot di un gruppo, dalle tracce del gruppo nella stessa riga. */
+/** A group's slot, from the group's tracks in the same row. */
 export interface GroupSlotState {
-  /** Almeno una traccia ha una clip nella riga (lo slot ha ▶). */
+  /** At least one track has a clip in the row (the slot has ▶). */
   readonly clips: boolean;
-  /** Almeno una suona la sua clip della riga. */
+  /** At least one plays its clip of the row. */
   readonly playing: boolean;
-  /** Almeno una aspetta il prossimo confine per lanciare la sua clip della riga. */
+  /** At least one is waiting for the next boundary to launch its clip of the row. */
   readonly queued: boolean;
 }
 
@@ -207,16 +207,16 @@ export function groupSlotState(members: readonly (readonly [Track, TrackSessionS
   };
 }
 
-/** Una scena: suona se suona almeno una delle sue clip (lanciata una clip di un'altra scena,
- *  suonano tutte e due), è in coda se una traccia aspetta il prossimo confine per lanciare la
- *  sua clip della riga. */
+/** A scene: it plays if at least one of its clips plays (with a clip of another scene launched,
+ *  both play), it's queued if a track is waiting for the next boundary to launch its
+ *  clip of the row. */
 export interface SceneState {
   readonly clips: boolean;
   readonly playing: boolean;
   readonly queued: boolean;
 }
 
-/** `tracks`: le tracce che suonano (non i gruppi), con il loro stato. */
+/** `tracks`: the playing tracks (not the groups), with their state. */
 export function sceneState(tracks: readonly (readonly [Track, TrackSessionState])[], slot: number): SceneState {
   const withClip = tracks.filter(([t]) => t.slots[slot]);
   return {
@@ -226,7 +226,7 @@ export function sceneState(tracks: readonly (readonly [Track, TrackSessionState]
   };
 }
 
-/** La clip `id` negli slot della traccia (null se non c'è più). */
+/** Clip `id` in the track's slots (null if it's gone). */
 export function slotClip(track: Track, id: ClipId): Clip | null {
   return track.slots.find(c => c?.id === id) ?? null;
 }
@@ -236,7 +236,7 @@ function slotOf(track: Track, id: ClipId): { slot: number } | null {
   return slot < 0 ? null : { slot };
 }
 
-/** Una clip senza loop finisce da sola: dopo la sua durata non suona più. */
+/** A clip without loop ends by itself: after its length it no longer plays. */
 function playingClip(track: Track, id: ClipId, elapsed: number): TrackSessionState['playing'] {
   const slot = track.slots.findIndex(c => c?.id === id);
   if (slot < 0 || elapsed >= track.slots[slot]!.playLength) return null;

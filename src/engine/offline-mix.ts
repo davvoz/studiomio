@@ -8,13 +8,13 @@ import type { InstrumentHost } from './players/instrument';
 import type { RenderCache } from './render-cache';
 import type { SampleLibrary } from './sample-library';
 
-/** Un grafo che calcola l'audio tutto in una volta (OfflineAudioContext). */
+/** A graph computing the audio all at once (OfflineAudioContext). */
 export interface OfflineGraph extends AudioGraph {
   startRendering(): Promise<{ readonly numberOfChannels: number; getChannelData(channel: number): Float32Array }>;
 }
 
 export interface MixDeps {
-  /** Crea il grafo offline: OfflineAudioContext nel browser. */
+  /** Creates the offline graph: OfflineAudioContext in the browser. */
   readonly createGraph: (frames: number, sampleRate: number) => OfflineGraph;
   readonly library: SampleLibrary;
   readonly renders: RenderCache;
@@ -22,12 +22,12 @@ export interface MixDeps {
   readonly effects: EffectHost;
 }
 
-/** Mixdown di [from, to) del progetto, con lo stesso motore della riproduzione dal vivo.
- *  Il loop della timeline non si applica: si esporta la timeline com'è. */
+/** Mixdown of [from, to) of the project, with the same engine as live playback.
+ *  The timeline loop doesn't apply: the timeline is exported as it is. */
 export async function renderMix(
   project: Project, from: Beats, to: Beats, deps: MixDeps, sampleRate = 44100, tailSeconds = 1,
 ): Promise<Float32Array[]> {
-  if (!(to > from)) throw new RangeError('intervallo vuoto');
+  if (!(to > from)) throw new RangeError('empty interval');
   const seconds = project.tempo.secondsAt(to - from) + tailSeconds;
   const graph = deps.createGraph(Math.ceil(seconds * sampleRate), sampleRate);
   const clips = new ClipAudio(graph, deps.library, deps.renders);
@@ -35,14 +35,14 @@ export async function renderMix(
   const engine = new PlaybackEngine(graph, { clips, instruments: deps.instruments, effects: deps.effects }, { timer: { every: () => () => {} } });
   engine.setProject(project);
   engine.scheduleRange(from, to, 0);
-  // strumenti ed effetti ricevono note e trasporto per messaggio: devono averli prima di iniziare
+  // instruments and effects receive notes and transport by message: they must have them before starting
   await Promise.all([deps.instruments.settle(graph), deps.effects.settle?.(graph)]);
   const out = await graph.startRendering();
   return Array.from({ length: out.numberOfChannels }, (_, i) => out.getChannelData(i).slice());
 }
 
-/** Un loop di `frames` campioni da un mixdown più lungo: la coda (riverberi, delay) oltre la
- *  fine si somma all'inizio, come quando il loop si ripete, così riparte senza stacchi. */
+/** A loop of `frames` samples from a longer mixdown: the tail (reverbs, delays) beyond the
+ *  end is added to the start, as when the loop repeats, so it restarts seamlessly. */
 export function foldTail(channels: readonly Float32Array[], frames: number): Float32Array[] {
   return channels.map(c => {
     const out = c.slice(0, frames);

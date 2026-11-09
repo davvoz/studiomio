@@ -1,20 +1,20 @@
-/* Il filtro di Prisma, stereo (i due canali con gli stessi coefficienti): passa-basso a 12 e
- * 24 dB, il ladder saturato, passa-alto, passa-banda, notch, peak, i comb (positivo e
- * negativo), il formante (le vocali) e il phaser. Il drive satura il suono prima del filtro,
- * il mix lo rimescola con quello asciutto. I coefficienti si calcolano alla frequenza di
- * controllo (`set`), il suono campione per campione (`process`, sul posto). */
+/* Prisma's filter, stereo (the two channels with the same coefficients): low-pass at 12 and
+ * 24 dB, the saturated ladder, high-pass, band-pass, notch, peak, the combs (positive and
+ * negative), the formant (the vowels) and the phaser. The drive saturates the sound before the filter,
+ * the mix blends it back with the dry. The coefficients are computed at the control
+ * rate (`set`), the sound sample by sample (`process`, in place). */
 import { FILTER } from './prisma';
 
-/** Le vocali A E I O U: tre formanti (Hz) e i loro livelli. */
+/** The vowels A E I O U: three formants (Hz) and their levels. */
 const VOWELS: readonly (readonly [number, number, number])[] = [
   [780, 1150, 2800], [420, 1650, 2650], [290, 2050, 2950], [460, 820, 2800], [330, 700, 2500],
 ];
 const VOWEL_GAINS = [1, 0.6, 0.25];
-/** Il ritardo più lungo dei comb: un periodo a 20 Hz (alla frequenza di campionamento più alta). */
+/** The combs' longest delay: a period at 20 Hz (at the highest sample rate). */
 const COMB_SIZE = 1 << 13;
 const PHASER_STAGES = 4;
 
-/** Un filtro a variabili di stato (TPT), un canale: dà passa-basso, passa-banda e passa-alto. */
+/** A state-variable filter (TPT), one channel: gives low-pass, band-pass and high-pass. */
 class SvfState {
   ic1 = 0;
   ic2 = 0;
@@ -52,12 +52,12 @@ class SvfCoefs {
   }
 }
 
-/** Un canale del filtro: tutti gli stati che servono ai vari tipi. */
+/** A channel of the filter: all the states the various types need. */
 class Channel {
   readonly s1 = new SvfState();
   readonly s2 = new SvfState();
   readonly formants = [new SvfState(), new SvfState(), new SvfState()];
-  /** Gli stadi del ladder (passa-basso a un polo TPT). */
+  /** The ladder's stages (one-pole TPT low-pass). */
   readonly ladder = new Float64Array(4);
   readonly allpass = new Float64Array(PHASER_STAGES);
   phaserFeedback = 0;
@@ -86,18 +86,18 @@ export class PrismaFilter {
   private readonly cf = [new SvfCoefs(), new SvfCoefs(), new SvfCoefs()];
   private readonly left = new Channel();
   private readonly right = new Channel();
-  /** Ladder: il guadagno di un polo e la retroazione. */
+  /** Ladder: the gain of one pole and the feedback. */
   private ladderG = 0;
   private ladderK = 0;
   private res = 0;
   private drive = 0;
   private driveGain = 1;
   private mix = 1;
-  /** Comb: ritardo in campioni, retroazione (con il segno), smorzamento. */
+  /** Comb: delay in samples, feedback (with sign), damping. */
   private combDelay = 1;
   private combFeedback = 0;
   private combDampK = 0;
-  /** Phaser: i coefficienti degli stadi passa-tutto. */
+  /** Phaser: the coefficients of the allpass stages. */
   private readonly allpassA = new Float64Array(PHASER_STAGES);
   private phaserFeedback = 0;
 
@@ -118,7 +118,7 @@ export class PrismaFilter {
     this.mix = clamp01(mix);
     switch (type) {
       case FILTER.lp24: case FILTER.hp24: case FILTER.bp24:
-        // due stadi come un Butterworth del quarto ordine: la risonanza tutta sul secondo
+        // two stages like a fourth-order Butterworth: all the resonance on the second
         this.c1.set(g, 1.848);
         this.c2.set(g, 0.765 * (1 - 0.97 * res));
         break;
@@ -129,12 +129,12 @@ export class PrismaFilter {
       case FILTER.combUp: case FILTER.combDown: {
         this.combDelay = Math.max(2, Math.min(COMB_SIZE - 2, sr / Math.max(20, cutoff)));
         this.combFeedback = (type === FILTER.combUp ? 1 : -1) * 0.95 * res;
-        // Var smorza le alte nella retroazione: a 0 il pettine è aperto, a 100 scuro
+        // Var damps the highs in the feedback: at 0 the comb is open, at 100 dark
         this.combDampK = variation * 0.9;
         break;
       }
       case FILTER.formant: {
-        // Var sceglie la vocale, il cutoff sposta le formanti (1 kHz: al loro posto)
+        // Var chooses the vowel, the cutoff moves the formants (1 kHz: in their place)
         const x = clamp01(variation) * (VOWELS.length - 1), i = Math.min(VOWELS.length - 2, Math.floor(x)), f = x - i;
         const shift = Math.max(0.25, Math.min(4, Math.sqrt(cutoff / 1000)));
         for (let j = 0; j < 3; j++) {
@@ -144,7 +144,7 @@ export class PrismaFilter {
         break;
       }
       case FILTER.phaser: {
-        // gli stadi sparsi attorno al cutoff (Var li allarga), la risonanza come retroazione
+        // the stages spread around the cutoff (Var widens them), the resonance as feedback
         for (let j = 0; j < PHASER_STAGES; j++) {
           const spread = Math.pow(2, (j - (PHASER_STAGES - 1) / 2) * variation * 1.5);
           const t = Math.tan((Math.PI * Math.min(sr * 0.45, fc * spread)) / sr);
@@ -163,7 +163,7 @@ export class PrismaFilter {
     this.right.reset();
   }
 
-  /** Filtra `n` campioni dei due canali, sul posto. */
+  /** Filters `n` samples of the two channels, in place. */
   process(l: Float64Array, r: Float64Array, n: number): void {
     this.channel(this.left, l, n);
     this.channel(this.right, r, n);
@@ -171,7 +171,7 @@ export class PrismaFilter {
 
   private channel(ch: Channel, buf: Float64Array, n: number): void {
     const { type, mix, drive, driveGain } = this;
-    // il drive alza il suono nella saturazione; il tetto scende un po', così non esplode di volume
+    // the drive raises the sound into the saturation; the ceiling drops a bit, so it doesn't explode in volume
     const ceiling = 1 / Math.sqrt(Math.sqrt(driveGain));
     for (let i = 0; i < n; i++) {
       const dry = buf[i];
@@ -205,7 +205,7 @@ export class PrismaFilter {
       case FILTER.phaser: {
         let y = x + ch.phaserFeedback * this.phaserFeedback;
         for (let j = 0; j < PHASER_STAGES; j++) {
-          // passa-tutto del primo ordine: y = a·x + s, s = x − a·y
+          // first-order allpass: y = a·x + s, s = x − a·y
           const a = this.allpassA[j], out = a * y + ch.allpass[j];
           ch.allpass[j] = y - a * out;
           y = out;
@@ -217,14 +217,14 @@ export class PrismaFilter {
     }
   }
 
-  /** Quattro poli TPT in fila con la retroazione risolta senza ritardo, saturata (Zavalishin). */
+  /** Four TPT poles in a row with the feedback solved without delay, saturated (Zavalishin). */
   private ladder(ch: Channel, x: number): number {
     const G = this.ladderG, k = this.ladderK, s = ch.ladder;
-    // ogni polo dà y = G·u + (1 − G)·s: l'uscita del quarto è G⁴·u + S, con S dagli stati
+    // each pole gives y = G·u + (1 − G)·s: the fourth's output is G⁴·u + S, with S from the states
     const b = 1 - G;
     const S = (((G * s[0] + s[1]) * G + s[2]) * G + s[3]) * b;
     const G4 = G * G * G * G;
-    // u = x − k·uscita, risolto; l'ingresso un po' più forte compensa i bassi persi con la risonanza
+    // u = x − k·output, solved; a slightly stronger input compensates the lows lost with the resonance
     let u = (x * (1 + k * 0.5) - k * S) / (1 + k * G4);
     u = Math.tanh(u);
     for (let j = 0; j < 4; j++) {
@@ -246,7 +246,7 @@ export class PrismaFilter {
     const y = x + this.combFeedback * ch.combDamp;
     buf[ch.combAt & mask] = y;
     ch.combAt = (ch.combAt + 1) & mask;
-    // più retroazione, più il pettine risuona: si abbassa perché il volume resti simile
+    // more feedback, the more the comb resonates: it's lowered so the volume stays similar
     return y * (1 - Math.abs(this.combFeedback) * 0.75);
   }
 }

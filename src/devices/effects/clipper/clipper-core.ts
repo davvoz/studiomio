@@ -1,19 +1,19 @@
-/* Il suono del Clipper. Per canale, alla frequenza sovracampionata:
+/* The Clipper's sound. Per channel, at the oversampled rate:
  *
- *   ingresso × Ingresso → curva (|x| fino al ginocchio passa com'è, poi entra nel tetto con una
- *   tanh che parte con pendenza 1: niente spigoli) → giù con il filtro a mezza banda → × Uscita
+ *   input × Input → curve (|x| up to the knee passes as it is, then enters the ceiling with a
+ *   tanh starting at slope 1: no corners) → down with the half-band filter → × Output
  *
- * La curva, con u = |x| / tetto e k = 1 − ginocchio: u fino a k, poi k + (1 − k)·tanh((u − k) / (1 − k)).
- * Con il ginocchio a 0 è il taglio netto (min(u, 1)), a 100 una tanh intera. Dopo il ritorno
- * alla frequenza originale il filtro può ricostruire picchi appena sopra il tetto: dietro va il
- * Limiter. Gira nell'AudioWorklet; qui niente Web Audio, così si prova anche in Node. */
+ * The curve, with u = |x| / ceiling and k = 1 − knee: u up to k, then k + (1 − k)·tanh((u − k) / (1 − k)).
+ * With the knee at 0 it's hard clipping (min(u, 1)), at 100 a full tanh. After returning
+ * to the original rate the filter can rebuild peaks just above the ceiling: the
+ * Limiter goes after it. Runs in the AudioWorklet; no Web Audio here, so it's also tested in Node. */
 import { dbToGain, type EffectCore } from '../../dsp/core';
 import { Oversampler } from '../../dsp/oversampler';
 import { CLIPPER_OVERSAMPLING } from './clipper';
 
 const SMOOTH = 0.02;
 
-/** La curva del clipper su un valore già diviso per il tetto. */
+/** The clipper's curve on a value already divided by the ceiling. */
 export function clipCurve(u: number, knee: number): number {
   const a = Math.abs(u), k = 1 - knee;
   if (a <= k) return u;
@@ -35,19 +35,19 @@ export class ClipperCore implements EffectCore {
   private readonly smoothK: number;
   private scratchL = new Float32Array(128);
   private scratchR = new Float32Array(128);
-  /** Il taglio più forte dall'ultima lettura (rapporto tra uscita e ingresso della curva). */
+  /** The strongest clipping since the last read (ratio between the curve's output and input). */
   private minRatio = 1;
 
   constructor(sampleRate: number) {
     this.smoothK = 1 - Math.exp(-1 / (SMOOTH * sampleRate));
   }
 
-  /** Ritardo dell'effetto in campioni (il giro su e giù del sovracampionamento). */
+  /** The effect's delay in samples (the oversampling's round trip up and down). */
   get latency(): number {
     return this.osL.latency;
   }
 
-  /** Quanti dB ha tagliato al massimo dall'ultima lettura (la lettura la azzera). */
+  /** How many dB it clipped at most since the last read (reading resets it). */
   takeReduction(): number {
     const db = -20 * Math.log10(Math.max(this.minRatio, 1e-6));
     this.minRatio = 1;

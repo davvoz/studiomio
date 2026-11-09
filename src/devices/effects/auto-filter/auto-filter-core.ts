@@ -1,8 +1,8 @@
-/* Il suono dell'Auto Filter: drive → filtro multimodo, un filtro per canale. Il cutoff si
- * calcola in ottave: la manopola, più l'LFO (agganciato alla battuta, il canale destro sfasato
- * di "Stereo"), più l'inviluppo dell'ingresso (o della chiave, col sidechain). Si ricalcola
- * ogni pochi campioni e scorre morbido, così anche l'onda quadra e i salti del trasporto non
- * fanno click. Gira nell'AudioWorklet; qui niente Web Audio. */
+/* The Auto Filter's sound: drive → multimode filter, one filter per channel. The cutoff is
+ * computed in octaves: the knob, plus the LFO (locked to the bar, the right channel offset
+ * by "Stereo"), plus the input's envelope (or the key's, with the sidechain). It's recomputed
+ * every few samples and glides smoothly, so even the square wave and transport jumps don't
+ * click. Runs in the AudioWorklet; no Web Audio here. */
 import { dbToGain, type EffectCore, type KeyedEffect, type TransportFollower, type TransportPosition } from '../../dsp/core';
 import { EnvelopeFollower } from '../../dsp/envelope-follower';
 import { LfoClock, lfoAt, type LfoRate } from '../../dsp/lfo';
@@ -10,9 +10,9 @@ import { MultimodeFilter } from '../../dsp/multimode-filter';
 import { TEMPO_RATES } from '../../rates';
 import { AUTO_FILTER_SYNC, ENV_OCTAVES, LFO_OCTAVES } from './auto-filter';
 
-/** Ogni quanti campioni si ricalcola il cutoff. */
+/** Every how many samples the cutoff is recomputed. */
 const CONTROL_RATE = 8;
-/** Quanto ci mette il cutoff ad assestarsi su un valore nuovo, in secondi. */
+/** How long the cutoff takes to settle on a new value, in seconds. */
 const SMOOTH = 0.002;
 const MIN_CUTOFF = 20;
 
@@ -21,7 +21,7 @@ export class AutoFilterCore implements EffectCore, TransportFollower, KeyedEffec
   private readonly lfo: LfoClock;
   private readonly env: EnvelopeFollower;
   private readonly smoothK: number;
-  /** Il cutoff di ogni canale in ottave (log2 Hz), quello che si sente e quello voluto. */
+  /** The cutoff of each channel in octaves (log2 Hz), the one heard and the target one. */
   private readonly octaves = [0, 0];
   private fresh = true;
   private countdown = 0;
@@ -70,7 +70,7 @@ export class AutoFilterCore implements EffectCore, TransportFollower, KeyedEffec
     this.env.set(v('envAttack', 6) / 1000, v('envRelease', 200) / 1000);
     this.mix = v('mix', 100) / 100;
     this.output = dbToGain(v('output', 0));
-    // il tipo, la pendenza e la risonanza valgono subito, anche se il cutoff sta scorrendo
+    // type, slope and resonance apply right away, even if the cutoff is gliding
     this.countdown = 0;
   }
 
@@ -87,7 +87,7 @@ export class AutoFilterCore implements EffectCore, TransportFollower, KeyedEffec
     this.keyR = right;
   }
 
-  /** Il cutoff di adesso di un canale, in Hz (per i test e per disegnarlo). */
+  /** A channel's current cutoff, in Hz (for tests and for drawing it). */
   cutoff(channel: 0 | 1): number {
     return Math.pow(2, this.octaves[channel]);
   }

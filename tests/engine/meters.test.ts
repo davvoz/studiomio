@@ -9,28 +9,28 @@ import { setup } from '../helpers/fixtures';
 const SR = 48000;
 
 describe('MeterCore', () => {
-  it('picco tenuto finché chi legge non lo azzera; RMS a media mobile, per canale', () => {
+  it('peak held until the reader resets it; moving-average RMS, per channel', () => {
     const out = new Float32Array(4);
     const core = new MeterCore(SR, out);
     const sine = (amp: number) => Float32Array.from({ length: 128 }, (_, i) => amp * Math.sin((2 * Math.PI * 1000 * i) / SR));
-    // un secondo di seno a piena scala a sinistra, a metà a destra
+    // a second of full-scale sine on the left, at half on the right
     for (let t = 0; t < SR; t += 128) core.process(sine(1), sine(0.5), 128);
     expect(out[0]).toBeCloseTo(1, 2);
     expect(out[1]).toBeCloseTo(0.5, 2);
     expect(Math.sqrt(out[2])).toBeCloseTo(Math.SQRT1_2, 1);
     expect(Math.sqrt(out[3])).toBeCloseTo(Math.SQRT1_2 / 2, 1);
-    // chi legge azzera il picco: il silenzio non lo rialza, l'RMS scende piano
+    // the reader resets the peak: the silence doesn't raise it, the RMS falls slowly
     out[0] = out[1] = 0;
     const before = Math.sqrt(out[2]);
     const silence = new Float32Array(128);
     core.process(silence, silence, 128);
     expect([out[0], out[1]]).toEqual([0, 0]);
-    expect(Math.sqrt(out[2]) / before).toBeGreaterThan(0.98); // un blocco: scende appena
+    expect(Math.sqrt(out[2]) / before).toBeGreaterThan(0.98); // one block: it barely goes down
     for (let t = 0; t < SR; t += 128) core.process(silence, silence, 128);
-    expect(20 * Math.log10(Math.sqrt(out[2]) / before)).toBeCloseTo(-36.2, 0); // τ 120 ms sulla media dei quadrati: 10·log10(e^(−1/0.12))
+    expect(20 * Math.log10(Math.sqrt(out[2]) / before)).toBeCloseTo(-36.2, 0); // τ 120 ms on the mean of squares: 10·log10(e^(−1/0.12))
   });
 
-  it('un picco breve tra due letture non si perde', () => {
+  it('a short peak between two reads isn\'t lost', () => {
     const out = new Float32Array(4);
     const core = new MeterCore(SR, out);
     const click = new Float32Array(128);
@@ -41,8 +41,8 @@ describe('MeterCore', () => {
   });
 });
 
-describe('MixerGraph: misuratori', () => {
-  it('uno per traccia dopo mute/solo e uno sul master dopo il suo volume', () => {
+describe('MixerGraph: meters', () => {
+  it('one per track after mute/solo and one on the master after its volume', () => {
     const { store, track } = setup({ audio: 1, midi: 1 });
     const graph = new FakeGraph(), meters = new FakeMeters();
     const mixer = new MixerGraph(graph, new FakeEffects(), graph.destination, meters);
@@ -50,7 +50,7 @@ describe('MixerGraph: misuratori', () => {
     const [masterMeter, a, m] = meters.created;
     expect((mixer.master as FakeGain).outputs).toEqual([masterMeter.input]);
     expect(masterMeter.output.outputs).toEqual([graph.destination]);
-    // traccia: … → gate → misuratore → bus del master
+    // track: … → gate → meter → master bus
     const bus = graph.gains[0];
     expect(a.output.outputs).toEqual([bus]);
     expect(graph.gains.some(g => g.outputs.includes(a.input))).toBe(true);
@@ -65,7 +65,7 @@ describe('MixerGraph: misuratori', () => {
     expect(mixer.levels(track(1))).toBeNull();
   });
 
-  it('senza misuratori (export) il suono va dritto, e i livelli sono null', () => {
+  it('without meters (export) the sound goes straight, and the levels are null', () => {
     const { store, track } = setup({ audio: 1, midi: 0 });
     const graph = new FakeGraph();
     const mixer = new MixerGraph(graph, new FakeEffects());
@@ -75,7 +75,7 @@ describe('MixerGraph: misuratori', () => {
     expect(mixer.levels(MASTER)).toBeNull();
   });
 
-  it('trova un effetto che suona, di una traccia o del master', () => {
+  it('finds a playing effect, of a track or of the master', () => {
     const { store, track } = setup({ audio: 1, midi: 0 });
     const graph = new FakeGraph(), effects = new FakeEffects();
     const mixer = new MixerGraph(graph, effects);

@@ -7,22 +7,22 @@ import type { SettingsOf } from '../src/dsp/stretch/stretcher';
 import { WarpRenderer, defaultStretchers, type WarpJob } from '../src/dsp/stretch/warp-renderer';
 import { WasmComplexStretcher } from '../src/dsp/wasm/wasm-stretchers';
 import { drumLoop, maxAbsDiff, SR } from './helpers/signals';
-// build per Node: `npm run wasm:test`
+// build for Node: `npm run wasm:test`
 import { pv_stretch } from './wasm-pkg/studiomio_dsp.js';
 
 const src = drumLoop(2, 120);
 const mono = mixMono(src);
 const transients = detectTransients(mono, onsetEnvelope(mono, SR), 0.5);
 
-describe('WebAssembly: Complex coincide con la versione TypeScript', () => {
-  it('trova dei transienti nel segnale di prova', () => {
+describe('WebAssembly: Complex matches the TypeScript version', () => {
+  it('finds some transients in the test signal', () => {
     expect(transients.length).toBeGreaterThan(8);
   });
 
   const cases: [string, SettingsOf<'complex'>, number][] = [
-    ['stereo, reset sui transienti', { mode: 'complex', fftSize: 4096, transients }, 0],
-    ['stereo, senza reset, FFT 2048', { mode: 'complex', fftSize: 2048, transients: null }, 0],
-    ['stereo, trasposto +7', { mode: 'complex', fftSize: 4096, transients }, 7],
+    ['stereo, reset on transients', { mode: 'complex', fftSize: 4096, transients }, 0],
+    ['stereo, without reset, FFT 2048', { mode: 'complex', fftSize: 2048, transients: null }, 0],
+    ['stereo, transposed +7', { mode: 'complex', fftSize: 4096, transients }, 7],
   ];
 
   it.each(cases)('%s', (_, settings, transpose) => {
@@ -34,11 +34,11 @@ describe('WebAssembly: Complex coincide con la versione TypeScript', () => {
     const js = new WarpRenderer().render({ channels: src, sampleRate: SR }, job);
     const wasm = new WarpRenderer({ ...defaultStretchers(), complex: new WasmComplexStretcher(pv_stretch) })
       .render({ channels: src, sampleRate: SR }, job);
-    // le funzioni matematiche di Rust e di V8 differiscono nell'ultima cifra
+    // Rust's and V8's maths functions differ in the last digit
     expect(maxAbsDiff(js, wasm)).toBeLessThan(1e-4);
   });
 
-  it('mono, rallentato', () => {
+  it('mono, slowed down', () => {
     const mono = { channels: [src[0]], sampleRate: SR };
     const len = src[0].length, outLength = Math.round(len * 1.3);
     const job: WarpJob = {

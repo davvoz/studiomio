@@ -1,18 +1,18 @@
-/* Il suono del Pitch Shifter. L'ingresso (più il feedback) va su un nastro; due testine lo
- * rileggono a un ritardo che scorre dentro la Finestra alla velocità che sposta l'intonazione
- * (più veloci del nastro: sopra, più lente: sotto), sfasate di mezza finestra. Quando una arriva
- * in fondo salta dall'altra parte, e lì il suo volume è zero: le due si passano il suono con una
- * dissolvenza a seno quadro, che somma sempre a uno. Il sinistro e il destro hanno ciascuno le
- * sue testine (Stereo li scorda in versi opposti). A intonazione ferma le testine tornano piano
- * a metà finestra, dove ne suona una sola: niente filtro a pettine. Semitoni scivola col Glide,
- * Finestra e mix scorrono morbidi. Gira nell'AudioWorklet; qui niente Web Audio. */
+/* The Pitch Shifter's sound. The input (plus the feedback) goes onto a tape; two heads
+ * read it back at a delay gliding inside the Window at the speed that shifts the pitch
+ * (faster than the tape: up, slower: down), offset by half a window. When one reaches
+ * the end it jumps to the other side, and there its volume is zero: the two hand over the sound with a
+ * squared-sine crossfade, which always sums to one. Left and right each have their
+ * own heads (Stereo detunes them in opposite directions). With the pitch still the heads slowly return
+ * to the middle of the window, where only one plays: no comb filter. Semitones glides with Glide,
+ * Window and mix glide smoothly. Runs in the AudioWorklet; no Web Audio here. */
 import type { EffectCore } from '../../dsp/core';
 import { TapeBuffer } from '../../dsp/tape-buffer';
 import { MAX_WINDOW_MS } from './pitch-shifter';
 
-/** Il ritardo minimo delle testine, in campioni (l'interpolazione legge anche i vicini). */
+/** The heads' minimum delay, in samples (the interpolation also reads the neighbours). */
 const OFFSET = 4;
-/** La velocità con cui le testine ferme tornano a metà finestra (17 cent: un tuffo che si posa). */
+/** The speed at which still heads return to the middle of the window (17 cents: a dive that settles). */
 const SETTLE = 0.01;
 const SMOOTH = 0.03;
 
@@ -21,7 +21,7 @@ export class PitchShifterCore implements EffectCore {
   private readonly tmp = new Float32Array(2);
   private readonly smoothK: number;
   private readonly ms: number;
-  /** Dove sono le testine nella finestra (0..1), per canale. */
+  /** Where the heads are in the window (0..1), per channel. */
   private readonly phase = [0.5, 0.5];
   private readonly ratio = [1, 1];
   private lastL = 0;
@@ -38,7 +38,7 @@ export class PitchShifterCore implements EffectCore {
   private feedback = 0;
   private mix = 1;
   private targetMix = 1;
-  /** Il passo per cui i rapporti sono stati calcolati (NaN: da ricalcolare). */
+  /** The step the ratios were computed for (NaN: to be recomputed). */
   private ratioFor = NaN;
 
   constructor(private readonly sampleRate: number) {
@@ -68,7 +68,7 @@ export class PitchShifterCore implements EffectCore {
 
   setTempo(): void {}
 
-  /** Il rapporto di velocità delle testine del canale (per i test e per disegnarlo). */
+  /** The speed ratio of the channel's heads (for tests and for drawing it). */
   ratioOf(channel: 0 | 1): number {
     this.updateRatios();
     return this.ratio[channel];

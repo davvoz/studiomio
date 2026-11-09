@@ -1,10 +1,10 @@
-/* Un rack salvato, da usare in altri progetti (come i preset dei rack di Live): i suoi
- * dispositivi con i parametri, le 8 macro con le mappature e i rack che ha dentro. Non conosce il
- * progetto da cui viene: una mappatura indica il dispositivo per posto nel rack (0 il primo), o
- * il rack dentro per posto nella lista dei rack dentro, non per id (così anche le destinazioni dei
- * modulatori, che fuori dal rack si perdono). Non ci
- * sono i sample caricati (sono file del progetto) né il sidechain (è una traccia del progetto).
- * Qui ci sono i dati, come si prendono da una catena e come si rileggono da fuori. */
+/* A saved rack, to use in other projects (like Live's rack presets): its
+ * devices with their parameters, the 8 macros with their mappings and the racks it has inside. It doesn't know the
+ * project it comes from: a mapping indicates the device by position in the rack (0 the first), or
+ * the inner rack by position in the list of inner racks, not by id (so also the targets of the
+ * modulators, which outside the rack are lost). There
+ * are no loaded samples (they're project files) nor the sidechain (it's a project track).
+ * Here are the data, how they're taken from a chain and how they're read back from outside. */
 import type { DeviceId } from '../core/id';
 import type { DeviceSettings, ParamValues } from './device';
 import { INSTRUMENT_DEVICE, type ModTarget } from './envelope';
@@ -15,7 +15,7 @@ import {
 } from './rack';
 import { MidiTrack } from './track';
 
-/** Un dispositivo del rack salvato: tipo, preset da cui era partito (da mostrare) e parametri. */
+/** A device of the saved rack: type, preset it started from (for display) and parameters. */
 export interface SavedDevice {
   readonly type: string;
   readonly preset: string | null;
@@ -24,13 +24,13 @@ export interface SavedDevice {
 
 export interface SavedEffect extends SavedDevice {
   readonly enabled: boolean;
-  /** Per i modulatori, le destinazioni (vedi `savedTarget`); assente: nessuna. */
+  /** For the modulators, the targets (see `savedTarget`); absent: none. */
   readonly targets?: readonly (string | null)[];
 }
 
-/** Una destinazione di un modulatore nel rack salvato: "d2:cutoff" (un parametro del terzo
- *  dispositivo), "r0:macro1" (una macro del rack stesso; "r1:…" del primo rack dentro),
- *  "mixer:volume". null: libera, o fuori dal rack. */
+/** A target of a modulator in the saved rack: "d2:cutoff" (a parameter of the third
+ *  device), "r0:macro1" (a macro of the rack itself; "r1:…" of the first inner rack),
+ *  "mixer:volume". null: free, or outside the rack. */
 function savedTarget(t: ModTarget | null, at: ReadonlyMap<DeviceKey, number>, racks: readonly DeviceId[]): string | null {
   if (!t || t.kind === 'clip') return null;
   if (t.kind === 'mixer') return `mixer:${t.param}`;
@@ -40,8 +40,8 @@ function savedTarget(t: ModTarget | null, at: ReadonlyMap<DeviceKey, number>, ra
   return device === undefined ? null : `d${device}:${t.param}`;
 }
 
-/** La destinazione salvata nella catena in cui il rack arriva: `devices` i suoi dispositivi,
- *  `racks` il rack e quelli dentro (nell'ordine del rack salvato). */
+/** The saved target in the chain the rack arrives in: `devices` its devices,
+ *  `racks` the rack and those inside (in the order of the saved rack). */
 export function presetTarget(saved: string | null, devices: readonly DeviceKey[], racks: readonly Rack[]): ModTarget | null {
   const m = saved ? /^(d|r|mixer)(\d*):(.+)$/.exec(saved) : null;
   if (!m) return null;
@@ -51,13 +51,13 @@ export function presetTarget(saved: string | null, devices: readonly DeviceKey[]
   return n && owner ? { kind: 'device', device: owner, param } : null;
 }
 
-/** Una mappatura muove un parametro di un dispositivo (`device`) o una macro di un rack dentro (`rack`). */
+/** A mapping moves a parameter of a device (`device`) or a macro of an inner rack (`rack`). */
 export type SavedMapping = SavedMappingOf<{
-  /** Il posto del dispositivo nel rack: lo strumento, se c'è, è il primo. */
+  /** The device's position in the rack: the instrument, if there is one, is the first. */
   readonly device: number;
   readonly rack?: undefined;
 }> | SavedMappingOf<{
-  /** Il posto del rack in `RackPreset.racks`; `param` è la sua macro ("macroN"). */
+  /** The rack's position in `RackPreset.racks`; `param` is its macro ("macroN"). */
   readonly rack: number;
   readonly device?: undefined;
 }>;
@@ -72,43 +72,43 @@ export interface SavedMacro {
   readonly name: string | null;
   readonly value: number;
   readonly mappings: readonly SavedMapping[];
-  /** Assente: manopola. */
+  /** Missing: knob. */
   readonly mode?: MacroMode;
-  /** Solo delle molle. */
+  /** Only for springs. */
   readonly spring?: MacroSpring;
 }
 
 export interface RackPreset {
   readonly name: string;
-  /** Lo strumento (Instrument Rack), o null (Audio Effect Rack). */
+  /** The instrument (Instrument Rack), or null (Audio Effect Rack). */
   readonly instrument: SavedDevice | null;
-  /** Gli effetti nell'ordine della catena, dopo lo strumento. */
+  /** The effects in chain order, after the instrument. */
   readonly effects: readonly SavedEffect[];
-  /** Sempre MACRO_COUNT. */
+  /** Always MACRO_COUNT. */
   readonly macros: readonly SavedMacro[];
-  /** I rack dentro, ognuno prima di quelli che ha dentro; assente se non ce ne sono. */
+  /** The inner racks, each before those it has inside; absent if there are none. */
   readonly racks?: readonly SavedInnerRack[];
 }
 
-/** Un rack dentro il rack salvato. */
+/** A rack inside the saved rack. */
 export interface SavedInnerRack {
   readonly name: string | null;
-  /** Il posto del suo primo dispositivo nel rack salvato, e quanti ne ha. */
+  /** The position of its first device in the saved rack, and how many it has. */
   readonly first: number;
   readonly count: number;
-  /** Sempre MACRO_COUNT. */
+  /** Always MACRO_COUNT. */
   readonly macros: readonly SavedMacro[];
 }
 
-/** Quanti dispositivi ha il rack salvato. */
+/** How many devices the saved rack has. */
 export const rackPresetSize = (r: RackPreset): number => (r.instrument ? 1 : 0) + r.effects.length;
 
 const saved = (s: DeviceSettings): SavedDevice => ({ type: s.type, preset: s.preset, params: { ...s.params } });
 
-/** Il rack `id` della catena di `owner`, da salvare con il nome `name`. */
+/** Rack `id` of `owner`'s chain, to save with the name `name`. */
 export function captureRack(p: Project, owner: ChainOwner, id: DeviceId, name: string): RackPreset {
   const rack = findRack(p.racksOf(owner), id);
-  if (!rack) throw new RangeError(`rack ${id} non trovato`);
+  if (!rack) throw new RangeError(`rack ${id} not found`);
   const track = owner === MASTER ? undefined : p.track(owner);
   const effects = p.effectsOf(owner);
   const at = new Map(rack.devices.map((k, i) => [k, i]));
@@ -137,8 +137,8 @@ export function captureRack(p: Project, owner: ChainOwner, id: DeviceId, name: s
   };
 }
 
-/** I rack di un rack salvato messo in una catena con i dispositivi `devices` (nell'ordine del
- *  rack salvato); `id` dà gli id dei rack nuovi. Il rack, poi quelli dentro. */
+/** The racks of a saved rack put into a chain with the devices `devices` (in the order of the
+ *  saved rack); `id` gives the ids of the new racks. The rack, then those inside. */
 export function presetRacks(preset: RackPreset, devices: readonly DeviceKey[], id: () => DeviceId): Rack[] {
   const saved = preset.racks ?? [];
   const ids = [id(), ...saved.map(() => id())];
@@ -152,8 +152,8 @@ export function presetRacks(preset: RackPreset, devices: readonly DeviceKey[], i
   ];
 }
 
-/** Un rack salvato da dati letti da fuori (file, spazio locale), o null se non lo è. Le
- *  mappature che non valgono si saltano; le macro mancanti sono vuote. */
+/** A saved rack from data read from outside (file, local storage), or null if it isn't one. The
+ *  invalid mappings are skipped; the missing macros are empty. */
 export function rackPresetFrom(raw: unknown): RackPreset | null {
   if (!isObject(raw)) return null;
   const { name, instrument, effects, macros } = raw;
@@ -188,8 +188,8 @@ export function rackPresetFrom(raw: unknown): RackPreset | null {
   return validNesting(preset) ? preset : withoutInnerRacks(preset);
 }
 
-/** I rack dentro stanno nelle regole dei rack (uno dentro l'altro, ognuno prima di quelli che ha
- *  dentro, mappature solo dentro). */
+/** The inner racks follow the rack rules (one inside the other, each before those it has
+ *  inside, mappings only inside). */
 function validNesting(preset: RackPreset): boolean {
   const devices = Array.from({ length: rackPresetSize(preset) }, (_, i) => `d${i}` as DeviceId);
   let n = 0;
@@ -203,7 +203,7 @@ function validNesting(preset: RackPreset): boolean {
   }
 }
 
-/** Il rack salvato senza i rack dentro (e senza le mappature sulle loro macro). */
+/** The saved rack without the inner racks (and without the mappings on their macros). */
 function withoutInnerRacks({ racks: _racks, ...preset }: RackPreset): RackPreset {
   return { ...preset, macros: preset.macros.map(m => ({ ...m, mappings: m.mappings.filter(x => x.rack === undefined) })) };
 }
@@ -212,7 +212,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-/** undefined: non è un dispositivo. */
+/** undefined: it isn't a device. */
 function savedDevice(raw: unknown): SavedDevice | undefined {
   if (!isObject(raw)) return undefined;
   const { type, preset, params } = raw;
@@ -223,7 +223,7 @@ function savedDevice(raw: unknown): SavedDevice | undefined {
   };
 }
 
-/** `size` dispositivi e `racks` rack dentro, a cui le mappature possono andare. */
+/** `size` devices and `racks` inner racks, which the mappings can go to. */
 function savedMacro(raw: unknown, size: number, racks: number): SavedMacro {
   if (!isObject(raw)) return { name: null, value: 0, mappings: [] };
   const mode = MACRO_MODES.find(([m]) => m === raw.mode)?.[0];

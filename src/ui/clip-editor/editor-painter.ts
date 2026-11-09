@@ -6,7 +6,7 @@ import { COLORS, withAlpha } from '../timeline/painters';
 import { FRAME, paintBeatGrid, paintClipRuler } from './clip-frame';
 import { contentToSeconds, secondsToContent, type BeatAxis } from './clip-geometry';
 
-/** Fasce verticali dell'editor, dall'alto. */
+/** Vertical bands of the editor, from the top. */
 export const LAYOUT = {
   ...FRAME,
   strip: 24,
@@ -33,7 +33,7 @@ export interface EditorPaint {
   readonly grid: Beats;
   readonly selectedMarker: number;
   readonly hoverTransient: Seconds | null;
-  /** Battito della clip sotto la testina, se la clip sta suonando. */
+  /** Clip beat under the playhead, if the clip is playing. */
   readonly playhead: Beats | null;
 }
 
@@ -48,7 +48,7 @@ export function paintEditor(p: EditorPaint): void {
   g.fillRect(sx0, top, sx1 - sx0, height - top);
   paintBeatGrid(g, axis, width, top, height, p.grid, p.signature);
   paintWave(p, top);
-  // fuori dalla regione che suona: più scuro
+  // outside the playing region: darker
   const rx0 = axis.beatToX(clip.region.start), rx1 = axis.beatToX(clip.region.end);
   g.fillStyle = C.regionShade;
   g.fillRect(0, top, rx0, height - top);
@@ -71,7 +71,7 @@ function paintWave(p: EditorPaint, top: number): void {
   const { g, axis, width, height, clip, peaks } = p;
   if (!peaks) return;
   const toSeconds = contentToSeconds(clip, p.tempo);
-  // l'altezza segue il gain della clip, come la si sente
+  // the height follows the clip's gain, as it's heard
   const mid = top + (height - top) / 2, amp = (height - top) / 2 - 4, gain = dbToGain(clip.gainDb);
   g.fillStyle = C.center;
   g.fillRect(0, Math.round(mid), width, 1);
@@ -129,7 +129,7 @@ function paintMarkers(p: EditorPaint): void {
   }
 }
 
-/** Il segno dei warp marker: un pentagono che punta in basso, nella striscia. */
+/** The warp markers' sign: a pentagon pointing down, in the strip. */
 function pentagon(g: CanvasRenderingContext2D, x: number, fill: string | null, stroke: string | null): void {
   const y0 = LAYOUT.ruler + 3, y1 = LAYOUT.top - 8, y2 = LAYOUT.top - 2;
   g.beginPath();

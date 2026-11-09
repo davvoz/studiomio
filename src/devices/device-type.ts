@@ -3,60 +3,60 @@ import { clampParam, type ParamCondition, type ParamSection, type ParamSpec } fr
 
 export interface Preset {
   readonly name: string;
-  /** Solo i valori diversi da quelli predefiniti. */
+  /** Only the values different from the defaults. */
   readonly params: ParamValues;
 }
 
-/** Un tipo di dispositivo (strumento o effetto), lato interfaccia: nome, parametri raggruppati
- *  e preset. Il suono lo fa il suo motore DSP nell'AudioWorklet, registrato con lo stesso
+/** A device type (instrument or effect), interface side: name, grouped parameters
+ *  and presets. The sound is made by its DSP engine in the AudioWorklet, registered with the same
  *  `type` in worklet/cores.ts. */
 export interface DeviceType {
   readonly type: string;
   readonly label: string;
   readonly sections: readonly ParamSection[];
   readonly presets: readonly Preset[];
-  /** Per gli effetti che possono ascoltare un'altra traccia (sidechain): il motore riceve quel
-   *  suono come secondo ingresso, per il rilevatore. */
+  /** For effects that can listen to another track (sidechain): the engine receives that
+   *  sound as a second input, for the detector. */
   readonly sidechain?: boolean;
-  /** Per gli strumenti i cui preset sono kit di batteria (la Drum Machine): finiscono anche in
-   *  Batterie, nel browser. */
+  /** For instruments whose presets are drum kits (the Drum Machine): they also end up in
+   *  Drums, in the browser. */
   readonly kit?: boolean;
-  /** Per gli strumenti che danno un nome alle note (la drum machine: un pad per nota): con
-   *  questi valori dei parametri (e questi nomi dei sample caricati, per posto), il nome di
-   *  ogni nota che suona qualcosa. */
+  /** For instruments that give notes a name (the drum machine: one pad per note): with
+   *  these parameter values (and these names of the loaded samples, by slot), the name of
+   *  each note that plays something. */
   readonly noteNames?: (values: Readonly<Record<string, number>>, samples?: ReadonlyMap<string, string>) => ReadonlyMap<number, string>;
-  /** I parametri che restano come sono quando si sceglie un preset (es. la mappa delle zone del
-   *  Sampler, che dipende dai sample caricati e non dal suono). */
+  /** The parameters that stay as they are when a preset is chosen (e.g. the Sampler's zone
+   *  map, which depends on the loaded samples and not on the sound). */
   readonly keepsOnPreset?: (param: string) => boolean;
-  /** Per i modulatori (LFO, Inviluppo): non toccano il suono, muovono i parametri delle loro
-   *  destinazioni (vedi devices/modulators). */
+  /** For modulators (LFO, Envelope): they don't touch the sound, they move the parameters of their
+   *  targets (see devices/modulators). */
   readonly modulator?: boolean;
-  /** Per chi lavora sulle note e non sul suono (l'Arpeggiatore): ha senso solo su una traccia MIDI. */
+  /** For whoever works on notes and not on sound (the Arpeggiator): only makes sense on a MIDI track. */
   readonly notes?: boolean;
 }
 
-/** I valori dei parametri che un preset di `t` non cambia, tra `params`. */
+/** The parameter values a preset of `t` doesn't change, among `params`. */
 export const keptOnPreset = (t: DeviceType, params: ParamValues): ParamValues =>
   t.keepsOnPreset ? Object.fromEntries(Object.entries(params).filter(([id]) => t.keepsOnPreset!(id))) : {};
 
 export const paramsOf = (t: DeviceType): ParamSpec[] => t.sections.flatMap(s => s.params);
 
-/** Vero se la condizione vale con questi valori. */
+/** True if the condition holds with these values. */
 const holds = ({ param, is }: ParamCondition, values: Readonly<Record<string, number>>): boolean =>
   typeof is === 'number' ? values[param] === is : is.includes(values[param]);
 
-/** Le sezioni che ci sono con questi valori (quelle con una condizione solo se vale). */
+/** The sections present with these values (those with a condition only if it holds). */
 export const activeSections = (t: DeviceType, values: ParamValues): ParamSection[] => {
   const all = t.sections.some(s => s.when) ? resolveParams(t, values) : values;
   return t.sections.filter(s => !s.when || holds(s.when, all));
 };
 
-/** I parametri che si mostrano fuori dal pannello del dispositivo (menu, controller); con i
- *  valori, solo quelli delle sezioni che ci sono. */
+/** The parameters shown outside the device panel (menus, controllers); with the
+ *  values, only those of the present sections. */
 export const visibleParamsOf = (t: DeviceType, values?: ParamValues): ParamSpec[] =>
   (values ? activeSections(t, values) : t.sections).flatMap(s => s.params).filter(p => !p.hidden);
 
-/** I parametri per id, per tipo (la Drum Machine ne ha migliaia: gli strumenti dei pad). */
+/** The parameters by id, by type (the Drum Machine has thousands: the pads' instruments). */
 const specsByType = new WeakMap<DeviceType, ReadonlyMap<string, ParamSpec>>();
 
 export const paramSpec = (t: DeviceType, id: string): ParamSpec | undefined => {
@@ -65,13 +65,13 @@ export const paramSpec = (t: DeviceType, id: string): ParamSpec | undefined => {
   return specs.get(id);
 };
 
-/** Tutti i parametri del tipo: quelli dati (validati) e, per gli altri, i predefiniti. */
+/** All the type's parameters: the given ones (validated) and, for the others, the defaults. */
 export function resolveParams(t: DeviceType, values: ParamValues): Record<string, number> {
   return Object.fromEntries(paramsOf(t).map(p => [p.id, p.id in values ? clampParam(p, values[p.id]) : p.default]));
 }
 
-/** Come resolveParams, senza i parametri delle sezioni che con questi valori non ci sono: è ciò
- *  che arriva al motore. */
+/** Like resolveParams, without the parameters of the sections that aren't there with these values: it's what
+ *  reaches the engine. */
 export function resolveActiveParams(t: DeviceType, values: ParamValues): Record<string, number> {
   const all = resolveParams(t, values);
   if (!t.sections.some(s => s.when)) return all;
@@ -80,7 +80,7 @@ export function resolveActiveParams(t: DeviceType, values: ParamValues): Record<
   return out;
 }
 
-/** Vero se il parametro conta con questi valori (es. il tempo in ms solo senza sincronia). */
+/** True if the parameter counts with these values (e.g. the time in ms only without sync). */
 export function paramActive(p: ParamSpec, values: Readonly<Record<string, number>>): boolean {
   return !p.when || holds(p.when, values);
 }

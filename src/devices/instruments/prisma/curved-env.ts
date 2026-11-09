@@ -1,9 +1,9 @@
-/* L'inviluppo di Prisma: attacco, hold, decadimento, sustain e rilascio, con la curva di ogni
- * tratto (vedi `bend` in shapes.ts). Un nuovo attacco riparte dal livello attuale (rubare una
- * voce non fa click) e i tempi si possono cambiare mentre suona: il tratto prosegue con la
- * velocità nuova (così la matrice può muoverli, es. la velocity che accorcia il decay).
- * La curva si calcola a passi: l'esponenziale di un tratto si moltiplica per una costante a ogni
- * campione, invece di ricalcolarla (l'inviluppo del volume va a frequenza piena). */
+/* Prisma's envelope: attack, hold, decay, sustain and release, with the curve of each
+ * stage (see `bend` in shapes.ts). A new attack restarts from the current level (stealing a
+ * voice doesn't click) and the times can be changed while it plays: the stage continues at the
+ * new speed (so the matrix can move them, e.g. velocity shortening the decay).
+ * The curve is computed in steps: a stage's exponential is multiplied by a constant at each
+ * sample, instead of recomputing it (the volume envelope runs at full rate). */
 
 export interface EnvShape {
   readonly attack: number;
@@ -18,15 +18,15 @@ export interface EnvShape {
 }
 
 const IDLE = 0, ATTACK = 1, HOLD = 2, DECAY = 3, SUSTAIN = 4, RELEASE = 5, KILL = 6;
-/** Sotto questo livello l'inviluppo è finito (−100 dB). */
+/** Below this level the envelope is finished (−100 dB). */
 const FLOOR = 1e-5;
-/** Lo spegnimento veloce (stop, voce rubata in silenzio) dura così. */
+/** The fast shutdown (stop, voice stolen in silence) lasts this long. */
 const KILL_TIME = 0.005;
 
 export class CurvedEnv {
   value = 0;
   private stage = IDLE;
-  /** Quanto è andato avanti il tratto (0…1), e da che livello è partito. */
+  /** How far the stage has gone (0…1), and from what level it started. */
   private t = 0;
   private from = 0;
   private attackStep = 1;
@@ -38,14 +38,14 @@ export class CurvedEnv {
   private attackCurve = 0;
   private decayCurve = 0;
   private releaseCurve = 0;
-  /** La curva del tratto in corso: e^(k·t), quanto la moltiplica un passo, 1 / (e^k − 1);
-   *  `curved` falso: il tratto è una retta. */
+  /** The curve of the current stage: e^(k·t), how much a step multiplies it, 1 / (e^k − 1);
+   *  `curved` false: the stage is a straight line. */
   private curved = false;
   private e = 1;
   private mul = 1;
   private inv = 1;
 
-  /** `rate`: quante volte al secondo si chiama `next` (i campioni, o la frequenza di controllo). */
+  /** `rate`: how many times per second `next` is called (the samples, or the control rate). */
   constructor(private readonly rate: number) {
     this.killStep = 1 / (KILL_TIME * rate);
   }
@@ -101,7 +101,7 @@ export class CurvedEnv {
         } else this.value = 1 - (1 - this.sustain) * this.shaped();
         break;
       case SUSTAIN:
-        // il sustain può cambiare mentre si tiene la nota
+        // the sustain can change while the note is held
         this.value = this.sustain;
         if (this.sustain <= FLOOR) this.begin(IDLE);
         break;
@@ -120,7 +120,7 @@ export class CurvedEnv {
     return this.value;
   }
 
-  /** Quanto è andato avanti il tratto, piegato dalla sua curva (dopo il passo di `t`). */
+  /** How far the stage has gone, bent by its curve (after the step of `t`). */
   private shaped(): number {
     if (!this.curved) return this.t;
     this.e *= this.mul;
@@ -135,7 +135,7 @@ export class CurvedEnv {
     this.prepare();
   }
 
-  /** La curva del tratto in corso, con il passo attuale (e la posizione `t` a cui è arrivato). */
+  /** The curve of the current stage, with the current step (and the position `t` it has reached). */
   private prepare(): void {
     let curve = 0, step = 0;
     switch (this.stage) {
@@ -145,7 +145,7 @@ export class CurvedEnv {
     }
     this.curved = Math.abs(curve) >= 0.5;
     if (!this.curved) return;
-    // come `bend`: f(t) = (e^(k·t) − 1) / (e^k − 1)
+    // like `bend`: f(t) = (e^(k·t) − 1) / (e^k − 1)
     const k = -curve * 0.08;
     this.inv = 1 / Math.expm1(k);
     this.mul = Math.exp(k * step);

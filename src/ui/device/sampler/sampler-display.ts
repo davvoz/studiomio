@@ -1,12 +1,12 @@
-/* Il pannello del Sampler. In alto, nella scheda Sample, la forma d'onda della zona scelta (con
- * il sample da scegliere o caricare); nella scheda Zone l'editor delle zone sulla tastiera. A
- * destra gli inviluppi disegnati; sotto le schede del sample (con i controlli del modo scelto) o
- * della zona, dell'intonazione, del filtro, della voce e dell'uscita; a destra l'LFO. Tutto,
- * tranne il modo, la voce e l'uscita, è della zona scelta: i controlli hanno i nomi dei parametri
- * della prima zona e scrivono in quelli della zona (il cui suono, toccato, diventa suo). Il modo (Classic,
- * One-Shot, Slice) sta nell'intestazione del dispositivo. Un file audio dal disco o un sample dal
- * browser lasciato sul pannello diventa il sample della zona scelta; più file insieme, o lasciati
- * sull'editor delle zone, diventano zone nuove (dal tasto sotto il puntatore). */
+/* The Sampler's panel. At the top, in the Sample tab, the waveform of the chosen zone (with
+ * the sample to choose or load); in the Zones tab the zone editor on the keyboard. On the
+ * right the drawn envelopes; below the tabs of the sample (with the controls of the chosen mode) or
+ * of the zone, of the pitch, of the filter, of the voice and of the output; on the right the LFO. Everything,
+ * except the mode, the voice and the output, belongs to the chosen zone: the controls have the names of the
+ * first zone's parameters and write into the zone's (whose sound, once touched, becomes its own). The mode (Classic,
+ * One-Shot, Slice) is in the device's header. An audio file from disk or a sample from the
+ * browser dropped on the panel becomes the chosen zone's sample; several files together, or dropped
+ * on the zone editor, become new zones (from the key under the pointer). */
 import type { SampleId } from '../../../core/id';
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import {
@@ -25,10 +25,10 @@ import { findTransients } from './slices';
 import { WaveView } from './wave-view';
 import { ZoneView, type ZoneRow } from './zone-view';
 
-/** I file che si possono lasciare sul pannello. */
+/** The files that can be dropped on the panel. */
 const isAudio = (f: File) => f.type.startsWith('audio/') || /\.(wav|aiff?|flac|mp3|ogg|m4a)$/i.test(f.name);
 
-/** I controlli della scheda del sample, nel loro ordine; poi quelli che si vedono in ogni modo. */
+/** The controls of the sample tab, in their order; then those visible in every mode. */
 const SAMPLE_ORDER = ['start', 'end', 'sliceBy', 'sliceGrid', SENSITIVITY, 'loop', 'loopStart', 'loopEnd', 'xfade', 'loopRelease', 'trigger', 'reverse'];
 const SAMPLE_CONTROLS: Readonly<Record<number, readonly string[]>> = {
   [MODE.classic]: ['start', 'end', 'loop', 'loopStart', 'loopEnd', 'xfade', 'loopRelease', 'reverse'],
@@ -36,34 +36,34 @@ const SAMPLE_CONTROLS: Readonly<Record<number, readonly string[]>> = {
   [MODE.slice]: ['sliceBy', 'sliceGrid', SENSITIVITY, 'trigger', 'reverse'],
 };
 const SAMPLE_KEYS = new Set(Object.values(SAMPLE_CONTROLS).flat());
-/** I controlli della scheda della zona: cambiando zona si rifanno. */
+/** The controls of the zone tab: changing zone they're redone. */
 const ZONE_CONTROLS: readonly ZoneKey[] = ['lo', 'hi', 'vlo', 'vhi', 'gain', 'pan'];
-/** Le chiavi che hanno i nomi dei parametri della prima zona e valgono per la zona scelta. */
+/** The keys that have the names of the first zone's parameters and apply to the chosen zone. */
 const OF_ZONE = FIRST_ZONE_KEYS as ReadonlySet<string>;
 const SOUND = new Set<string>(SOUND_KEYS);
-/** Le scelte che stanno meglio in un menu che in fila di pulsanti. */
+/** The choices that sit better in a menu than in a row of buttons. */
 const MENUS = new Set(['loop', 'loopRelease', 'sliceBy', 'sliceGrid', 'root', 'voiceMode', 'fType', 'lfoShape', 'lfoDiv', 'lo', 'hi']);
-/** I controlli che, quando non contano, si tolgono invece di attenuarsi (stanno allo stesso posto). */
+/** The controls that, when they don't count, are removed instead of dimmed (they sit in the same place). */
 const SWAPPED = new Set(['lfoRate', 'lfoDiv', 'sliceGrid', SENSITIVITY]);
 
-/** Velocity delle note di prova (le fette, le zone). */
+/** Velocity of the test notes (the slices, the zones). */
 const AUDITION_VELOCITY = 110;
-/** Il primo tasto delle zone caricate una per tasto: C1, come i pad di una batteria. */
+/** The first key of the zones loaded one per key: C1, like a drum kit's pads. */
 const FIRST_ZONE_KEY = 36;
 
 type Tab = 'sample' | 'zones';
 
-/** L'inviluppo che si guarda, la scheda in alto e la zona scelta (restano fra un pannello e l'altro). */
+/** The envelope being looked at, the top tab and the chosen zone (they stay from one panel to the next). */
 const view = { env: 1, tab: 'sample' as Tab, zone: 0 };
 
 export class SamplerDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'smp' });
   readonly head: HTMLElement;
-  /** I controlli per id del parametro, con la chiave che li ordina (per le zone: "start", "lo"…). */
+  /** The controls by parameter id, with the key ordering them (for the zones: "start", "lo"…). */
   private readonly controls = new Map<string, { control: ParamControl; spec: ParamSpec; key: string }>();
-  /** I posti dei controlli che valgono per la zona scelta. */
+  /** The slots of the controls applying to the chosen zone. */
   private readonly slots = new Map<ZoneKey, HTMLElement>();
-  /** Gli id dei controlli della scheda della zona di adesso (z2lo…), da togliere cambiando zona. */
+  /** The ids of the controls of the current zone tab (z2lo…), to remove when changing zone. */
   private zoneControls: string[] = [];
   private readonly wave: WaveView;
   private readonly zoneView: ZoneView;
@@ -71,27 +71,27 @@ export class SamplerDisplay implements DeviceDisplay {
   private readonly envTabs: HTMLButtonElement[] = [];
   private readonly envKnobs = el('div', { className: 'device-controls smp-knobs' });
   private readonly tabs: Record<Tab, HTMLButtonElement>;
-  private readonly zoneChoice = el<HTMLSelectElement>('select', { className: 'smp-zone-pick', title: 'La zona che si guarda' });
-  private readonly sampleChoice = el<HTMLSelectElement>('select', { className: 'smp-sample', title: 'Il sample della zona (tra quelli del progetto)' });
-  private readonly addZones = el<HTMLButtonElement>('button', { className: 'mini', textContent: '+ Zone…', title: 'Carica dei file audio in zone nuove, un tasto ciascuno (o sulle note scritte nei nomi)' });
-  /** Il suono della zona scelta: come la prima o suo. */
-  private readonly link = el<HTMLButtonElement>('button', { className: 'mini smp-link', textContent: 'Come zona 1' });
+  private readonly zoneChoice = el<HTMLSelectElement>('select', { className: 'smp-zone-pick', title: 'The zone being looked at' });
+  private readonly sampleChoice = el<HTMLSelectElement>('select', { className: 'smp-sample', title: 'The zone\'s sample (among the project\'s)' });
+  private readonly addZones = el<HTMLButtonElement>('button', { className: 'mini', textContent: '+ Zones…', title: 'Load audio files into new zones, one key each (or on the notes written in the names)' });
+  /** The chosen zone's sound: like the first or its own. */
+  private readonly link = el<HTMLButtonElement>('button', { className: 'mini smp-link', textContent: 'Like zone 1' });
   private readonly info = el('span', { className: 'smp-info muted' });
-  private readonly detect = el<HTMLButtonElement>('button', { className: 'mini smp-detect', textContent: 'Rileva', title: 'Trova le fette ai transienti (con la sensibilità scelta)' });
+  private readonly detect = el<HTMLButtonElement>('button', { className: 'mini smp-detect', textContent: 'Detect', title: 'Find the slices at the transients (with the chosen sensitivity)' });
   private readonly sampleCard: HTMLElement;
   private readonly zoneCard: HTMLElement;
   private readonly zoneTitle = el('span', { className: 'smp-card-title' });
-  /** I titoli delle schede che valgono per la zona scelta, con il loro nome ("Filtro" → "Filtro · zona 2"). */
+  /** The titles of the tabs applying to the chosen zone, with their name ("Filter" → "Filter · zone 2"). */
   private readonly soundTitles: [HTMLElement, string][] = [];
   private values: Record<string, number>;
   private params: ParamValues | null = null;
   private settings: DeviceSettings;
   private enabled = true;
-  /** La zona per cui sono fatti i controlli che dipendono dalla zona. */
+  /** The zone the zone-dependent controls are made for. */
   private builtZone = -1;
-  /** I valori come li vede la zona scelta (vedi zoneValues). */
+  /** The values as the chosen zone sees them (see zoneValues). */
   private shownValues: { values: Record<string, number>; zone: number; out: Record<string, number> } | null = null;
-  /** Il pannello è stato nel documento: quando ne esce smette di guardare le voci. */
+  /** The panel has been in the document: when it leaves it stops watching the voices. */
   private shown = false;
   private hadAudio = false;
 
@@ -121,7 +121,7 @@ export class SamplerDisplay implements DeviceDisplay {
       pitched: () => this.values.mode !== MODE.slice,
       menu: (x, y) => this.zoneMenu(x, y),
     });
-    // il nome dell'inviluppo è nella scheda scelta (e la zona nel titolo): il disegno usa tutta l'altezza
+    // the envelope's name is in the chosen tab (and the zone in the title): the drawing uses the whole height
     this.envView = new EnvView(() => this.zoneValues(), (values, final) => ctx.setParams(this.toZone(values), final), () => '', true);
     this.envView.canvas.classList.add('smp-env');
 
@@ -130,8 +130,8 @@ export class SamplerDisplay implements DeviceDisplay {
     this.head = el('div', { className: 'smp-head' }, mode);
 
     this.tabs = {
-      sample: el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Sample', title: 'La forma d\'onda della zona scelta', onclick: () => this.showTab('sample') }),
-      zones: el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Zone', title: 'I sample sulla tastiera: tasti e velocity di ogni zona', onclick: () => this.showTab('zones') }),
+      sample: el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Sample', title: 'The chosen zone\'s waveform', onclick: () => this.showTab('sample') }),
+      zones: el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Zones', title: 'The samples on the keyboard: keys and velocities of each zone', onclick: () => this.showTab('zones') }),
     };
     this.zoneChoice.onchange = () => this.selectZone(Number(this.zoneChoice.value));
     this.link.onclick = () => {
@@ -139,7 +139,7 @@ export class SamplerDisplay implements DeviceDisplay {
       ctx.setParams(Object.keys(own).length ? own : { [zoneParam(zone, 'own')]: 0 }, true);
     };
     this.sampleChoice.onchange = () => this.assign((this.sampleChoice.value || null) as SampleId | null);
-    const load = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Carica…', title: 'Carica un file audio nella zona scelta', onclick: () => this.pickFiles(files => this.loadFiles(files), false) });
+    const load = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Load…', title: 'Load an audio file into the chosen zone', onclick: () => this.pickFiles(files => this.loadFiles(files), false) });
     this.addZones.onclick = () => this.pickFiles(files => this.newZones(files, this.nextKey()));
     this.detect.onclick = () => this.findSlices(this.values[SENSITIVITY], true);
     const waveBox = el('div', { className: 'smp-wave-box' },
@@ -148,7 +148,7 @@ export class SamplerDisplay implements DeviceDisplay {
       this.wave.canvas, this.zoneView.canvas);
 
     const envCard = el('div', { className: 'smp-card smp-env-card' },
-      el('div', { className: 'smp-card-head' }, this.title('Inviluppi'), el('div', { className: 'smp-tabs' }, ...ENV_NAMES.map((name, i) => {
+      el('div', { className: 'smp-card-head' }, this.title('Envelopes'), el('div', { className: 'smp-tabs' }, ...ENV_NAMES.map((name, i) => {
         const b = el<HTMLButtonElement>('button', { className: 'mini', textContent: name, onclick: () => this.showEnv(i + 1) });
         this.envTabs.push(b);
         return b;
@@ -157,14 +157,14 @@ export class SamplerDisplay implements DeviceDisplay {
     this.sampleCard = el('div', { className: 'smp-card' },
       el('div', { className: 'smp-card-head' }, this.title('Sample'), this.detect), this.row(...SAMPLE_ORDER));
     this.sampleCard.classList.add('smp-sample-card');
-    const remove = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Togli', title: 'Toglie la zona e il suo sample', onclick: () => this.removeZone(this.zone) });
+    const remove = el<HTMLButtonElement>('button', { className: 'mini', textContent: 'Remove', title: 'Removes the zone and its sample', onclick: () => this.removeZone(this.zone) });
     this.zoneCard = el('div', { className: 'smp-card smp-zone-card' },
       el('div', { className: 'smp-card-head' }, this.zoneTitle, remove), this.zoneRow(ZONE_CONTROLS));
-    const pitchCard = this.card(this.title('Intonazione'), [], this.row('root', 'transpose', 'detune', 'keyTrack', 'pitchEnv'));
-    const filterCard = this.card(this.title('Filtro'), [this.power('fOn'), this.control('fType', undefined, true)],
+    const pitchCard = this.card(this.title('Pitch'), [], this.row('root', 'transpose', 'detune', 'keyTrack', 'pitchEnv'));
+    const filterCard = this.card(this.title('Filter'), [this.power('fOn'), this.control('fType', undefined, true)],
       this.row('fCutoff', 'fRes', 'fDrive', 'fVar', 'fKey', 'fEnv', 'fVel'));
-    // ciò che resta di tutto il Sampler: la voce (una voce sola è di tutte le zone) e l'uscita
-    const outCard = this.card(el('span', { className: 'smp-card-title', textContent: 'Voce e uscita' }), [],
+    // what's left of the whole Sampler: the voice (a single voice belongs to all the zones) and the output
+    const outCard = this.card(el('span', { className: 'smp-card-title', textContent: 'Voice and output' }), [],
       this.row('voiceMode', 'glide', 'velocity', 'pan', 'volume'));
     const lfoCard = this.card(this.title('LFO'), [this.control('lfoShape', undefined, true)],
       el('div', { className: 'smp-lfo-grid' }, ...['lfoSync', 'lfoRate', 'lfoDiv', 'lfoTrig', 'lfoFade', 'lfoPitch', 'lfoCutoff', 'lfoVolume', 'lfoPan']
@@ -186,7 +186,7 @@ export class SamplerDisplay implements DeviceDisplay {
     requestAnimationFrame(this.frame);
   }
 
-  /** A ogni fotogramma: i cursori delle voci, e il sample quando finisce di caricarsi. */
+  /** At every frame: the voices' cursors, and the sample when it finishes loading. */
   private readonly frame = () => {
     if (this.element.isConnected) this.shown = true;
     else if (this.shown) return;
@@ -208,7 +208,7 @@ export class SamplerDisplay implements DeviceDisplay {
     }
     this.settings = settings;
     this.enabled = enabled;
-    // la zona scelta non c'è più (tolta): si passa alla prima che c'è
+    // the chosen zone is gone (removed): it moves to the first that exists
     if (view.zone !== 0 && !sampleAt(settings, zoneSlot(view.zone))) view.zone = this.rows()[0]?.index ?? 0;
     if (this.zone !== this.builtZone) this.buildZoneControls();
     const shown = new Set(SAMPLE_CONTROLS[this.values.mode] ?? []), values = this.zoneValues();
@@ -218,7 +218,7 @@ export class SamplerDisplay implements DeviceDisplay {
       setActive(control, active);
       control.element.hidden = (SAMPLE_KEYS.has(key) && !shown.has(key)) || (SWAPPED.has(key) && !active);
     }
-    // la sensibilità conta solo con le fette ai transienti (è un parametro dell'interfaccia)
+    // the sensitivity counts only with the slices at the transients (it's an interface parameter)
     const transients = this.values.mode === MODE.slice && this.values.sliceBy === SLICE.transients;
     const sens = this.controls.get(SENSITIVITY);
     if (sens) sens.control.element.hidden = !transients;
@@ -230,17 +230,17 @@ export class SamplerDisplay implements DeviceDisplay {
 
   // ---------------------------------------------------------------- zone
 
-  /** La scheda in alto: in Slice c'è solo il sample (le fette sono della prima zona). */
+  /** The top tab: in Slice there's only the sample (the slices belong to the first zone). */
   private get tab(): Tab {
     return this.values.mode === MODE.slice ? 'sample' : view.tab;
   }
 
-  /** La zona che si guarda: in Slice la prima, che ha le fette. */
+  /** The zone being looked at: in Slice the first, which has the slices. */
   private get zone(): number {
     return this.values.mode === MODE.slice ? 0 : view.zone;
   }
 
-  /** Le zone che hanno un sample, in ordine. */
+  /** The zones that have a sample, in order. */
   private rows(): ZoneRow[] {
     const out: ZoneRow[] = [];
     for (let i = 0; i < MAX_ZONES; i++) if (sampleAt(this.settings, zoneSlot(i))) out.push({ index: i, name: this.sampleName(i) ?? '…' });
@@ -268,32 +268,32 @@ export class SamplerDisplay implements DeviceDisplay {
     this.update(this.settings, this.enabled);
   }
 
-  /** Rifà i controlli che valgono per la zona scelta, ai loro posti. */
+  /** Redoes the controls applying to the chosen zone, in their places. */
   private buildZoneControls(): void {
     const zone = this.zone;
     this.builtZone = zone;
     for (const id of this.zoneControls) this.controls.delete(id);
     this.zoneControls = [...this.slots.keys()].map(key => zoneParam(zone, key));
     for (const [key, slot] of this.slots) slot.replaceChildren(this.control(zoneParam(zone, key), undefined, MENUS.has(key), key));
-    this.zoneTitle.textContent = `Zona ${zone + 1}`;
+    this.zoneTitle.textContent = `Zone ${zone + 1}`;
     this.ctx.controlsChanged();
   }
 
-  /** Il tasto da cui partono le zone nuove: dopo l'ultima zona su un tasto solo, o C1. */
+  /** The key the new zones start from: after the last single-key zone, or C1. */
   private nextKey(): number {
     const single = this.rows().map(r => zoneMap(this.values, r.index)).filter(z => z.lo === z.hi);
     return single.length ? Math.min(127, Math.max(...single.map(z => z.hi)) + 1) : FIRST_ZONE_KEY;
   }
 
-  /** Le zone libere (senza sample), quante ne servono, e i valori per metterci `names` da `first`. */
+  /** The free zones (without sample), as many as needed, and the values to put `names` there from `first`. */
   private place(names: readonly string[], first: number): { zones: number[]; values: Record<string, number> } | null {
     const free = Array.from({ length: MAX_ZONES }, (_, i) => i).filter(i => !sampleAt(this.settings, zoneSlot(i)));
     if (free.length < names.length) {
-      this.info.textContent = `Al massimo ${MAX_ZONES} zone: ne restano ${free.length}.`;
+      this.info.textContent = `At most ${MAX_ZONES} zones: ${free.length} left.`;
       return null;
     }
     const layout = layoutZones(names, first), zones = free.slice(0, names.length), values: Record<string, number> = {};
-    // della zona resta solo la mappa nuova: ciò che le era rimasto da prima torna ai predefiniti
+    // only the new map of the zone stays: what was left from before goes back to the defaults
     for (const [k, z] of zones.entries()) {
       for (const [id, def] of Object.entries(zoneDefaults(z))) if (this.values[id] !== def) values[id] = def;
       Object.assign(values, zoneKeys(z, layout[k].lo, layout[k].hi, layout[k].root));
@@ -301,7 +301,7 @@ export class SamplerDisplay implements DeviceDisplay {
     return { zones, values };
   }
 
-  /** File in zone nuove, da `first` (un passo solo); poi si guardano le zone. */
+  /** Files into new zones, from `first` (a single step); then the zones are shown. */
   private async newZones(files: readonly File[], first: number): Promise<void> {
     const samples = this.ctx.samples;
     const placed = samples?.loadAll && this.place(files.map(f => f.name), first);
@@ -309,13 +309,13 @@ export class SamplerDisplay implements DeviceDisplay {
     try {
       await samples.loadAll(Object.fromEntries(placed.zones.map((z, k) => [zoneSlot(z), files[k]])), placed.values);
     } catch (err) {
-      this.info.textContent = `Impossibile caricare i file: ${err instanceof Error ? err.message : err}`;
+      this.info.textContent = `Can't load the files: ${err instanceof Error ? err.message : err}`;
       return;
     }
     this.afterZones(placed.zones);
   }
 
-  /** Un sample del progetto in una zona nuova, sul tasto `key`. */
+  /** A project sample in a new zone, on key `key`. */
   private newZone(id: SampleId, name: string, key: number): void {
     const placed = this.place([name], key);
     if (!placed || !this.ctx.samples) return;
@@ -334,7 +334,7 @@ export class SamplerDisplay implements DeviceDisplay {
     this.ctx.samples?.assign({ [zoneSlot(zone)]: null }, zoneDefaults(zone));
   }
 
-  /** La nota che fa sentire la zona: la sua nota base, se ci sta dentro. */
+  /** The note that makes the zone heard: its root note, if it fits inside. */
   private zonePitch(zone: number): number {
     const z = zoneMap(this.values, zone);
     return z.root >= z.lo && z.root <= z.hi ? z.root : z.lo;
@@ -346,17 +346,17 @@ export class SamplerDisplay implements DeviceDisplay {
       this.ctx.setParams(Object.assign({}, ...rows.map(fn)), true);
     const roots = rows.map(r => zoneMap(this.values, r.index).root), ranges = spreadRanges(roots);
     showContextMenu(x, y, [
-      { label: 'Carica in zone nuove…', run: () => this.pickFiles(files => this.newZones(files, this.nextKey())) },
-      { label: `Cambia il sample della zona ${zone + 1}…`, disabled: !has, run: () => this.pickFiles(files => this.loadFiles(files), false) },
-      { label: `Togli la zona ${zone + 1}`, disabled: !has, run: () => this.removeZone(zone) },
+      { label: 'Load into new zones…', run: () => this.pickFiles(files => this.newZones(files, this.nextKey())) },
+      { label: `Change the sample of zone ${zone + 1}…`, disabled: !has, run: () => this.pickFiles(files => this.loadFiles(files), false) },
+      { label: `Remove zone ${zone + 1}`, disabled: !has, run: () => this.removeZone(zone) },
       SEPARATOR,
-      { label: 'Un tasto per zona, da C1', disabled: !rows.length,
+      { label: 'One key per zone, from C1', disabled: !rows.length,
         run: all((r, k) => zoneKeys(r.index, Math.min(127, FIRST_ZONE_KEY + k), Math.min(127, FIRST_ZONE_KEY + k), Math.min(127, FIRST_ZONE_KEY + k))) },
-      { label: 'Dividi la tastiera tra le note base', disabled: rows.length < 2,
+      { label: 'Split the keyboard between the root notes', disabled: rows.length < 2,
         run: all((r, k) => zoneKeys(r.index, ranges[k].lo, ranges[k].hi, roots[k])) },
-      { label: 'Tutte su tutta la tastiera', disabled: !rows.length, run: all((r, k) => zoneKeys(r.index, 0, 127, roots[k])) },
+      { label: 'All on the whole keyboard', disabled: !rows.length, run: all((r, k) => zoneKeys(r.index, 0, 127, roots[k])) },
       SEPARATOR,
-      { label: 'Mostra tutta la tastiera', run: () => this.zoneView.zoomAll() },
+      { label: 'Show the whole keyboard', run: () => this.zoneView.zoomAll() },
     ]);
   }
 
@@ -371,8 +371,8 @@ export class SamplerDisplay implements DeviceDisplay {
     return (id && this.ctx.samples?.list().find(s => s.id === id)?.name) || null;
   }
 
-  /** I valori come li vede la zona scelta: posizioni, nota base e suono (vedi OF_ZONE) sono i
-   *  suoi, sotto i nomi dei parametri della prima zona. */
+  /** The values as the chosen zone sees them: positions, root note and sound (see OF_ZONE) are
+   *  its own, under the names of the first zone's parameters. */
   private zoneValues(): Record<string, number> {
     const zone = this.zone;
     if (zone === 0) return this.values;
@@ -384,8 +384,8 @@ export class SamplerDisplay implements DeviceDisplay {
     return out;
   }
 
-  /** Valori con i nomi della prima zona nei parametri della zona scelta. Toccando il suono di una
-   *  zona che segue la prima, la zona prende il suo (dalla prima) e poi il cambio. */
+  /** Values with the first zone's names into the chosen zone's parameters. Touching the sound of a
+   *  zone following the first, the zone takes its own (from the first) and then the change. */
   private toZone(values: ParamValues): ParamValues {
     const zone = this.zone;
     if (zone === 0) return values;
@@ -397,19 +397,19 @@ export class SamplerDisplay implements DeviceDisplay {
   private refreshSample(): void {
     const all = this.ctx.samples?.list() ?? [], rows = this.rows();
     const current = sampleAt(this.settings, zoneSlot(this.zone));
-    this.sampleChoice.replaceChildren(el('option', { value: '', textContent: '— nessun sample —' }),
+    this.sampleChoice.replaceChildren(el('option', { value: '', textContent: '— no sample —' }),
       ...all.map(s => el('option', { value: s.id, textContent: s.name })));
     this.sampleChoice.value = current ?? '';
-    this.zoneChoice.replaceChildren(...rows.map(r => el('option', { value: String(r.index), textContent: `Zona ${r.index + 1} · ${r.name}` })));
+    this.zoneChoice.replaceChildren(...rows.map(r => el('option', { value: String(r.index), textContent: `Zone ${r.index + 1} · ${r.name}` })));
     this.zoneChoice.value = String(this.zone);
     this.zoneChoice.hidden = rows.length < 2 || this.values.mode === MODE.slice;
     const follows = this.values[zoneParam(this.zone, 'own')] !== 1;
     this.link.hidden = this.zone === 0;
     this.link.classList.toggle('on', follows);
     this.link.title = follows
-      ? 'Il suono di questa zona (loop, intonazione, filtro, inviluppi, LFO) è quello della zona 1. Clic (o cambiane un controllo) per darle il suo.'
-      : 'Questa zona ha il suo suono (loop, intonazione, filtro, inviluppi, LFO). Clic: torna quello della zona 1.';
-    for (const [title, name] of this.soundTitles) title.textContent = rows.length > 1 ? `${name} · zona ${this.zone + 1}` : name;
+      ? 'This zone\'s sound (loop, pitch, filter, envelopes, LFO) is zone 1\'s. Click (or change one of its controls) to give it its own.'
+      : 'This zone has its own sound (loop, pitch, filter, envelopes, LFO). Click: back to zone 1\'s.';
+    for (const [title, name] of this.soundTitles) title.textContent = rows.length > 1 ? `${name} · zone ${this.zone + 1}` : name;
     const a = this.audio();
     if (!a) {
       this.info.textContent = rows.length > 1 ? `${rows.length} zone` : '';
@@ -420,7 +420,7 @@ export class SamplerDisplay implements DeviceDisplay {
     this.info.textContent = `${length} · ${(a.sampleRate / 1000).toFixed(1)} kHz · ${a.channels.length > 1 ? 'stereo' : 'mono'}`;
   }
 
-  /** Un sample del progetto nella zona scelta (null: tolto). In Slice ai transienti, le fette si cercano subito. */
+  /** A project sample in the chosen zone (null: removed). In Slice at the transients, the slices are looked for right away. */
   private assign(id: SampleId | null): void {
     const samples = this.ctx.samples;
     if (!samples) return;
@@ -429,7 +429,7 @@ export class SamplerDisplay implements DeviceDisplay {
     if (id) this.afterLoad();
   }
 
-  /** Un file nella zona scelta; più file vanno in zone nuove. */
+  /** A file in the chosen zone; several files go into new zones. */
   private async loadFiles(files: readonly File[]): Promise<void> {
     const samples = this.ctx.samples;
     if (!samples || !files.length) return;
@@ -438,13 +438,13 @@ export class SamplerDisplay implements DeviceDisplay {
     try {
       await samples.load(zoneSlot(this.zone), file, {});
     } catch (err) {
-      this.info.textContent = `Impossibile caricare "${file.name}": ${err instanceof Error ? err.message : err}`;
+      this.info.textContent = `Can't load "${file.name}": ${err instanceof Error ? err.message : err}`;
       return;
     }
     this.afterLoad();
   }
 
-  /** Dopo un sample nuovo: si vede tutto, e in Slice ai transienti le fette sono le sue. */
+  /** After a new sample: everything is shown, and in Slice at the transients the slices are its own. */
   private afterLoad(): void {
     this.wave.zoomAll();
     if (this.values.mode === MODE.slice && this.values.sliceBy === SLICE.transients) this.findSlices(this.values[SENSITIVITY], true);
@@ -460,13 +460,13 @@ export class SamplerDisplay implements DeviceDisplay {
     input.click();
   }
 
-  /** File dal disco e sample (o file) dal browser, lasciati sul pannello. Sull'editor delle zone
-   *  vanno in zone nuove dal tasto sotto il puntatore (sul nome di una zona: ne cambiano il sample). */
+  /** Files from disk and samples (or files) from the browser, dropped on the panel. On the zone editor
+   *  they go into new zones from the key under the pointer (on a zone's name: they change its sample). */
   private bindDrops(): void {
     const target = this.element;
     if (!this.ctx.samples) return;
     const files = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
-    /** Dove va ciò che arriva a (x, y): una zona nuova da un tasto, o la zona di una riga. */
+    /** Where what arrives at (x, y) goes: a new zone from a key, or a row's zone. */
     const where = (x: number, y: number): { key: number } | { zone: number } | null => {
       if (this.tab !== 'zones' || !this.zoneView.canvas.contains(document.elementFromPoint(x, y))) return null;
       const key = this.zoneView.keyAt(x), zone = this.zoneView.zoneAt(y);
@@ -510,9 +510,9 @@ export class SamplerDisplay implements DeviceDisplay {
     }, { accept: item => item.payload?.kind === 'sample' || item.payload?.kind === 'file' });
   }
 
-  // ---------------------------------------------------------------- fette
+  // ---------------------------------------------------------------- slices
 
-  /** Cerca le fette ai transienti con la sensibilità `sens` (0…100) e le salva (sul sample della prima zona). */
+  /** Looks for the slices at the transients with sensitivity `sens` (0…100) and saves them (on the first zone's sample). */
   private findSlices(sens: number, final: boolean): void {
     const audio = this.ctx.samples?.audio?.(zoneSlot(0));
     if (!audio) return;
@@ -523,7 +523,7 @@ export class SamplerDisplay implements DeviceDisplay {
 
   private setMode(mode: number): void {
     const v = this.values, audio = this.ctx.samples?.audio?.(zoneSlot(0));
-    // passando a Slice ai transienti la prima volta, le fette si trovano da sole
+    // switching to Slice at the transients the first time, the slices are found by themselves
     if (mode === MODE.slice && v.sliceBy === SLICE.transients && !v[SLICE_COUNT] && audio) {
       const found = findTransients(audio, v.reverse === 1, v[SENSITIVITY] / 100, v.start / 100, v.end / 100);
       this.ctx.setParams({ mode, ...sliceValues(found) }, true);
@@ -534,20 +534,20 @@ export class SamplerDisplay implements DeviceDisplay {
     const samples = this.ctx.samples, loaded = sampleAt(this.settings, zoneSlot(this.zone));
     const sliced = this.values.mode === MODE.slice, transients = sliced && this.values.sliceBy === SLICE.transients;
     showContextMenu(x, y, [
-      { label: 'Carica un sample…', run: () => this.pickFiles(files => this.loadFiles(files), false) },
-      { label: 'Togli il sample', disabled: !loaded || !samples, run: () => this.assign(null) },
-      ...(sliced ? [] : [{ label: 'Carica in zone nuove…', run: () => this.pickFiles(files => this.newZones(files, this.nextKey())) }]),
+      { label: 'Load a sample…', run: () => this.pickFiles(files => this.loadFiles(files), false) },
+      { label: 'Remove the sample', disabled: !loaded || !samples, run: () => this.assign(null) },
+      ...(sliced ? [] : [{ label: 'Load into new zones…', run: () => this.pickFiles(files => this.newZones(files, this.nextKey())) }]),
       SEPARATOR,
-      { label: 'Mostra tutto il sample', run: () => this.wave.zoomAll() },
+      { label: 'Show the whole sample', run: () => this.wave.zoomAll() },
       ...(transients ? [
         SEPARATOR,
-        { label: 'Rileva le fette ai transienti', disabled: !this.audio(), run: () => this.findSlices(this.values[SENSITIVITY], true) },
-        { label: 'Togli tutte le fette', disabled: !this.values[SLICE_COUNT], run: () => this.ctx.setParams(sliceValues([]), true) },
+        { label: 'Detect the slices at the transients', disabled: !this.audio(), run: () => this.findSlices(this.values[SENSITIVITY], true) },
+        { label: 'Remove all the slices', disabled: !this.values[SLICE_COUNT], run: () => this.ctx.setParams(sliceValues([]), true) },
       ] : []),
     ]);
   }
 
-  // ---------------------------------------------------------------- inviluppi
+  // ---------------------------------------------------------------- envelopes
 
   private showEnv(env: number): void {
     view.env = env;
@@ -559,25 +559,25 @@ export class SamplerDisplay implements DeviceDisplay {
     this.ctx.controlsChanged();
   }
 
-  // ---------------------------------------------------------------- controlli
+  // ---------------------------------------------------------------- controls
 
   private card(title: HTMLElement, head: readonly Node[], ...body: Node[]): HTMLElement {
     return el('div', { className: 'smp-card' }, el('div', { className: 'smp-card-head' }, title, ...head), ...body);
   }
 
-  /** Il titolo di una scheda che vale per la zona scelta (con più zone dice quale). */
+  /** The title of a tab applying to the chosen zone (with several zones it says which). */
   private title(name: string): HTMLElement {
     const title = el('span', { className: 'smp-card-title', textContent: name });
     this.soundTitles.push([title, name]);
     return title;
   }
 
-  /** Una fila di controlli. */
+  /** A row of controls. */
   private row(...ids: string[]): HTMLElement {
     return el('div', { className: 'device-controls smp-knobs' }, ...ids.map(id => this.control(id)));
   }
 
-  /** La fila della scheda della zona: un posto per controllo, riempito da buildZoneControls. */
+  /** The row of the zone tab: one slot per control, filled by buildZoneControls. */
   private zoneRow(keys: readonly ZoneKey[]): HTMLElement {
     return el('div', { className: 'device-controls smp-knobs' }, ...keys.map(key => {
       const slot = el('span', { className: 'smp-slot' });
@@ -586,7 +586,7 @@ export class SamplerDisplay implements DeviceDisplay {
     }));
   }
 
-  /** Il controllo del parametro `id`; `change` al posto del cambio normale (es. il modo). */
+  /** The control of parameter `id`; `change` in place of the normal change (e.g. the mode). */
   private control(id: string, change?: (v: number) => void, menu = MENUS.has(id), key = id): HTMLElement {
     const spec = paramSpec(this.ctx.type, id)!;
     const onChange = id === SENSITIVITY
@@ -607,9 +607,9 @@ export class SamplerDisplay implements DeviceDisplay {
     } else this.ctx.setParams({ sliceBy }, true);
   }
 
-  /** Acceso/spento del filtro, un pulsante nell'intestazione della scheda. */
+  /** On/off of the filter, a button in the tab's header. */
   private power(id: string): HTMLElement {
-    const b = el<HTMLButtonElement>('button', { className: 'mini smp-power', textContent: '⏻', title: 'Accendi/spegni il filtro' });
+    const b = el<HTMLButtonElement>('button', { className: 'mini smp-power', textContent: '⏻', title: 'Turn the filter on/off' });
     b.dataset.param = id;
     b.onclick = () => this.ctx.setParams(this.toZone({ [id]: this.zoneValues()[id] === 1 ? 0 : 1 }), true);
     this.controls.set(id, { control: { element: b, set: v => b.classList.toggle('on', v === 1) }, spec: paramSpec(this.ctx.type, id)!, key: id });

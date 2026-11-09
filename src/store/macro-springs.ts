@@ -1,18 +1,18 @@
-/* Le macro molla: chiunque le muova (il mouse, un tasto, una nota o un CC della mappa MIDI, le
- * manopole dell'APC40 e dei Launchpad), lasciate tornano da sole al loro riposo, nel tempo di
- * ritorno della molla e da dovunque siano. Lasciate vuol dire: chi sa quando le si lascia (il
- * mouse, i tasti, le note) lo dice con `hold`; per gli altri (un CC, una manopola senza fine)
- * conta come lasciata una macro che non si muove da SPRING_IDLE_MS. Il ritorno non è un passo di
- * annullamento: riporta il progetto com'era. */
+/* The spring macros: whoever moves them (the mouse, a key, a note or a CC of the MIDI map, the
+ * knobs of the APC40 and the Launchpads), once released they return by themselves to their rest, in the spring's
+ * return time and from wherever they are. Released means: whoever knows when they're let go (the
+ * mouse, the keys, the notes) says so with `hold`; for the others (a CC, an endless knob)
+ * a macro that hasn't moved for SPRING_IDLE_MS counts as released. The return isn't an undo
+ * step: it brings the project back as it was. */
 import type { DeviceId } from '../core/id';
 import { MASTER, type ChainOwner, type Project } from '../model/project';
 import { findRack, springOf } from '../model/rack';
 import { edit, type ProjectStore } from './project-store';
 import { setMacro } from './rack-edits';
 
-/** Dopo quanto una macro mossa da chi non dice quando la lascia conta come lasciata. */
+/** After how long a macro moved by someone who doesn't say when they let it go counts as released. */
 export const SPRING_IDLE_MS = 200;
-/** Ogni quanto la molla fa un passo. */
+/** How often the spring takes a step. */
 const FRAME_MS = 15;
 
 export interface SpringClock {
@@ -28,8 +28,8 @@ const realClock: SpringClock = {
   },
 };
 
-/** Una macro tirata: dov'è, quando la si è mossa l'ultima volta, e da dove e quando ha
- *  cominciato a tornare (null: non torna ancora). */
+/** A pulled macro: where it is, when it was last moved, and from where and when it
+ *  started to return (null: it isn't returning yet). */
 interface Pull {
   readonly owner: ChainOwner;
   readonly rack: DeviceId;
@@ -42,9 +42,9 @@ const keyOf = (owner: ChainOwner, rack: DeviceId, index: number) => `${owner}|${
 
 export class MacroSprings {
   private readonly pulls = new Map<string, Pull>();
-  /** Quanti tengono ogni macro (il mouse e un tasto insieme, per esempio). */
+  /** How many hold each macro (the mouse and a key together, for example). */
   private readonly holders = new Map<string, number>();
-  /** L'ultimo valore scritto dalla molla: quello non è qualcuno che la muove. */
+  /** The last value written by the spring: that's not someone moving it. */
   private readonly written = new Map<string, number>();
   private stopTimer: (() => void) | null = null;
 
@@ -52,7 +52,7 @@ export class MacroSprings {
     store.onChange((p, _previous, cause) => this.changed(p, cause === 'load'));
   }
 
-  /** Qualcuno prende (`down`) o lascia la macro: tenuta non torna; lasciata torna subito. */
+  /** Someone takes (`down`) or releases the macro: held it doesn't return; released it returns right away. */
   hold(owner: ChainOwner, rack: DeviceId, index: number, down: boolean): void {
     const k = keyOf(owner, rack, index);
     const n = (this.holders.get(k) ?? 0) + (down ? 1 : -1);
@@ -64,12 +64,12 @@ export class MacroSprings {
     pull.touched = this.clock.now() - SPRING_IDLE_MS;
   }
 
-  /** Vero se qualche molla è tirata (per i test e la diagnosi). */
+  /** True if some spring is pulled (for tests and diagnosis). */
   get pulling(): boolean {
     return this.pulls.size > 0;
   }
 
-  /** Le molle lontane dal riposo che non ha spostato la molla stessa: qualcuno le ha mosse. */
+  /** The springs away from rest that the spring itself didn't move: someone moved them. */
   private changed(p: Project, loaded: boolean): void {
     if (loaded) {
       this.pulls.clear();
@@ -105,7 +105,7 @@ export class MacroSprings {
     else if (!this.pulls.size) this.stop();
   }
 
-  /** Un passo di ogni molla lasciata: in linea retta verso il riposo, in tempo per arrivarci. */
+  /** One step of each released spring: in a straight line towards rest, in time to get there. */
   private step(): void {
     const p = this.store.project, now = this.clock.now();
     const moves: { pull: Pull; value: number }[] = [];
@@ -129,7 +129,7 @@ export class MacroSprings {
       moves.push({ pull, value });
     }
     if (!moves.length) return;
-    this.store.apply(edit('Molla', (next, ctx) => moves.reduce(
+    this.store.apply(edit('Spring', (next, ctx) => moves.reduce(
       (q, { pull, value }) => setMacro(pull.owner, pull.rack, pull.index, value).apply(q, ctx), next)), { transient: true });
   }
 

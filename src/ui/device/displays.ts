@@ -1,6 +1,6 @@
-/* Pannelli grafici dei dispositivi. Di norma un dispositivo ha le manopole generate dai suoi
- * parametri; un tipo che ha bisogno di un'interfaccia sua (l'EQ con curva e spettro) la
- * registra qui con il suo nome, e il pannello la usa al posto delle manopole. */
+/* Graphic panels of the devices. Normally a device has the knobs generated from its
+ * parameters; a type needing its own interface (the EQ with curve and spectrum)
+ * registers it here with its name, and the panel uses it in place of the knobs. */
 import type { SampleId } from '../../core/id';
 import type { DeviceType } from '../../devices/device-type';
 import type { SampleData } from '../../devices/dsp/core';
@@ -21,62 +21,62 @@ import { PrismaDisplay } from './prisma/prisma-display';
 import { SamplerDisplay } from './sampler/sampler-display';
 import { WavetableDisplay } from './wavetable/wavetable-display';
 
-/** Lo spettro del suono che entra in un effetto e di quello che esce, in dB per banda di
- *  frequenza (come AnalyserNode.getFloatFrequencyData). */
+/** The spectrum of the sound entering an effect and of the one leaving it, in dB per frequency
+ *  band (like AnalyserNode.getFloatFrequencyData). */
 export interface SpectrumTap {
   readonly sampleRate: number;
-  /** Quante bande: metà della dimensione della FFT. */
+  /** How many bands: half the size of the FFT. */
   readonly binCount: number;
-  /** Riempie `pre` e `post` (lunghi binCount); false se l'effetto non sta suonando. */
+  /** Fills `pre` and `post` (binCount long); false if the effect isn't playing. */
   read(pre: Float32Array<ArrayBuffer>, post: Float32Array<ArrayBuffer>): boolean;
   dispose(): void;
 }
 
-/** Cosa fa un effetto di dinamica: il livello che sente il rilevatore e la riduzione, in dB. */
+/** What a dynamics effect is doing: the level the detector hears and the reduction, in dB. */
 export interface DynamicsReading {
   readonly input: number;
   readonly reduction: number;
 }
 
 export interface DynamicsTap {
-  /** Ciò che è successo dall'ultima lettura; null se non è arrivato niente. */
+  /** What happened since the last read; null if nothing arrived. */
   read(): DynamicsReading | null;
   dispose(): void;
 }
 
-/** I sample di uno strumento che ne suona (i pad della Drum Machine), per posto. */
+/** The samples of an instrument that plays some (the Drum Machine's pads), by slot. */
 export interface SampleSlots {
-  /** I sample del progetto, da scegliere. */
+  /** The project's samples, to choose from. */
   list(): readonly SampleRef[];
-  /** Copia il file nel progetto e lo mette al posto `slot`, con i parametri `values`. */
+  /** Copies the file into the project and puts it in slot `slot`, with the parameters `values`. */
   load(slot: string, file: File, values: ParamValues): Promise<void>;
-  /** Come `load`, con più file insieme (per posto): un passo solo. */
+  /** Like `load`, with several files together (by slot): a single step. */
   loadAll?(files: Readonly<Record<string, File>>, values: ParamValues): Promise<void>;
-  /** Sample del progetto (null: tolto) per posto, con i parametri `values`: un passo solo. */
+  /** Project samples (null: removed) by slot, with the parameters `values`: a single step. */
   assign(changes: Readonly<Record<string, SampleId | null>>, values: ParamValues): void;
-  /** I campioni del sample al posto `slot`, se è caricato (per disegnarlo). */
+  /** The samples of the sample in slot `slot`, if it's loaded (to draw it). */
   audio?(slot: string): SampleData | undefined;
 }
 
-/** Per i modulatori (LFO, Inviluppo): i bersagli che possono muovere, nella catena aperta. */
+/** For the modulators (LFO, Envelope): the targets they can move, in the open chain. */
 export interface ModTargetHost {
-  /** Il bersaglio sotto il punto (x, y) dello schermo, con il suo controllo: un parametro di un
-   *  dispositivo della catena (non del modulatore stesso) o una macro; null se non ce n'è. */
+  /** The target under point (x, y) of the screen, with its control: a parameter of a
+   *  device of the chain (not of the modulator itself) or a macro; null if there isn't one. */
   at(x: number, y: number): { readonly target: ModTarget; readonly element: HTMLElement } | null;
-  /** Il nome di un bersaglio: "Prisma · Cutoff", "Volume". */
+  /** A target's name: "Prisma · Cutoff", "Volume". */
   label(target: ModTarget): string;
-  /** I bersagli da scegliere da un menu (volume e pan della traccia, macro dei rack). */
+  /** The targets to choose from a menu (the track's volume and pan, the racks' macros). */
   choices(): readonly { readonly target: ModTarget; readonly label: string }[];
-  /** La destinazione `slot` (da 0) muove `target` (null: libera); con `amount` anche la quantità. */
+  /** Target `slot` (from 0) moves `target` (null: free); with `amount` also the amount. */
   set(slot: number, target: ModTarget | null, amount?: number): void;
-  /** Da adesso un clic su un bersaglio della catena lo passa a `pick` invece di muoverlo; la
-   *  catena si scorre e le schede si cambiano come sempre. Dura fino a `stopPicking`, a Esc o
-   *  a un'altra scelta: alla fine si chiama `ended`. */
+  /** From now on a click on a target of the chain passes it to `pick` instead of moving it; the
+   *  chain scrolls and the tabs change as always. It lasts until `stopPicking`, Esc or
+   *  another choice: at the end `ended` is called. */
   startPicking(pick: (target: ModTarget) => void, ended: () => void): void;
   stopPicking(): void;
-  /** Con il puntatore in `x` vicino a un bordo della catena (un trascinamento), la scorre di un passo. */
+  /** With the pointer at `x` near an edge of the chain (a drag), it scrolls it by one step. */
   scrollToward(x: number): void;
-  /** Un messaggio nella barra di stato. */
+  /** A message in the status bar. */
   say(text: string): void;
 }
 
@@ -84,47 +84,47 @@ export interface DisplayContext {
   readonly type: DeviceType;
   readonly settings: DeviceSettings;
   readonly sampleRate: number;
-  /** Cambia uno o più parametri; `final` alla fine del gesto chiude il passo di annullamento.
-   *  I parametri mappati su una macro restano come sono (li muove la macro). */
+  /** Changes one or more parameters; `final` at the end of the gesture closes the undo step.
+   *  The parameters mapped to a macro stay as they are (the macro moves them). */
   setParams(values: ParamValues, final: boolean): void;
-  /** Da chiamare quando il pannello rifà i suoi controlli (es. un'altra banda): la catena
-   *  rimette i segni delle macro. */
+  /** To be called when the panel redoes its controls (e.g. another band): the chain
+   *  puts the macro marks back. */
   controlsChanged(): void;
-  /** Lo spettro dell'effetto (si stacca con `dispose`); per gli strumenti è sempre vuoto. */
+  /** The effect's spectrum (detached with `dispose`); for the instruments it's always empty. */
   openSpectrum(): SpectrumTap;
-  /** Per gli effetti di dinamica: cosa stanno facendo mentre il suono passa. */
+  /** For the dynamics effects: what they're doing while the sound passes. */
   openDynamics?(): DynamicsTap;
-  /** Suona subito una nota con lo strumento (per gli effetti non fa nulla). */
+  /** Plays a note right away with the instrument (for the effects it does nothing). */
   audition(pitch: number, velocity: number): void;
-  /** Le note che lo strumento ha suonato dalla chiamata precedente (per gli effetti, nessuna). */
+  /** The notes the instrument played since the previous call (for the effects, none). */
   playedNotes(): readonly number[];
-  /** Dove leggono adesso le voci dello strumento, se suona un sample (frazioni del sample; con
-   *  più sample, l'indice del sample più la frazione: vedi InstrumentCore.playheads). */
+  /** Where the instrument's voices read now, if it plays a sample (fractions of the sample; with
+   *  several samples, the sample's index plus the fraction: see InstrumentCore.playheads). */
   playheads?(): readonly number[];
-  /** I sample del dispositivo (solo per gli strumenti). */
+  /** The device's samples (only for the instruments). */
   readonly samples?: SampleSlots;
-  /** I bersagli delle destinazioni (solo per i modulatori). */
+  /** The targets of the destinations (only for the modulators). */
   readonly modTargets?: ModTargetHost;
 }
 
-/** Lo spettro di chi non ne ha uno: non legge mai nulla. */
+/** The spectrum of whoever doesn't have one: it never reads anything. */
 export const NO_SPECTRUM: SpectrumTap = { sampleRate: 48000, binCount: 0, read: () => false, dispose() {} };
 
-/** Di chi non suona: non legge mai nulla. */
+/** Of whoever doesn't play: it never reads anything. */
 export const NO_DYNAMICS: DynamicsTap = { read: () => null, dispose() {} };
 
 export interface DeviceDisplay {
   readonly element: HTMLElement;
-  /** Controlli che stanno nell'intestazione del dispositivo, dopo il nome (per esempio le schede). */
+  /** Controls sitting in the device's header, after the name (for example the tabs). */
   readonly head?: HTMLElement;
   update(settings: DeviceSettings, enabled: boolean): void;
-  /** Voci in più nel menu (tasto destro) di un parametro, prima di quelle delle macro. */
+  /** Extra items in a parameter's menu (right click), before the macros' ones. */
   menuFor?(param: string): MenuItem[];
 }
 
 export type DisplayFactory = (ctx: DisplayContext) => DeviceDisplay;
 
-/** Pannelli grafici per tipo di dispositivo. */
+/** Graphic panels by device type. */
 export const DEVICE_DISPLAYS: Readonly<Record<string, DisplayFactory>> = {
   eq: ctx => new EqDisplay(ctx),
   compressor: ctx => new DynamicsDisplay(ctx, COMPRESSOR_GRAPH),

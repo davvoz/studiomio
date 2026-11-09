@@ -1,6 +1,6 @@
-/* I progetti recenti, come "Apri recente" di Live: le cartelle aperte o salvate, la più recente
- * prima. Si ricordano in IndexedDB (un handle di cartella si può conservare lì), come le
- * cartelle del browser. */
+/* Recent projects, like Live's "Open Recent": the folders opened or saved, most recent
+ * first. They're remembered in IndexedDB (a folder handle can be kept there), like the
+ * browser's folders. */
 import { loadHandles, saveHandles } from '../browser/fs-folder';
 
 const KEY = 'recent-projects';
@@ -10,7 +10,7 @@ export class RecentProjects {
   private handles: FileSystemDirectoryHandle[] = [];
   private readonly loaded: Promise<void>;
 
-  /** `changed`: l'elenco è cambiato (per ridisegnare il menu). */
+  /** `changed`: the list changed (to redraw the menu). */
   constructor(private readonly changed: () => void = () => {}) {
     this.loaded = loadHandles(KEY).then(h => {
       this.handles = h;
@@ -18,19 +18,19 @@ export class RecentProjects {
     });
   }
 
-  /** Finché IndexedDB non ha risposto l'elenco è vuoto. */
+  /** Until IndexedDB has answered the list is empty. */
   get list(): readonly FileSystemDirectoryHandle[] {
     return this.handles;
   }
 
-  /** La cartella va in cima (se c'era già, si sposta). */
+  /** The folder goes to the top (if it was already there, it moves). */
   async add(handle: FileSystemDirectoryHandle): Promise<void> {
     await this.loaded;
     const others = await this.without(handle);
     await this.store([handle, ...others].slice(0, MAX_RECENT));
   }
 
-  /** Toglie una cartella che non si apre più (spostata, cancellata). */
+  /** Removes a folder that no longer opens (moved, deleted). */
   async remove(handle: FileSystemDirectoryHandle): Promise<void> {
     await this.loaded;
     await this.store(await this.without(handle));

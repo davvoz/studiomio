@@ -1,23 +1,23 @@
-/* "Trance Gate" (il tipo resta 'gate': i progetti salvati lo chiamano così). Un pattern di step (fino a 32) a tempo, agganciato alla battuta: ogni
- * step apre il suono al suo livello (0 = chiuso) per la parte dello step data da "Gate", con
- * attacco e rilascio per non fare click; lo swing ritarda gli step dispari. "Profondità" dice
- * quanto chiude: a 100% il silenzio, meno lascia passare un po' di suono (un tremolo a step).
- * Gli step si disegnano nel pannello (ui/device/gate); qui c'è solo la descrizione, il suono
- * è in gate-core.ts. */
+/* "Trance Gate" (the type stays 'gate': saved projects call it that). A pattern of steps (up to 32) in time, locked to the bar: each
+ * step opens the sound at its level (0 = closed) for the part of the step given by "Gate", with
+ * attack and release to avoid clicks; swing delays the odd steps. "Depth" says
+ * how much it closes: at 100% silence, less lets a bit of sound through (a stepped tremolo).
+ * The steps are drawn in the panel (ui/device/gate); here there's only the description, the sound
+ * is in gate-core.ts. */
 import type { DeviceType } from '../../device-type';
 import type { ChoiceParam, NumberParam } from '../../params';
 
 export const MAX_STEPS = 32;
 
-/** Quanto è lungo uno step, in quarti. */
+/** How long a step is, in quarters. */
 export const STEP_RATES: readonly (readonly [label: string, beats: number])[] = [
   ['1/4', 1], ['1/8', 1 / 2], ['1/8T', 1 / 3], ['1/16', 1 / 4], ['1/16T', 1 / 6], ['1/32', 1 / 8],
 ];
 
-/** Il parametro del livello dello step `i` (da 0). */
+/** The level parameter of step `i` (from 0). */
 export const stepParam = (i: number) => `step${i + 1}`;
 
-/** Un pattern scritto con "x" (aperto), "o" (a metà) e "." (chiuso): i livelli dei suoi step. */
+/** A pattern written with "x" (open), "o" (half) and "." (closed): the levels of its steps. */
 export function pattern(text: string): Record<string, number> {
   const steps = text.replace(/\s/g, '');
   return Object.fromEntries(Array.from({ length: MAX_STEPS }, (_, i) => {
@@ -26,7 +26,7 @@ export function pattern(text: string): Record<string, number> {
   }));
 }
 
-/** Il pattern di partenza: il classico trance gate in sedicesimi. */
+/** The starting pattern: the classic sixteenth-note trance gate. */
 const INIT = pattern('x.xx .xx. x.xx .x.x');
 
 const choice = (id: string, label: string, options: readonly string[], def = 0, extra: Partial<ChoiceParam> = {}): ChoiceParam =>
@@ -43,8 +43,8 @@ export const GATE: DeviceType = {
     {
       label: 'Pattern',
       params: [
-        choice('rate', 'Velocità', STEP_RATES.map(([l]) => l), rate('1/16')),
-        num('length', 'Passi', 1, MAX_STEPS, 16, '', { step: 1 }),
+        choice('rate', 'Rate', STEP_RATES.map(([l]) => l), rate('1/16')),
+        num('length', 'Steps', 1, MAX_STEPS, 16, '', { step: 1 }),
         num('swing', 'Swing', 0, 100, 0, '%', { step: 1 }),
       ],
     },
@@ -52,25 +52,25 @@ export const GATE: DeviceType = {
       label: 'Step',
       params: [
         num('gate', 'Gate', 5, 100, 75, '%', { step: 1 }),
-        num('attack', 'Attacco', 0.5, 50, 1, 'ms', { scale: 'log', step: 0.1 }),
-        num('release', 'Rilascio', 0.5, 500, 20, 'ms', { scale: 'log', step: 0.1 }),
-        num('depth', 'Profondità', 0, 100, 100, '%', { step: 1 }),
+        num('attack', 'Attack', 0.5, 50, 1, 'ms', { scale: 'log', step: 0.1 }),
+        num('release', 'Release', 0.5, 500, 20, 'ms', { scale: 'log', step: 0.1 }),
+        num('depth', 'Depth', 0, 100, 100, '%', { step: 1 }),
       ],
     },
     {
-      label: 'Passi',
+      label: 'Steps',
       params: Array.from({ length: MAX_STEPS }, (_, i) =>
-        num(stepParam(i), `Passo ${i + 1}`, 0, 100, INIT[stepParam(i)], '%', { step: 1, hidden: true })),
+        num(stepParam(i), `Step ${i + 1}`, 0, 100, INIT[stepParam(i)], '%', { step: 1, hidden: true })),
     },
   ],
   presets: [
     { name: 'Init', params: {} },
-    { name: 'Ottavi', params: { ...pattern('x'), rate: rate('1/8'), gate: 50 } },
-    { name: 'Sedicesimi staccati', params: { ...pattern('x'), gate: 35, release: 8 } },
-    { name: 'Galoppo', params: { ...pattern('x.xx'), gate: 60 } },
+    { name: 'Eighths', params: { ...pattern('x'), rate: rate('1/8'), gate: 50 } },
+    { name: 'Staccato sixteenths', params: { ...pattern('x'), gate: 35, release: 8 } },
+    { name: 'Gallop', params: { ...pattern('x.xx'), gate: 60 } },
     { name: 'Swing', params: { ...pattern('x.xx x.x. xx.x x.xo'), swing: 55, gate: 65 } },
-    { name: 'Terzine', params: { ...pattern('x.x x.. x.x .xx'), length: 12, rate: rate('1/16T'), gate: 70 } },
-    { name: 'Tremolo a step', params: { ...pattern('xo'), depth: 60, attack: 8, release: 60, gate: 100 } },
-    { name: 'Respiro di 1/4', params: { ...pattern('x...'), rate: rate('1/32'), length: 8, gate: 100, attack: 2, release: 120 } },
+    { name: 'Triplets', params: { ...pattern('x.x x.. x.x .xx'), length: 12, rate: rate('1/16T'), gate: 70 } },
+    { name: 'Step tremolo', params: { ...pattern('xo'), depth: 60, attack: 8, release: 60, gate: 100 } },
+    { name: '1/4 breath', params: { ...pattern('x...'), rate: rate('1/32'), length: 8, gate: 100, attack: 2, release: 120 } },
   ],
 };

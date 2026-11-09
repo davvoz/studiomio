@@ -1,4 +1,4 @@
-/* Una cartella del disco come Directory del progetto, per gli script in Node. */
+/* A folder on disk as a project Directory, for scripts in Node. */
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { FileNotFoundError, splitPath, type Directory } from '../src/persistence/directory';

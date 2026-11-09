@@ -10,7 +10,7 @@ import { holdMidi, moveMidi, pressMidi, pullMidi, setMidi } from '../../src/stor
 import { groupDevices, mapMacro, setMacro, setMacroMode, setMacroSpring, springsAtRest } from '../../src/store/rack-edits';
 import { setup } from '../helpers/fixtures';
 
-/** Un orologio finto: il tempo avanza solo con `run`, che fa i passi della molla. */
+/** A fake clock: time advances only with `run`, which takes the spring's steps. */
 class FakeClock implements SpringClock {
   t = 0;
   private fn: (() => void) | null = null;
@@ -28,7 +28,7 @@ class FakeClock implements SpringClock {
   }
 }
 
-/** Una traccia MIDI con un Delay in un rack; la macro 1 muove il mix ed è una molla. */
+/** A MIDI track with a Delay in a rack; macro 1 moves the mix and is a spring. */
 function rig() {
   const s = setup({ midi: 1 });
   const t = s.track(0);
@@ -47,13 +47,13 @@ function rig() {
   return { ...s, t, rack, delay, clock, springs, macro, mix };
 }
 
-describe('macro molla', () => {
-  it('diventando molla riposa dov\'è e torna in 1/4; il riposo e il ritorno si cambiano', () => {
+describe('spring macro', () => {
+  it('becoming a spring it rests where it is and returns in 1/4; the rest and the return can be changed', () => {
     const r = rig();
     expect(r.macro()).toMatchObject({ mode: 'spring', value: 0, spring: { rest: 0, time: 1, sync: true } });
     r.store.apply(setMacroSpring(r.t, r.rack, 0, { rest: 64 }));
-    expect([r.macro().value, r.macro().spring?.rest]).toEqual([64, 64]); // ferma sta al riposo
-    expect(r.store.undoLabel).toBe('Riposo della molla');
+    expect([r.macro().value, r.macro().spring?.rest]).toEqual([64, 64]); // still, it stays at rest
+    expect(r.store.undoLabel).toBe('Spring rest');
     r.store.apply(setMacroSpring(r.t, r.rack, 0, { time: 300, sync: false }));
     expect(springTimeLabel(r.macro().spring!)).toBe('300 ms');
     r.store.apply(setMacroMode(r.t, r.rack, 0, 'knob'));
@@ -61,25 +61,25 @@ describe('macro molla', () => {
     expect('spring' in r.macro()).toBe(false);
   });
 
-  it('lasciata, torna al riposo nel tempo di ritorno (a tempo: dal BPM), senza passi di annullamento', () => {
+  it('released, it returns to rest within the return time (synced: from the BPM), without undo steps', () => {
     const r = rig();
     r.store.apply(setTempo(120)); // 1/4 = 500 ms
     const label = r.store.undoLabel;
     r.store.apply(setMacro(r.t, r.rack, 0, 127), { transient: true });
     expect(r.mix()).toBe(100);
     r.clock.run(SPRING_IDLE_MS - 20);
-    expect(r.macro().value).toBe(127); // si sta ancora muovendo
+    expect(r.macro().value).toBe(127); // it's still moving
     r.clock.run(20 + 250);
     expect(r.macro().value).toBeGreaterThan(55);
-    expect(r.macro().value).toBeLessThan(72); // a metà strada a metà tempo
+    expect(r.macro().value).toBeLessThan(72); // halfway at half time
     r.clock.run(260);
     expect([r.macro().value, r.mix()]).toEqual([0, 0]);
     expect(r.store.undoLabel).toBe(label);
     expect(r.springs.pulling).toBe(false);
-    expect(r.clock.ticking).toBe(false); // ferma, la molla non lavora
+    expect(r.clock.ticking).toBe(false); // still, the spring doesn't work
   });
 
-  it('tenuta non torna; lasciata torna subito; mossa mentre torna, ricomincia da lì', () => {
+  it('held it doesn\'t return; released it returns right away; moved while returning, it restarts from there', () => {
     const r = rig();
     r.store.apply(setMacroSpring(r.t, r.rack, 0, { time: 100, sync: false }));
     r.springs.hold(r.t, r.rack, 0, true);
@@ -96,10 +96,10 @@ describe('macro molla', () => {
     expect(r.macro().value).toBe(0);
   });
 
-  it('un tasto la tira fino al capo lontano dal riposo finché è giù', () => {
+  it('a key pulls it to the end far from rest while it\'s down', () => {
     const r = rig();
     r.store.apply(setKey({ kind: 'macro', owner: r.t, rack: r.rack, index: 0 }, 'KeyQ'));
-    expect(r.store.apply(pressKey('KeyQ'))).toBe(r.store.project); // non è un interruttore
+    expect(r.store.apply(pressKey('KeyQ'))).toBe(r.store.project); // it isn't a toggle
     r.store.apply(holdKey('KeyQ', true), { transient: true });
     expect(r.macro().value).toBe(127);
     r.store.apply(setMacroSpring(r.t, r.rack, 0, { rest: 100 }));
@@ -107,13 +107,13 @@ describe('macro molla', () => {
     expect(r.macro().value).toBe(0);
   });
 
-  it('MIDI: un CC la tira senza passi di annullamento, una nota la tira fino in fondo', () => {
+  it('MIDI: a CC pulls it without undo steps, a note pulls it all the way', () => {
     const r = rig();
     const target = { kind: 'macro', owner: r.t, rack: r.rack, index: 0 } as const;
     r.store.apply(setMidi(target, { type: 'cc', channel: 0, number: 21 }));
     const label = r.store.undoLabel;
     const cc = { type: 'cc', channel: 0, number: 21 } as const;
-    expect(r.store.apply(moveMidi(cc, 90))).toBe(r.store.project); // le molle sono di pullMidi
+    expect(r.store.apply(moveMidi(cc, 90))).toBe(r.store.project); // the springs belong to pullMidi
     r.store.apply(holdMidi(cc, true, false), { transient: true });
     expect(r.macro().value).toBe(0);
     r.store.apply(pullMidi(cc, 127), { transient: true });
@@ -127,7 +127,7 @@ describe('macro molla', () => {
     expect(r.macro().value).toBe(127);
   });
 
-  it('si salva al riposo, anche tirata; riposo e ritorno restano nel progetto e nei rack salvati', () => {
+  it('it\'s saved at rest, even pulled; rest and return stay in the project and in the saved racks', () => {
     const r = rig();
     r.store.apply(setMacroSpring(r.t, r.rack, 0, { rest: 30, time: 8, sync: true }));
     r.store.apply(setMacro(r.t, r.rack, 0, 127), { transient: true });
@@ -136,19 +136,19 @@ describe('macro molla', () => {
     const t = back.tracks[0] as MidiTrack;
     expect(t.racks[0].macros[0]).toMatchObject({ mode: 'spring', value: 30, spring: { rest: 30, time: 8, sync: true } });
     expect(t.effects[0].params.mix).toBeCloseTo((30 / 127) * 100, 0);
-    const preset = rackPresetFrom(JSON.parse(JSON.stringify(captureRack(springsAtRest(r.store.project), r.t, r.rack, 'Molla'))));
+    const preset = rackPresetFrom(JSON.parse(JSON.stringify(captureRack(springsAtRest(r.store.project), r.t, r.rack, 'Spring'))));
     expect(preset?.macros[0]).toMatchObject({ mode: 'spring', value: 30, spring: { rest: 30, time: 8, sync: true } });
   });
 
-  it('il tempo di ritorno si scrive a mano', () => {
+  it('the return time is written by hand', () => {
     expect(parseSpringTime('300 ms')).toEqual({ time: 300, sync: false });
     expect(parseSpringTime('1,5 s')).toEqual({ time: 1500, sync: false });
     expect(parseSpringTime('3/16')).toEqual({ time: 0.75, sync: true });
-    expect(parseSpringTime('2 battute')).toEqual({ time: 8, sync: true });
-    expect(parseSpringTime('3 battiti')).toEqual({ time: 3, sync: true });
+    expect(parseSpringTime('2 bars')).toEqual({ time: 8, sync: true });
+    expect(parseSpringTime('3 beats')).toEqual({ time: 3, sync: true });
     expect(parseSpringTime('750')).toEqual({ time: 750, sync: false });
-    expect(parseSpringTime('presto')).toBeNull();
-    expect(springTimeLabel({ rest: 0, time: 12, sync: true })).toBe('3 battute');
+    expect(parseSpringTime('soon')).toBeNull();
+    expect(springTimeLabel({ rest: 0, time: 12, sync: true })).toBe('3 bars');
     expect(springTimeLabel({ rest: 0, time: 1500, sync: false })).toBe('1.5 s');
   });
 });

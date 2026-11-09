@@ -30,10 +30,10 @@ import { PrismaCore } from '../instruments/prisma/prisma-core';
 import { SamplerCore } from '../instruments/sampler/sampler-core';
 import { WavetableCore } from '../instruments/wavetable/wavetable-core';
 
-/** I motori DSP degli strumenti, per tipo: aggiungere un synth è aggiungere una riga qui e
- *  la sua descrizione in registry.ts. */
+/** The instruments' DSP engines, by type: adding a synth is adding a line here and
+ *  its description in registry.ts. */
 export const INSTRUMENT_CORES: Readonly<Record<string, CoreFactory>> = {
-  // i synth a una voce con il sequencer a passi davanti (vedi devices/sequencer.ts)
+  // the monophonic synths with the step sequencer in front (see devices/sequencer.ts)
   analog: sampleRate => new StepSequencer(new AnalogCore(sampleRate), sampleRate),
   drums: sampleRate => new DrumCore(sampleRate),
   kick: sampleRate => new KickCore(sampleRate),
@@ -45,7 +45,7 @@ export const INSTRUMENT_CORES: Readonly<Record<string, CoreFactory>> = {
   wavetable: sampleRate => new WavetableCore(sampleRate),
 };
 
-/** I motori DSP degli effetti, per tipo (stesso schema degli strumenti). */
+/** The effects' DSP engines, by type (same scheme as the instruments). */
 export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
   autoFilter: sampleRate => new AutoFilterCore(sampleRate),
   autoPan: sampleRate => new AutoPanCore(sampleRate),
