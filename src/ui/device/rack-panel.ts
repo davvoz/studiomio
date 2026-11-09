@@ -148,7 +148,11 @@ export class RackPanel {
       ? controlFor(spec, m.value, (v, final) => (spring ? o.store.apply(set(v), { transient: true }) : this.merge(set(v), `macro-${o.rack.id}-${index}`, final)))
       : registerControl(new MacroSwitch(spec.label, m.value, mode,
         // the toggle is an undo step; the held button isn't (it undoes itself)
-        on => (mode === 'toggle' ? this.apply(set(on ? MACRO_MAX : 0)) : o.store.apply(set(on ? MACRO_MAX : 0), { transient: true }))));
+        on => {
+          const edit = set(on ? MACRO_MAX : 0);
+          if (mode === 'toggle') this.apply(edit);
+          else o.store.apply(edit, { transient: true });
+        }));
     this.macros.push(control);
     const e = control.element;
     e.classList.add('macro');

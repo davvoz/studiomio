@@ -106,7 +106,8 @@ export class BrowserLoader {
       ? { kind: 'lane', track: target.owner === MASTER ? null : target.owner, beat: this.deps.cursor() } : target;
     if (payload.kind === 'file') {
       const file = await payload.file();
-      return at.kind === 'slot' ? this.deps.importFilesToSlots([file], at.track, at.slot) : this.deps.importFiles([file], at.track, at.kind === 'lane' ? at.beat : 0);
+      if (at.kind === 'slot') return this.deps.importFilesToSlots([file], at.track, at.slot);
+      return this.deps.importFiles([file], at.track, at.kind === 'lane' ? at.beat : 0);
     }
     const before = store.project;
     if (at.kind === 'slot') {

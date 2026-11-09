@@ -108,7 +108,8 @@ export class CurvedEnv {
       case RELEASE:
       case KILL:
         this.t += this.stage === KILL ? this.killStep : this.releaseStep;
-        this.value = this.t >= 1 ? 0 : this.from * (1 - (this.stage === KILL ? this.t : this.shaped()));
+        if (this.t >= 1) this.value = 0;
+        else this.value = this.from * (1 - (this.stage === KILL ? this.t : this.shaped()));
         if (this.t >= 1 || this.value < FLOOR) {
           this.value = 0;
           this.stage = IDLE;

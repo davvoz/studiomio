@@ -9,10 +9,11 @@
  * The modulations (two synced LFOs and an envelope, two targets each) are recomputed
  * every CONTROL_RATE samples and added to the knob values. Runs in the AudioWorklet;
  * no Web Audio here, so it's also tested in Node. */
+import { clamp01 } from '../../../core/math';
 import { dbToGain, midiToHz, type InstrumentCore } from '../../dsp/core';
 import { Adsr } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
-import { WAVE_TABLE, type Wave } from '../../dsp/oscillators';
+import { sineTriangle, WAVE_TABLE, type Wave } from '../../dsp/oscillators';
 import { Oversampler } from '../../dsp/oversampler';
 import { Tpt } from '../../dsp/tpt';
 import { MAX_UNISON } from '../analog/analog';
@@ -38,7 +39,6 @@ const VOWELS: readonly (readonly (readonly [hz: number, db: number])[])[] = [
 /** Bandwidth of the three formants (Hz): narrow enough to hear the vowel. */
 const FORMANT_BANDWIDTH = [90, 110, 170];
 
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 /** The position of copy `k` of `n` in the fan: from −1 to +1 (0 if it's alone). */
 const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
@@ -145,7 +145,7 @@ class LfoSettings {
 /** The LFO waves, from −1 to 1; the triangle starts from 0 and rises, the saws from the extremes. */
 const LFO_WAVES: readonly ((phase: number, lfo: Lfo) => number)[] = [
   p => Math.sin(2 * Math.PI * p),
-  p => (p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4),
+  sineTriangle,
   p => 1 - 2 * p,
   p => 2 * p - 1,
   p => (p < 0.5 ? 1 : -1),

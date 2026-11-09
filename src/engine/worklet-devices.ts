@@ -331,7 +331,7 @@ class WorkletEffect implements Effect {
     this.settings = settings;
     if (settings.params !== prev.params) this.send({ type: 'params', params: fullEffectParams(settings) });
     if (settings.enabled !== prev.enabled) this.send({ type: 'enabled', enabled: settings.enabled });
-    if (!settings.sidechain !== !prev.sidechain) this.send({ type: 'keyed', keyed: !!settings.sidechain });
+    if (Boolean(settings.sidechain) !== Boolean(prev.sidechain)) this.send({ type: 'keyed', keyed: !!settings.sidechain });
   }
 
   setTempo(bpm: number): void {

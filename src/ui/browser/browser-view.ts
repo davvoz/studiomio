@@ -228,15 +228,19 @@ export class BrowserView {
     }
     const { item, depth, path } = row;
     const open = this.expanded.has(item.id);
+    const where = path?.length ? `${path.join(' › ')} › ` : '';
+    const hint = path?.length ? path.join(' › ') : item.hint;
+    let twist = '';
+    if (item.children && !path) twist = open ? '▾' : '▸';
     const r = el('div', {
       className: `browser-row icon-${item.icon}${item.id === this.selected ? ' selected' : ''}${item.payload ? '' : ' folder'}`,
       draggable: !!item.payload,
-      title: item.payload ? `${path?.length ? `${path.join(' › ')} › ` : ''}${item.name}: double click or Enter to load it, or drag it` : item.name,
+      title: item.payload ? `${where}${item.name}: double click or Enter to load it, or drag it` : item.name,
     },
-    el('span', { className: 'twist', textContent: item.children && !path ? (open ? '▾' : '▸') : '' }),
+    el('span', { className: 'twist', textContent: twist }),
     el('span', { className: 'icon', textContent: ICONS[item.icon] }),
     el('span', { className: 'name', textContent: item.name }),
-    ...(path?.length ? [el('span', { className: 'hint', textContent: path.join(' › ') })] : item.hint ? [el('span', { className: 'hint', textContent: item.hint })] : []));
+    ...(hint ? [el('span', { className: 'hint', textContent: hint })] : []));
     r.dataset.index = String(index);
     r.style.setProperty('--depth', String(depth));
     return r;
@@ -297,7 +301,10 @@ export class BrowserView {
     const handled = () => { e.preventDefault(); e.stopPropagation(); };
     switch (e.key) {
       case 'ArrowDown': handled(); return go(at + 1);
-      case 'ArrowUp': handled(); return at <= 0 && !current ? go(0) : at === 0 ? this.searchInput.focus() : go(at - 1);
+      case 'ArrowUp':
+        handled();
+        if (at <= 0 && !current) return go(0);
+        return at === 0 ? this.searchInput.focus() : go(at - 1);
       case 'Home': handled(); return go(0);
       case 'End': handled(); return go(items.length - 1);
       case 'ArrowRight':

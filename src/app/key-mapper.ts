@@ -89,6 +89,13 @@ export class KeyMapper {
     if (RESERVED.has(e.code) || findBinding(KEYMAP, e)) return this.say(`${label} is already used by the app: choose another key.`);
     this.store.apply(setKey(target, e.code));
     const others = targetsOf(this.store.project.keyMap, e.code).length - 1;
-    this.say(`Mapped to key ${label}${others ? ` (it also moves ${others === 1 ? 'another control' : `${others} other controls`})` : ''}. Del removes it, Esc turns KEY off.`);
+    this.say(`Mapped to key ${label}${alsoMoves(others)}. Del removes it, Esc turns KEY off.`);
   }
+}
+
+/** The note after "Mapped to …" when the key or control already moves `others` other controls. */
+export function alsoMoves(others: number): string {
+  if (others <= 0) return '';
+  if (others === 1) return ' (it also moves another control)';
+  return ` (it also moves ${others} other controls)`;
 }

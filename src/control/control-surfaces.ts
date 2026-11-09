@@ -175,13 +175,18 @@ export class ControlSurfaces {
     return { input: list(this.access?.inputs.values() ?? []), output: list(this.access?.outputs.values() ?? []) };
   }
 
+  private webMidiState(): string {
+    if (!this.supported) return 'missing';
+    return this.enabled ? 'active' : 'not activated yet (🎛 button)';
+  }
+
   /** Everything needed to understand what's happening with a controller, to paste in a message:
    *  from the console (F12), `copy(studiomio.surfaces.report())`. */
   report(): string {
     const c = this.conn;
     const lines = [
       `studiomio · controller · ${new Date().toISOString()}`,
-      `Web MIDI: ${this.supported ? (this.enabled ? 'active' : 'not activated yet (🎛 button)') : 'missing'}`,
+      `Web MIDI: ${this.webMidiState()}`,
       'Input ports:', ...this.ports().input.map(p => `  ${p}`),
       'Output ports:', ...this.ports().output.map(p => `  ${p}`),
       c ? `Connected: ${c.driver.name}` : 'Connected: no controller',

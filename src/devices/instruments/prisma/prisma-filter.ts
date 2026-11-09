@@ -3,6 +3,7 @@
  * negative), the formant (the vowels) and the phaser. The drive saturates the sound before the filter,
  * the mix blends it back with the dry. The coefficients are computed at the control
  * rate (`set`), the sound sample by sample (`process`, in place). */
+import { clamp01 } from '../../../core/math';
 import { FILTER } from './prisma';
 
 /** The vowels A E I O U: three formants (Hz) and their levels. */
@@ -77,7 +78,6 @@ class Channel {
   }
 }
 
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 export class PrismaFilter {
   private type: number = FILTER.lp12;

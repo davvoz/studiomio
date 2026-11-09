@@ -448,7 +448,11 @@ export class SamplerDisplay implements DeviceDisplay {
   private afterLoad(): void {
     this.wave.zoomAll();
     if (this.values.mode === MODE.slice && this.values.sliceBy === SLICE.transients) this.findSlices(this.values[SENSITIVITY], true);
-    this.ctx.audition(this.values.mode === MODE.slice ? FIRST_SLICE_NOTE : this.zone === 0 && this.rows().length < 2 ? 60 : this.zonePitch(this.zone), AUDITION_VELOCITY);
+    let pitch: number;
+    if (this.values.mode === MODE.slice) pitch = FIRST_SLICE_NOTE;
+    else if (this.zone === 0 && this.rows().length < 2) pitch = 60;
+    else pitch = this.zonePitch(this.zone);
+    this.ctx.audition(pitch, AUDITION_VELOCITY);
   }
 
   private pickFiles(then: (files: File[]) => void, multiple = true): void {
@@ -589,11 +593,11 @@ export class SamplerDisplay implements DeviceDisplay {
   /** The control of parameter `id`; `change` in place of the normal change (e.g. the mode). */
   private control(id: string, change?: (v: number) => void, menu = MENUS.has(id), key = id): HTMLElement {
     const spec = paramSpec(this.ctx.type, id)!;
-    const onChange = id === SENSITIVITY
-      ? (v: number, final: boolean) => this.findSlices(v, final)
-      : id === 'sliceBy'
-        ? (v: number) => this.setSliceBy(v)
-        : change ? (v: number) => change(v) : (v: number, final: boolean) => this.ctx.setParams(this.toZone({ [id]: v }), final);
+    let onChange: (v: number, final: boolean) => void;
+    if (id === SENSITIVITY) onChange = (v, final) => this.findSlices(v, final);
+    else if (id === 'sliceBy') onChange = v => this.setSliceBy(v);
+    else if (change) onChange = v => change(v);
+    else onChange = (v, final) => this.ctx.setParams(this.toZone({ [id]: v }), final);
     const control = controlFor(spec, this.zoneValues()[id], onChange, { menu });
     this.controls.set(id, { control, spec, key });
     return control.element;

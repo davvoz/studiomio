@@ -36,8 +36,11 @@ const CHIPS: readonly { readonly src: number; readonly label: string }[] = [
   ...[1, 2, 3, 4].map(n => ({ src: SRC.macro1 + n - 1, label: `M${n}` })),
 ];
 
-export const sourceFamily = (src: number): string =>
-  isEnvSource(src) ? 'env' : isLfoSource(src) ? 'lfo' : src >= SRC.macro1 ? 'macro' : 'key';
+export function sourceFamily(src: number): string {
+  if (isEnvSource(src)) return 'env';
+  if (isLfoSource(src)) return 'lfo';
+  return src >= SRC.macro1 ? 'macro' : 'key';
+}
 
 /** What was being looked at (it stays from one panel to the next, also when it's rebuilt). */
 const view = { page: 0, env: 1, lfo: 1 };

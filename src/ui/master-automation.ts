@@ -2,6 +2,7 @@
  * the master's, on the left the menus (one of its effects or racks, a parameter or a macro), on
  * the right the lane with the curve, aligned with the timeline and with its zoom. It opens with the
  * master's "A" button; it has a dot when the master has curves. */
+import { countOf } from '../core/math';
 import type { PlaybackEngine } from '../engine/playback-engine';
 import type { ModTarget } from '../model/envelope';
 import type { Project } from '../model/project';
@@ -115,7 +116,8 @@ export class MasterAutomation {
     this.button.classList.toggle('on', this.isOpen);
     this.button.classList.toggle('has', n > 0);
     this.button.classList.toggle('off', !on);
-    const count = n ? ` (${n === 1 ? '1 curve' : `${n} curves`}${on ? '' : ', switched off'})` : '';
+    const off = on ? '' : ', switched off';
+    const count = n ? ` (${countOf(n, 'curve')}${off})` : '';
     this.button.title = `Master automation: curves on the timeline for its effects and the macros of its racks${count}`;
     this.power.textContent = on ? 'On' : 'Off';
     this.power.classList.toggle('on', on);

@@ -2,6 +2,7 @@
  * plays it; an audio file or a browser sample dropped on a pad becomes its sample) and,
  * below, the hit of the chosen piece as it is, computed with the same engine that plays. Next to it the
  * controls of the chosen piece, then those of all the pieces. */
+import { pickAbove } from '../../../core/math';
 import type { SampleId } from '../../../core/id';
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import { PIECES, pieceOfNote, pieceParam, pieceSlot, SOURCE, type PieceKey } from '../../../devices/instruments/cymbals/cymbals';
@@ -262,7 +263,7 @@ export class CymbalsDisplay implements DeviceDisplay {
     const w = this.wave.clientWidth, h = this.wave.clientHeight, mid = h / 2;
     g.fillStyle = '#15181c';
     g.fillRect(0, 0, w, h);
-    const step = this.seconds > 2 ? 0.5 : this.seconds > 0.8 ? 0.25 : this.seconds > 0.3 ? 0.1 : 0.025;
+    const step = pickAbove(this.seconds, [[2, 0.5], [0.8, 0.25], [0.3, 0.1]], 0.025);
     g.font = '10px system-ui, sans-serif';
     for (let t = step; t < this.seconds; t += step) {
       const x = Math.round((t / this.seconds) * w) + 0.5;

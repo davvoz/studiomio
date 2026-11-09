@@ -16,6 +16,13 @@ const LOG_TO_DB = 20 / Math.LN10;
 /** The lowest range: there the closed gate is silence, not −80 dB. */
 const SILENCE_DB = 80;
 
+/** The gate's gain: open, fully shut when the depth reaches silence, otherwise the reduction in dB. */
+function gateGain(position: number, depth: number, reduction: number): number {
+  if (position >= 1) return 1;
+  if (position <= 0 && depth >= SILENCE_DB) return 0;
+  return Math.exp(-reduction / LOG_TO_DB);
+}
+
 const coef = (seconds: number, sampleRate: number) => Math.exp(-1 / Math.max(1, seconds * sampleRate));
 
 export class NoiseGateCore implements EffectCore, KeyedEffect, DynamicsMeter {
@@ -104,7 +111,7 @@ export class NoiseGateCore implements EffectCore, KeyedEffect, DynamicsMeter {
       position = target > position ? Math.min(target, position + up) : Math.max(target, position - down);
       const reduction = (1 - position) * depth;
       if (reduction > maxReduction) maxReduction = reduction;
-      const g = position >= 1 ? 1 : position <= 0 && depth >= SILENCE_DB ? 0 : Math.exp(-reduction / LOG_TO_DB);
+      const g = gateGain(position, depth, reduction);
       outL[i] = inL[i] * g;
       outR[i] = inR[i] * g;
     }

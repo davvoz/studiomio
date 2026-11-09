@@ -146,7 +146,8 @@ export class GateDisplay implements DeviceDisplay {
       // where the step starts and how long it lasts with the swing (as in dsp/steps.ts)
       const paired = (i | 1) < n;
       const start = !paired || i % 2 === 0 ? i : i - 1 + split;
-      const length = !paired ? 1 : i % 2 === 0 ? split : 2 - split;
+      let length = 1;
+      if (paired) length = i % 2 === 0 ? split : 2 - split;
       const x = PAD + start * cell + 1, bw = Math.max(2, length * gate * cell - 2);
       const level = v[stepParam(i)] / 100;
       g.strokeStyle = 'rgba(255,255,255,0.14)';

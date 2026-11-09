@@ -6,6 +6,11 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- Internal cleanup after a code-quality analysis: simpler, more readable code in the engine, the
+  devices, the controllers and the interface, with no change in how anything works or sounds. The
+  release build now uses fixed, verified versions of its tools.
+
 ## [0.3.55] - 2026-11-09
 
 ### Added

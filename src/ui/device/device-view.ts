@@ -375,9 +375,10 @@ export class DeviceView {
     const canMove = (key: DeviceKey, dir: -1 | 1) => changes(layoutMove(order, racks, key, dir));
     const panelOf = (key: DeviceKey): Node => {
       const e = effects.find(x => x.id === key);
-      const node = e
-        ? this.effectPanel(owner, e, dir => canMove(e.id, dir)) ?? missing(e.type)
-        : track instanceof MidiTrack ? this.instrumentPanel(track) ?? missing(track.instrument.type) : missing(key);
+      let node: Node;
+      if (e) node = this.effectPanel(owner, e, dir => canMove(e.id, dir)) ?? missing(e.type);
+      else if (track instanceof MidiTrack) node = this.instrumentPanel(track) ?? missing(track.instrument.type);
+      else node = missing(key);
       const panel = this.panels.get(key);
       if (panel) this.bindPanel(owner, key, panel);
       return node;
@@ -604,7 +605,9 @@ export class DeviceView {
     if (!content || !this.deps.clipboard) return false;
     this.deps.clipboard.content = content;
     const n = (content.instrument ? 1 : 0) + content.effects.length;
-    this.deps.say?.(`${content.rack ? `Rack «${content.rack.name}» copied` : n > 1 ? `${n} devices copied` : 'Device copied'}: choose a track and press Ctrl+V to paste it there.`);
+    let copied = n > 1 ? `${n} devices copied` : 'Device copied';
+    if (content.rack) copied = `Rack «${content.rack.name}» copied`;
+    this.deps.say?.(`${copied}: choose a track and press Ctrl+V to paste it there.`);
     return true;
   }
 

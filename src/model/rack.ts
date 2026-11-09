@@ -5,6 +5,7 @@
  * one inside the other: a macro moves the parameters of all the devices of its rack, also
  * of those in the racks it has inside, and those racks' macros. Here are the data and the pure
  * operations, on the order of the chain's devices. */
+import { countOf } from '../core/math';
 import type { DeviceId } from '../core/id';
 import { INSTRUMENT_DEVICE } from './envelope';
 
@@ -57,7 +58,7 @@ export function springTimeLabel({ time, sync }: MacroSpring): string {
   const named = SPRING_TIMES.find(([t, s]) => t === time && s === sync);
   if (named) return named[2];
   if (!sync) return time >= 1000 ? `${+(time / 1000).toFixed(2)} s` : `${Math.round(time)} ms`;
-  return time % 4 === 0 ? `${time / 4} bar${time === 4 ? '' : 's'}` : `${+time.toFixed(2)} beats`;
+  return time % 4 === 0 ? countOf(time / 4, 'bar') : `${+time.toFixed(2)} beats`;
 }
 
 /** A return time written by hand: "300 ms", "1.5 s", "3/16" (of a note), "2 bars",
@@ -111,7 +112,8 @@ export const isSwitchMacro = (m: Macro): boolean => macroMode(m) === 'toggle' ||
 /** The value a macro can have: for toggle and button, on (from halfway up) or off. */
 export function macroValueFor(mode: MacroMode, value: number): number {
   const v = Math.max(0, Math.min(MACRO_MAX, Number.isFinite(value) ? value : 0));
-  return mode === 'knob' || mode === 'spring' ? v : v >= MACRO_MAX / 2 ? MACRO_MAX : 0;
+  if (mode === 'knob' || mode === 'spring') return v;
+  return v >= MACRO_MAX / 2 ? MACRO_MAX : 0;
 }
 
 export interface Rack {

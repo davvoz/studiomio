@@ -191,7 +191,9 @@ const GRID_BAND = 'rgba(255,255,255,0.045)';
 /** Level of beat `b` in the grid: 0 bar, 1 beat, 2 half beat, 3 the rest. */
 export function beatLevel(b: Beats, beatsPerBar: number): 0 | 1 | 2 | 3 {
   const on = (step: number) => Math.abs(b / step - Math.round(b / step)) < 1e-6;
-  return on(beatsPerBar) ? 0 : on(1) ? 1 : on(0.5) ? 2 : 3;
+  if (on(beatsPerBar)) return 0;
+  if (on(1)) return 1;
+  return on(0.5) ? 2 : 3;
 }
 
 /** Width of the alternating bands for a grid of step `grid`: the beat as long as the
@@ -241,7 +243,8 @@ export function paintClipRuler(g: CanvasRenderingContext2D, axis: BeatAxis, widt
     const x = Math.round(axis.beatToX(b));
     g.fillStyle = '#5d636d';
     g.fillRect(x, FRAME.loopBand, 1, FRAME.ruler - FRAME.loopBand);
-    const text = label >= bar ? String(Math.floor(b / bar + 1e-9) + 1) : signature.format(b).split('.').slice(0, label >= 1 ? 2 : 3).join('.');
+    const parts = label >= 1 ? 2 : 3;
+    const text = label >= bar ? String(Math.floor(b / bar + 1e-9) + 1) : signature.format(b).split('.').slice(0, parts).join('.');
     g.fillStyle = COLORS.rulerText;
     g.fillText(text, x + 3, FRAME.ruler - 6);
   }

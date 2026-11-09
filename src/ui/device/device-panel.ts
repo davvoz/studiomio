@@ -175,8 +175,9 @@ export class DevicePanel {
     const { preset } = this.settings;
     const mine = userPresets.list(type.type);
     const option = (kind: string, p: Preset) => el('option', { value: `${kind}:${p.name}`, textContent: p.name });
-    const value = preset && mine.some(p => p.name === preset) ? `${USER}:${preset}`
-      : preset && type.presets.some(p => p.name === preset) ? `${FACTORY}:${preset}` : '';
+    let value = '';
+    if (preset && mine.some(p => p.name === preset)) value = `${USER}:${preset}`;
+    else if (preset && type.presets.some(p => p.name === preset)) value = `${FACTORY}:${preset}`;
     this.presets.replaceChildren(
       el('option', { value: '', textContent: preset ?? '— preset —', disabled: true, hidden: !!value }),
       ...(mine.length ? [
@@ -241,5 +242,7 @@ const FACTORY = 'f';
 
 function presetFrom(type: DeviceType, value: string): Preset | undefined {
   const [kind, name] = [value.slice(0, 1), value.slice(2)];
-  return kind === USER ? userPresets.find(type.type, name) : kind === FACTORY ? type.presets.find(p => p.name === name) : undefined;
+  if (kind === USER) return userPresets.find(type.type, name);
+  if (kind === FACTORY) return type.presets.find(p => p.name === name);
+  return undefined;
 }

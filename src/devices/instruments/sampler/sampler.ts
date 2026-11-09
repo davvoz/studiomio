@@ -362,7 +362,7 @@ export function noteInName(name: string): number | null {
   const found = [...base.matchAll(/(?<![a-z])([a-g])([#b♯♭]?)(-?[0-8])(?![0-9])/gi)].at(-1);
   if (!found) return null;
   const pc = ({ c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 } as Record<string, number>)[found[1].toLowerCase()];
-  const acc = found[2] === '#' || found[2] === '♯' ? 1 : found[2] ? -1 : 0;
+  const acc = ACCIDENTAL[found[2]] ?? 0;
   const p = pc + acc + (Number(found[3]) + 2) * 12;
   return p >= 0 && p <= 127 ? p : null;
 }
@@ -423,4 +423,7 @@ export function sliceValues(points: readonly number[]): Record<string, number> {
   return out;
 }
 
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : Number.isFinite(x) ? x : 0);
+/** 0..1, and 0 for NaN (a damaged file). */
+const clamp01 = (x: number) => (Number.isNaN(x) ? 0 : Math.min(1, Math.max(0, x)));
+
+const ACCIDENTAL: Readonly<Record<string, number>> = { '#': 1, '♯': 1, b: -1, B: -1, '♭': -1 };

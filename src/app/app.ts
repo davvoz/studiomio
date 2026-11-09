@@ -797,7 +797,8 @@ export class App implements Commands, TimelineActions {
       openClip: ref => this.openClip(ref),
       get detail() {
         const open = app.bottom.open;
-        return open === app.device ? 'devices' : open ? 'clip' : null;
+        if (open === app.device) return 'devices';
+        return open ? 'clip' : null;
       },
       closeDetail: () => this.bottom.closeAll(),
       say: t => this.say(t),

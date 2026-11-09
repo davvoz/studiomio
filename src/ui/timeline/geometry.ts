@@ -97,8 +97,11 @@ export function hitTest(project: Project, geo: TimelineGeometry, x: number, y: n
   const handles = y - geo.trackTop(index) < CLIP_HEADER + 2 ? fadeHandles(geo, placement) : null;
   const near = (hx: number) => Math.abs(x - hx) <= FADE_HANDLE_PX / 2 + 2;
   const edge = Math.min(EDGE_PX, (x1 - x0) / 4);
-  const zone: ClipZone = handles && near(handles.in) ? 'fadeIn' : handles && near(handles.out) ? 'fadeOut'
-    : x - x0 < edge ? 'start' : x1 - x < edge ? 'end' : 'body';
+  let zone: ClipZone = 'body';
+  if (handles && near(handles.in)) zone = 'fadeIn';
+  else if (handles && near(handles.out)) zone = 'fadeOut';
+  else if (x - x0 < edge) zone = 'start';
+  else if (x1 - x < edge) zone = 'end';
   return { kind: 'clip', zone, trackIndex: index, track: track.id, placement, beat };
 }
 

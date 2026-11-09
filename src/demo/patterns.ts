@@ -19,6 +19,7 @@ export function steps(pad: number, pattern: string, from: Beats = 0): Note[] {
 }
 
 const NOTE_NAMES: Readonly<Record<string, number>> = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+const ACCIDENTAL: Readonly<Record<string, number>> = { '#': 1, b: -1 };
 
 /** An acid line in sixteenths, the way a 303 is programmed: one word per step, "." rest,
  *  "-" holds the previous note one more step. A note is name and octave ("a2", "c#3", "eb2"),
@@ -36,7 +37,7 @@ export function acid(line: string, from: Beats = 0): Note[] {
     const m = /^([a-g])(#|b)?(\d)(~)?$/i.exec(word);
     if (!m) throw new Error(`invalid acid step: "${word}"`);
     const [, name, accidental, octave, slide] = m;
-    const pitch = 12 * (Number(octave) + 1) + NOTE_NAMES[name.toLowerCase()] + (accidental === '#' ? 1 : accidental === 'b' ? -1 : 0);
+    const pitch = 12 * (Number(octave) + 1) + NOTE_NAMES[name.toLowerCase()] + (ACCIDENTAL[accidental ?? ''] ?? 0);
     notes.push({ pitch, start: from + i * STEP, steps: 1, slide: !!slide, accent: name !== name.toLowerCase() });
   });
   // 303 gate: half a step; with the slide the note reaches past the start of the next

@@ -20,6 +20,8 @@ const DIFFUSERS = [[142, 379, 107, 277], [131, 353, 113, 307]];
 const MAX_DIFFUSION = 0.7;
 /** The modulation: how many samples and how fast. */
 const MOD_DEPTH = 12, MOD_RATE = 0.7;
+/** Which lines the slow modulation stretches (+1) or shortens (−1): two, in opposite directions. */
+const MOD_SIGN: readonly number[] = [0, 0, 1, 0, 0, -1, 0, 0];
 const SMOOTH = 0.03;
 
 const flush = (x: number) => (Math.abs(x) < 1e-20 ? 0 : x);
@@ -148,7 +150,7 @@ export class ReverbCore implements EffectCore {
       const mod = Math.sin(this.phase) * MOD_DEPTH;
       for (let k = 0; k < LINES; k++) {
         const line = lines[k];
-        const d = lengths[k] + (k === 2 ? mod : k === 5 ? -mod : 0);
+        const d = lengths[k] + MOD_SIGN[k] * mod;
         line.lp += dampK * (line.read(d) - line.lp);
         fb[k] = line.lp * gains[k];
       }

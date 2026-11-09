@@ -13,6 +13,7 @@
  * copy, taking into account how much the warp speeds up the reading (a 4× sync reads four times
  * faster: it needs the version two octaves up). Runs in the AudioWorklet; no Web
  * Audio here, so it's also tested in Node. */
+import { clamp01, clamp11 } from '../../../core/math';
 import { paramSpec } from '../../device-type';
 import { dbToGain, midiToHz, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
@@ -47,7 +48,7 @@ const DEST_LOG = DEST_SPECS.map(s => s.scale === 'log');
 /** From the knob's position (0…1, also outside: it stops at the edges) to the value, without
  *  rounding to the step: the modulated semitones glide. */
 function fromUnit(d: number, u: number): number {
-  const s = DEST_SPECS[d], x = u < 0 ? 0 : u > 1 ? 1 : u;
+  const s = DEST_SPECS[d], x = clamp01(u);
   return DEST_LOG[d] ? s.min * Math.pow(s.max / s.min, x) : s.min + x * (s.max - s.min);
 }
 
@@ -85,8 +86,6 @@ function lookup(data: Float32Array, base: number, next: number, fx: number, p: n
 
 /** The position of copy `k` of `n` in the fan: from −1 to +1 (0 if it's alone). */
 const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
-const clamp11 = (x: number) => (x < -1 ? -1 : x > 1 ? 1 : x);
 
 class OscSettings {
   on = false;
@@ -476,8 +475,9 @@ class PrismaVoice implements PolyVoice, MonoVoice {
       const aReadsB = CROSS_WARPS.includes(this.osc[0].warp);
       for (let step = 0; step < 2; step++) {
         const o = aReadsB ? 1 - step : step, other = 1 - o;
-        const cross = this.osc[o].warp === WARP.subFm ? sub
-          : CROSS_WARPS.includes(this.osc[o].warp) && s.osc[other].on && (o === 0 || !aReadsB) ? this.raw[other] : null;
+        let cross: Float64Array | null = null;
+        if (this.osc[o].warp === WARP.subFm) cross = sub;
+        else if (CROSS_WARPS.includes(this.osc[o].warp) && s.osc[other].on && (o === 0 || !aReadsB)) cross = this.raw[other];
         this.renderOsc(o, len, cross);
         if (s.osc[o].on) this.mix(this.oscL[o], this.oscR[o], len, routeGains(s.osc[o].route, parallel));
       }
@@ -601,7 +601,8 @@ class PrismaVoice implements PolyVoice, MonoVoice {
             v = this.digitalHeld[c];
             break;
           case NOISE.crackle:
-            this.crackle[c] = this.crackle[c] * 0.6 + (Math.abs(w) < this.crackleChance ? (w > 0 ? 1 : -1) : 0);
+            const pop = w > 0 ? 1 : -1;
+      this.crackle[c] = this.crackle[c] * 0.6 + (Math.abs(w) < this.crackleChance ? pop : 0);
             v = this.crackle[c];
             break;
           default:
@@ -841,7 +842,9 @@ class PrismaVoice implements PolyVoice, MonoVoice {
       if (!used[at]) continue;
       // during the delay the LFO is still and doesn't modulate; then it opens in "rise" seconds
       const running = this.age >= l.delay - 1e-9 || l.delay <= 0.0011;
-      fade[at] = !running ? 0 : l.rise <= 0.0011 ? 1 : clamp01((this.age - (l.delay <= 0.0011 ? 0 : l.delay)) / l.rise);
+      if (!running) fade[at] = 0;
+      else if (l.rise <= 0.0011) fade[at] = 1;
+      else fade[at] = clamp01((this.age - (l.delay <= 0.0011 ? 0 : l.delay)) / l.rise);
       const phase = (this.lfoPhase[i] + l.phase) % 1;
       let value: number;
       if (isRandomShape(l.shape)) value = randomValue(l.shape, this.lfoCycle[i] + Math.floor(this.lfoPhase[i] + l.phase), phase);

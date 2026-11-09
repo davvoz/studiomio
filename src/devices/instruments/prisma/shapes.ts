@@ -3,6 +3,7 @@
  * the matrix makes it bipolar (−1…1) if needed. A drawn LFO is a row of points, from the
  * first (always at the start of the cycle) to the last (always at the end), joined by segments that
  * can be curved. Pure data: they run in the AudioWorklet and in the interface. */
+import { clamp01 } from '../../../core/math';
 
 /** At most this many points in a drawn LFO. */
 export const LFO_POINTS = 16;
@@ -42,7 +43,9 @@ export function pointsOf(values: Readonly<Record<string, number>>, lfo: number):
   const n = Math.max(2, Math.min(LFO_POINTS, Math.round(values[pointCountParam(lfo)] ?? 3)));
   const points: LfoPoint[] = [];
   for (let k = 1; k <= n; k++) {
-    const x = k === 1 ? 0 : k === n ? 1 : clamp01(values[pointParam(lfo, 'X', k)] ?? 0.5);
+    let x = clamp01(values[pointParam(lfo, 'X', k)] ?? 0.5);
+    if (k === 1) x = 0;
+    else if (k === n) x = 1;
     points.push({ x, y: clamp01(values[pointParam(lfo, 'Y', k)] ?? 0), curve: values[pointParam(lfo, 'C', k)] ?? 0 });
   }
   const inner = points.slice(1, -1).map((p, i) => ({ p, i })).sort((a, b) => a.p.x - b.p.x || a.i - b.i).map(e => e.p);
@@ -120,5 +123,4 @@ export function randomValue(shape: number, cycle: number, phase: number): number
   return a + (hash01(cycle + 1) - a) * t;
 }
 
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const round3 = (x: number) => Math.round(x * 1000) / 1000;

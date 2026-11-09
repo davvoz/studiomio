@@ -136,7 +136,9 @@ export class LfoEditor {
       if (points.length >= LFO_POINTS) return;
       const p = this.at(e), after = points.findIndex(q => q.x > p.x);
       // never before the first; if nobody is further right, right before the last
-      const index = after < 1 ? (after === 0 ? 1 : points.length - 1) : after;
+      let index = after;
+      if (after === 0) index = 1;
+      else if (after < 0) index = points.length - 1;
       points = [...points.slice(0, index), { x: p.x, y: p.y, curve: 0 }, ...points.slice(index)];
       target = { kind: 'point', index };
       this.write(points, false);
@@ -153,7 +155,10 @@ export class LfoEditor {
       } else {
         const p = this.at(m), i = t.index, n = start.length;
         // the first and the last stay at the edges; the others don't jump over their neighbours
-        const x = i === 0 ? 0 : i === n - 1 ? 1 : Math.max(start[i - 1].x, Math.min(start[i + 1].x, p.x));
+        let x: number;
+        if (i === 0) x = 0;
+        else if (i === n - 1) x = 1;
+        else x = Math.max(start[i - 1].x, Math.min(start[i + 1].x, p.x));
         last = start.map((q, j) => (j === i ? { ...q, x, y: p.y } : q));
       }
       this.write(last, false);
@@ -198,8 +203,9 @@ export class LfoEditor {
       g.stroke();
     }
     g.globalAlpha = enabled ? 1 : 0.5;
-    const value = points ? (p: number) => drawnValue(points, p)
-      : isRandomShape(shape) ? (p: number) => randomValue(shape, Math.floor(p * 8) + 11, (p * 8) % 1) : (p: number) => shapeValue(shape, p);
+    let value = (p: number) => shapeValue(shape, p);
+    if (points) value = p => drawnValue(points, p);
+    else if (isRandomShape(shape)) value = p => randomValue(shape, Math.floor(p * 8) + 11, (p * 8) % 1);
     const line = new Path2D(), steps = Math.max(64, Math.round(b.w));
     for (let i = 0; i <= steps; i++) {
       // the steps (two points at the same x) are drawn vertical
@@ -221,7 +227,8 @@ export class LfoEditor {
         const hot = this.hot?.kind === 'point' && this.hot.index === i;
         g.beginPath();
         g.arc(b.x(p.x), b.y(p.y), POINT, 0, 2 * Math.PI);
-        g.fillStyle = hot ? '#fff' : points ? ACCENT : 'rgba(255,157,46,0.4)';
+        if (hot) g.fillStyle = '#fff';
+        else g.fillStyle = points ? ACCENT : 'rgba(255,157,46,0.4)';
         g.fill();
       });
       if (points) {

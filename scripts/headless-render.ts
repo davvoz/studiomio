@@ -25,6 +25,17 @@ import type { SampleId, TrackId } from '../src/core/id';
 const BLOCK = 128;
 const SILENCE = new Float32Array(BLOCK);
 
+/** Reads one WAV sample at a byte offset, as −1..1: float (format 3) or integer PCM of 8 to 32 bits. */
+function sampleReader(v: DataView, format: number, bits: number): (o: number) => number {
+  if (format === 3) return bits === 64 ? o => v.getFloat64(o, true) : o => v.getFloat32(o, true);
+  switch (bits) {
+    case 8: return o => (v.getUint8(o) - 128) / 128;
+    case 16: return o => v.getInt16(o, true) / 32768;
+    case 24: return o => (v.getUint8(o) | (v.getUint8(o + 1) << 8) | (v.getInt8(o + 2) << 16)) / 8388608;
+    default: return o => v.getInt32(o, true) / 2147483648;
+  }
+}
+
 /** A WAV (PCM 8/16/24/32 or float 32/64, also "extensible") into float channels. */
 export function decodeWav(bytes: Uint8Array): SampleData {
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -43,12 +54,7 @@ export function decodeWav(bytes: Uint8Array): SampleData {
     } else if (id === 'data') {
       const bps = bits / 8, frames = Math.floor(Math.min(size, bytes.length - at - 8) / (channels * bps));
       const out = Array.from({ length: Math.min(2, channels) }, () => new Float32Array(frames));
-      const read: (o: number) => number =
-        format === 3 ? (bits === 64 ? o => v.getFloat64(o, true) : o => v.getFloat32(o, true))
-        : bits === 8 ? o => (v.getUint8(o) - 128) / 128
-        : bits === 16 ? o => v.getInt16(o, true) / 32768
-        : bits === 24 ? o => ((v.getUint8(o) | (v.getUint8(o + 1) << 8) | (v.getInt8(o + 2) << 16))) / 8388608
-        : o => v.getInt32(o, true) / 2147483648;
+      const read = sampleReader(v, format, bits);
       let o = at + 8;
       for (let i = 0; i < frames; i++) {
         for (let c = 0; c < channels; c++, o += bps) if (c < out.length) out[c][i] = read(o);

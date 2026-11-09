@@ -16,6 +16,13 @@ const FIT_MIN = 1, FIT_ROOM = 1.1;
 
 type Handle = 'A' | 'H' | 'D' | 'R' | 'Ac' | 'Dc' | 'Rc';
 
+/** The pointer over a handle: curves drag up and down, the decay moves both ways, times sideways. */
+function handleCursor(h: Handle | null): string {
+  if (!h) return 'default';
+  if (h.endsWith('c')) return 'ns-resize';
+  return h === 'D' ? 'move' : 'ew-resize';
+}
+
 export class EnvView {
   readonly canvas = el<HTMLCanvasElement>('canvas', {
     className: 'prisma-env', title: 'Drag the handles: times and sustain; the dots halfway through the segments curve them (double click: straight)',
@@ -40,7 +47,7 @@ export class EnvView {
         this.hot = h;
         this.paint(true);
       }
-      c.style.cursor = !h ? 'default' : h.endsWith('c') ? 'ns-resize' : h === 'D' ? 'move' : 'ew-resize';
+      c.style.cursor = handleCursor(h);
     });
     c.addEventListener('dblclick', e => {
       const h = this.hit(e);
@@ -104,7 +111,10 @@ export class EnvView {
     e.preventDefault();
     const v0 = this.values(), L = this.layout(v0), curve0 = v0[this.param(h)];
     // the time is read from the start of the segment whose end is being dragged
-    const x0 = h === 'A' ? PAD : h === 'H' ? L.xA : h === 'D' ? L.xH : L.xS;
+    let x0 = L.xS;
+    if (h === 'A') x0 = PAD;
+    else if (h === 'H') x0 = L.xA;
+    else if (h === 'D') x0 = L.xH;
     const r = this.canvas.getBoundingClientRect();
     const timeAt = (clientX: number) => {
       const dx = Math.max(0, clientX - r.left - x0) / L.k;
@@ -182,7 +192,8 @@ export class EnvView {
     for (const [h, x, y] of this.handles(v)) {
       g.beginPath();
       g.arc(x, y, h.endsWith('c') ? HANDLE - 1 : HANDLE, 0, 2 * Math.PI);
-      g.fillStyle = h === this.hot ? '#fff' : h.endsWith('c') ? 'rgba(255,255,255,0.45)' : ACCENT;
+      if (h === this.hot) g.fillStyle = '#fff';
+      else g.fillStyle = h.endsWith('c') ? 'rgba(255,255,255,0.45)' : ACCENT;
       g.fill();
     }
     g.globalAlpha = 1;

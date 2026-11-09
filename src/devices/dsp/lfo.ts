@@ -3,6 +3,7 @@
  * cycle always starts on the quarter, even after a jump, at every loop round and in export, and the
  * same point of the piece always gives the same value (also in the random waves). When stopped, or in
  * Hz, it runs free. Pure: no Web Audio, tested in Node. */
+import { sineTriangle } from './oscillators';
 import type { TransportPosition } from './core';
 
 export const LFO_SHAPES = ['Sine', 'Triangle', 'Saw ↓', 'Saw ↑', 'Square', 'S&H', 'Smooth S&H'] as const;
@@ -21,7 +22,7 @@ export function cycleRandom(cycle: number, seed = 0): number {
  *  and rise, the saws and the square from the extremes. */
 const WAVES: readonly ((p: number, k: number, seed: number) => number)[] = [
   p => Math.sin(2 * Math.PI * p),
-  p => (p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4),
+  sineTriangle,
   p => 1 - 2 * p,
   p => 2 * p - 1,
   p => (p < 0.5 ? 1 : -1),

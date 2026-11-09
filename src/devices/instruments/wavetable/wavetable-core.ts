@@ -6,6 +6,8 @@
  * modulations are computed every CONTROL_RATE samples; the positions, B's level and the
  * volume get there as ramps, sample by sample, so moving them quickly doesn't scratch.
  * Runs in the AudioWorklet; no Web Audio here, so it's also tested in Node. */
+import { sineTriangle } from '../../dsp/oscillators';
+import { clamp01 } from '../../../core/math';
 import { dbToGain, midiToHz, type InstrumentCore } from '../../dsp/core';
 import { Adsr, type AdsrTimes } from '../../dsp/envelope';
 import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
@@ -26,7 +28,7 @@ const FRAME_STRIDE = LEVELS * STRIDE;
 
 const lfoWave = (shape: number, phase: number): number => {
   switch (shape) {
-    case LFO_SHAPE.triangle: return phase < 0.25 ? 4 * phase : phase < 0.75 ? 2 - 4 * phase : 4 * phase - 4;
+    case LFO_SHAPE.triangle: return sineTriangle(phase);
     case LFO_SHAPE.sawDown: return 1 - 2 * phase;
     case LFO_SHAPE.sawUp: return 2 * phase - 1;
     case LFO_SHAPE.square: return phase < 0.5 ? 1 : -1;
@@ -151,7 +153,6 @@ class Settings {
 
 /** The position of copy `k` of `n` in the fan: from −1 to +1 (0 if it's alone). */
 const fan = (k: number, n: number) => (n > 1 ? (2 * k) / (n - 1) - 1 : 0);
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 /** The quantities of the two voices per oscillator, copy by copy. */
 class Osc {
@@ -220,7 +221,8 @@ class WavetableVoice implements PolyVoice, MonoVoice {
       this.subPhase = 0;
       // the copies start from different phases (fixed: the same sound every time)
       this.osc.forEach((o, i) => {
-        for (let k = 0; k < MAX_UNISON; k++) o.phases[k] = k ? (k * (i ? 0.381966 : 0.618034)) % 1 : 0;
+        const spread = i ? 0.381966 : 0.618034;
+        for (let k = 0; k < MAX_UNISON; k++) o.phases[k] = (k * spread) % 1;
       });
       this.fresh = true;
     }

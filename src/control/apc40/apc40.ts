@@ -5,12 +5,13 @@
  * in banks of 8. The LEDs are decided by the program, every round: clip colour, green for the one
  * playing, blinking for the queued one (the controller does it); only what changes is sent.
  * The controller doesn't know Web MIDI: it receives messages with `receive` and sends with `out`. */
+import { type ParamSpec } from '../../devices/params';
 import type { DeviceId, TrackId } from '../../core/id';
 import { MASTER } from '../../model/project';
 import { slotRef, type ClipRef } from '../../store/clip-ref';
 import { setEffectEnabled, setMasterMixer, setMixer } from '../../store/edits';
 import {
-  bipolar, ccKey, noteKey, PARAMS_PER_BANK, SessionSurface, SETTLE_MS, type BlockLight, type SlotLight,
+  bipolar, ccKey, noteKey, PARAMS_PER_BANK, SessionSurface, SETTLE_MS, type BlockLight, type SceneLight, type SlotLight,
 } from '../session-surface';
 import {
   CC, COLOR, dongleChallenge, faderToDb, IDENTITY_REQUEST, identityDeviceId, introduction, isDongleResponse, knobToPan, ledMessages,
@@ -261,7 +262,7 @@ export class Apc40 extends SessionSurface {
     const ring = this.ring;
     const leds = new Map<string, number>();
     // on = 127 as in Live; the blinking is done by the controller (no timed traffic from here)
-    const note = (n: number, v: number | boolean, channel = 0) => leds.set(noteKey(n, channel), typeof v === 'boolean' ? (v ? ON : 0) : v);
+    const note = (n: number, v: number | boolean, channel = 0) => leds.set(noteKey(n, channel), ledValue(v));
     const tracks = this.ringTracks();
 
     // the grid
@@ -274,13 +275,12 @@ export class Apc40 extends SessionSurface {
     // something in the row is queued; otherwise the scene's colour (white if it has none), off
     // if the row is empty
     for (let i = 0; i < SCENES; i++) {
-      const s = this.sceneLight(i);
-      note(NOTE.sceneLaunch + i, s === 'queued' ? TRIGGERED(COLOR.green) : s === 'playing' ? COLOR.green : s === 'off' ? COLOR.off : s.color ? paletteIndex(s.color) : COLOR.white);
+      note(NOTE.sceneLaunch + i, sceneColor(this.sceneLight(i)));
     }
     // per track
     tracks.forEach((t, c) => {
       const stop = this.stopLight(t);
-      note(NOTE.clipStop, stop === 'queued' ? STOP_LED.blink : stop === 'playing' ? STOP_LED.on : STOP_LED.off, c);
+      note(NOTE.clipStop, STOP_LED_OF[stop], c);
       note(NOTE.trackSelect, !!t && !this.masterSelected && t.id === ui.track, c);
       note(NOTE.activator, !!t && !t.mixer.mute, c);
       note(NOTE.solo, !!t?.mixer.solo, c);
@@ -313,7 +313,7 @@ export class Apc40 extends SessionSurface {
     this.ringsAgain(dev ? `${dev.owner}/${dev.device.key}/${dev.bank}` : '');
     for (let i = 0; i < PARAMS_PER_BANK; i++) {
       const spec = dev?.params[i];
-      leds.set(ccKey(CC.deviceRing + i), spec ? (bipolar(spec) ? RING.pan : RING.volume) : RING.off);
+      leds.set(ccKey(CC.deviceRing + i), ringStyle(spec));
       leds.set(ccKey(CC.deviceKnob + i), dev && spec ? Math.round(this.heardUnit(dev, spec) * 127) : 0);
     }
     note(NOTE.deviceLeft, !!dev && dev.index > 0);
@@ -362,4 +362,34 @@ function overviewColor(light: BlockLight): number {
     case 'clips': return COLOR.amber;
     case 'empty': return COLOR.dim;
   }
+}
+
+/** A LED's value: a boolean is on or off, a number is already the colour or the state. */
+function ledValue(v: number | boolean): number {
+  if (typeof v === 'number') return v;
+  return v ? ON : 0;
+}
+
+/** A scene button: blinking if queued, green if playing, otherwise the scene's colour (white if
+ *  it has none), off if the row is empty. */
+function sceneColor(s: SceneLight): number {
+  switch (s) {
+    case 'queued': return TRIGGERED(COLOR.green);
+    case 'playing': return COLOR.green;
+    case 'off': return COLOR.off;
+    default: return s.color ? paletteIndex(s.color) : COLOR.white;
+  }
+}
+
+/** A clip stop button: blinking with the stop queued, lit while the track plays. */
+const STOP_LED_OF: Readonly<Record<'off' | 'playing' | 'queued', number>> = {
+  queued: STOP_LED.blink,
+  playing: STOP_LED.on,
+  off: STOP_LED.off,
+};
+
+/** The LED ring around a device knob: centred for bipolar parameters, off with nothing mapped. */
+function ringStyle(spec: ParamSpec | undefined): number {
+  if (!spec) return RING.off;
+  return bipolar(spec) ? RING.pan : RING.volume;
 }

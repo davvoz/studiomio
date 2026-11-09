@@ -71,7 +71,7 @@ const KINDS: { readonly [K in ParamSpec['kind']]: ParamKind<Extract<ParamSpec, {
     fromUnit: (p, u) => KINDS.number.clamp(p, p.scale === 'log'
       ? p.min * Math.pow(p.max / p.min, clamp01(u))
       : p.min + clamp01(u) * (p.max - p.min)),
-    format: (p, v) => (p.offAtMin && v <= p.min ? `−∞${p.unit ? ` ${p.unit}` : ''}` : formatNumber(v, p.unit ?? '')),
+    format: (p, v) => (p.offAtMin && v <= p.min ? withUnit('−∞', p.unit) : formatNumber(v, p.unit ?? '')),
   },
   choice: {
     clamp: (p, v) => Math.max(0, Math.min(p.options.length - 1, Math.round(Number.isFinite(v) ? v : p.default))),
@@ -92,12 +92,24 @@ export const formatParam = (p: ParamSpec, v: number): string => kindOf(p).format
 const UNIT_SCALES: Readonly<Record<string, (v: number) => readonly [number, string]>> = {
   Hz: v => (Math.abs(v) >= 1000 ? [v / 1000, 'kHz'] : [v, 'Hz']),
   s: v => (Math.abs(v) < 1 ? [v * 1000, 'ms'] : [v, 's']),
-  pan: v => [Math.abs(v), v < 0 ? 'L' : v > 0 ? 'R' : 'C'],
+  pan: v => [Math.abs(v), panSide(v)],
 };
 
 function formatNumber(v: number, unit: string): string {
   const [value, u] = UNIT_SCALES[unit]?.(v) ?? [v, unit];
+  return withUnit(value.toFixed(decimals(value)), u);
+}
+
+/** Decimals worth showing: none for whole or large numbers, one from 10, two below. */
+function decimals(value: number): number {
   const a = Math.abs(value);
-  const digits = a >= 100 || Number.isInteger(value) ? 0 : a >= 10 ? 1 : 2;
-  return `${value.toFixed(digits)}${u ? ` ${u}` : ''}`;
+  if (a >= 100 || Number.isInteger(value)) return 0;
+  return a >= 10 ? 1 : 2;
+}
+
+const withUnit = (text: string, unit: string | undefined) => (unit ? `${text} ${unit}` : text);
+
+function panSide(v: number): string {
+  if (v < 0) return 'L';
+  return v > 0 ? 'R' : 'C';
 }

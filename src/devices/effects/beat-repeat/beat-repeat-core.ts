@@ -278,7 +278,9 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
         yL = this.lp[0].process(this.hp[0].process(yL));
         yR = this.lp[1].process(this.hp[1].process(yR));
       }
-      const d = this.mode === REPEAT_MODE.mix ? 1 : this.mode === REPEAT_MODE.insert || this.only ? dry : 0;
+      let d = 0;
+      if (this.mode === REPEAT_MODE.mix) d = 1;
+      else if (this.mode === REPEAT_MODE.insert || this.only) d = dry;
       outL[i] = xL * d + yL;
       outR[i] = xR * d + yR;
       ringL[this.ringPos] = xL;

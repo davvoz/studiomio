@@ -8,6 +8,7 @@
  * every CONTROL_RATE samples. Loop, pitch, filter, envelopes and LFO are those of the
  * voice's zone. A voice restarting while it plays (mono, stolen voice) fades its last
  * value instead of jumping: no clicks. */
+import { clamp01 } from '../../../core/math';
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { MonoPlayer, type MonoVoice } from '../../dsp/mono-player';
 import { VoicePool, type PolyVoice } from '../../dsp/voice-pool';
@@ -37,7 +38,6 @@ const SHAPES: readonly number[] = [
   PRISMA_SHAPE.sampleHold, PRISMA_SHAPE.smoothRandom,
 ];
 
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 const envShape = (v: (id: string) => number, n: number): EnvShape => ({
   attack: v(`e${n}A`), hold: v(`e${n}H`), decay: v(`e${n}D`), sustain: v(`e${n}S`) / 100, release: v(`e${n}R`),

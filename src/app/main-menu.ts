@@ -98,6 +98,11 @@ export function mainMenu(app: App): Menu[] {
       label: 'Options',
       items: () => {
         const surfaces = app.surfaces, name = surfaces.connected;
+        const controller = () => {
+          if (name) return { label: `Controller MIDI: ${name}`, checked: true, disabled: true, run: () => {} };
+          if (surfaces.enabled) return { label: 'MIDI controllers: connect an APC40 mkII or a Launchpad', disabled: true, run: () => {} };
+          return { label: 'Enable the MIDI controllers…', run: () => app.run(() => surfaces.enable()) };
+        };
         return [
           { label: 'Snap to grid', shortcut: 'Ctrl+4', checked: app.ui.snap, run: () => app.toggleSnap() },
           { label: 'Loop', shortcut: 'Ctrl+L', checked: store.project.loop.enabled, run: () => app.toggleLoop() },
@@ -106,9 +111,7 @@ export function mainMenu(app: App): Menu[] {
           { label: 'Map the computer keyboard', shortcut: 'Ctrl+K', checked: app.ui.keyMapping, run: () => app.toggleKeyMap() },
           { label: 'Map MIDI', shortcut: 'Ctrl+M', checked: app.ui.midiMapping, run: () => app.toggleMidiMap() },
           SEPARATOR,
-          name ? { label: `Controller MIDI: ${name}`, checked: true, disabled: true, run: () => {} }
-            : surfaces.enabled ? { label: 'MIDI controllers: connect an APC40 mkII or a Launchpad', disabled: true, run: () => {} }
-              : { label: 'Enable the MIDI controllers…', run: () => app.run(() => surfaces.enable()) },
+          controller(),
         ];
       },
     },

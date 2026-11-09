@@ -46,7 +46,8 @@ export class ModTraces {
     let value = this.lines.get(key)?.valueAt(now) ?? null;
     for (const trace of this.channels.get(key) ?? []) {
       const v = this.lines.get(trace)!.valueAt(now);
-      value = value === null ? v : multiply ? value * v : value + v;
+      if (value === null) value = v;
+      else value = multiply ? value * v : value + v;
     }
     return value;
   }

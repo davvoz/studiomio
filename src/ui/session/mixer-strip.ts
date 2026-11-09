@@ -2,6 +2,7 @@
  * pan, vertical volume with the level meter, mute and solo (the buses have no sends);
  * for the master volume, level and peak. Each strip is built once and then
  * updated, so a dragged fader isn't interrupted. */
+import { signGlyph } from '../../core/math';
 import type { TrackId } from '../../core/id';
 import type { NumberParam } from '../../devices/params';
 import { instrumentType } from '../../devices/registry';
@@ -26,7 +27,14 @@ const sendParam = (bus: BusTrack): NumberParam => ({
   kind: 'number', id: `send-${bus.id}`, label: bus.name, min: SEND_OFF_DB, max: 0, default: SEND_OFF_DB, step: 0.5, offAtMin: true,
 });
 
-const formatDb = (db: number) => (db <= -40 ? '−∞' : `${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db).toFixed(1)}`);
+const formatDb = (db: number) => (db <= -40 ? '−∞' : `${signGlyph(db)}${Math.abs(db).toFixed(1)}`);
+
+/** The strip's badge: the instrument for MIDI tracks, otherwise the kind of track. */
+function badgeOf(t: Track): string {
+  if (t instanceof MidiTrack) return instrumentType(t.instrument.type)?.label ?? t.instrument.type;
+  if (t instanceof GroupTrack) return 'Group';
+  return t instanceof BusTrack ? 'Bus' : 'Audio';
+}
 
 export interface StripActions {
   readonly ui: UiState;
@@ -95,8 +103,7 @@ export class TrackStrip {
     this.shown = t;
     this.element.style.setProperty('--color', t.color);
     this.element.classList.toggle('bus-strip', t instanceof BusTrack);
-    this.badge.textContent = t instanceof MidiTrack ? instrumentType(t.instrument.type)?.label ?? t.instrument.type
-      : t instanceof GroupTrack ? 'Group' : t instanceof BusTrack ? 'Bus' : 'Audio';
+    this.badge.textContent = badgeOf(t);
     for (const s of this.sends) s.control.set(t.send(s.bus));
     setFxCount(this.fx, t.effects.length);
     this.pan.set(Math.round(t.mixer.pan * 50));

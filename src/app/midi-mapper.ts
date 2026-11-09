@@ -3,6 +3,7 @@
  * Off, mapped controls move their targets: of CCs arriving together only the last
  * value of each is applied, and a sweep is a single undo step. The ports the MIDI
  * comes from are opened by ControlSurfaces, only if needed. */
+import { alsoMoves } from './key-mapper';
 import type { ControlSurfaces } from '../control/control-surfaces';
 import { encodeMidiTarget, midiLabel, midiTargetsOf, type MidiControl } from '../model/midi-map';
 import { springTargets, type MacroTarget } from '../store/key-edits';
@@ -120,7 +121,7 @@ export class MidiMapper {
     this.run(() => {
       this.store.apply(setMidi(target, control));
       const others = midiTargetsOf(this.store.project.midiMap, control).length - 1;
-      this.tell(`Mapped to ${midiLabel(control)}${others ? ` (it also moves ${others === 1 ? 'another control' : `${others} other controls`})` : ''}. Del removes it, Esc turns MIDI off.`,
+      this.tell(`Mapped to ${midiLabel(control)}${alsoMoves(others)}. Del removes it, Esc turns MIDI off.`,
         `${encodeMidiTarget(target)}=${controlKey(control)}`);
     });
   }

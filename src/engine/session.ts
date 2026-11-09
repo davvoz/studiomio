@@ -134,10 +134,12 @@ export class Session {
     const s = this.tracks.get(track.id);
     if (!s) return { playing: null, queued: null, followsArrangement: true };
     const now = s.at(clock), next = s.after(clock);
+    let queued: TrackSessionState['queued'] = null;
+    if (next) queued = next.source.kind === 'clip' ? slotOf(track, next.source.clip) : 'arrangement';
+    else if (now && now.until !== Infinity) queued = 'stop';
     return {
       playing: now?.source.kind === 'clip' ? playingClip(track, now.source.clip, clock - now.source.origin) : null,
-      queued: next ? (next.source.kind === 'clip' ? slotOf(track, next.source.clip) : 'arrangement')
-        : now && now.until !== Infinity ? 'stop' : null,
+      queued,
       followsArrangement: now?.source.kind === 'arrangement',
     };
   }
@@ -180,11 +182,19 @@ export class Session {
 
 /** A group's state from its tracks: it plays the clip of the first that plays, it queues what
  *  one is waiting for (a clip before the stop), it follows the arrangement if they all follow it. */
-export function mergedState(states: readonly TrackSessionState[]): TrackSessionState {
+/** What the tracks have queued, together: a clip first, then a stop, then the return to the arrangement. */
+function mergedQueue(states: readonly TrackSessionState[]): TrackSessionState['queued'] {
   const clip = states.find(s => typeof s.queued === 'object' && s.queued)?.queued;
+  if (clip) return clip;
+  if (states.some(s => s.queued === 'stop')) return 'stop';
+  if (states.some(s => s.queued === 'arrangement')) return 'arrangement';
+  return null;
+}
+
+export function mergedState(states: readonly TrackSessionState[]): TrackSessionState {
   return {
     playing: states.find(s => s.playing)?.playing ?? null,
-    queued: clip ?? (states.some(s => s.queued === 'stop') ? 'stop' : states.some(s => s.queued === 'arrangement') ? 'arrangement' : null),
+    queued: mergedQueue(states),
     followsArrangement: states.every(s => s.followsArrangement),
   };
 }

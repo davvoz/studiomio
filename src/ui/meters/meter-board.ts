@@ -1,5 +1,6 @@
 /* The level meters in the interface: one drawing loop for all (at every frame
  * it reads each track's levels once and updates whoever shows them). */
+import { signGlyph } from '../../core/math';
 import type { MeterReading } from '../../engine/meters';
 import { SILENT } from '../../engine/meters';
 import type { ChainOwner } from '../../model/project';
@@ -139,7 +140,7 @@ export class PeakReadout implements MeterView {
   }
 
   draw(b: Ballistics): void {
-    const text = b.max <= FLOOR_DB ? '−∞' : `${b.max > 0 ? '+' : b.max < 0 ? '−' : ''}${Math.abs(b.max).toFixed(1)}`;
+    const text = b.max <= FLOOR_DB ? '−∞' : `${signGlyph(b.max)}${Math.abs(b.max).toFixed(1)}`;
     if (text === this.shown && this.element.classList.contains('clip') === b.clip) return;
     this.shown = text;
     this.element.textContent = text;

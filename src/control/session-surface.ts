@@ -268,7 +268,9 @@ export abstract class SessionSurface {
       // a group's slot: from its tracks, in the group's colour
       const members = this.project.soundingTracks(track.id).map(t => [t, engine.sessionState(t)] as const);
       const g = groupSlotState(members, scene);
-      return g.queued ? 'queued' : g.playing ? 'playing' : g.clips ? { clip: track.color } : 'off';
+      if (g.queued) return 'queued';
+      if (g.playing) return 'playing';
+      return g.clips ? { clip: track.color } : 'off';
     }
     const st = engine.sessionState(track);
     const clip = track.slots[scene];
@@ -306,7 +308,8 @@ export abstract class SessionSurface {
   protected stopLight(track: Track | undefined): 'off' | 'playing' | 'queued' {
     if (!track) return 'off';
     const st = this.host.engine.sessionState(track);
-    return st.queued === 'stop' ? 'queued' : st.playing ? 'playing' : 'off';
+    if (st.queued === 'stop') return 'queued';
+    return st.playing ? 'playing' : 'off';
   }
 
   // ---------------------------------------------------------------- chosen track
@@ -399,11 +402,10 @@ export abstract class SessionSurface {
     const macro = macroOf(this.project.racksOf(c.owner), key as DeviceKey, spec.id);
     if (macro) return this.host.say(`${this.label}: ${spec.label} is moved by macro ${macro.index + 1} of ${rackName(macro.rack)}.`);
     const index = rack ? rack.macros.findIndex((_, m) => macroParam(m) === spec.id) : -1;
-    const edit = rack
-      ? setMacro(c.owner, rack.id, index, v)
-      : key === INSTRUMENT_KEY
-        ? setInstrumentParam(c.owner as TrackId, spec.id, v)
-        : setEffectParam(c.owner, key as DeviceId, spec.id, v);
+    let edit;
+    if (rack) edit = setMacro(c.owner, rack.id, index, v);
+    else if (key === INSTRUMENT_KEY) edit = setInstrumentParam(c.owner as TrackId, spec.id, v);
+    else edit = setEffectParam(c.owner, key as DeviceId, spec.id, v);
     const id = `param-${c.owner}-${c.device.key}-${spec.id}`;
     // a spring returns by itself: pulling it isn't an undo step (the knob doesn't say
     // when it's let go: the spring waits for it to be still)

@@ -412,8 +412,10 @@ export class Project {
     const rootIds = new Set(roots.map(t => t.id));
     const moved = new Set(roots.flatMap(t => this.trackBlock(t.id)).map(t => t.id));
     const block = this.tracks.filter(t => moved.has(t.id)).map(t => (rootIds.has(t.id) ? t.withGroup(group.id) : t));
-    const tracks = this.tracks.flatMap(t =>
-      (t.id === roots[0].id ? [this.fitted(group.withGroup(roots[0].group)), ...block] : moved.has(t.id) ? [] : [t]));
+    const tracks = this.tracks.flatMap(t => {
+      if (t.id === roots[0].id) return [this.fitted(group.withGroup(roots[0].group)), ...block];
+      return moved.has(t.id) ? [] : [t];
+    });
     return this.with({ tracks }).validated();
   }
 

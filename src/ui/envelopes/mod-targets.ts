@@ -2,6 +2,7 @@
  * the mixer (volume and pan), the instrument and the effects, with their parameters (numbers and choices:
  * a choice, like a switch, snaps when the curve moves it past halfway). On the
  * master the effects and the macros of its racks, for its curves on the timeline. */
+import { signGlyph } from '../../core/math';
 import type { DeviceId } from '../../core/id';
 import { activeSections, paramSpec, resolveParams, type DeviceType } from '../../devices/device-type';
 import { paramFromUnit, paramToUnit, type ChoiceParam } from '../../devices/params';
@@ -141,10 +142,13 @@ export const deviceKeyOf = (t: ModTarget): string => (t.kind === 'device' ? t.de
 /** How a value of the curve is written, by target type. */
 const FORMATS: { readonly [K in ModScaleKind]: (v: number) => string } = {
   volume: v => (v <= 0.0001 ? '0 % (−∞ dB)' : `${Math.round(v * 100)} % (${(40 * Math.log10(v)).toFixed(1)} dB)`),
-  pan: v => (Math.abs(v) < 0.005 ? 'centre' : `${Math.round(Math.abs(v) * 100)} ${v < 0 ? 'L' : 'R'}`),
-  param: v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.round(Math.abs(v) * 100)} %`,
+  pan: v => {
+    if (Math.abs(v) < 0.005) return 'centre';
+    return `${Math.round(Math.abs(v) * 100)} ${v < 0 ? 'L' : 'R'}`;
+  },
+  param: v => `${signGlyph(v)}${Math.round(Math.abs(v) * 100)} %`,
   // the clip plays the nearest semitone
-  transpose: v => { const st = Math.round(v); return `${st > 0 ? '+' : st < 0 ? '−' : ''}${Math.abs(st)} st`; },
+  transpose: v => { const st = Math.round(v); return `${signGlyph(st)}${Math.abs(st)} st`; },
 };
 
 /** How a value of the curve is written; for a choice (with its chain) also the option

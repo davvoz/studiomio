@@ -103,6 +103,8 @@ const SWING = 0.06;
 
 // the notes: in the app 36 (C1) is the C at 65 Hz, the root of brehho23's bass and acid
 const DO = 36, REB = 37, MIB = 39, SIB = 34, DO_ALTO = 48;
+/** The steps of the galloping bass that leave the root. */
+const GALLOP_TURNS: Readonly<Record<number, number>> = { 7: REB, 14: MIB, 15: REB };
 /** The mode: C phrygian with the tritone (C Db Eb F F# G Ab Bb). */
 const MODE_STEPS = [0, 1, 3, 5, 6, 7, 8, 10];
 /** The nearest note of the mode, below or equal. */
@@ -466,7 +468,7 @@ const BASSES = {
   goa: clip('Goa', bassBars('.xxx .xxx .xxx .xxx', [DO, DO, DO, REB], (r, i) => (i % 3 === 1 ? r + 12 : r)), len(4)),
   trance: clip('Trance oscura', bassBars('.xxx .xxx .xxx .xxx', [DO, DO, REB, DO], (r, i) => inMode(r + [0, 0, 7, 0, 1, 0, 0, 12, 0, 0, 3, 0][i % 12])), len(4)),
   galoppo: clip('Galoppo', written([[DO, 0.5, 0.2, 112], [DO, 0.75, 0.2, 96]].flatMap(([p, s, d, v]) =>
-    Array.from({ length: 16 }, (_, k): [number, number, number, number] => [k === 7 ? REB : k === 14 ? MIB : k === 15 ? REB : p, s + k, d, v]))), len(4)),
+    Array.from({ length: 16 }, (_, k): [number, number, number, number] => [GALLOP_TURNS[k] ?? p, s + k, d, v]))), len(4)),
   // brehho23's dembow: three plus three plus two
   dembow: clip('Dembow', written([[36, 0, 0.75, 112], [36, 0.75, 0.75, 96], [36, 1.5, 0.5, 104], [36, 2, 0.75, 112], [36, 2.75, 0.75, 96], [36, 3.5, 0.5, 104], [36, 4, 0.75, 112], [36, 4.75, 0.75, 96], [36, 5.5, 0.5, 104], [36, 6, 0.75, 112], [36, 6.75, 0.75, 96], [36, 7.5, 0.5, 104], [37, 8, 0.75, 112], [37, 8.75, 0.75, 96], [37, 9.5, 0.5, 104], [37, 10, 0.75, 112], [37, 10.75, 0.75, 96], [37, 11.5, 0.5, 104], [36, 12, 0.75, 112], [36, 12.75, 0.75, 96], [36, 13.5, 0.5, 104], [36, 14, 0.75, 112], [30, 14.75, 0.75, 96], [30, 15.5, 0.5, 104]]), len(4), [LONG_NOTES]),
   sub: clip('Sub tenuto', [held(DO, 0, 8), held(REB, 8, 4), held(SIB, 12, 4)], len(4), [LONG_NOTES]),

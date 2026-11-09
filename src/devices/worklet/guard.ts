@@ -4,16 +4,16 @@
  * checks its block: if it's broken it zeroes it and restarts the engine. Pure: it's also tested in
  * Node. */
 
-/** True if the buffer has a non-finite sample (x − x is 0 only for finite numbers). */
+/** True if the buffer has a non-finite sample (NaN or infinity). */
 export function hasInvalid(buf: Float32Array): boolean {
-  for (let i = 0; i < buf.length; i++) if (buf[i] - buf[i] !== 0) return true;
+  for (let i = 0; i < buf.length; i++) if (!Number.isFinite(buf[i])) return true;
   return false;
 }
 
 /** `buf` if it's healthy, otherwise its copy in `spare` with zero in place of the non-finite samples. */
 export function cleaned(buf: Float32Array, spare: Float32Array): Float32Array {
   if (!hasInvalid(buf)) return buf;
-  for (let i = 0; i < buf.length; i++) spare[i] = buf[i] - buf[i] === 0 ? buf[i] : 0;
+  for (let i = 0; i < buf.length; i++) spare[i] = Number.isFinite(buf[i]) ? buf[i] : 0;
   return spare.subarray(0, buf.length);
 }
 

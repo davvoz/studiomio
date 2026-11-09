@@ -58,7 +58,8 @@ export function scaledSinks(targets: readonly { readonly sink: ModSink; readonly
  *  at the exact instant the curve crosses the half. */
 export function switchSink(inner: ModSink, on: boolean): ModSink {
   const threshold = on ? -0.5 : 0.5, full = on ? -1 : 1;
-  const step = (v: number) => ((on ? v <= threshold : v >= threshold) ? full : 0);
+  const crossed = (v: number) => (on ? v <= threshold : v >= threshold);
+  const step = (v: number) => (crossed(v) ? full : 0);
   let last = { value: 0, time: -Infinity };
   return {
     set: (v, t) => {

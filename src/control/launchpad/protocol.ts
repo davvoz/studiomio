@@ -129,11 +129,14 @@ export const dawMode = (model: Model, on: boolean): number[] => [...header(model
 /** What the grid shows. */
 export type Layout = 'session' | 'volume' | 'pan' | 'device';
 
+/** MK2's layout bytes (the device page doesn't exist there: it stays on Session). */
+const MK2_LAYOUT: Readonly<Record<Layout, number>> = { session: 0, volume: 4, pan: 5, device: 0 };
+
 /** The SysEx that changes layout. X and Mini MK3: 00 <layout> (Session 0, faders 0x0D); Pro MK3:
  *  00 <layout> <page> 00 (Session 0, faders 1 with page 0 volume, 1 pan, 3 device);
  *  MK2: 22 <layout> (Session 0, volume faders 4, pan faders 5). */
 export function layoutMessage(model: Model, layout: Layout): number[] {
-  if (model.id === 'mk2') return [...header(model), 0x22, layout === 'volume' ? 4 : layout === 'pan' ? 5 : 0, 0xf7];
+  if (model.id === 'mk2') return [...header(model), 0x22, MK2_LAYOUT[layout], 0xf7];
   if (model.id === 'pro') return [...header(model), 0x00, layout === 'session' ? 0 : 1, FADER_PAGE[layout], 0x00, 0xf7];
   return [...header(model), 0x00, layout === 'session' ? 0 : 0x0d, 0xf7];
 }
@@ -147,7 +150,9 @@ export function reportedLayout(model: Model, data: ArrayLike<number>): 'session'
   if (model.id === 'mk2' || data.length < 9) return null;
   const h = header(model);
   if (h.some((b, i) => data[i] !== b) || data[6] !== 0x00) return null;
-  return data[7] === 0 ? 'session' : data[7] === (model.id === 'pro' ? 1 : 0x0d) ? 'faders' : 'other';
+  if (data[7] === 0) return 'session';
+  const faders = model.id === 'pro' ? 1 : 0x0d;
+  return data[7] === faders ? 'faders' : 'other';
 }
 
 /** X and Mini MK3: the Session button's two colours (the first when the grid is on Session). */

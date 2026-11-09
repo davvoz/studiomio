@@ -4,6 +4,8 @@
  * a note plays the version that has nothing above Nyquist, so even high notes don't
  * fold back into aliasing. The versions are born from the shape's spectrum (FFT), removing the
  * excess harmonics. Pure data: the engine in the AudioWorklet and the panel's drawing use them. */
+import { clamp01 } from '../../../core/math';
+import { sineTriangle } from '../../dsp/oscillators';
 import { Fft } from '../../../dsp/fft';
 
 /** Samples per period. */
@@ -37,9 +39,12 @@ const TAU = 2 * Math.PI;
 const lerp = (a: number, b: number, x: number) => a + (b - a) * x;
 /** The classic shapes, all in phase with sin(2πt) so they blend into each other without holes. */
 const sine = (t: number) => Math.sin(TAU * t);
-const triangle = (t: number) => (t < 0.25 ? 4 * t : t < 0.75 ? 2 - 4 * t : 4 * t - 4);
+const triangle = sineTriangle;
 const saw = (t: number) => (t === 0 ? 0 : 1 - 2 * t);
-const square = (t: number) => (t === 0 || t === 0.5 ? 0 : t < 0.5 ? 1 : -1);
+function square(t: number): number {
+  if (t === 0 || t === 0.5) return 0;
+  return t < 0.5 ? 1 : -1;
+}
 
 /** The vowels A E I O U: three formants (Hz, dB), as in Neuro. */
 const VOWELS: readonly (readonly (readonly [hz: number, db: number])[])[] = [
@@ -96,7 +101,8 @@ export const TABLES: readonly { readonly name: string; readonly shape: Shape }[]
     shape: {
       harmonics: (k, p) => {
         const i = DRAWBARS.indexOf(k);
-        return i < 0 ? 0 : Math.max(0, Math.min(1, p * DRAWBARS.length - i + 1)) * (i ? 0.7 : 1);
+        if (i < 0) return 0;
+        return clamp01(p * DRAWBARS.length - i + 1) * (i ? 0.7 : 1);
       },
     },
   },

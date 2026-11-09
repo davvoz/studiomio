@@ -493,7 +493,10 @@ export class SessionView {
         // the chosen slot stays on its clip
         const s = this.selected?.slot;
         if (s === undefined) return;
-        const slot = s === index ? to : s > index && s <= to ? s - 1 : s < index && s >= to ? s + 1 : s;
+        let slot = s;
+        if (s === index) slot = to;
+        else if (s > index && s <= to) slot = s - 1;
+        else if (s < index && s >= to) slot = s + 1;
         this.select({ ...this.selected!, slot });
       },
     });
@@ -974,7 +977,8 @@ export class SessionView {
       this.deps.store.apply(e);
       return true;
     } catch (err) {
-      this.deps.say(err instanceof TypeError ? 'Clips go on tracks of the same kind: audio with audio, MIDI with MIDI.' : `${err instanceof Error ? err.message : err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      this.deps.say(err instanceof TypeError ? 'Clips go on tracks of the same kind: audio with audio, MIDI with MIDI.' : message);
       return false;
     }
   }

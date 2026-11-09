@@ -63,7 +63,9 @@ export function rollHit(host: RollHost, clip: MidiClip, x: number, y: number): R
     const x0 = axis.beatToX(n.start), x1 = axis.beatToX(n.start + n.duration);
     if (x < x0 - 1 || x > x1 + 1) continue;
     const edge = Math.min(EDGE_PX, (x1 - x0) / 3);
-    const zone = x >= x1 - edge ? 'end' : x <= x0 + edge && x1 - x0 > 12 ? 'start' : 'body';
+    let zone: 'start' | 'end' | 'body' = 'body';
+    if (x >= x1 - edge) zone = 'end';
+    else if (x <= x0 + edge && x1 - x0 > 12) zone = 'start';
     return { kind: 'note', note: n, zone };
   }
   return { kind: 'empty', beat, pitch };
@@ -349,8 +351,10 @@ class EraseNoteGesture extends IdleGesture<MidiClip> implements RollGesture {
 /** The gesture starting by pressing on each thing. */
 export const rollGestureFor: { readonly [K in RollHit['kind']]: (host: RollHost, clip: MidiClip, hit: Extract<RollHit, { kind: K }>, p: Pointer) => RollGesture } = {
   ...frameGestureFor,
-  note: (h, c, hit, p) => (h.drawMode && hit.zone === 'body' ? new EraseNoteGesture(h, c, hit.note)
-    : hit.zone === 'body' ? new MoveNotesGesture(h, c, hit.note, p) : new ResizeNotesGesture(h, c, hit.note, hit.zone, p)),
+  note: (h, c, hit, p) => {
+    if (hit.zone !== 'body') return new ResizeNotesGesture(h, c, hit.note, hit.zone, p);
+    return h.drawMode ? new EraseNoteGesture(h, c, hit.note) : new MoveNotesGesture(h, c, hit.note, p);
+  },
   empty: (h, c, hit, p) => (h.drawMode ? new DrawNoteGesture(h, c, hit.pitch, p) : new MarqueeGesture(h, c, p)),
   velocity: (h, c, hit, p) => new VelocityGesture(h, c, hit.note, p),
   lane: () => new IdleGesture<MidiClip>(),
@@ -358,7 +362,10 @@ export const rollGestureFor: { readonly [K in RollHit['kind']]: (host: RollHost,
 
 export const rollCursor: { readonly [K in RollHit['kind']]: (hit: Extract<RollHit, { kind: K }>, drawMode: boolean) => string } = {
   ...frameCursor,
-  note: (hit, draw) => (hit.zone !== 'body' ? 'ew-resize' : draw ? 'not-allowed' : 'grab'),
+  note: (hit, draw) => {
+    if (hit.zone !== 'body') return 'ew-resize';
+    return draw ? 'not-allowed' : 'grab';
+  },
   empty: (_hit, draw) => (draw ? 'crosshair' : 'default'),
   velocity: () => 'ns-resize',
   lane: () => 'default',

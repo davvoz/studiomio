@@ -5,6 +5,7 @@
  * Shift+wheel scrolls; double click on empty space goes back to the whole sample. In Slice a click on a
  * slice plays it; with the slices at the transients double click adds one (or, on a marker,
  * removes it). With Reverse the sample is shown reversed and the positions apply there. */
+import { clamp01 } from '../../../core/math';
 import type { SampleData } from '../../../devices/dsp/core';
 import { LOOP, MODE, SLICE, SLICE_COUNT, sliceParam, sliceStarts, sliceValues } from '../../../devices/instruments/sampler/sampler';
 import type { ParamValues } from '../../../model/device';
@@ -37,7 +38,6 @@ export interface WaveHost {
   menu(x: number, y: number): void;
 }
 
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const round = (pct: number) => Math.round(pct * 1000) / 1000;
 
 export class WaveView {
@@ -61,7 +61,9 @@ export class WaveView {
         this.hot = h;
         this.paint();
       }
-      c.style.cursor = h === 'loop' ? 'grab' : h ? 'ew-resize' : this.sliced() ? 'pointer' : 'default';
+      if (h === 'loop') c.style.cursor = 'grab';
+      else if (h) c.style.cursor = 'ew-resize';
+      else c.style.cursor = this.sliced() ? 'pointer' : 'default';
     });
     c.addEventListener('pointerleave', () => {
       if (this.hot) {
@@ -319,7 +321,8 @@ export class WaveView {
         const x = Math.round(this.xOf(s)) + 0.5;
         if (x < -40 || x > w + 1) return;
         const hot = this.hot && this.hot !== 'loop' && this.hot.kind === 'slice' && Math.abs(v[sliceParam(this.hot.param)] - s) < 1e-9;
-        g.strokeStyle = hot ? '#fff' : i === 0 ? 'rgba(79,209,224,0.35)' : 'rgba(79,209,224,0.7)';
+        if (hot) g.strokeStyle = '#fff';
+        else g.strokeStyle = i === 0 ? 'rgba(79,209,224,0.35)' : 'rgba(79,209,224,0.7)';
         g.beginPath();
         g.moveTo(x, top);
         g.lineTo(x, bottom);

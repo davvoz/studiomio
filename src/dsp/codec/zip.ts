@@ -96,8 +96,8 @@ export async function readZip(zip: Uint8Array): Promise<ZipEntry[]> {
     const start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
     const raw = zip.subarray(start, start + packed);
     if (raw.length !== packed) throw bad(`"${name}" is truncated`);
-    const data = method === 0 ? raw.slice() : method === 8 ? await inflate(raw) : null;
-    if (!data) throw new Error(`"${name}" uses an unsupported compression (${method})`);
+    if (method !== 0 && method !== 8) throw new Error(`"${name}" uses an unsupported compression (${method})`);
+    const data = method === 0 ? raw.slice() : await inflate(raw);
     if (data.length !== size || crc32(data) !== crc) throw bad(`"${name}" is damaged`);
     out.push({ name, data });
   }

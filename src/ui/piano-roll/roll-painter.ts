@@ -82,7 +82,8 @@ function paintRows({ g, width, pitches, named }: RollPaint, bottom: number): voi
   g.fillRect(0, ROLL.ruler, width, bottom - ROLL.ruler);
   for (const pitch of pitches.visible(ROLL.ruler, bottom)) {
     const y = pitches.pitchToY(pitch);
-    g.fillStyle = named ? (named.has(pitch) ? C.named : C.unnamed) : isBlackKey(pitch) ? C.black : C.white;
+    if (named) g.fillStyle = named.has(pitch) ? C.named : C.unnamed;
+    else g.fillStyle = isBlackKey(pitch) ? C.black : C.white;
     g.fillRect(0, y, width, pitches.rowHeight);
     // a line under each C separates the octaves
     g.fillStyle = pitch % 12 === 0 ? C.octave : 'rgba(0,0,0,0.25)';

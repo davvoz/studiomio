@@ -82,7 +82,8 @@ export class RollKeyboard {
       // a black key's row: the key on the left, the white one next to it on the right
       g.fillStyle = '#d9dce2';
       g.fillRect(0, y, width, h);
-      g.fillStyle = p === this.pressed ? '#ff9d2e' : black ? '#26292f' : '#d9dce2';
+      if (p === this.pressed) g.fillStyle = '#ff9d2e';
+      else g.fillStyle = black ? '#26292f' : '#d9dce2';
       g.fillRect(0, y, black ? width * 0.62 : width, h);
       g.fillStyle = 'rgba(0,0,0,0.35)';
       g.fillRect(0, Math.round(y + h) - 1, width, 1);
@@ -104,7 +105,8 @@ export class RollKeyboard {
     const h = axis.rowHeight, text = h >= 9;
     for (const p of rows) {
       const y = axis.pitchToY(p), name = names.get(p);
-      g.fillStyle = p === this.pressed ? '#ff9d2e' : name ? '#2a2e35' : '#17191d';
+      if (p === this.pressed) g.fillStyle = '#ff9d2e';
+      else g.fillStyle = name ? '#2a2e35' : '#17191d';
       g.fillRect(0, y, width, h);
       g.fillStyle = 'rgba(0,0,0,0.45)';
       g.fillRect(0, Math.round(y + h) - 1, width, 1);

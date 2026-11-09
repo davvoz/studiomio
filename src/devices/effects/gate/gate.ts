@@ -17,12 +17,14 @@ export const STEP_RATES: readonly (readonly [label: string, beats: number])[] = 
 /** The level parameter of step `i` (from 0). */
 export const stepParam = (i: number) => `step${i + 1}`;
 
+const STEP_LEVEL: Readonly<Record<string, number>> = { x: 100, o: 50 };
+
 /** A pattern written with "x" (open), "o" (half) and "." (closed): the levels of its steps. */
 export function pattern(text: string): Record<string, number> {
   const steps = text.replace(/\s/g, '');
   return Object.fromEntries(Array.from({ length: MAX_STEPS }, (_, i) => {
     const c = steps[i % steps.length];
-    return [stepParam(i), c === 'x' ? 100 : c === 'o' ? 50 : 0];
+    return [stepParam(i), STEP_LEVEL[c] ?? 0];
   }));
 }
 

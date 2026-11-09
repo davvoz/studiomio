@@ -70,9 +70,9 @@ export function press(p: Project, ctx: EditContext, t: KeyTarget): Project {
   const spec = mappingSpec(p, t.owner, t);
   if (!spec) return p;
   const current = clampParam(spec, deviceAt(p, t.owner, t.device)?.params[t.param] ?? spec.default);
-  const value = spec.kind === 'choice'
-    ? (current + 1) % spec.options.length
-    : paramToUnit(spec, current) >= 0.5 ? spec.min : spec.max;
+  let value: number;
+  if (spec.kind === 'choice') value = (current + 1) % spec.options.length;
+  else value = paramToUnit(spec, current) >= 0.5 ? spec.min : spec.max;
   if (t.device !== INSTRUMENT_DEVICE) return setEffectParam(t.owner, t.device, t.param, value).apply(p, ctx);
   if (t.owner === MASTER) return p;
   return setInstrumentParam(t.owner, t.param, value).apply(p, ctx);

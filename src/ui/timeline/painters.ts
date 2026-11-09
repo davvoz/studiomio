@@ -171,7 +171,10 @@ function paintClip(g: CanvasRenderingContext2D, pl: Placement, trackIndex: numbe
   g.lineWidth = 1;
 }
 
-const clipLabel = (c: Clip): string => (c instanceof AudioClip && c.transpose ? `${c.name}  ${c.transpose > 0 ? '+' : ''}${c.transpose} st` : c.name);
+function clipLabel(c: Clip): string {
+  if (!(c instanceof AudioClip) || !c.transpose) return c.name;
+  return `${c.name}  ${c.transpose > 0 ? '+' : ''}${c.transpose} st`;
+}
 
 /** The fades, as in Live: the volume line rising from the bottom corner and falling
  *  towards the other, with the removed part in shadow. */
@@ -268,7 +271,9 @@ export function paintRuler(g: CanvasRenderingContext2D, project: Project, geo: T
     const barIndex = b / bar;
     const isBar = Math.abs(barIndex - Math.round(barIndex)) < 1e-6;
     g.fillStyle = COLORS.rulerText;
-    const tick = isBar ? height - RULER_LOOP_BAND : Number.isInteger(b) ? 6 : 3;
+    let tick: number;
+    if (isBar) tick = height - RULER_LOOP_BAND;
+    else tick = Number.isInteger(b) ? 6 : 3;
     g.fillRect(x, height - tick, 1, tick);
     if (isBar && Math.round(barIndex) % labelEvery === 0) g.fillText(String(Math.round(barIndex) + 1), x + 3, height - 5);
   }

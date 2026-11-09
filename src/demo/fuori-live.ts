@@ -242,8 +242,10 @@ const HATS = {
   ride: 'x.o. x.o. x.o. x.o.',
   noise: '...o ..o. ...o .o..',
 };
+/** The closed hat of step `k`: every eighth one a fill. */
+const closedHat = (k: number) => (k % 8 === 7 ? HATS.closedFill : HATS.closed);
 const hats = (count: number, opts: { open?: boolean; ride?: boolean; sparse?: boolean } = {}): Note[] => swing([
-  ...phrase(opts.sparse ? HAT.short : HAT.closed, Array.from({ length: count }, (_, k) => (opts.sparse ? HATS.sparse : k % 8 === 7 ? HATS.closedFill : HATS.closed))),
+  ...phrase(opts.sparse ? HAT.short : HAT.closed, Array.from({ length: count }, (_, k) => (opts.sparse ? HATS.sparse : closedHat(k)))),
   ...(opts.open ? phrase(HAT.open, Array(count).fill(HATS.open)) : []),
   ...(opts.ride ? phrase(HAT.ride, Array(count).fill(HATS.ride)) : []),
   ...phrase(HAT.noise, Array(count).fill(HATS.noise)),
@@ -364,7 +366,7 @@ const pumpScaled = (kick: readonly Note[], depth: number, release: Beats, level:
 const mod = (param: string, points: EnvelopePoint[]): ModSpec => ({ target: instrumentParam(param), points });
 /** A slow wave between `a` and `b` over `length` beats, `cycles` times (for the vowel). */
 const sway = (length: Beats, cycles: number, a: number, b: number): EnvelopePoint[] =>
-  Array.from({ length: cycles * 4 + 1 }, (_, k) => ({ beat: (k * length) / (cycles * 4), value: k % 4 === 0 ? a : k % 4 === 2 ? b : (a + b) / 2 }));
+  Array.from({ length: cycles * 4 + 1 }, (_, k) => ({ beat: (k * length) / (cycles * 4), value: [a, (a + b) / 2, b, (a + b) / 2][k % 4] }));
 
 // ------------------------------------------------------------------ the tracks
 

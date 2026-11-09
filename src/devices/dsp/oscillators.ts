@@ -22,6 +22,13 @@ const square: Wave = (t, dt) => (t < 0.5 ? 1 : -1) + polyBlep(t, dt) - polyBlep(
 const triangle: Wave = t => 1 - 4 * Math.abs(t - 0.5);
 const sine: Wave = t => Math.sin(2 * Math.PI * t);
 
+/** Triangle in phase with the sine (0 at phase 0, peak at ¼, trough at ¾), for the LFOs. */
+export function sineTriangle(p: number): number {
+  if (p < 0.25) return 4 * p;
+  if (p < 0.75) return 2 - 4 * p;
+  return 4 * p - 4;
+}
+
 /** In the order of the options of the "wave" parameters (Saw, Square, Triangle, Sine). */
 export const WAVE_TABLE: readonly Wave[] = [saw, square, triangle, sine];
 

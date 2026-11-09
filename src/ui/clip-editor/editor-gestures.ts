@@ -85,7 +85,8 @@ export class MarkerGesture implements EditorGesture {
 
   end(): void {
     if (!this.dragged && !this.created) return this.host.invalidate();
-    const label = this.created && !this.dragged ? 'Add warp marker' : this.origin.shift ? 'Move audio under the marker' : 'Move warp marker';
+    let label = this.origin.shift ? 'Move audio under the marker' : 'Move warp marker';
+    if (this.created && !this.dragged) label = 'Add warp marker';
     const markers = this.current;
     this.host.commit(label, c => c.withMarkers(markers));
   }

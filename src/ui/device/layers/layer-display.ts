@@ -4,6 +4,7 @@
  * in the order they're heard, then the note and the output. The layers that can play a sample
  * have the sample choice: an audio file (or a browser sample) dropped on their tab
  * becomes their sample. Each instrument says what its panel is like (LayerLayout). */
+import { pickAbove, signGlyph } from '../../../core/math';
 import type { SampleId } from '../../../core/id';
 import { paramActive, paramSpec, resolveParams } from '../../../devices/device-type';
 import type { InstrumentCore, SampleData, SamplePlayer } from '../../../devices/dsp/core';
@@ -273,7 +274,7 @@ export class LayerDisplay implements DeviceDisplay {
     g.fillStyle = '#15181c';
     g.fillRect(0, 0, w, h);
     // the time: a line every 50, 100 or 250 ms
-    const step = this.seconds > 1.2 ? 0.25 : this.seconds > 0.5 ? 0.1 : 0.05;
+    const step = pickAbove(this.seconds, [[1.2, 0.25], [0.5, 0.1]], 0.05);
     g.font = '10px system-ui, sans-serif';
     for (let t = step; t < this.seconds; t += step) {
       const x = Math.round((t / this.seconds) * w) + 0.5;
@@ -326,7 +327,8 @@ export class LayerDisplay implements DeviceDisplay {
     const name = note?.kind === 'choice' ? note.options[v.note] : '';
     g.fillStyle = 'rgba(255,255,255,0.75)';
     g.font = '600 12px system-ui, sans-serif';
-    g.fillText(`${name}${v.fine ? ` ${v.fine > 0 ? '+' : ''}${v.fine} ct` : ''}`, 8, 16);
+    const fine = v.fine ? ` ${signGlyph(v.fine)}${Math.abs(v.fine)} ct` : '';
+    g.fillText(`${name}${fine}`, 8, 16);
     g.font = '10px system-ui, sans-serif';
     g.fillStyle = 'rgba(255,255,255,0.35)';
     g.textAlign = 'right';

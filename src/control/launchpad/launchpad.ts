@@ -164,7 +164,8 @@ export class Launchpad extends SessionSurface {
     const note = kind === 0x90 || kind === 0x80;
     if (note || (kind === 0xb0 && channel === 0 && !this.isFader(number, channel))) {
       const pressed = kind !== 0x80 && value > 0;
-      const scene = (note ? this.model.sceneKind === 'note' : this.model.sceneKind === 'cc') ? sceneAt(number) : null;
+      const sceneMessage = this.model.sceneKind === (note ? 'note' : 'cc');
+      const scene = sceneMessage ? sceneAt(number) : null;
       if (note && scene === null) {
         const pad = padAt(number);
         if (pad && pressed) this.pad(pad.col, pad.row);
@@ -400,7 +401,24 @@ export class Launchpad extends SessionSurface {
       return { horizontal: false, bipolar: false, colors: tracks.map((_, i) => (dev?.params[i] ? COLOR.darkBlue : COLOR.off)) };
     }
     const pan = layout === 'pan';
-    return { horizontal: pan, bipolar: pan, colors: tracks.map(t => (!t ? COLOR.off : pan ? paletteIndex(t.color) : COLOR.green)) };
+    const color = (t: Track | undefined) => {
+      if (!t) return COLOR.off;
+      return pan ? paletteIndex(t.color) : COLOR.green;
+    };
+    return { horizontal: pan, bipolar: pan, colors: tracks.map(color) };
+  }
+
+  /** A grid pad: the overview's blocks, a track function on its row, otherwise the clip slot. */
+  private gridColor(fn: TrackMode | 'volumeReset' | 'panReset' | 'none' | null, col: number, row: number, track: Track | undefined): number {
+    if (this.overview) return blockColor(this.blockLight(col, row));
+    if (fn) return functionColor(fn, track, this.host.ui.track, this.stopLight(track));
+    return padColor(this.slotLight(track, this.ring.scene + row));
+  }
+
+  /** The Session button's colour when active (inactive it's always half white). */
+  private sessionButtonColor(): number {
+    if (this.overview) return COLOR.blue;
+    return this.mixer ? COLOR.cream : COLOR.paleGreenHalf;
   }
 
   /** The position of each fader (undefined where there's nothing to move). */
@@ -412,7 +430,10 @@ export class Launchpad extends SessionSurface {
         return dev && spec ? Math.round(this.heardUnit(dev, spec) * 127) : undefined;
       });
     }
-    return this.ringTracks().map(t => (!t ? undefined : layout === 'pan' ? panToKnob(t.mixer.pan) : dbToFader(t.mixer.volumeDb)));
+    return this.ringTracks().map(t => {
+      if (!t) return undefined;
+      return layout === 'pan' ? panToKnob(t.mixer.pan) : dbToFader(t.mixer.volumeDb);
+    });
   }
 
   // ---------------------------------------------------------------- fader
@@ -477,9 +498,7 @@ export class Launchpad extends SessionSurface {
       for (let row = 0; row < SIZE; row++) {
         const fn = this.overview ? null : this.gridFunction(row);
         for (let col = 0; col < SIZE; col++) {
-          leds.set(noteKey(padNote(col, row)), this.overview ? blockColor(this.blockLight(col, row))
-            : fn ? functionColor(fn, tracks[col], this.host.ui.track, this.stopLight(tracks[col]))
-              : padColor(this.slotLight(tracks[col], this.ring.scene + row)));
+          leds.set(noteKey(padNote(col, row)), this.gridColor(fn, col, row, tracks[col]));
         }
       }
     }
@@ -501,8 +520,7 @@ export class Launchpad extends SessionSurface {
 
     // the Session button: X and Mini with the SysEx, the others with their LED
     if (model.id === 'x' || model.id === 'mini') {
-      const [active, inactive] = this.overview ? [COLOR.blue, COLOR.whiteHalf] : this.mixer ? [COLOR.cream, COLOR.whiteHalf] : [COLOR.paleGreenHalf, COLOR.whiteHalf];
-      leds.set(SESSION_KEY, active * 128 + inactive);
+      leds.set(SESSION_KEY, this.sessionButtonColor() * 128 + COLOR.whiteHalf);
     } else if (model.id === 'mk2') {
       button('session', this.mixer ? COLOR.whiteHalf : COLOR.paleGreenHalf);
       button('mixer', this.mixer ? COLOR.cream : COLOR.whiteHalf);
@@ -526,7 +544,8 @@ export class Launchpad extends SessionSurface {
     if (id === 'mini' && row === SIZE - 1) return this.mode === 'none' ? COLOR.whiteHalf : MODE_COLOR[this.mode as Exclude<Mode, 'none'>];
     if (id === 'pro' && this.mode === 'device') {
       const dev = this.controlled();
-      return !dev || row >= dev.banks ? COLOR.off : row === dev.bank ? COLOR.darkBlue : COLOR.whiteHalf;
+      if (!dev || row >= dev.banks) return COLOR.off;
+      return row === dev.bank ? COLOR.darkBlue : COLOR.whiteHalf;
     }
     if ((id === 'x' || id === 'mk2') && this.mixer) {
       const choice = MIXER_COLUMN[row];
@@ -540,7 +559,12 @@ export class Launchpad extends SessionSurface {
       return this.mode === choice ? MODE_COLOR[choice as Exclude<Mode, 'none'>] : COLOR.whiteHalf;
     }
     const s = this.sceneLight(row);
-    return s === 'queued' ? blink(COLOR.green) : s === 'playing' ? pulse(COLOR.green) : s === 'off' ? COLOR.off : s.color ? paletteIndex(s.color) : COLOR.green;
+    switch (s) {
+      case 'queued': return blink(COLOR.green);
+      case 'playing': return pulse(COLOR.green);
+      case 'off': return COLOR.off;
+      default: return s.color ? paletteIndex(s.color) : COLOR.green;
+    }
   }
 
   /** Pro MK3: the track row, the modes, the transport. */
@@ -570,6 +594,13 @@ export class Launchpad extends SessionSurface {
 
 const SESSION_KEY = 's:session';
 
+/** A track's stop pad: blinking with the stop queued, lit while it plays. */
+const STOP_COLOR: Readonly<Record<'off' | 'playing' | 'queued', number>> = {
+  queued: blink(COLOR.red),
+  playing: COLOR.red,
+  off: COLOR.redHalf,
+};
+
 const isTrackMode = (m: Mode): m is 'stop' | 'mute' | 'solo' => m === 'stop' || m === 'mute' || m === 'solo';
 
 /** A slot's pad, as in Live on the Launchpads: the playing clip pulses green, the queued one
@@ -597,7 +628,7 @@ function functionColor(fn: TrackMode | 'volumeReset' | 'panReset' | 'none', t: T
   if (!t) return COLOR.off;
   switch (fn) {
     case 'select': return t.id === selected ? COLOR.white : COLOR.whiteHalf;
-    case 'stop': return stop === 'queued' ? blink(COLOR.red) : stop === 'playing' ? COLOR.red : COLOR.redHalf;
+    case 'stop': return STOP_COLOR[stop];
     case 'mute': return t.mixer.mute ? COLOR.yellowHalf : COLOR.yellow;
     case 'solo': return t.mixer.solo ? COLOR.blue : COLOR.blueHalf;
     case 'volumeReset': return COLOR.greenHalf;

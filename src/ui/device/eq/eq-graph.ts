@@ -193,7 +193,8 @@ export class EqGraph {
       g.fillStyle = band.on ? color : '#22262c';
       g.fill();
       g.lineWidth = i === state.selected ? 2 : 1;
-      g.strokeStyle = i === state.selected ? '#fff' : band.on ? 'rgba(0,0,0,0.5)' : color;
+      if (i === state.selected) g.strokeStyle = '#fff';
+      else g.strokeStyle = band.on ? 'rgba(0,0,0,0.5)' : color;
       g.stroke();
       g.fillStyle = band.on ? '#141414' : color;
       g.fillText(String(i + 1), x, y + 0.5);

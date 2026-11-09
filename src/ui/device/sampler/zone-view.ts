@@ -16,6 +16,8 @@ const EDGE = 4, MIN_EDGES = 14;
 const MIN_KEYS = 12;
 /** How long a played key stays lit (ms). */
 const FLASH = 180;
+/** The pointer over each part of a zone row. */
+const CURSOR_OF: Readonly<Record<string, string>> = { lo: 'ew-resize', hi: 'ew-resize', move: 'grab', key: 'pointer', name: 'pointer' };
 
 export interface ZoneRow {
   readonly index: number;
@@ -73,7 +75,7 @@ export class ZoneView {
       const h = this.hit(e.clientX, e.clientY);
       const changed = JSON.stringify(h) !== JSON.stringify(this.hot);
       this.hot = h;
-      c.style.cursor = h.kind === 'lo' || h.kind === 'hi' ? 'ew-resize' : h.kind === 'move' ? 'grab' : h.kind === 'key' || h.kind === 'name' ? 'pointer' : 'default';
+      c.style.cursor = CURSOR_OF[h.kind] ?? 'default';
       if (changed) this.paint();
     });
     c.addEventListener('pointerleave', () => {
@@ -267,7 +269,8 @@ export class ZoneView {
       if (xb > xa) {
         const inner = ROW_H - 3, yb = y + ROW_H - 1.5;
         const y0 = yb - (z.vhi / 127) * inner, y1 = yb - ((z.vlo - 1) / 127) * inner;
-        g.fillStyle = on ? ACCENT : hot ? 'rgba(255,157,46,0.7)' : 'rgba(255,157,46,0.45)';
+        if (on) g.fillStyle = ACCENT;
+        else g.fillStyle = hot ? 'rgba(255,157,46,0.7)' : 'rgba(255,157,46,0.45)';
         g.fillRect(xa, y0, Math.max(2, xb - xa - 1), Math.max(2, y1 - y0));
         const range = z.lo === z.hi ? noteName(z.lo) : `${noteName(z.lo)}–${noteName(z.hi)}`;
         const textEnd = xa + 8 + g.measureText(range).width, dot = this.xOf(z.root + 0.5);
@@ -314,7 +317,9 @@ export class ZoneView {
     for (let k = lo; k <= hi; k++) {
       const x = this.xOf(k), lit = this.flashes.has(k) && now - this.flashes.get(k)! < FLASH;
       const hotKey = this.hot?.kind === 'key' && this.hot.key === k;
-      g.fillStyle = lit ? ACCENT : hotKey ? '#d9d9d9' : isBlack(k) ? '#2a2d31' : '#b9bcc0';
+      if (lit) g.fillStyle = ACCENT;
+      else if (hotKey) g.fillStyle = '#d9d9d9';
+      else g.fillStyle = isBlack(k) ? '#2a2d31' : '#b9bcc0';
       g.fillRect(x, 1, Math.max(1, keyW - 1), KEYS_H - 2);
       if (k % 12 === 0 && keyW * 12 > 34) {
         g.fillStyle = '#141414';
