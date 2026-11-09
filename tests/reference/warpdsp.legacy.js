@@ -775,3 +775,6 @@ function WarpDSP() {
     encodeWav, makeZip, crc32,
   };
 }
+
+// For the tests, which import it as a module (no dynamic evaluation).
+export { WarpDSP };

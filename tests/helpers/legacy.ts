@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { runInThisContext } from 'node:vm';
+import { WarpDSP } from '../reference/warpdsp.legacy.js';
 
 /** WarpMio's original DSP engine (`tests/reference/warpdsp.legacy.js`), used as
- *  reference: it's a self-contained function, so evaluating it is enough. */
+ *  reference: a self-contained function, imported as a plain module. */
 export interface LegacyDsp {
   render(channels: Float32Array[], sr: number, job: unknown): Float32Array[];
   onsetEnvelope(mono: Float32Array, sr: number): { flux: Float32Array; hop: number; frameRate: number };
@@ -16,8 +14,5 @@ export interface LegacyDsp {
 }
 
 export function loadLegacyDsp(): LegacyDsp {
-  const path = fileURLToPath(new URL('../reference/warpdsp.legacy.js', import.meta.url));
-  const source = `(() => {\n${readFileSync(path, 'utf8')}\nreturn WarpDSP;\n})()`;
-  const factory = runInThisContext(source, { filename: path }) as () => LegacyDsp;
-  return factory();
+  return WarpDSP() as LegacyDsp;
 }
