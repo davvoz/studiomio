@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.56] - 2026-11-09
+
 ### Changed
 - Internal cleanup after a code-quality analysis: simpler, more readable code in the engine, the
   devices, the controllers and the interface, with no change in how anything works or sounds. The
