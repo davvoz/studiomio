@@ -163,3 +163,7 @@ themselves. A graphic panel of its own is registered in `ui/device/displays.ts`.
 
 The WASM is ready but off: on this load V8 is faster, and the real gain comes from the workers'
 parallelism.
+
+## License
+
+[MIT](LICENSE) © 2026 David

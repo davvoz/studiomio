@@ -5,6 +5,7 @@
   "version": "0.3.54",
   "description": "DAW with warp in the style of Ableton Live",
   "author": "David <ing.casaert@gmail.com>",
+  "license": "MIT",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
