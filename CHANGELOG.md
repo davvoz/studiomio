@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.54] - 2026-11-09
+
 ### Changed
 - studiomio is now in English: menus, messages, devices and their parameters, presets, factory
   racks and the shortcuts help. Projects, presets and racks saved before keep working and sound
