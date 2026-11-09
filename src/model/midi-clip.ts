@@ -74,7 +74,7 @@ export class MidiClip extends Clip<MidiClipProps> {
   }
 
   mappingNotes(fn: (n: Note, index: number) => Note): MidiClip {
-    return this.withNotes(this.notes.map(fn));
+    return this.withNotes(this.notes.map((n, i) => fn(n, i)));
   }
 
   /** The clip's time multiplied by `factor` (×2: everything lasts twice as long, as at half

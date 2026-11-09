@@ -58,6 +58,7 @@ export class VoicePool<V extends PolyVoice> {
     if (free >= 0) return free;
     const all = this.voices.map((_, i) => i);
     const released = all.filter(i => this.voices[i].releasing);
-    return (released.length ? released : all).reduce((a, b) => (this.startedAt[b] < this.startedAt[a] ? b : a));
+    const candidates = released.length ? released : all;
+    return candidates.reduce((a, b) => (this.startedAt[b] < this.startedAt[a] ? b : a), candidates[0]);
   }
 }

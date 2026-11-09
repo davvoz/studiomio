@@ -665,8 +665,6 @@ export const PRESTABILITI_LIVE: LiveSpec<PrestabilitiLiveSound, TrackKey> = {
   arrangement: SCENES.map((_, i) => i),
 };
 
-/** A scene's clips, for whoever wants to check them. */
-export const prestabilitiScene = (name: string): Partial<Record<TrackKey, ClipSpec>> | undefined => SCENES.find(s => s.name === name)?.clips;
 
 /** The spoken phrases, for whoever wants to check them. */
 export const PRESTABILITI_PHRASES = PHRASES;

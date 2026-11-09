@@ -97,6 +97,11 @@ export class App implements Commands, TimelineActions {
   private readonly bottom = new BottomPanel();
   /** Clipboard shared by timeline and piano roll. */
   readonly clipboard = new Clipboard();
+  /** The keyboard and MIDI inputs: they listen from construction on, kept here for their whole life. */
+  readonly noteKeys: NoteKeys;
+  readonly keyMapper: KeyMapper;
+  readonly midiMapper: MidiMapper;
+  readonly midiTargets: MidiTargets;
   private readonly automation: MasterAutomation;
   /** The last opened clip of each track: that's where "Show automation" goes. */
   private readonly lastClips = new Map<TrackId, ClipRef>();
@@ -247,16 +252,16 @@ export class App implements Commands, TimelineActions {
       }
     });
     // before mapped keys: with ⌨ on the note keys play, even if they're mapped
-    new NoteKeys(this.ui, new NoteKeyboard({
+    this.noteKeys = new NoteKeys(this.ui, new NoteKeyboard({
       base: id => keyboardBase(this.store.project, id),
       press: (track, pitch, velocity) => this.audio.pressNote(track, pitch, velocity),
       release: (track, pitch) => this.audio.releaseNote(track, pitch),
       say: t => this.say(t),
     }));
     // before the shortcuts: the keys mapped to macros and parameters
-    new KeyMapper(this.store, this.ui, t => this.say(t), this.springs);
-    new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
-    new MidiTargets(this.store, this.ui, t => this.say(t));
+    this.keyMapper = new KeyMapper(this.store, this.ui, t => this.say(t), this.springs);
+    this.midiMapper = new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
+    this.midiTargets = new MidiTargets(this.store, this.ui, t => this.say(t));
     bindKeys(document, this, KEYMAP);
     // closing the window with unsaved changes asks for confirmation (in Electron the main process asks)
     addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });

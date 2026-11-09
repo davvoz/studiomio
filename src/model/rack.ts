@@ -173,8 +173,6 @@ export const parentOf = (racks: RackList, rack: Rack): Rack | undefined => outer
 /** The racks inside a rack, at every depth. */
 export const innerRacks = (racks: RackList, rack: Rack): Rack[] => racks.filter(r => isInside(racks, r, rack));
 
-/** How many racks there are around a rack (0: it's in the chain). */
-export const rackDepth = (racks: RackList, rack: Rack): number => outerRacks(racks, rack).length;
 
 /** Each rack before those it has inside: after a rack has grown, it stays before those
  *  that had its same devices. */

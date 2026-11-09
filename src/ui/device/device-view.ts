@@ -1005,7 +1005,7 @@ export class DeviceView {
     edit: (values: ParamValues) => Edit, mergeKey: string): void {
     const racks = this.deps.store.project.racksOf(owner);
     const free = Object.fromEntries(Object.entries(values).filter(([param]) => !macroOf(racks, key, param)));
-    const ids = Object.keys(free).sort();
+    const ids = Object.keys(free).sort((a, b) => a.localeCompare(b));
     if (ids.length) this.param(edit(free), `${mergeKey}-${ids.join(',')}`, final);
     else if (final) this.deps.store.endMerge();
   }

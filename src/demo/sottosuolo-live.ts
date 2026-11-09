@@ -679,8 +679,6 @@ export const SOTTOSUOLO_LIVE: LiveSpec<SottosuoloLiveSound, TrackKey> = {
   arrangement: SCENES.map((_, i) => i),
 };
 
-/** A scene's clips, for whoever wants to check them. */
-export const sottosuoloScene = (name: string): Partial<Record<TrackKey, ClipSpec>> | undefined => SCENES.find(s => s.name === name)?.clips;
 
 /** Builds the live in the store's (empty) project. */
 export function buildSottosuoloLive(store: ProjectStore, sounds: Readonly<Record<SottosuoloLiveSound, SampleRef>>): void {

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { runInThisContext } from 'node:vm';
 
 /** WarpMio's original DSP engine (`tests/reference/warpdsp.legacy.js`), used as
  *  reference: it's a self-contained function, so evaluating it is enough. */
@@ -16,6 +17,7 @@ export interface LegacyDsp {
 
 export function loadLegacyDsp(): LegacyDsp {
   const path = fileURLToPath(new URL('../reference/warpdsp.legacy.js', import.meta.url));
-  const factory = new Function(`${readFileSync(path, 'utf8')}\nreturn WarpDSP;`)() as () => LegacyDsp;
+  const source = `(() => {\n${readFileSync(path, 'utf8')}\nreturn WarpDSP;\n})()`;
+  const factory = runInThisContext(source, { filename: path }) as () => LegacyDsp;
   return factory();
 }

@@ -965,8 +965,6 @@ export const RAVE_LIVE: LiveSpec<RaveLiveSound, TrackKey> = {
   keys: KEYS,
 };
 
-/** A scene's clips, for whoever wants to check them. */
-export const raveScene = (name: string): Clips | undefined => SCENES.find(s => s.name === name)?.clips;
 
 /** Builds the live in the store's (empty) project. */
 export function buildRaveLive(store: ProjectStore, sounds: Readonly<Record<RaveLiveSound, SampleRef>>): void {

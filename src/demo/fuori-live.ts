@@ -633,8 +633,6 @@ export const FUORI_LIVE: LiveSpec<FuoriLiveSound, TrackKey> = {
   arrangement: [0, 1, 2, 3, 4, 5, 6, 7],
 };
 
-/** A scene's clips, for whoever wants to check them. */
-export const fuoriScene = (name: string): Partial<Record<TrackKey, ClipSpec>> | undefined => SCENES.find(s => s.name === name)?.clips;
 
 /** Builds the live in the store's (empty) project. */
 export function buildFuoriLive(store: ProjectStore, sounds: Readonly<Record<FuoriLiveSound, SampleRef>>): void {

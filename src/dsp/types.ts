@@ -8,5 +8,3 @@ export interface AudioData {
   readonly channels: Channels;
   readonly sampleRate: number;
 }
-
-export const lengthOf = (channels: Channels): number => channels[0]?.length ?? 0;

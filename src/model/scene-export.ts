@@ -26,7 +26,7 @@ export function sceneLength(clips: readonly Clip[], maxBeats: Beats): SceneLengt
   const once = Math.max(0, ...clips.filter(c => !c.loop.enabled).map(c => c.region.end - c.region.start));
   if (!loops.length) return { length: once, loops: false };
   const ticks = loops.map(l => Math.max(1, Math.round(l * TICKS_PER_BEAT)));
-  const lcm = ticks.reduce((a, b) => (a / gcd(a, b)) * b);
+  const lcm = ticks.reduce((a, b) => (a / gcd(a, b)) * b, 1);
   let length = lcm / TICKS_PER_BEAT > maxBeats ? Math.max(...loops) : lcm / TICKS_PER_BEAT;
   // a multiple of the loops' length, so that the final round also closes
   if (length < once) length *= Math.ceil(once / length - 1e-9);

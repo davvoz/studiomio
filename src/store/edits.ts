@@ -1,6 +1,6 @@
 /* Project edits, one per user action. They're pure functions: they receive the
  * parameters and return an Edit that the store applies and can undo. */
-import type { DeviceId, IdFactory, PlacementId, SampleId, SceneId, TrackId } from '../core/id';
+import type { DeviceId, IdFactory, PlacementId, SampleId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { placementEnd, type Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
@@ -346,7 +346,6 @@ export const setSlot = (trackId: TrackId, sceneIndex: number, clip: Clip | null)
 export const addScene = (index?: number): Edit =>
   edit('New scene', (p, { ids }) => p.addingScene({ id: ids.next('scene'), name: String(p.scenes.length + 1) }, index));
 
-export const removeScene = (id: SceneId): Edit => edit('Delete scene', p => p.removingScene(id));
 
 // ------------------------------------------------------------------ helpers
 

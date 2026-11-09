@@ -1,6 +1,5 @@
 /* Track groups from the interface: Ctrl+G, Ctrl+Shift+G and the items of the track menus,
  * the same in the arrangement and in the session. */
-import type { TrackId } from '../core/id';
 import { GroupTrack, type Track } from '../model/track';
 import { addTrack, groupTracks, setGroupFolded, ungroupTracks, type TrackPlace } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
@@ -69,5 +68,3 @@ export function newTrackHereItems(store: ProjectStore, t: Track): MenuItem[] {
   ];
 }
 
-/** How many group levels contain the track (0: none). */
-export const groupDepth = (store: ProjectStore, id: TrackId): number => store.project.groupsOf(id).length;

@@ -3,7 +3,7 @@
  * m0·input + m1·band-pass + m2·low-pass, with g and k setting frequency and
  * damping. These filters are equivalent to the bilinear transform of the analogue prototypes,
  * so the frequency response is computed exactly: the drawn curve is the one you hear. */
-import { BAND, BAND_TYPES, SLOPES, type EqBand } from './eq';
+import { BAND, SLOPES, type EqBand } from './eq';
 
 /** A filter section: g = tan(π·f/fs) (corrected for the shelves), k = 1/Q, and the output mix. */
 export interface Section {
@@ -58,8 +58,6 @@ const SHAPES: readonly ((band: EqBand, sampleRate: number) => Section[])[] = [
 
 export const sectionsOf = (band: EqBand, sampleRate: number): Section[] => (SHAPES[band.type] ?? SHAPES[BAND.bell])(band, sampleRate);
 
-/** True if the band, as it is, doesn't change the sound (shelves and bells at 0 dB). */
-export const isFlat = (band: EqBand): boolean => !band.on || (!!BAND_TYPES[band.type]?.gain && band.gain === 0);
 
 /** |H| of a section at frequency `freq`: H(s) = m0 + (m1·s + m2) / (s² + k·s + 1), s = j·tan(π·f/fs)/g. */
 export function sectionMagnitude(s: Section, freq: number, sampleRate: number): number {

@@ -343,7 +343,7 @@ export class SamplerDisplay implements DeviceDisplay {
   private zoneMenu(x: number, y: number): void {
     const rows = this.rows(), zone = this.zone, has = rows.some(r => r.index === zone);
     const all = (fn: (r: ZoneRow, k: number) => Record<string, number>) => () =>
-      this.ctx.setParams(Object.assign({}, ...rows.map(fn)), true);
+      this.ctx.setParams(Object.assign({}, ...rows.map((r, k) => fn(r, k))), true);
     const roots = rows.map(r => zoneMap(this.values, r.index).root), ranges = spreadRanges(roots);
     showContextMenu(x, y, [
       { label: 'Load into new zones…', run: () => this.pickFiles(files => this.newZones(files, this.nextKey())) },

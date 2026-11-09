@@ -300,7 +300,7 @@ export class CymbalsCore implements InstrumentCore, SamplePlayer {
       sample: this.samples[i],
     };
     // at most two hits of the piece together: the oldest fades, the new one takes a free voice
-    const voices = this.voices[i], oldest = (list: CymbalVoice[]) => list.reduce((a, b) => (a.age <= b.age ? a : b));
+    const voices = this.voices[i], oldest = (list: CymbalVoice[]) => list.reduce((a, b) => (a.age <= b.age ? a : b), list[0]);
     const sounding = voices.filter(x => x.sounding);
     if (sounding.length >= VOICES_PER_PIECE - 1) oldest(sounding).choke();
     (voices.find(x => !x.active) ?? oldest(voices)).trigger(hit, ++this.hits);

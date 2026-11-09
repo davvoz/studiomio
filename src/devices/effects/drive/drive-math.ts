@@ -98,14 +98,7 @@ export const fastIntegral = (shape: Shape): ((x: number) => number) => {
   return x => table.at(x);
 };
 
-/** Below this distance between two samples the average slope is the curve at the midpoint. */
-const ADAA_EPS = 1e-5;
 
-/** An antialiasing step: the "average" value of the curve between `prev` and `x`. */
-export function adaa(shape: Shape, x: number, prev: number, fPrev: number, fx: number): number {
-  const d = x - prev;
-  return Math.abs(d) > ADAA_EPS ? (fx - fPrev) / d : shape.fn((x + prev) / 2);
-}
 
 /** The maximum shift of the bias (asymmetry), on the already amplified signal. */
 export const MAX_BIAS = 0.5;
