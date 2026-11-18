@@ -6,6 +6,10 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- Pitch Shifter: the Glide knob was drawn broken and couldn't be turned or mapped to a macro; it now
+  goes from 1 ms to 2 s.
+
 ## [0.3.57] - 2026-11-10
 
 ### Changed

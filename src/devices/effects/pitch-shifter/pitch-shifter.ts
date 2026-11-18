@@ -23,7 +23,7 @@ export const PITCH_SHIFTER: DeviceType = {
       params: [
         num('semitones', 'Semitones', -MAX_SHIFT, MAX_SHIFT, 0, 'st', { step: 1 }),
         num('fine', 'Fine', -50, 50, 0, 'ct', { step: 1 }),
-        num('glide', 'Glide', 0, 2000, 20, 'ms', { scale: 'log', step: 1 }),
+        num('glide', 'Glide', 1, 2000, 20, 'ms', { scale: 'log', step: 1 }),
       ],
     },
     {
