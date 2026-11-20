@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { paramSpec, resolveParams } from '../../src/devices/device-type';
 import { BODY_SLOT, FIRST_NOTE, KICK, NOTE_COUNT, noteHz, SNAP_SLOT, SNAP_SOURCE, SOURCE } from '../../src/devices/instruments/kick/kick';
 import { driveSample, KickCore } from '../../src/devices/instruments/kick/kick-core';
+import { crushCurve, hardCurve, KickCrush } from '../../src/devices/instruments/kick/kick-crush';
 import { instrumentType } from '../../src/devices/registry';
 import { INSTRUMENT_CORES } from '../../src/devices/worklet/cores';
 
@@ -163,5 +164,64 @@ describe('Kick: the sound', () => {
     core.noteOn(2, 36, 40);
     core.render(soft, new Float32Array(n), 0, n);
     expect(peak(soft)).toBeLessThan(peak(loud) * 0.5);
+  });
+});
+
+describe('Kick: bend and crush', () => {
+  const LONG = { ...PURE, pitch: 0, tailLevel: 100, tailDecay: 3, hold: 0, decay: 0.05 };
+
+  it('the bend starts higher and lands on the note when its time is over', () => {
+    const bent = hit({ ...LONG, bend: 12, bendTime: 400 }, 1).left;
+    // near the start almost an octave above, then the note
+    expect(zeroCrossHz(bent, at(0.01), at(0.06))).toBeGreaterThan(noteHz(29) * 1.6);
+    expect(zeroCrossHz(bent, at(0.5), at(1))).toBeCloseTo(noteHz(29), 0);
+    // without bend the oscillator is the one it was
+    const flat = hit(LONG, 1).left, zero = hit({ ...LONG, bend: 0, bendTime: 1500 }, 1).left;
+    expect(zero).toEqual(flat);
+  });
+
+  it('crush off: the sound does not change, whatever its other knobs say', () => {
+    const off = hit({ crushOn: 0 }, 0.5).left;
+    expect(hit({ crushOn: 0, crush: 100, crushTone: 300, crushRes: 100 }, 0.5).left).toEqual(off);
+  });
+
+  it('the curve: odd and bounded, linear near zero, the asymmetry keeps 0 at 0', () => {
+    expect(hardCurve(0.01)).toBeCloseTo(0.01, 4);
+    expect(hardCurve(50)).toBeLessThanOrEqual(1);
+    expect(hardCurve(-3)).toBeCloseTo(-hardCurve(3), 10);
+    expect(crushCurve(0, 30, 0.4)).toBe(0);
+    expect(crushCurve(1, 30, 0.4) + crushCurve(-1, 30, 0.4)).not.toBeCloseTo(0, 2);
+  });
+
+  it('crush on: the hit is late by the oversampling latency, snap included, and becomes richer', () => {
+    const latency = new KickCrush(SR, 0).latency;
+    expect(latency).toBeGreaterThan(0);
+    const clean = hit({ crushOn: 0 }, 0.4).left;
+    const crushed = hit({ crushOn: 1, crush: 0, crushTone: 8000, crushRes: 0, crushAsym: 0 }, 0.4).left;
+    const first = (x: Float32Array) => x.findIndex(v => Math.abs(v) > 1e-4);
+    expect(first(crushed) - first(clean)).toBe(latency);
+    // driven hard, the tail turns square
+    const hard = hit({ ...LONG, crushOn: 1, crush: 100, crushTone: 6000, crushRes: 0, crushAsym: 0 }, 0.6).left;
+    const soft = hit({ ...LONG, crushOn: 1, crush: 0, crushTone: 6000, crushRes: 0, crushAsym: 0 }, 0.6).left;
+    // brightness: the energy of the slope against the energy of the wave (a sine's is 2π·f/SR)
+    const bright = (x: Float32Array) => {
+      const d = x.slice(at(0.3), at(0.6)).map((v, i, a) => (i ? v - a[i - 1] : 0));
+      return rms(d, 1, d.length) / rms(x, at(0.3), at(0.6));
+    };
+    expect(bright(soft)).toBeLessThan(0.02);
+    expect(bright(hard)).toBeGreaterThan(bright(soft) * 2.5);
+    expect(hard.every(Number.isFinite)).toBe(true);
+    expect(peak(hard)).toBeLessThan(2);
+  });
+
+  it('crush on: after the hit and its ring the engine stops working', () => {
+    const core = new KickCore(SR);
+    core.setParams(resolveParams(KICK, { crushOn: 1, decay: 0.05, tailLevel: 0, hold: 0, snapDecay: 2 }));
+    core.noteOn(1, 36, 127);
+    const n = at(1), sink = new Float32Array(n);
+    for (let f = 0; f < n; f += 128) core.render(sink, new Float32Array(n), f, Math.min(n, f + 128));
+    const after = new Float32Array(128);
+    core.render(after, new Float32Array(128), 0, 128);
+    expect(after.every(v => v === 0)).toBe(true);
   });
 });

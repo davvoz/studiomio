@@ -20,6 +20,7 @@ import { ReverbCore } from '../effects/reverb/reverb-core';
 import { ReverseCore } from '../effects/reverse/reverse-core';
 import { StereoCore } from '../effects/stereo/stereo-core';
 import { TapeStopCore } from '../effects/tape-stop/tape-stop-core';
+import { TransientCore } from '../effects/transient/transient-core';
 import { AnalogCore } from '../instruments/analog/analog-core';
 import { DrumCore } from '../instruments/drums/drums-core';
 import { CymbalsCore } from '../instruments/cymbals/cymbals-core';
@@ -67,4 +68,5 @@ export const EFFECT_CORES: Readonly<Record<string, EffectFactory>> = {
   reverse: sampleRate => new ReverseCore(sampleRate),
   stereo: sampleRate => new StereoCore(sampleRate),
   tapeStop: sampleRate => new TapeStopCore(sampleRate),
+  transient: sampleRate => new TransientCore(sampleRate),
 };

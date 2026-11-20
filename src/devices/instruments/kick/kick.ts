@@ -2,8 +2,12 @@
  * the attack hit (a click, noise or a sample); the Body is the "thump" (a sine falling
  * from above to the note, or a kick sample); the Tail is the sub staying on the note; the
  * Rumble is techno's dark distorted tail (a reverb of the kick, filtered, saturated and
- * squashed under the hit). Everything is tuned to a note (the kick in key), and at the output
- * there's the saturation and the low cut. Here is the description (parameters and presets); the
+ * squashed under the hit). The Bend glides the whole kick down onto its note, slower than the
+ * body's fall: the tonal "doom" of hardtek and frenchcore kicks. The Crush is the hard kick's
+ * distortion: body and tail (not the snap, which stays a clean layer on top) driven into a hard
+ * curve, oversampled, then through a resonant low-pass that gives the distortion its pitch, the
+ * "tok". Everything is tuned to a note (the kick in key), and at the output there's the
+ * saturation and the low cut. Here is the description (parameters and presets); the
  * sound is in kick-core.ts. */
 import type { DeviceType, Preset } from '../../device-type';
 import { DRIVE_TYPES } from '../../dsp/saturate';
@@ -41,6 +45,7 @@ const ms = (id: string, label: string, min: number, max: number, def: number, ex
 const bodySynth = { when: { param: 'bodySource', is: SOURCE.synth } };
 const bodySample = { when: { param: 'bodySource', is: SOURCE.sample } };
 const rumbleOn = { when: { param: 'rumbleOn', is: 1 } };
+const crushOn = { when: { param: 'crushOn', is: 1 } };
 
 export const KICK: DeviceType = {
   type: 'kick',
@@ -87,6 +92,8 @@ export const KICK: DeviceType = {
         percent('tailLevel', 'Level', 35),
         num('tailDecay', 'Length', 0.05, 5, 0.6, 's', { scale: 'log' }),
         percent('tailDrive', 'Drive', 0),
+        num('bend', 'Bend', 0, 24, 0, 'st', { step: 0.5 }),
+        ms('bendTime', 'Bend time', 20, 2000, 300),
       ],
     },
     {
@@ -98,6 +105,16 @@ export const KICK: DeviceType = {
         num('rumbleTone', 'Tone', 40, 600, 140, 'Hz', { scale: 'log', ...rumbleOn }),
         percent('rumbleDrive', 'Drive', 55, rumbleOn),
         percent('rumbleDuck', 'Ducking', 80, rumbleOn),
+      ],
+    },
+    {
+      label: 'Crush',
+      params: [
+        choice('crushOn', 'Crush', ['Off', 'On']),
+        percent('crush', 'Amount', 50, crushOn),
+        num('crushTone', 'Tone', 150, 8000, 1400, 'Hz', { scale: 'log', ...crushOn }),
+        percent('crushRes', 'Resonance', 35, crushOn),
+        percent('crushAsym', 'Asymmetry', 20, crushOn),
       ],
     },
     {
@@ -193,6 +210,27 @@ function kickPresets(): Preset[] {
       name: 'Minimal',
       params: { note: note(36), snapLevel: 65, snapTone: 8000, snapDecay: 2, pitch: 20, pitchTime: 20, pitchCurve: 50, shape: 0,
         hold: 5, decay: 0.1, tailLevel: 5, tailDecay: 0.1, drive: 0, volume: -2 },
+    },
+    {
+      // the hardtek / tribe kick: a short tonal hit, crushed, the tail gliding down a fifth
+      name: 'Hardtek',
+      params: { note: note(33), snapSource: SNAP_SOURCE.click, snapLevel: 50, snapTone: 5000, snapDecay: 6, pitch: 30, pitchTime: 32,
+        pitchCurve: 60, shape: 30, hold: 30, decay: 0.24, tailLevel: 45, tailDecay: 0.32, tailDrive: 30, bend: 7, bendTime: 160,
+        crushOn: 1, crush: 55, crushTone: 1600, crushRes: 40, crushAsym: 25, drive: 10, lowCut: 30, volume: -9 },
+    },
+    {
+      // the frenchcore kick: a long distorted tone with a clean click on top, gliding an octave down
+      name: 'Frenchcore',
+      params: { note: note(33), snapSource: SNAP_SOURCE.click, snapLevel: 55, snapTone: 6500, snapDecay: 4, pitch: 36, pitchTime: 28,
+        pitchCurve: 65, shape: 40, hold: 60, decay: 0.32, tailLevel: 60, tailDecay: 0.42, tailDrive: 60, bend: 12, bendTime: 260,
+        crushOn: 1, crush: 80, crushTone: 1100, crushRes: 55, crushAsym: 35, drive: 0, lowCut: 32, volume: -12 },
+    },
+    {
+      // a techno kick with the crush as a mild dirt: punch, a little tone, no long tail
+      name: 'Warehouse',
+      params: { note: note(33), snapSource: SNAP_SOURCE.noise, snapLevel: 50, snapTone: 4200, snapDecay: 9, pitch: 34, pitchTime: 34,
+        pitchCurve: 60, shape: 25, hold: 18, decay: 0.2, tailLevel: 28, tailDecay: 0.3, bend: 3, bendTime: 90,
+        crushOn: 1, crush: 30, crushTone: 2600, crushRes: 25, crushAsym: 15, drive: 12, lowCut: 28, volume: -7 },
     },
     {
       name: 'Breakbeat',

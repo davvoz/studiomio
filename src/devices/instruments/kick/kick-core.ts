@@ -5,13 +5,16 @@
  * hit fades the previous one out in a few milliseconds: the kick is monophonic, without clicks. The
  * rumble is a single one for all hits: four comb filters (a small reverb) on the body
  * and the tail, darkened, saturated and lowered while the body plays, so it grows between one hit and
- * the next. At the end the saturation, the low cut and the volume. Runs in the AudioWorklet;
+ * the next. The bend glides the sine down onto the note (on top of the body's fall); the crush
+ * (kick-crush.ts) distorts body and tail together, the snap stays clean on top. At the end the
+ * saturation, the low cut and the volume. Runs in the AudioWorklet;
  * no Web Audio here, so it's also tested (and drawn) outside. */
 import { dbToGain, type InstrumentCore, type SampleData, type SamplePlayer } from '../../dsp/core';
 import { decayCoef } from '../../dsp/envelope';
 import { Noise } from '../../dsp/noise';
 import { driveSample, softClip as soft } from '../../dsp/saturate';
 import { Svf } from '../../dsp/svf';
+import { KickCrush } from './kick-crush';
 import { BODY_SLOT, FOLLOW, kickNote, noteHz, ROOT_NOTE, SNAP_SLOT, SNAP_SOURCE, SOURCE } from './kick';
 
 /** Below this level a layer is finished (−100 dB). */
@@ -22,6 +25,8 @@ const TWO_PI = 2 * Math.PI;
 const LP = 0, BP = 1, HP = 2;
 /** The rumble combs' delays, in seconds (coprime, so as not to reinforce the same notes). */
 const COMBS = [0.0233, 0.0317, 0.0379, 0.0431];
+/** How long the crush's filter may ring after a hit, in samples. */
+const CRUSH_RING = 2048;
 
 /** A mono sample (the kick sits in the centre) and its sample rate. */
 interface MonoSample {
@@ -72,12 +77,19 @@ interface Settings {
   tailLevel: number;
   tailDecay: number;
   tailDrive: number;
+  bend: number;
+  bendTime: number;
   rumbleOn: boolean;
   rumble: number;
   rumbleTime: number;
   rumbleTone: number;
   rumbleDrive: number;
   rumbleDuck: number;
+  crushOn: boolean;
+  crush: number;
+  crushTone: number;
+  crushRes: number;
+  crushAsym: number;
   drive: number;
   driveType: number;
   lowCut: number;
@@ -103,6 +115,9 @@ class KickVoice {
   private curve = 1;
   private pitchEnv = 1;
   private pitchK = 0;
+  private bend = 0;
+  /** The bend's progress per sample (1 / its length in samples). */
+  private bendStep = 0;
   private shape = 0;
   private bodyGain = 0;
   private tailGain = 0;
@@ -151,6 +166,8 @@ class KickVoice {
     this.curve = s.curve;
     this.pitchEnv = 1;
     this.pitchK = decayCoef(s.pitchTime, sr);
+    this.bend = s.bend;
+    this.bendStep = 1 / Math.max(1, s.bendTime * sr);
     this.shape = s.shape;
     this.synth = s.bodySynth;
     this.bodyGain = s.bodyLevel;
@@ -199,7 +216,9 @@ class KickVoice {
     const bodyEnv = rise * this.bodyAmp, tailEnv = rise * this.tailAmp;
     // the pitch drop, in semitones: the more curve, the sooner it drops
     this.pitchEnv *= this.pitchK;
-    const hz = this.base * Math.pow(2, (this.semis * Math.pow(this.pitchEnv, this.curve)) / 12);
+    // the bend: from `bend` semitones above to the note, fast at first, landing softly
+    const left = this.bend > 0 ? Math.max(0, 1 - t * this.bendStep) : 0;
+    const hz = this.base * Math.pow(2, (this.semis * Math.pow(this.pitchEnv, this.curve) + this.bend * left * left) / 12);
     this.phase += hz / sr;
     if (this.phase >= 1) this.phase -= 1;
     const sine = Math.sin(TWO_PI * this.phase);
@@ -293,7 +312,15 @@ export class KickCore implements InstrumentCore, SamplePlayer {
   private duck = 0;
   private readonly duckRelease: number;
   private rumbleWasOn = false;
+  private crushWasOn = false;
+  /** Samples since the last hit ended (0 while one plays). */
+  private idle = 0;
   private volume = 1;
+  private readonly crush: KickCrush;
+  // one block of the layers, before the output stage
+  private kickBuf = new Float32Array(128);
+  private snapBuf = new Float32Array(128);
+  private bodyBuf = new Float32Array(128);
 
   constructor(private readonly sampleRate: number) {
     this.voices = [new KickVoice(sampleRate), new KickVoice(sampleRate)];
@@ -303,6 +330,7 @@ export class KickCore implements InstrumentCore, SamplePlayer {
     this.rumbleLow2 = new Svf(sampleRate);
     this.lowCut = new Svf(sampleRate);
     this.duckRelease = decayCoef(0.08, sampleRate);
+    this.crush = new KickCrush(sampleRate, 2);
   }
 
   setParams(p: Readonly<Record<string, number>>): void {
@@ -315,7 +343,9 @@ export class KickCore implements InstrumentCore, SamplePlayer {
       attack: p.attack / 1000, hold: p.hold / 1000, decay: p.decay,
       tailLevel: pct('tailLevel'), tailDecay: p.tailDecay, tailDrive: pct('tailDrive'),
       rumbleOn: p.rumbleOn === 1, rumble: pct('rumble'), rumbleTime: p.rumbleTime, rumbleTone: p.rumbleTone,
-      rumbleDrive: pct('rumbleDrive'), rumbleDuck: pct('rumbleDuck'),
+      rumbleDrive: pct('rumbleDrive'), rumbleDuck: pct('rumbleDuck'), bend: p.bend ?? 0, bendTime: (p.bendTime ?? 300) / 1000,
+      crushOn: p.crushOn === 1, crush: (p.crush ?? 50) / 100, crushTone: p.crushTone ?? 1400, crushRes: (p.crushRes ?? 35) / 100,
+      crushAsym: (p.crushAsym ?? 20) / 100,
       drive: pct('drive'), driveType: p.driveType, lowCut: p.lowCut, velocity: pct('velocity'), volume: dbToGain(p.volume),
     };
     this.s = s;
@@ -327,6 +357,7 @@ export class KickCore implements InstrumentCore, SamplePlayer {
     this.rumbleLow1.set(s.rumbleTone, 0.15, LP);
     this.rumbleLow2.set(s.rumbleTone * 1.5, 0, LP);
     this.lowCut.set(s.lowCut, 0.1, HP);
+    this.crush.set({ amount: s.crush, tone: s.crushTone, resonance: s.crushRes, asymmetry: s.crushAsym });
   }
 
   setSample(slot: string, sample: SampleData | null): void {
@@ -347,6 +378,7 @@ export class KickCore implements InstrumentCore, SamplePlayer {
   silence(): void {
     for (const v of this.voices) v.choke();
     for (const c of this.combs) c.clear();
+    this.crush.clear();
     this.duck = 0;
   }
 
@@ -355,17 +387,46 @@ export class KickCore implements InstrumentCore, SamplePlayer {
     if (!s) return;
     const [a, b] = this.voices;
     const rumbleOn = s.rumbleOn && s.rumble > 0;
-    // turned on again, the rumble restarts clean
+    // turned on again, the rumble and the crush restart clean
     if (rumbleOn && !this.rumbleWasOn) for (const c of this.combs) c.clear();
+    if (s.crushOn && !this.crushWasOn) this.crush.clear();
     this.rumbleWasOn = rumbleOn;
-    if (!a.active && !b.active && !rumbleOn) return;
-    const rumbleGain = s.rumble * 1.6, rumbleDrive = 1 + s.rumbleDrive * 12, rumbleNorm = 1 / Math.tanh(rumbleDrive);
-    for (let i = from; i < to; i++) {
+    this.crushWasOn = s.crushOn;
+    const n = to - from;
+    // with the crush on, the end of a hit is still in its delay and its filter: keep going a little
+    this.idle = a.active || b.active ? 0 : this.idle + n;
+    if (this.idle > 0 && !rumbleOn && (!s.crushOn || this.idle > this.crush.latency + CRUSH_RING)) return;
+    this.layers(n);
+    if (s.crushOn) {
+      this.crush.process(this.kickBuf, n);
+      this.crush.align([this.snapBuf, this.bodyBuf], n);
+    }
+    this.output(s, rumbleOn, left, right, from, n);
+  }
+
+  /** The voices' layers for `n` samples into the block buffers. */
+  private layers(n: number): void {
+    if (this.kickBuf.length < n) [this.kickBuf, this.snapBuf, this.bodyBuf] = [new Float32Array(n), new Float32Array(n), new Float32Array(n)];
+    const [a, b] = this.voices, kb = this.kickBuf, sb = this.snapBuf, bb = this.bodyBuf;
+    for (let i = 0; i < n; i++) {
       let kick = 0, snap = 0, body = 0;
       if (a.active) { a.step(); kick += a.kick; snap += a.snap; body = a.body; }
       if (b.active) { b.step(); kick += b.kick; snap += b.snap; body = Math.max(body, b.body); }
-      let x = driveSample(kick + snap, s.drive, s.driveType);
+      kb[i] = kick;
+      sb[i] = snap;
+      bb[i] = body;
+    }
+  }
+
+  /** Saturation, rumble, low cut and volume, added into the outputs from `from`. */
+  private output(s: Settings, rumbleOn: boolean, left: Float32Array, right: Float32Array, from: number, n: number): void {
+    const kb = this.kickBuf, sb = this.snapBuf, bb = this.bodyBuf;
+    const rumbleGain = s.rumble * 1.6, rumbleDrive = 1 + s.rumbleDrive * 12, rumbleNorm = 1 / Math.tanh(rumbleDrive);
+    for (let i = 0; i < n; i++) {
+      const kick = kb[i];
+      let x = driveSample(kick + sb[i], s.drive, s.driveType);
       if (rumbleOn) {
+        const body = bb[i];
         this.duck = body > this.duck ? body : this.duck * this.duckRelease;
         const input = this.rumbleIn.process(kick) * 0.35;
         let wet = 0;
@@ -376,8 +437,8 @@ export class KickCore implements InstrumentCore, SamplePlayer {
         x += wet * rumbleGain * (1 - s.rumbleDuck * Math.min(1, this.duck));
       }
       const y = this.lowCut.process(x) * this.volume;
-      left[i] += y;
-      right[i] += y;
+      left[from + i] += y;
+      right[from + i] += y;
     }
   }
 }

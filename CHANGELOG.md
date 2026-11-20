@@ -6,6 +6,18 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Kick: a Crush section, the distortion of hard kicks. Body and tail go through a hard curve
+  (Amount, with Asymmetry for even harmonics), oversampled, then through a resonant low-pass that
+  gives the distortion its tone; the snap stays clean on top. Off by default: existing kicks sound
+  the same.
+- Kick: Bend in the Tail section glides the whole kick down onto its note, slower than the body's
+  fall: the tonal "doom" of hardtek and frenchcore kicks. New presets: Hardtek, Frenchcore,
+  Warehouse.
+- Transient: a new effect that shapes hits without a threshold. Attack raises or softens the first
+  milliseconds of every hit, Sustain what follows; Speed, Length, Output, Clip and Mix. Presets for
+  kick punch, tight kick, snare crack, clicky percussion and more room.
+
 ### Fixed
 - Pitch Shifter: the Glide knob was drawn broken and couldn't be turned or mapped to a macro; it now
   goes from 1 ms to 2 s.

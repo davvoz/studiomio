@@ -19,6 +19,7 @@ import { REVERB } from './effects/reverb/reverb';
 import { REVERSE } from './effects/reverse/reverse';
 import { STEREO } from './effects/stereo/stereo';
 import { TAPE_STOP } from './effects/tape-stop/tape-stop';
+import { TRANSIENT } from './effects/transient/transient';
 import { ANALOG } from './instruments/analog/analog';
 import { DRUMS } from './instruments/drums/drums';
 import { CYMBALS } from './instruments/cymbals/cymbals';
@@ -36,7 +37,7 @@ import { ENVELOPE_DEVICE, LFO_DEVICE } from './modulators/modulators';
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS, KICK, SNARE, CYMBALS];
 
 /** The available effects, as above. */
-export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, NOISE_GATE, MULTIBAND, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER, LFO_DEVICE, ENVELOPE_DEVICE, ARP];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, NOISE_GATE, MULTIBAND, TRANSIENT, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER, LFO_DEVICE, ENVELOPE_DEVICE, ARP];
 
 /** The effects that can be added to a chain: the note ones only if there's an instrument. */
 export const chainEffectTypes = (midi: boolean): readonly DeviceType[] => (midi ? EFFECT_TYPES : EFFECT_TYPES.filter(t => !t.notes));
