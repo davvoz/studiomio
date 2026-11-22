@@ -12,10 +12,11 @@ The button downloads the installer of the latest version straight away (Windows 
 isn't signed: on the first install choose "More info" → "Run anyway". It updates itself. Notes and
 earlier versions are in the [Releases](https://github.com/davvoz/studiomio/releases).
 
-**Linux** (64-bit): [.deb](https://github.com/davvoz/studiomio/releases/latest/download/studiomio.deb)
-for Debian/Ubuntu (`sudo apt install ./studiomio.deb`), or the
-[AppImage](https://github.com/davvoz/studiomio/releases/latest/download/studiomio.AppImage) for
-any distribution (`chmod +x studiomio.AppImage`, then run it; it updates itself). On Ubuntu 24.04
+[![Download for Linux (.deb)](https://img.shields.io/github/v/release/davvoz/studiomio?label=Linux%20.deb&style=for-the-badge&color=ff9d2e)](https://github.com/davvoz/studiomio/releases/latest/download/studiomio.deb)
+[![Download for Linux (AppImage)](https://img.shields.io/github/v/release/davvoz/studiomio?label=Linux%20AppImage&style=for-the-badge&color=ff9d2e)](https://github.com/davvoz/studiomio/releases/latest/download/studiomio.AppImage)
+
+**Linux** (64-bit): the .deb for Debian/Ubuntu (`sudo apt install ./studiomio.deb`), or the
+AppImage for any distribution (`chmod +x studiomio.AppImage`, then run it; it updates itself). On Ubuntu 24.04
 and later the AppImage needs `--no-sandbox`, the .deb doesn't. Less tested than the Windows version:
 problems are welcome in the [issues](https://github.com/davvoz/studiomio/issues).
 
