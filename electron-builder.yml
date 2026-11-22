@@ -1,4 +1,4 @@
-# Installer Windows di studiomio (npm run dist → release/).
+# Installers of studiomio: Windows (npm run dist → release/) and Linux (built by the release workflow).
 appId: it.davvoz.studiomio
 productName: studiomio
 copyright: Copyright © 2026 David
@@ -41,6 +41,30 @@ nsis:
   createStartMenuShortcut: true
   # "Open in studiomio" in the menu of the folders (build/installer.nsh)
   include: build/installer.nsh
+
+# Linux: an AppImage (any distribution, updates itself) and a .deb (Debian/Ubuntu; it installs
+# the AppArmor profile Ubuntu 24+ needs for Chromium's sandbox). The icon is build/icon.png.
+linux:
+  target: [AppImage, deb]
+  category: AudioVideo
+  executableName: studiomio
+  syncDesktopName: true   # the .desktop file matches the window (desktopName in package.json)
+  synopsis: DAW with warp in the style of Ableton Live
+  artifactName: studiomio-${version}.${ext}
+
+# electron-builder's dependencies plus ALSA, which a DAW can't start without (renamed in Ubuntu 24.04).
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libasound2t64 | libasound2
 
 # Updates are downloaded from the repository's releases.
 publish:

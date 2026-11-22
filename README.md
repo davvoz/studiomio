@@ -12,6 +12,13 @@ The button downloads the installer of the latest version straight away (Windows 
 isn't signed: on the first install choose "More info" → "Run anyway". It updates itself. Notes and
 earlier versions are in the [Releases](https://github.com/davvoz/studiomio/releases).
 
+**Linux** (64-bit): [.deb](https://github.com/davvoz/studiomio/releases/latest/download/studiomio.deb)
+for Debian/Ubuntu (`sudo apt install ./studiomio.deb`), or the
+[AppImage](https://github.com/davvoz/studiomio/releases/latest/download/studiomio.AppImage) for
+any distribution (`chmod +x studiomio.AppImage`, then run it; it updates itself). On Ubuntu 24.04
+and later the AppImage needs `--no-sandbox`, the .deb doesn't. Less tested than the Windows version:
+problems are welcome in the [issues](https://github.com/davvoz/studiomio/issues).
+
 ## Development
 
 Requirements: Node 22+, Rust with `wasm32-unknown-unknown` and `wasm-pack`. After `npm install`, run

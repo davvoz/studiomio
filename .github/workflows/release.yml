@@ -2,6 +2,7 @@
 #   npm version minor        (0.1.0 → 0.2.0: commit + tag v0.2.0)
 #   git push --follow-tags
 # Installed apps find it on their next start and offer the update.
+# Windows builds, tests and creates the release; Linux then adds its packages to it.
 name: release
 
 on:
@@ -9,7 +10,7 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write   # to create the release and upload the installer
+  contents: write   # to create the release and upload the installers
 
 jobs:
   windows:
@@ -17,23 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with:
-          node-version: 22
-          cache: npm
-
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
-        with:
-          tool: wasm-pack
-
-      - run: npm ci
-      - run: npm run wasm
-      # needed even without tests: the typecheck in npm run build checks the tests, which import it
-      - run: npm run wasm:test
+      - uses: ./.github/actions/setup
 
       # a release with broken tests must not reach users; an urgent fix can skip them
       # with "[skip tests]" in the version commit message (release.bat patch notest)
@@ -57,5 +42,28 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --title "$v" --notes-file release-notes.md \
             "release/studiomio-setup-$v.exe" "release/studiomio-setup-$v.exe.blockmap" release/latest.yml \
             release/studiomio-setup.exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # After windows: its tests gate the release too, and the release already exists. If this job fails
+  # the Windows release stays out; rerun the job from Actions to add the Linux files.
+  linux:
+    needs: windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup
+
+      - run: npm run build
+      - run: npm run electron:build
+      - run: npx electron-builder --linux --publish never
+
+      # latest-linux.yml is what the AppImage reads to update itself; the copies with the fixed
+      # name are for the README's direct links.
+      - run: |
+          v="${GITHUB_REF_NAME#v}"
+          cp "release/studiomio-$v.AppImage" release/studiomio.AppImage
+          cp "release/studiomio-$v.deb" release/studiomio.deb
+          gh release upload "$GITHUB_REF_NAME" --clobber release/latest-linux.yml             "release/studiomio-$v.AppImage" "release/studiomio-$v.deb"             release/studiomio.AppImage release/studiomio.deb
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

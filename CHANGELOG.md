@@ -6,6 +6,10 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Linux version: an AppImage that updates itself and a .deb for Debian/Ubuntu, published with
+  every release next to the Windows installer. Download links in the README.
+
 ## [0.3.58] - 2026-11-22
 
 ### Added

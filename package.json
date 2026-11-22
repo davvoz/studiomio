@@ -6,6 +6,8 @@
   "description": "DAW with warp in the style of Ableton Live",
   "author": "David <ing.casaert@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/davvoz/studiomio",
+  "desktopName": "studiomio.desktop",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
