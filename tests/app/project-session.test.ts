@@ -111,6 +111,17 @@ describe('ProjectSession', () => {
     expect(await other.exists(PROJECT_FILE)).toBe(true);
   });
 
+  it('opening a project gives its folder the app icon (where the folder can have one)', async () => {
+    let marked = 0;
+    const disk = Object.assign(new MemoryDirectory('Song'), { markProject: async () => { marked++; } });
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    const session = new ProjectSession(store, fakeAudio().audio, async () => disk);
+    await session.saveAs();
+    expect(marked).toBe(1);
+    await session.open(disk);
+    expect(marked).toBe(2);
+  });
+
   it('opening a folder without a project is a clear error', async () => {
     const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
     const session = new ProjectSession(store, fakeAudio().audio, async () => new MemoryDirectory('Empty'));
@@ -174,6 +185,50 @@ describe('ProjectSession', () => {
     await reopened.discardRecovery();
     expect(await disk.exists(RECOVERY_FILE)).toBe(false);
     expect(loaded.size).toBe(1);
+  });
+
+  it('imports tracks from another project: audio files copied (the same one reused), one undo step', async () => {
+    const theirs = new MemoryDirectory('Theirs');
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    const source = new ProjectSession(store, fakeAudio().audio, async () => theirs);
+    await source.importFiles([fileOf('kick.wav'), fileOf('voce.wav')], null, 0);
+    await source.save();
+    const kick = store.project.tracks[0];
+
+    const mine = new MemoryDirectory('Mine');
+    await mine.writeBytes('audio/kick.wav', new Uint8Array([1, 2, 3, 4])); // the same file
+    await mine.writeBytes('audio/voce.wav', new Uint8Array([7])); // another file with the same name
+    const here = new ProjectStore(Project.empty('q', randomIds), randomIds);
+    const { audio, loaded } = fakeAudio();
+    const session = new ProjectSession(here, audio, async () => mine);
+    await session.saveAs();
+    const seen: string[] = [];
+    await session.importFrom(async (p, name) => {
+      seen.push(name, ...p.tracks.map(t => t.name));
+      return { tracks: p.tracks.map(t => t.id), master: false, clips: true };
+    }, theirs);
+
+    expect(seen).toEqual(['Theirs', 'kick', 'voce']);
+    const p = here.project;
+    expect(p.tracks.map(t => t.name)).toEqual(['kick', 'voce']);
+    expect(p.tracks[0].id).not.toBe(kick.id);
+    expect(p.samples.map(s => s.file)).toEqual(['audio/kick.wav', 'audio/voce 2.wav']);
+    expect(await mine.list('audio')).toEqual(expect.arrayContaining(['kick.wav', 'voce.wav', 'voce 2.wav']));
+    expect(new Set(loaded.keys())).toEqual(new Set(p.samples.map(s => s.id)));
+    expect(here.undoLabel).toBe('Import from Theirs');
+    here.undo();
+    expect(here.project.tracks).toEqual([]);
+  });
+
+  it('import: choosing nothing changes nothing, a folder without a project is an error', async () => {
+    const theirs = new MemoryDirectory('Theirs');
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    await new ProjectSession(store, fakeAudio().audio, async () => theirs).save();
+    const here = new ProjectStore(Project.empty('q', randomIds), randomIds);
+    const session = new ProjectSession(here, fakeAudio().audio, async () => new MemoryDirectory('Empty'));
+    await session.importFrom(async () => null, theirs);
+    expect(here.canUndo).toBe(false);
+    await expect(session.importFrom(async () => null)).rejects.toThrow(/"Empty" doesn't contain/);
   });
 
   it('damaged recovery copy: the project opens anyway, without offering it', async () => {

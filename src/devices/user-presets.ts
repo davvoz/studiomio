@@ -33,9 +33,14 @@ export interface PresetStorage {
 }
 
 declare global {
+  /** From Electron's preload (electron/preload.cts); other modules add their parts. */
+  interface StudiomioDesktop {
+    readonly presets: Required<PresetBackend>;
+    readonly racks: Required<RackBackend>;
+  }
   interface Window {
-    /** From Electron's preload (electron/preload.cts); absent in the browser. */
-    readonly studiomioDesktop?: { readonly presets: Required<PresetBackend>; readonly racks: Required<RackBackend> };
+    /** Absent in the browser. */
+    readonly studiomioDesktop?: StudiomioDesktop;
   }
 }
 

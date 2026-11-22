@@ -4,7 +4,12 @@ import type { SampleRef } from '../model/sample';
 import { MemoryDirectory, readText, writeText, type Directory } from './directory';
 import { ProjectCodec } from './project-codec';
 
-export const PROJECT_FILE = 'progetto.json';
+/** The project: its own extension, so that a double click on it opens studiomio. */
+export const PROJECT_FILE = 'progetto.studiomio';
+/** Where the versions up to 0.3.57 kept the project: it's still read, and saving moves it to
+ *  PROJECT_FILE. */
+export const LEGACY_PROJECT_FILE = 'progetto.json';
+const PROJECT_FILES = [PROJECT_FILE, LEGACY_PROJECT_FILE] as const;
 export const BACKUP_FILE = 'progetto.bak.json';
 export const RECOVERY_FILE = 'progetto.recupero.json';
 export const AUDIO_DIR = 'audio';
@@ -22,7 +27,8 @@ export function safeFileName(name: string): string {
 }
 
 /** A project's folder:
- *    progetto.json      tracks, clips, markers, mixer (readable and diffable)
+ *    progetto.studiomio tracks, clips, markers, mixer (JSON: readable and diffable; progetto.json
+ *                       in the folders of the versions up to 0.3.57)
  *    progetto.bak.json  the version saved before the current one
  *    progetto.recupero.json  the changes not yet saved, written by themselves every so often: if
  *                       the app hangs or closes badly they're reopened from here (saving removes it)
@@ -34,16 +40,25 @@ export class ProjectFolder {
     return this.dir.name;
   }
 
-  hasProject(): Promise<boolean> {
-    return this.dir.exists(PROJECT_FILE);
+  async hasProject(): Promise<boolean> {
+    return (await this.savedFile()) !== null;
+  }
+
+  /** The file holding the saved project, null if there's none. */
+  private async savedFile(): Promise<string | null> {
+    for (const file of PROJECT_FILES) if (await this.dir.exists(file)) return file;
+    return null;
   }
 
   async save(project: Project): Promise<void> {
     await this.requireSamples(project);
     const text = this.codec.stringify(project);
     // it's serialized before touching the files: if it fails, the folder stays as it was
-    if (await this.dir.exists(PROJECT_FILE)) await this.dir.writeBytes(BACKUP_FILE, await this.dir.readBytes(PROJECT_FILE));
+    const saved = await this.savedFile();
+    if (saved) await this.dir.writeBytes(BACKUP_FILE, await this.dir.readBytes(saved));
     await writeText(this.dir, PROJECT_FILE, text);
+    if (saved === LEGACY_PROJECT_FILE) await this.dir.remove(LEGACY_PROJECT_FILE);
+    await this.dir.markProject?.();
     await this.dropRecovery();
   }
 
@@ -69,7 +84,9 @@ export class ProjectFolder {
   }
 
   async load(): Promise<LoadedProject> {
-    const project = this.codec.parse(await readText(this.dir, PROJECT_FILE));
+    const file = await this.savedFile();
+    if (!file) throw new Error(`"${this.name}" doesn't contain a studiomio project`);
+    const project = this.codec.parse(await readText(this.dir, file));
     return { project, missing: await this.missingSamples(project) };
   }
 
@@ -84,6 +101,14 @@ export class ProjectFolder {
     const path = `${AUDIO_DIR}/${name}`;
     await this.dir.writeBytes(path, data);
     return path;
+  }
+
+  /** An audio file of another project (`path` relative to that folder): if this folder already has
+   *  it identical at the same path it's used as it is, otherwise it's copied like an import.
+   *  Returns the relative path here. */
+  async adoptAudio(path: string, data: Uint8Array): Promise<string> {
+    if (await this.dir.exists(path) && sameBytes(await this.dir.readBytes(path), data)) return path;
+    return this.importAudio(path.slice(path.lastIndexOf('/') + 1), data);
   }
 
   /** Collect and save: the project with only the samples it uses, as entries of a ZIP inside the
@@ -121,16 +146,18 @@ export class ProjectFolder {
   }
 }
 
+const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
+
 /** The project folder inside a ZIP (made with Collect and save, or by hand), in memory.
- *  It's the one with the topmost progetto.json: the ZIP can contain it or be it. `name`: the name if
+ *  It's the one with the topmost project file (also progetto.json, of the older versions): the ZIP can contain it or be it. `name`: the name if
  *  the folder is the ZIP itself. */
 export async function unpackProject(zip: Uint8Array, name: string): Promise<MemoryDirectory> {
   const entries = await readZip(zip);
   const depth = (path: string) => path.split('/').length;
-  const top = entries.map(e => e.name).filter(n => n === PROJECT_FILE || n.endsWith(`/${PROJECT_FILE}`))
-    .sort((a, b) => depth(a) - depth(b))[0];
+  const isProject = (path: string) => PROJECT_FILES.some(f => path === f || path.endsWith(`/${f}`));
+  const top = entries.map(e => e.name).filter(isProject).sort((a, b) => depth(a) - depth(b))[0];
   if (top === undefined) throw new Error(`"${name}" doesn't contain a studiomio project`);
-  const prefix = top.slice(0, -PROJECT_FILE.length);
+  const prefix = top.slice(0, top.lastIndexOf('/') + 1);
   const dir = new MemoryDirectory(prefix ? prefix.slice(0, -1).split('/').pop() : name);
   for (const e of entries) {
     const path = e.name.slice(prefix.length);

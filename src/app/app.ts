@@ -21,6 +21,7 @@ import { MASTER, type ChainOwner, type Project } from '../model/project';
 import type { TimeRange } from '../model/note-edits';
 import { BusTrack } from '../model/track';
 import type { Directory } from '../persistence/directory';
+import { DesktopDirectory, desktopFolders } from '../persistence/desktop-directory';
 import { FsAccessDirectory } from '../persistence/fs-access-directory';
 import { ProjectFolder } from '../persistence/project-folder';
 import { sceneArrangement, sceneClips, sceneLength } from '../model/scene-export';
@@ -34,6 +35,7 @@ import { arrangementToScene, sceneToArrangement, type SceneClip } from '../store
 import { findClip, placementRef, setClipColor, slotRef, type ClipRef } from '../store/clip-ref';
 import { showContextMenu, type MenuItem } from '../ui/context-menu';
 import { choose } from '../ui/dialog';
+import { chooseImport } from '../ui/import-dialog';
 import { gridStep } from '../ui/timeline/geometry';
 import { rulerMenu, timelineMenu, type TimelineActions } from './menus';
 import { edit, ProjectStore } from '../store/project-store';
@@ -64,16 +66,45 @@ import { KeyMapper } from './key-mapper';
 import { keyboardBase, NoteKeyboard, NoteKeys } from './note-keyboard';
 import { MidiMapper } from './midi-mapper';
 import { mainMenu } from './main-menu';
-import { RecentProjects } from './recent-projects';
+import { recentName, RecentProjects, type RecentProject } from './recent-projects';
 import { ProjectSession } from './project-session';
 import { MacroSprings } from '../store/macro-springs';
 import { SamplePreview } from './sample-preview';
+
+/** The desktop app chooses the project folders by path (Windows can open them, they get the app's
+ *  icon); the browser with File System Access. */
+function projectPicker(): () => Promise<Directory> {
+  const folders = desktopFolders();
+  return folders ? () => DesktopDirectory.pick(folders) : FsAccessDirectory.pick;
+}
+
+/** What the recent list remembers of a folder: the browser's handle or the desktop path. */
+function recentEntry(dir: Directory): RecentProject | null {
+  if (dir instanceof FsAccessDirectory) return dir.root;
+  if (dir instanceof DesktopDirectory) return dir.path;
+  return null;
+}
+
+/** A recent folder to open, null if it's gone. A browser folder's permission is asked right away,
+ *  while the click on the item still counts. */
+async function reopenRecent(entry: RecentProject): Promise<Directory | null> {
+  if (typeof entry === 'string') {
+    const folders = desktopFolders();
+    return folders ? new DesktopDirectory(entry, folders) : null;
+  }
+  try {
+    return await FsAccessDirectory.reopen(entry);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'NotFoundError') return null;
+    throw e;
+  }
+}
 
 /** The application: creates the parts, connects them and implements the commands. */
 export class App implements Commands, TimelineActions {
   readonly store = new ProjectStore(starterProject('New project', randomIds), randomIds);
   readonly audio = new AudioSystem(this.store);
-  readonly session = new ProjectSession(this.store, this.audio);
+  readonly session = new ProjectSession(this.store, this.audio, projectPicker());
   /** The project folders opened or saved recently, for the File menu. */
   readonly recent = new RecentProjects();
   readonly ui = new UiState();
@@ -239,7 +270,10 @@ export class App implements Commands, TimelineActions {
 
     this.session.on('message', t => this.say(t));
     this.session.on('change', () => menuBar.render());
-    this.session.on('stored', dir => { if (dir instanceof FsAccessDirectory) void this.recent.add(dir.root); });
+    this.session.on('stored', dir => {
+      const entry = recentEntry(dir);
+      if (entry) void this.recent.add(entry);
+    });
     // deleted clips leave the selection, the deleted track is no longer the chosen one;
     // a track hidden in a closed group passes the choice to the visible group
     this.store.onChange(p => {
@@ -632,24 +666,24 @@ export class App implements Commands, TimelineActions {
   open(): void { this.run(async () => { if (await this.closeProject()) await this.openFolder(); }); }
   save(): void { this.run(() => this.session.save()); }
 
-  /** Opens a recent project. Permission on the folder is asked right away, while the click
-   *  on the item still counts; if the folder is gone (moved, deleted) it leaves the list. */
-  openRecent(handle: FileSystemDirectoryHandle): void {
+  /** Opens a recent project; if the folder is gone (moved, deleted) it leaves the list. */
+  openRecent(entry: RecentProject): void {
     this.run(async () => {
-      const gone = async () => {
-        await this.recent.remove(handle);
-        this.say(`"${handle.name}" is gone (moved or deleted?): removed from recent projects.`);
-      };
-      let dir: FsAccessDirectory;
-      try {
-        dir = await FsAccessDirectory.reopen(handle);
-      } catch (e) {
-        if (e instanceof DOMException && e.name === 'NotFoundError') return gone();
-        throw e;
+      const dir = await reopenRecent(entry);
+      if (!dir || !(await new ProjectFolder(dir).hasProject())) {
+        await this.recent.remove(entry);
+        return this.say(`"${recentName(entry)}" is gone (moved or deleted?): removed from recent projects.`);
       }
-      if (!(await new ProjectFolder(dir).hasProject())) return gone();
       if (await this.closeProject()) await this.openFolder(dir);
     });
+  }
+
+  /** Opens the project in a disk folder chosen from Windows: a double click on its file or "Open in
+   *  studiomio" on the folder (desktop app only). */
+  openPath(path: string): void {
+    const folders = desktopFolders();
+    if (!folders) return;
+    this.run(async () => { if (await this.closeProject()) await this.openFolder(new DesktopDirectory(path, folders)); });
   }
 
   /** Opens a project folder; if there are changes never saved (the app hung or
@@ -666,6 +700,9 @@ export class App implements Commands, TimelineActions {
     else if (answer === 'discard') await this.session.discardRecovery();
   }
   saveAs(): void { this.run(() => this.session.saveAs()); }
+
+  /** Imports tracks, buses and the master's devices from another project folder. */
+  importFromProject(): void { this.run(() => this.session.importFrom(chooseImport)); }
 
   /** Collect and save: the project in a ZIP file to hand to another user. */
   collectAndSave(): void {

@@ -15,6 +15,19 @@ files:
   - dist-electron/**
   - package.json
 
+# The icon of the project folders (electron/project-folders.ts copies it into each one).
+extraResources:
+  - from: build/project.ico
+    to: project.ico
+
+# A double click on a project (progetto.studiomio) opens it in studiomio.
+fileAssociations:
+  - ext: studiomio
+    name: studiomio project
+    description: studiomio project
+    icon: project   # build/project.ico
+    role: Editor
+
 win:
   target: nsis
   artifactName: studiomio-setup-${version}.${ext}
@@ -26,6 +39,8 @@ nsis:
   shortcutName: studiomio
   createDesktopShortcut: always
   createStartMenuShortcut: true
+  # "Open in studiomio" in the menu of the folders (build/installer.nsh)
+  include: build/installer.nsh
 
 # Updates are downloaded from the repository's releases.
 publish:

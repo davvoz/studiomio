@@ -71,8 +71,11 @@ scripts/        rendering without a browser (headless-render.ts, render-project.
 tests/          one file per module; equivalence with WarpMio (tests/reference/)
 ```
 
-A project folder holds `progetto.json` (readable, versioned), `progetto.bak.json` (the previous
-save) and `audio/` (the original files, copied on import).
+A project folder holds `progetto.studiomio` (JSON, readable, versioned; `progetto.json` up to
+0.3.57, still opened), `progetto.bak.json` (the previous save) and `audio/` (the original files,
+copied on import). In the desktop app a double click on `progetto.studiomio`, or "Open in studiomio"
+in a folder's right-click menu, opens the project; on Windows the folder shows the app's icon
+(a hidden `desktop.ini` and `studiomio.ico` inside it).
 
 ### Real-time audio
 

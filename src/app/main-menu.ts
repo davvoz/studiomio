@@ -4,6 +4,7 @@ import { KEY, SEPARATOR, type MenuAction, type MenuItem } from '../ui/context-me
 import { definitionTable, showDialog } from '../ui/dialog';
 import type { Menu } from '../ui/menu-bar';
 import type { App } from './app';
+import { recentName } from './recent-projects';
 
 /** Shortcuts that aren't in any menu, for the shortcuts window. */
 const OTHER_KEYS: readonly (readonly [string, string])[] = [
@@ -23,7 +24,7 @@ function recentItems(app: App): MenuItem[] {
   if (!list.length) return [];
   return [
     SEPARATOR,
-    ...list.map((h, i) => ({ label: `${i + 1}  ${h.name}`, run: () => app.openRecent(h) })),
+    ...list.map((h, i) => ({ label: `${i + 1}  ${recentName(h)}`, run: () => app.openRecent(h) })),
     { label: 'Clear the recent list', run: () => void app.recent.clear() },
   ];
 }
@@ -44,6 +45,7 @@ export function mainMenu(app: App): Menu[] {
         { label: 'Collect and save as ZIP…', run: () => app.collectAndSave() },
         SEPARATOR,
         { label: 'Import audio…', run: () => app.chooseAudioFiles() },
+        { label: 'Import from project…', run: () => app.importFromProject() },
         { label: 'Export the mix as WAV…', run: () => app.exportMix() },
         SEPARATOR,
         { label: 'Load the demo project', run: () => app.loadDemo() },

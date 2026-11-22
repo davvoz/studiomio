@@ -8,7 +8,9 @@ import type { SampleRef } from '../model/sample';
 import { MemoryDirectory, type Directory } from '../persistence/directory';
 import { FsAccessDirectory } from '../persistence/fs-access-directory';
 import { ProjectFolder, safeFileName, unpackProject } from '../persistence/project-folder';
-import type { ProjectStore } from '../store/project-store';
+import { importPart, importSummary, mergingImport, type ImportChoice } from '../model/project-import';
+import { withFreshIds } from '../persistence/fresh-ids';
+import { edit, type ProjectStore } from '../store/project-store';
 import { starterProject } from '../store/edits';
 import { importSample } from '../store/selection-edits';
 import { importSampleToSlot } from '../store/session-edits';
@@ -127,12 +129,15 @@ export class ProjectSession {
     this.events.emit('change');
   }
 
-  /** Opens the project in folder `dir` (without: lets the user choose it). */
+  /** Opens the project in folder `dir` (without: lets the user choose it); where the system allows
+   *  it the folder gets the app's icon. */
   async open(dir?: Directory): Promise<void> {
     dir ??= await this.pickDirectory();
     const folder = new ProjectFolder(dir);
     if (!(await folder.hasProject())) throw new Error(`"${dir.name}" doesn't contain a studiomio project`);
     await this.openFolder(folder, true, `Opened "${dir.name}".`);
+    // the projects of the older versions, never saved since, get the app's icon too
+    await dir.markProject?.();
     this.events.emit('stored', dir);
   }
 
@@ -153,6 +158,31 @@ export class ProjectSession {
     this.savedVersion = project;
     this.events.emit('change');
     this.say(missing.length ? `${opened} ${missing.length} audio files are missing: ${missing.map(s => s.file).join(', ')}` : opened);
+  }
+
+  /** Imports tracks, buses and the master's devices from another project (folder `dir`; without,
+   *  the user chooses it): `choose` sees that project and says what to take (null: nothing). Its
+   *  audio files are copied into this project's folder. A single undo step. */
+  async importFrom(choose: (source: Project, name: string) => Promise<ImportChoice | null>, dir?: Directory): Promise<void> {
+    dir ??= await this.pickDirectory();
+    const folder = new ProjectFolder(dir);
+    if (!(await folder.hasProject())) throw new Error(`"${dir.name}" doesn't contain a studiomio project`);
+    const { project, missing } = await folder.load();
+    const choice = await choose(project, dir.name);
+    const chosen = choice && importPart(project, choice);
+    if (!chosen) return;
+    const lost = chosen.samples.filter(s => missing.some(m => m.id === s.id));
+    if (lost.length) throw new Error(`audio files are missing in "${dir.name}": ${lost.map(s => s.file).join(', ')}`);
+    let part = withFreshIds(chosen, this.store.ids);
+    for (const s of part.samples) {
+      const bytes = await folder.readAudio(s);
+      const file = await this.folder.adoptAudio(s.file, bytes);
+      await this.audio.addSample(s.id, await this.decode(bytes));
+      if (file !== s.file) part = part.updatingSample(s.id, x => ({ ...x, file }));
+    }
+    this.store.apply(edit(`Import from ${dir.name}`, p => mergingImport(p, part)));
+    const audio = part.samples.length ? ` (${part.samples.length} audio files copied)` : '';
+    this.say(`Imported ${importSummary(part)} from "${dir.name}"${audio}.`);
   }
 
   /** True if the folder has a recovery copy (changes never saved: the app

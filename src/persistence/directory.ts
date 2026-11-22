@@ -8,6 +8,9 @@ export interface Directory {
   /** Names of the files (not the folders) contained in `dir`. */
   list(dir: string): Promise<string[]>;
   remove(path: string): Promise<void>;
+  /** Makes the folder look like a studiomio project where the system allows it (on Windows the
+   *  app's icon on the folder). Optional: the folders that can't, don't have it. */
+  markProject?(): Promise<void>;
 }
 
 export class FileNotFoundError extends Error {

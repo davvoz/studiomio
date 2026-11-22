@@ -73,17 +73,18 @@ function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<
   }).finally(() => db.close()));
 }
 
-/** The folders remembered under `key` (empty if IndexedDB is missing or blocked). */
-export async function loadHandles(key: string): Promise<FileSystemDirectoryHandle[]> {
+/** The folders remembered under `key` (empty if IndexedDB is missing or blocked): handles, or
+ *  whatever else can be kept in IndexedDB (e.g. paths). */
+export async function loadHandles<T = FileSystemDirectoryHandle>(key: string): Promise<T[]> {
   try {
-    return (await run<FileSystemDirectoryHandle[] | undefined>('readonly', s => s.get(key))) ?? [];
+    return (await run<T[] | undefined>('readonly', s => s.get(key))) ?? [];
   } catch {
     return [];
   }
 }
 
 /** Remembers the folders under `key`; without IndexedDB they only last while the app is open. */
-export async function saveHandles(key: string, handles: readonly FileSystemDirectoryHandle[]): Promise<void> {
+export async function saveHandles<T = FileSystemDirectoryHandle>(key: string, handles: readonly T[]): Promise<void> {
   try {
     await run('readwrite', s => s.put([...handles], key));
   } catch (e) {

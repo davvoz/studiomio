@@ -17,6 +17,22 @@ Sections: Added, Changed, Fixed.
 - Transient: a new effect that shapes hits without a threshold. Attack raises or softens the first
   milliseconds of every hit, Sustain what follows; Speed, Length, Output, Clip and Mix. Presets for
   kick punch, tight kick, snare crack, clicky percussion and more room.
+- File › Import from project…: brings tracks, groups, buses and the master's effects and racks from
+  another project folder into the open one, with their instruments, devices, racks, macros, mixer
+  and sends, and optionally their clips. A group brings all its tracks; sidechains and sends towards
+  what stays behind are closed. The audio files they use are copied into this project's folder. One
+  undo step.
+- Open a project from Windows: a double click on its file, or "Open in studiomio" in the right-click
+  menu of its folder (also of the empty space inside it). If studiomio is already open, the project
+  opens in that window. Project folders show the studiomio icon once the app opens or saves them.
+
+### Changed
+- The project file is now `progetto.studiomio` instead of `progetto.json` (same content), so that
+  Windows knows it opens with studiomio. Older projects open as before and are converted the first
+  time they're saved; ZIPs made by older versions open too. Older versions of the app can't open
+  the converted projects: update them.
+- In the desktop app, Open, Save as and Import from project choose the folder with the Windows
+  dialog.
 
 ### Fixed
 - Pitch Shifter: the Glide knob was drawn broken and couldn't be turned or mapped to a macro; it now

@@ -1,11 +1,12 @@
 // Electron main process: opens the app window, serves the files in `dist/`, keeps the
 // user's preset and rack files, logs where the app hangs and checks for updates
 // on GitHub Releases. The app itself (src/) doesn't change.
-import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type IpcMainInvokeEvent, type OpenDialogOptions } from 'electron';
 import updater from 'electron-updater';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { extname, join, normalize, sep } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { loadPresets, removePreset, savePreset, type StoredPreset } from './presets.js';
+import * as folders from './project-folders.js';
 import { loadRacks, removeRack, saveRack, type StoredRack } from './racks.js';
 import { releaseNotesText } from './release-notes.js';
 
@@ -121,15 +122,24 @@ function watchHangs(win: BrowserWindow): void {
   });
 }
 
+/** Answers the app's requests on `channel`, not those of pages from another origin. */
+function handle(channel: string, run: (...args: unknown[]) => Promise<unknown>): void {
+  ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+    if (!event.senderFrame?.url.startsWith(ORIGIN)) throw new Error('origin not allowed');
+    return run(...args);
+  });
+}
+
+const text = (v: unknown): string => {
+  if (typeof v !== 'string' || !v) throw new TypeError('expected text');
+  return v;
+};
+
 /** The user's presets and racks: files in Documents, so they survive uninstalling the app
  *  or clearing its data, and can be copied by hand to another computer. */
 function handlePresets(): void {
   const root = join(app.getPath('documents'), 'studiomio', 'Preset');
   const rackRoot = join(app.getPath('documents'), 'studiomio', 'Rack');
-  const text = (v: unknown): string => {
-    if (typeof v !== 'string' || !v) throw new TypeError('expected text');
-    return v;
-  };
   const preset = (v: unknown): StoredPreset => {
     const { type, name, params } = (v ?? {}) as Record<string, unknown>;
     if (!params || typeof params !== 'object') throw new TypeError('expected parameters');
@@ -144,12 +154,6 @@ function handlePresets(): void {
     const error = await shell.openPath(dir);
     if (error) throw new Error(error);
   };
-  // answers only the app, not pages from another origin
-  const handle = (channel: string, run: (...args: unknown[]) => Promise<unknown>) =>
-    ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-      if (!event.senderFrame?.url.startsWith(ORIGIN)) throw new Error('origin not allowed');
-      return run(...args);
-    });
   handle('presets:load', () => loadPresets(root));
   handle('presets:save', (folder, p) => savePreset(root, text(folder), preset(p)));
   handle('presets:remove', (type, name) => removePreset(root, text(type), text(name)));
@@ -158,6 +162,41 @@ function handlePresets(): void {
   handle('racks:save', r => saveRack(rackRoot, rack(r)));
   handle('racks:remove', name => removeRack(rackRoot, text(name)));
   handle('racks:reveal', () => reveal(rackRoot));
+}
+
+/** The icon project folders get: in the installed app among its resources. */
+const folderIcon = () => (app.isPackaged ? join(process.resourcesPath, 'project.ico') : join(import.meta.dirname, '..', 'build', 'project.ico'));
+
+/** The project folders on disk (see project-folders): `launched` the project the app was started
+ *  with, given to the app once. */
+function handleProjectFolders(window: () => BrowserWindow | null, launched: string | null): void {
+  let pending = launched;
+  const relative = (v: unknown): string => {
+    if (typeof v !== 'string') throw new TypeError('expected a path');
+    return v;
+  };
+  const bytes = (v: unknown): Uint8Array => {
+    if (!(v instanceof Uint8Array)) throw new TypeError('expected bytes');
+    return v;
+  };
+  handle('folders:pick', async () => {
+    const win = window();
+    const options: OpenDialogOptions = { title: 'Project folder', properties: ['openDirectory', 'createDirectory', 'promptToCreate'] };
+    const { canceled, filePaths } = await (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options));
+    return canceled ? null : filePaths[0] ?? null;
+  });
+  handle('folders:exists', (root, path) => folders.exists(text(root), relative(path)));
+  handle('folders:read', (root, path) => folders.read(text(root), relative(path)));
+  handle('folders:write', (root, path, data) => folders.write(text(root), relative(path), bytes(data)));
+  handle('folders:list', (root, dir) => folders.list(text(root), relative(dir)));
+  handle('folders:remove', (root, path) => folders.remove(text(root), relative(path)));
+  // the icon is a nicety: if Windows refuses it, the project is saved anyway
+  handle('folders:mark', root => folders.markProjectFolder(text(root), folderIcon()).catch(e => console.warn('folder icon:', e)));
+  handle('folders:launched', async () => {
+    const folder = pending;
+    pending = null;
+    return folder;
+  });
 }
 
 /** Looks for a new version at startup: downloads it in the background and offers to restart. */
@@ -184,20 +223,27 @@ function checkForUpdates(win: BrowserWindow): void {
   autoUpdater.checkForUpdates().catch(() => {});
 }
 
+/** The arguments after the program, without the app's own folder ("electron ." in development:
+ *  in a second instance Chromium may put its switches before it). */
+const launchArgs = (argv: readonly string[]): string[] => argv.slice(1).filter(a => resolve(a) !== app.getAppPath());
+
 // A single instance: a second launch brings the already open window to the front.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   let win: BrowserWindow | null = null;
-  app.on('second-instance', () => {
+  // also a project opened from Windows while the app is open: it goes to the window
+  app.on('second-instance', (_event, argv) => {
     if (!win) return;
     if (win.isMinimized()) win.restore();
     win.focus();
+    void folders.projectFolderIn(launchArgs(argv)).then(folder => { if (folder) win?.webContents.send('folders:open', folder); });
   });
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     protocol.handle(SCHEME, serve);
     handlePresets();
+    handleProjectFolders(() => win, await folders.projectFolderIn(launchArgs(process.argv)));
     // MIDI (APC40), project folders and the rest: granted only to the app itself.
     const ours = (url: string) => url.startsWith(ORIGIN);
     session.defaultSession.setPermissionRequestHandler((wc, _permission, callback) => callback(ours(wc.getURL())));

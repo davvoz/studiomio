@@ -16,7 +16,9 @@ export function choose<T>(title: string, message: string, buttons: readonly Dial
   return openDialog(title, [Object.assign(document.createElement('p'), { textContent: message })], buttons);
 }
 
-function openDialog<T>(title: string, content: readonly Node[], buttons: readonly DialogButton<T>[]): Promise<T | null> {
+/** A dialog with any content and some buttons: the value of the button pressed, null if it's closed
+ *  another way (Esc, click outside). The content stays readable after closing (e.g. checkboxes). */
+export function openDialog<T>(title: string, content: readonly Node[], buttons: readonly DialogButton<T>[]): Promise<T | null> {
   const dialog = Object.assign(document.createElement('dialog'), { className: 'dialog' });
   let result: T | null = null;
   const footer = document.createElement('footer');

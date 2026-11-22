@@ -362,6 +362,15 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .dialog footer .primary { background: var(--accent); color: #141414; border-color: var(--accent); }
 .dialog footer button:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
 .dialog:has(.definitions) { max-width: min(760px, calc(100vw - 32px)); }
+/* import from project: the tracks, buses and master of the other project, with a checkbox each */
+.import-list { max-height: min(52vh, 460px); overflow-y: auto; border: 1px solid #3a3f47; border-radius: 6px; padding: 4px 8px 8px; }
+.import-section { margin: 10px 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.import-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; min-width: 0; }
+.import-row:has(input:disabled) { opacity: .7; cursor: default; }
+.import-swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; background: #555; }
+.import-name { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-detail { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.import-option { margin-top: 10px; }
 .definitions { columns: 2 280px; column-gap: 32px; font-size: 12.5px; }
 .definitions table { width: 100%; border-collapse: collapse; break-inside: avoid; margin-bottom: 12px; }
 .definitions caption { text-align: left; padding-bottom: 2px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--line); }

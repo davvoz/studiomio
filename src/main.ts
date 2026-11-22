@@ -1,6 +1,7 @@
 import { App } from './app/app';
 import { userPresets } from './devices/user-presets';
 import { userRacks } from './devices/user-racks';
+import { desktopFolders } from './persistence/desktop-directory';
 
 // the user's presets and racks before the devices (they're few files); without them, the app starts anyway
 await Promise.all([
@@ -13,3 +14,11 @@ const app = new App(document.getElementById('app')!);
 // in development the app is reachable from the console (and from the automated checks); in the
 // installed app only the controllers, for diagnosis from F12: copy(studiomio.surfaces.report())
 Object.assign(window, { studiomio: import.meta.env.DEV ? app : { surfaces: app.surfaces } });
+
+// a project opened from Windows (double click on its file, or "Open in studiomio" on its folder):
+// at launch, or later while the app is open
+const folders = desktopFolders();
+if (folders) {
+  folders.onOpen(path => app.openPath(path));
+  void folders.launched().then(path => { if (path) app.openPath(path); });
+}

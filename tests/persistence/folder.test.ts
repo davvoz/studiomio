@@ -2,7 +2,8 @@ import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { crc32, makeZip, readZip, type ZipEntry } from '../../src/dsp/codec/zip';
 import { MemoryDirectory, readText } from '../../src/persistence/directory';
-import { BACKUP_FILE, PROJECT_FILE, ProjectFolder, safeFileName, unpackProject } from '../../src/persistence/project-folder';
+import { BACKUP_FILE, LEGACY_PROJECT_FILE, PROJECT_FILE, ProjectFolder, safeFileName, unpackProject } from '../../src/persistence/project-folder';
+import { ProjectCodec } from '../../src/persistence/project-codec';
 import { addSample, placeSample, setTempo } from '../../src/store/edits';
 import { sampleRef, setup } from '../helpers/fixtures';
 
@@ -26,6 +27,28 @@ describe('ProjectFolder', () => {
     expect(missing).toEqual([]);
     expect(JSON.parse(await readText(dir, BACKUP_FILE)).tempo).toBe(120);
     expect(await dir.list('')).toEqual(expect.arrayContaining([PROJECT_FILE, BACKUP_FILE]));
+  });
+
+  it('a project of the older versions (progetto.json) opens; saving moves it to progetto.studiomio', async () => {
+    let marked = 0;
+    const dir = Object.assign(new MemoryDirectory('Old'), { markProject: async () => { marked++; } });
+    const { store } = setup({ audio: 1 });
+    await dir.writeBytes(LEGACY_PROJECT_FILE, new TextEncoder().encode(new ProjectCodec().stringify(store.project)));
+    const folder = new ProjectFolder(dir);
+    expect(PROJECT_FILE).toBe('progetto.studiomio');
+    expect(await folder.hasProject()).toBe(true);
+    const { project } = await folder.load();
+    expect(project.tracks).toHaveLength(1);
+
+    await folder.save(project.withTempo(133));
+    expect(await dir.exists(LEGACY_PROJECT_FILE)).toBe(false);
+    expect(JSON.parse(await readText(dir, BACKUP_FILE)).tempo).toBe(120); // the old file is the backup
+    expect((await folder.load()).project.tempo.bpm).toBe(133);
+    expect(marked).toBe(1); // the folder gets the project's icon
+  });
+
+  it('a folder without a project: a clear error on opening', async () => {
+    await expect(new ProjectFolder(new MemoryDirectory('Empty')).load()).rejects.toThrow(/"Empty" doesn't contain a studiomio project/);
   });
 
   it('doesn\'t save if some audio files are missing, and reports them on opening', async () => {
@@ -114,6 +137,18 @@ describe('ProjectFolder', () => {
 
     await expect(unpackProject(deflatedZip([{ name: 'other/note.txt', data: bytes(1) }]), 'Niente')).rejects.toThrow(/"Niente" doesn't contain a studiomio project/);
     await expect(readZip(bytes(100))).rejects.toThrow(/not a ZIP/);
+  });
+
+  it('also opens a ZIP of the older versions, with progetto.json in a folder', async () => {
+    const { store } = setup({ sample: true });
+    const json = new TextEncoder().encode(await projectJson(store.project));
+    const zip = deflatedZip([
+      { name: `Old song/${LEGACY_PROJECT_FILE}`, data: json },
+      { name: 'Old song/audio/loop.wav', data: bytes(10) },
+    ]);
+    const unpacked = await unpackProject(zip, 'received');
+    expect(unpacked.name).toBe('Old song');
+    expect((await new ProjectFolder(unpacked).load()).missing).toEqual([]);
   });
 
   it('file names', () => {
