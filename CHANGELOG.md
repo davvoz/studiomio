@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.58] - 2026-11-22
+
 ### Added
 - Kick: a Crush section, the distortion of hard kicks. Body and tail go through a hard curve
   (Amount, with Asymmetry for even harmonics), oversampled, then through a resonant low-pass that
