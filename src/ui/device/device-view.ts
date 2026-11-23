@@ -2,9 +2,8 @@ import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { DeviceId, SampleId, TrackId } from '../../core/id';
 import type { SampleData } from '../../devices/dsp/core';
 import type { SampleRef } from '../../model/sample';
-import { keptOnPreset, resolveParams } from '../../devices/device-type';
+import { type DeviceType, keptOnPreset, resolveParams } from '../../devices/device-type';
 import { deviceTypeAt, mappingSpec } from '../../devices/rack-params';
-import type { DeviceType } from '../../devices/device-type';
 import { chainEffectTypes, effectType, INSTRUMENT_TYPES, instrumentType } from '../../devices/registry';
 import { DEFAULT_INSTRUMENT, sampleAt, type EffectSettings, type ParamValues } from '../../model/device';
 import type { EffectList } from '../../model/effect-list';
@@ -292,20 +291,24 @@ export class DeviceView {
     const fold = [...this.panels.values()].some(p => !p.folded);
     for (const [key, panel] of this.panels) {
       panel.setFolded(fold);
-      this.setDeviceFolded(owner, key, fold);
+      if (fold) this.foldDevice(owner, key);
+      else this.unfoldDevice(owner, key);
     }
   }
 
-  private setDeviceFolded(owner: ChainOwner, key: string, folded: boolean): void {
-    if (folded) this.foldedDevices.add(`${owner}/${key}`);
-    else this.foldedDevices.delete(`${owner}/${key}`);
+  private foldDevice(owner: ChainOwner, key: string): void {
+    this.foldedDevices.add(`${owner}/${key}`);
+  }
+
+  private unfoldDevice(owner: ChainOwner, key: string): void {
+    this.foldedDevices.delete(`${owner}/${key}`);
   }
 
   /** A panel's options to collapse it, remembering the choice. */
   private foldOptions(owner: ChainOwner, key: string) {
     return {
       folded: this.foldedDevices.has(`${owner}/${key}`),
-      onFold: (folded: boolean) => this.setDeviceFolded(owner, key, folded),
+      onFold: (folded: boolean) => (folded ? this.foldDevice(owner, key) : this.unfoldDevice(owner, key)),
     };
   }
 
@@ -345,7 +348,8 @@ export class DeviceView {
     this.title.textContent = source.name;
     this.title.style.setProperty('--color', source.color);
     this.backButton.hidden = !this.back;
-    const view = `${[...this.folded].join(',')}/${this.mapMode ? `${this.mapMode.rack}:${this.mapMode.macro}` : ''}`;
+    const mapping = this.mapMode ? `${this.mapMode.rack}:${this.mapMode.macro}` : '';
+    const view = `${[...this.folded].join(',')}/${mapping}`;
     const shape = shapeOf(this.owner, source, view);
     if (shape !== this.builtFor) this.build(this.owner, source, shape);
     else this.update(source);
@@ -401,7 +405,7 @@ export class DeviceView {
     // another chain starts from the beginning, or from the device the controller moves
     if (!sameOwner) this.revealControlled();
     // a just-added effect is shown right away, even at the end of a long chain
-    const added = sameOwner && known.size ? effects.filter(e => !known.has(e.id)).at(-1) : undefined;
+    const added = sameOwner && known.size ? effects.findLast(e => !known.has(e.id)) : undefined;
     const panel = added && this.panels.get(added.id);
     if (panel) this.reveal(panel.element);
   }
@@ -500,7 +504,7 @@ export class DeviceView {
       ...rack.macros.map((m, i): MenuItem => {
         const name = macroName(m, i, label);
         return {
-          label: `Map to ${name}${name === `Macro ${i + 1}` ? '' : ` (macro ${i + 1})`}`,
+          label: name === `Macro ${i + 1}` ? `Map to ${name}` : `Map to ${name} (macro ${i + 1})`,
           checked: current?.rack.id === rack.id && current.index === i,
           run: () => this.guard(mapMacro(owner, rack.id, i, device, param)),
         };

@@ -113,7 +113,7 @@ export class ModulatorDisplay implements DeviceDisplay {
       row.name.textContent = t ? this.host?.label(t) ?? '?' : '—';
       row.name.title = t ? row.name.textContent : 'Free: click ⊕ Map and then a knob, or choose from the ▾ menu';
     });
-    const used = this.targets.filter(t => t).length;
+    const used = this.targets.filter(Boolean).length;
     const count = this.head.querySelector('.prisma-chip-count');
     if (count) count.textContent = used ? String(used) : '';
     this.head.querySelector('.prisma-chip')?.classList.toggle('used', used > 0);

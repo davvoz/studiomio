@@ -186,7 +186,7 @@ export class BrowserView {
 
   /** A source's content must be reread. */
   private invalidate(sourceId: string): void {
-    for (const key of [...this.loaded.keys()]) if (key === rootKey(sourceId) || key.startsWith(`${sourceId}/`)) this.loaded.delete(key);
+    for (const key of this.loaded.keys()) if (key === rootKey(sourceId) || key.startsWith(`${sourceId}/`)) this.loaded.delete(key);
     if (this.source?.id === sourceId) {
       if (this.searchInput.value.trim()) this.runSearch();
       else this.renderList();

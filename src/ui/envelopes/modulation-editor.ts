@@ -144,11 +144,11 @@ export class ModulationEditor {
     this.device.value = key;
     const device = this.devices.find(d => d.key === key);
     this.param.hidden = !device;
-    this.param.replaceChildren(...(device?.sections ?? []).map(s => {
+    this.param.replaceChildren(...(device?.sections ?? []).flatMap(s => {
       const options = s.params.map(p => el('option', { value: targetKey(p.target), textContent: `${has(p.target) ? MARK : ''}${p.label}` }));
       // a single section (the mixer): no groups
       return device!.sections.length > 1 ? el('optgroup', { label: s.label }, ...options) : options;
-    }).flat());
+    }));
     if (this.target) this.param.value = targetKey(this.target);
     const label = device?.sections.flatMap(s => s.params).find(p => this.target && sameTarget(p.target, this.target));
     this.side.textContent = label ? `${device!.label} · ${label.label}` : '';

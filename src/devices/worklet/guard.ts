@@ -6,7 +6,7 @@
 
 /** True if the buffer has a non-finite sample (NaN or infinity). */
 export function hasInvalid(buf: Float32Array): boolean {
-  for (let i = 0; i < buf.length; i++) if (!Number.isFinite(buf[i])) return true;
+  for (const v of buf) if (!Number.isFinite(v)) return true;
   return false;
 }
 

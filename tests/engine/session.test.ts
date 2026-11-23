@@ -306,6 +306,6 @@ describe('session: building blocks', () => {
     const core = { setParams() {}, noteOn: (id: number) => ons.push(id), noteOff: (id: number) => offs.push(id), silence() {}, render() {} };
     q.renderBlock(core, new Float32Array(2000), new Float32Array(2000), 0);
     expect(ons).toEqual([1, 2]); // the 64 doesn't start any more
-    expect(offs.sort()).toEqual([1, 2]); // 60 and 62 end at 500
+    expect(offs.toSorted((a, b) => a - b)).toEqual([1, 2]); // 60 and 62 end at 500
   });
 });

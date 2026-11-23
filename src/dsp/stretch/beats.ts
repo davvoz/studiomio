@@ -114,7 +114,7 @@ export class BeatsStretcher implements TimeStretcher<SettingsOf<'beats'>> {
   private static slicePoints(slices: readonly number[], len: number): number[] {
     const pts = [0];
     for (const v of [...slices].sort((p, q) => p - q).map(Math.round)) {
-      if (v > pts[pts.length - 1] + 32 && v < len - 32) pts.push(v);
+      if (v > pts.at(-1)! + 32 && v < len - 32) pts.push(v);
     }
     return pts;
   }

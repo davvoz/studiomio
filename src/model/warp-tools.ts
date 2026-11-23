@@ -50,7 +50,7 @@ export function followTempo(
   snapped.forEach((t, k) => {
     if (k % beatsPerBar === 0 || k === snapped.length - 1) ms.push({ t, b: k });
   });
-  const last = ms[ms.length - 1];
+  const last = ms.at(-1)!;
   if (duration - last.t > 0.01) ms.push({ t: duration, b: last.b + ((duration - last.t) * tempo) / 60 });
   return WarpMarkers.of(ms, tempo);
 }

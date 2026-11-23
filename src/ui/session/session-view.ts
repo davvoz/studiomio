@@ -114,7 +114,10 @@ const busWidth = (b: BusTrack) => (b.folded ? 'var(--session-folded)' : 'var(--s
 
 /** For each bus the distance from the right edge: the master and the buses coming after it. */
 const busRights = (buses: readonly BusTrack[]): string[] =>
-  buses.map((_, i) => `calc(var(--session-master) + 2px${buses.slice(i + 1).map(b => ` + ${busWidth(b)} + 2px`).join('')})`);
+  buses.map((_, i) => {
+    const after = buses.slice(i + 1).map(b => ` + ${busWidth(b)} + 2px`).join('');
+    return `calc(var(--session-master) + 2px${after})`;
+  });
 
 /** A bus stays still next to the master, as in Live, while the tracks scroll underneath. */
 function pinBus(e: HTMLElement, right: string): HTMLElement {
@@ -283,7 +286,8 @@ export class SessionView {
     if (!copied) return false;
     this.deps.clipboard.content = copied;
     const n = copied.items.length;
-    this.deps.say(`${n > 1 ? `${n} clips copied` : 'Clip copied'}: Ctrl+V pastes ${n > 1 ? 'them' : 'it'} from a slot on, or in the timeline at the cursor.`);
+    const message = n > 1 ? `${n} clips copied` : 'Clip copied';
+    this.deps.say(`${message}: Ctrl+V pastes ${n > 1 ? 'them' : 'it'} from a slot on, or in the timeline at the cursor.`);
     return true;
   }
 
@@ -338,7 +342,8 @@ export class SessionView {
     const T = tracks.length, B = p.buses.length, S = p.scenes.length, rights = busRights(p.buses);
     // the leftover space sits between the tracks and the buses: buses and master stay on the right edge
     const cols = (n: number) => (n ? `repeat(${n}, var(--session-col)) ` : '');
-    this.grid.style.gridTemplateColumns = `${cols(T)}minmax(0, 1fr) ${p.buses.map(b => `${busWidth(b)} `).join('')}var(--session-master)`;
+    const busColumns = p.buses.map(b => `${busWidth(b)} `).join('');
+    this.grid.style.gridTemplateColumns = `${cols(T)}minmax(0, 1fr) ${busColumns}var(--session-master)`;
     this.grid.style.gridTemplateRows = `auto repeat(${S}, var(--session-row)) auto 1fr auto`;
     if (this.quantize.value !== p.launchQuantization) this.quantize.value = p.launchQuantization;
     if (this.selected && !(tracks.some(t => t.id === this.selected!.track) && this.selected.slot < S)) this.selected = null;
@@ -375,8 +380,7 @@ export class SessionView {
       onclick: () => this.deps.openDevices(MASTER),
     }), row.head, masterCol));
     this.scenes = p.scenes.map((scene, s) => place(this.sceneCell(scene, s), row.scene(s), masterCol));
-    cells.push(...this.scenes);
-    cells.push(place(el('button', {
+    cells.push(...this.scenes, place(el('button', {
       className: 'stop-all', textContent: '■ Stop all', title: 'Stop all the clips at the next boundary',
       onclick: () => this.deps.engine.stopAllClips(),
     }), row.stop(S), masterCol));
@@ -805,7 +809,7 @@ export class SessionView {
     if (!track) return audio ? { kind: 'slot', track: null, slot: 0 } : { kind: 'lane', track: null, beat: 0 };
     if (!audio) return { kind: 'chain', owner: track.id };
     const free = track.slots.findIndex(c => !c);
-    return { kind: 'slot', track: track.id, slot: free < 0 ? 0 : free };
+    return { kind: 'slot', track: track.id, slot: Math.max(free, 0) };
   }
 
   private dragMove(e: PointerEvent): void {
@@ -954,7 +958,7 @@ export class SessionView {
       return this.pick([...this.picked.values(), ref], ref);
     }
     const rest = [...this.picked.values()].filter(r => slotKey(r.track, r.slot) !== key);
-    if (rest.length) this.pick(rest, rest[rest.length - 1]);
+    if (rest.length) this.pick(rest, rest.at(-1));
   }
 
   /** The chosen slots that have a clip. */

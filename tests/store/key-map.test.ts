@@ -87,7 +87,10 @@ describe('computer keyboard: the parameters', () => {
     expect(r.fx(r.delay).params.mix).toBe(100);
     r.store.apply(pressKey('Digit1'));
     expect(r.fx(r.delay).params.mix).toBe(0);
-    const curves = [1, 2, 0].map(() => (r.store.apply(pressKey('Digit2')), r.fx(r.stop).params.curve));
+    const curves = [1, 2, 0].map(() => {
+      r.store.apply(pressKey('Digit2'));
+      return r.fx(r.stop).params.curve;
+    });
     expect(curves).toEqual([1, 2, 0]);
   });
 

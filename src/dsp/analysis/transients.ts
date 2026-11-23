@@ -46,7 +46,7 @@ export function detectTransients(mono: Samples, envl: OnsetEnvelope, sensitivity
   const out: number[] = [];
   for (const p of pickPeaks(f, rules)) {
     const pos = refineOnset(mono, p.i * hop, hop);
-    if (!out.length || pos - out[out.length - 1] > hop) out.push(pos);
+    if (!out.length || pos - out.at(-1)! > hop) out.push(pos);
   }
   return out;
 }
@@ -67,7 +67,7 @@ function pickPeaks(f: ArrayLike<number>, rules: PeakRules): { i: number; v: numb
   for (let i = 1; i < n - 1; i++) {
     const v = f[i];
     if (v < rules.delta || !isLocalMax(f, i) || !standsOut(v, i, n, rules)) continue;
-    const last = peaks[peaks.length - 1];
+    const last = peaks.at(-1);
     if (!last || i - last.i >= rules.minGap) peaks.push({ i, v });
     else if (v > last.v) {
       last.i = i;

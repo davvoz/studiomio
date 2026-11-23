@@ -66,7 +66,9 @@ export class PitchShifterCore implements EffectCore {
     }
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the pitch shifter has no tempo-dependent parameters.
+  }
 
   /** The speed ratio of the channel's heads (for tests and for drawing it). */
   ratioOf(channel: 0 | 1): number {

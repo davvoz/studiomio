@@ -1,6 +1,5 @@
-import type { TrackId } from '../core/id';
+import { randomIds, type TrackId } from '../core/id';
 import type { ModTarget } from '../model/envelope';
-import { randomIds } from '../core/id';
 import type { Beats, Seconds } from '../core/music-time';
 import type { Color } from '../model/clip';
 import type { Placement } from '../model/arrangement';
@@ -266,7 +265,8 @@ export class App implements Commands, TimelineActions {
     // the processor has already zeroed the faulty block and restarted the engine: here we say which
     this.audio.onDeviceFault((type, error) => {
       const label = instrumentType(type)?.label ?? effectType(type)?.label ?? type;
-      this.say(`${label} produced an invalid sound and was restarted${error ? ` (${error})` : ''}.`);
+      const why = error ? ` (${error})` : '';
+      this.say(`${label} produced an invalid sound and was restarted${why}.`);
     });
     this.renderViews();
 
@@ -284,7 +284,7 @@ export class App implements Commands, TimelineActions {
       this.ui.keepKeyboardTracks(id => !!p.track(id));
       if (this.ui.track && !p.track(this.ui.track)) this.ui.selectTrack(null);
       else if (this.ui.track && !(p.track(this.ui.track) instanceof BusTrack) && !p.visibleTracks.some(t => t.id === this.ui.track)) {
-        this.ui.selectTrack(p.groupsOf(this.ui.track).filter(g => g.folded).at(-1)?.id ?? null);
+        this.ui.selectTrack(p.groupsOf(this.ui.track).findLast(g => g.folded)?.id ?? null);
       }
     });
     // before mapped keys: with ⌨ on the note keys play, even if they're mapped
@@ -362,7 +362,8 @@ export class App implements Commands, TimelineActions {
     if (!copied) return this.say('Select some clips to copy.');
     this.clipboard.content = copied;
     const n = copied.items.length;
-    this.say(`${n === 1 ? 'Copied 1 clip: Ctrl+V pastes it' : `Copied ${n} clips: Ctrl+V pastes them`} at the cursor.`);
+    const message = n === 1 ? 'Copied 1 clip: Ctrl+V pastes it' : `Copied ${n} clips: Ctrl+V pastes them`;
+    this.say(`${message} at the cursor.`);
   }
 
   cutSelection(): void {
@@ -502,7 +503,8 @@ export class App implements Commands, TimelineActions {
         const from = Math.floor(range.start / bar) + 1, to = Math.max(from, Math.ceil(range.end / bar));
         const name = from === to ? `Bar ${from}` : `Bars ${from}-${to}`;
         this.store.apply(arrangementToScene(name, clips));
-        this.say(`Scene "${name}" at the bottom of the session, with ${clips.length === 1 ? 'one clip' : `${clips.length} clips`}.`);
+        const count = clips.length === 1 ? 'one clip' : `${clips.length} clips`;
+        this.say(`Scene "${name}" at the bottom of the session, with ${count}.`);
       } finally {
         this.consolidating = false;
       }
@@ -820,7 +822,8 @@ export class App implements Commands, TimelineActions {
       const out = plan.loops ? foldTail(mix, Math.round(p.tempo.secondsAt(plan.length) * sr)) : mix;
       download(new Blob([encodeWav(out, sr, 24)], { type: 'audio/wav' }), `${this.session.name} - ${scene.name}.wav`);
       const bars = plan.length / p.signature.beatsPerBar;
-      this.say(`Scene "${scene.name}" exported: ${Number.isInteger(bars) ? `${bars} bars` : `${plan.length} beats`}${plan.loops ? ', in loop' : ''}.`);
+      const length = Number.isInteger(bars) ? `${bars} bars` : `${plan.length} beats`;
+      this.say(`Scene "${scene.name}" exported: ${length}${plan.loops ? ', in loop' : ''}.`);
     });
   }
 
@@ -829,7 +832,8 @@ export class App implements Commands, TimelineActions {
   sceneToArrangement(index: number): void {
     const p = this.store.project, scene = p.scenes[index];
     const len = scene && sceneLength(sceneClips(p, index), SCENE_MAX_BARS * p.signature.beatsPerBar);
-    if (!len || !(len.length > 0)) return this.say('The scene is empty: there\'s nothing to copy.');
+    const filled = !!len && len.length > 0;
+    if (!filled) return this.say('The scene is empty: there\'s nothing to copy.');
     const at = Math.max(0, this.audio.engine.position);
     this.store.apply(sceneToArrangement(index, at, len.length));
     this.ui.select(addedPlacements(p, this.store.project).map(r => r.id));
@@ -939,7 +943,7 @@ export class App implements Commands, TimelineActions {
     if (last && findClip(p, last)) return last;
     const playing = this.audio.engine.playingClips().get(id);
     if (playing) return slotRef(id, playing);
-    const slot = track.slots.find(c => c);
+    const slot = track.slots.find(Boolean);
     if (slot) return slotRef(id, slot.id);
     const placed = track.arrangement[0];
     return placed ? placementRef(id, placed.id) : null;

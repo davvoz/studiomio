@@ -54,7 +54,7 @@ export class KeyMapper {
   }
 
   private releaseAll(): void {
-    for (const key of [...this.held]) {
+    for (const key of this.held) {
       this.held.delete(key);
       this.store.apply(holdKey(key, false), { transient: true });
       this.holdSprings(key, false);

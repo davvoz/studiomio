@@ -31,7 +31,7 @@ describe('from the clip to the warp job', () => {
     const c = clip.withMarkers(WarpMarkers.straight(120, 4, 0.5));
     const { job, startBeat } = clipRender(c, sample, new Tempo(120));
     expect(startBeat).toBe(-1);
-    expect(job.points[job.points.length - 1]).toEqual([176400, 176400]);
+    expect(job.points.at(-1)).toEqual([176400, 176400]);
   });
 
   it('settings of each mode from the clip\'s options', () => {

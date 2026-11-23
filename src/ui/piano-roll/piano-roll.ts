@@ -306,7 +306,8 @@ export class PianoRoll implements RollHost {
     if (!copied) return this.deps.say('Select some notes to copy.');
     this.deps.clipboard.content = copied;
     const n = copied.notes.length;
-    this.deps.say(`${n === 1 ? 'Copied 1 note: Ctrl+V pastes it' : `Copied ${n} notes: Ctrl+V pastes them`} at the insertion point (click in empty space to choose it).`);
+    const message = n === 1 ? 'Copied 1 note: Ctrl+V pastes it' : `Copied ${n} notes: Ctrl+V pastes them`;
+    this.deps.say(`${message} at the insertion point (click in empty space to choose it).`);
   }
 
   cut(): void {
@@ -431,7 +432,8 @@ export class PianoRoll implements RollHost {
     const notes = new Set(t.clip.notes);
     if ([...this._selection].some(n => !notes.has(n))) this._selection = new Set([...this._selection].filter(n => notes.has(n)));
     const instrument = t.track.instrument;
-    const label = `${instrumentType(instrument.type)?.label ?? instrument.type}${instrument.preset ? ` · ${instrument.preset}` : ''}`;
+    const name = instrumentType(instrument.type)?.label ?? instrument.type;
+    const label = instrument.preset ? `${name} · ${instrument.preset}` : name;
     const names = this.noteNames();
     if (!sameNames(names, this.names)) {
       const hadNames = this.names !== null;

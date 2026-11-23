@@ -254,7 +254,9 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
       this.expected = Number.NaN;
       return;
     }
-    if (!(Math.abs(pos.beat - this.expected) <= 4 * bps)) {
+    // `expected` is NaN after a stop: that counts as a jump too
+    const inTime = Math.abs(pos.beat - this.expected) <= 4 * bps;
+    if (!inTime) {
       this.lastInterval = Math.floor((pos.beat - bps - offset) / interval + EPS);
       this.lastGrid = Math.floor((pos.beat - bps) / this.gridBeats + EPS);
     }

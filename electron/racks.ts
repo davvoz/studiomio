@@ -30,9 +30,8 @@ export async function saveRack(root: string, rack: StoredRack): Promise<void> {
 
 /** Deletes the rack's files (by name). */
 export async function removeRack(root: string, name: string): Promise<void> {
-  for (const f of await scan(root)) {
-    if (f.rack.name === name) await rm(f.path, { force: true });
-  }
+  const files = (await scan(root)).filter(f => f.rack.name === name);
+  await Promise.all(files.map(f => rm(f.path, { force: true })));
 }
 
 const scan = (root: string): Promise<RackFile[]> => scanJson(root, (raw, path) => {

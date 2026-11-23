@@ -41,7 +41,10 @@ function makePool(size: number) {
     const n = workers.length;
     let value = 0;
     const w = new FakeWorker({
-      set: ({ value: v }) => ((value = v), null),
+      set: ({ value: v }) => {
+        value = v;
+        return null;
+      },
       get: () => ({ worker: n, value }),
       slow: ({ ms, tag }) => new Promise(r => setTimeout(() => r(tag), ms)),
       fail: () => { throw new Error('broken'); },

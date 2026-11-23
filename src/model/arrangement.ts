@@ -27,7 +27,8 @@ const EPS = 1e-9;
 function fitToClip<C extends Clip>(p: Placement<C>): Placement<C> {
   if (p.offset < 0) throw new RangeError(`negative offset: ${p.offset}`);
   const length = Math.min(p.length, p.clip.playLength - p.offset);
-  if (!(length > EPS)) throw new RangeError(`invalid length: ${p.length}`);
+  const long = length > EPS;
+  if (!long) throw new RangeError(`invalid length: ${p.length}`);
   return fitFades(length === p.length ? p : { ...p, length });
 }
 

@@ -27,11 +27,12 @@ export class WarpMarkers {
 
   /** Sorted markers, without duplicates and with increasing beats. */
   static of(markers: readonly WarpMarker[], baseBpm: number): WarpMarkers {
-    if (!(baseBpm > 0)) throw new RangeError(`invalid base tempo: ${baseBpm}`);
+    const positive = baseBpm > 0;
+  if (!positive) throw new RangeError(`invalid base tempo: ${baseBpm}`);
     const sorted = [...markers].sort((p, q) => p.t - q.t);
     const out: WarpMarker[] = [];
     for (const m of sorted) {
-      const l = out[out.length - 1];
+      const l = out.at(-1);
       if (l && (m.t - l.t < 1e-5 || m.b - l.b < 1e-5)) continue;
       out.push({ t: m.t, b: m.b });
     }
@@ -43,8 +44,7 @@ export class WarpMarkers {
   static straight(bpm: number, duration: Seconds, firstBeatAt: Seconds = 0): WarpMarkers {
     const ms: WarpMarker[] = [];
     if (firstBeatAt > 0) ms.push({ t: 0, b: (-firstBeatAt * bpm) / 60 });
-    ms.push({ t: firstBeatAt, b: 0 });
-    ms.push({ t: duration, b: ((duration - firstBeatAt) * bpm) / 60 });
+    ms.push({ t: firstBeatAt, b: 0 }, { t: duration, b: ((duration - firstBeatAt) * bpm) / 60 });
     return WarpMarkers.of(ms, bpm);
   }
 
@@ -76,7 +76,7 @@ export class WarpMarkers {
   get globalBpm(): number {
     const m = this.markers;
     if (m.length < 2) return this.baseBpm;
-    return (60 * (m[m.length - 1].b - m[0].b)) / (m[m.length - 1].t - m[0].t);
+    return (60 * (m.at(-1)!.b - m[0].b)) / (m.at(-1)!.t - m[0].t);
   }
 
   /** Tempo of the segment starting at marker `i` (the last marker uses the segment before). */
@@ -153,7 +153,7 @@ export class WarpMarkers {
     const out: WarpMarker[] = [];
     for (const m of this.markers) {
       const b = Math.round(m.b / step) * step;
-      if (!out.length || b > out[out.length - 1].b + 1e-6) out.push({ t: m.t, b });
+      if (!out.length || b > out.at(-1)!.b + 1e-6) out.push({ t: m.t, b });
     }
     return new WarpMarkers(out, this.baseBpm);
   }

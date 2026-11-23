@@ -359,7 +359,7 @@ export function upgradeZoneTune(params: ParamValues, samples?: Readonly<Record<s
 export function noteInName(name: string): number | null {
   const base = name.replace(/\.[a-z0-9]+$/i, '');
   // the last note written in the name, separated from other letters ("Bd1" isn't a D1)
-  const found = [...base.matchAll(/(?<![a-z])([a-g])([#b♯♭]?)(-?[0-8])(?![0-9])/gi)].at(-1);
+  const found = [...base.matchAll(/(?<![a-z])([a-g])([#b♯♭]?)(-?[0-8])(?!\d)/gi)].at(-1);
   if (!found) return null;
   const pc = ({ c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 } as Record<string, number>)[found[1].toLowerCase()];
   const acc = ACCIDENTAL[found[2]] ?? 0;

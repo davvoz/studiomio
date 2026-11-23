@@ -108,10 +108,22 @@ export interface DisplayContext {
 }
 
 /** The spectrum of whoever doesn't have one: it never reads anything. */
-export const NO_SPECTRUM: SpectrumTap = { sampleRate: 48000, binCount: 0, read: () => false, dispose() {} };
+export const NO_SPECTRUM: SpectrumTap = {
+  sampleRate: 48000,
+  binCount: 0,
+  read: () => false,
+  dispose() {
+    // Intentionally no-op: this tap owns no resources.
+  },
+};
 
 /** Of whoever doesn't play: it never reads anything. */
-export const NO_DYNAMICS: DynamicsTap = { read: () => null, dispose() {} };
+export const NO_DYNAMICS: DynamicsTap = {
+  read: () => null,
+  dispose() {
+    // Intentionally no-op: this tap owns no resources.
+  },
+};
 
 export interface DeviceDisplay {
   readonly element: HTMLElement;

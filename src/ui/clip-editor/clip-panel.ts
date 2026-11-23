@@ -141,7 +141,8 @@ export class ClipPanel {
     this.selectedMarker = selectedMarker;
     if (sample) {
       this.duration = sampleDuration(sample);
-      this.info.textContent = `${sample.name} · ${this.duration.toFixed(2)} s · ${sample.analysis ? `${sample.analysis.tempo.toFixed(2)} BPM detected` : 'not analysed'}`;
+      const tempo = sample.analysis ? `${sample.analysis.tempo.toFixed(2)} BPM detected` : 'not analysed';
+      this.info.textContent = `${sample.name} · ${this.duration.toFixed(2)} s · ${tempo}`;
     }
     const set = (input: HTMLInputElement, v: string) => { if (document.activeElement !== input) input.value = v; };
     set(this.name, clip.name);

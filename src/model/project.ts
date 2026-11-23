@@ -252,7 +252,8 @@ export class Project {
 
   withLoop(patch: Partial<LoopRegion>): Project {
     const loop = { ...this.loop, ...patch };
-    if (!(loop.end > loop.start)) throw new RangeError('empty loop region');
+    const ordered = loop.end > loop.start;
+    if (!ordered) throw new RangeError('empty loop region');
     return this.with({ loop });
   }
 
@@ -523,7 +524,7 @@ export class Project {
     return t;
   }
 
-  private validated(): Project {
+  private validated(): this {
     this.validate();
     return this;
   }

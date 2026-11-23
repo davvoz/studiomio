@@ -17,7 +17,10 @@ describe('Peaks', () => {
 
   it('the store computes the peaks once per sample, straight and reversed', () => {
     let reads = 0;
-    const store = new PeakStore(() => (reads++, { channels, sampleRate: 1000 }));
+    const store = new PeakStore(() => {
+      reads++;
+      return { channels, sampleRate: 1000 };
+    });
     const id = 'sample-1' as Parameters<PeakStore['get']>[0];
     expect(store.get(id)!.range(0.85, 0.95)[1]).toBeCloseTo(0.8, 6);
     expect(store.get(id, true)!.range(0.05, 0.15)[1]).toBeCloseTo(0.8, 6);

@@ -30,7 +30,10 @@ describe('RenderCache', () => {
 
   it('an error doesn\'t stay in the cache', async () => {
     let fail = true;
-    const cache = new RenderCache(async () => { if (fail) throw new Error('no'); return [new Float32Array(1)]; });
+    const cache = new RenderCache(async () => {
+      if (fail) throw new Error('no');
+      return [new Float32Array(1)];
+    });
     const k = renderKey(sid, job(1));
     await expect(cache.ensure(k, sid, job(1))).rejects.toThrow('no');
     fail = false;

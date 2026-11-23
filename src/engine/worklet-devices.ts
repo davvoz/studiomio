@@ -38,6 +38,33 @@ const workletModulation = (send: (m: ModMessage) => void): DeviceModulation => (
 /** Where the samples of the project's samples are (the SampleLibrary). */
 export type SampleSource = (id: SampleId) => SampleData | undefined;
 
+/** The pings to a processor: who waits for it to have received the messages sent so far. */
+class Pings {
+  private count = 0;
+  private readonly waiting = new Map<number, () => void>();
+
+  /** Resolves when the processor answers the ping that `send` sends now. */
+  next(send: (id: number) => void): Promise<void> {
+    const id = ++this.count;
+    return new Promise(resolve => {
+      this.waiting.set(id, resolve);
+      send(id);
+    });
+  }
+
+  /** The processor answered ping `id`. */
+  answered(id: number): void {
+    this.waiting.get(id)?.();
+    this.waiting.delete(id);
+  }
+
+  /** Nobody will answer any more: whoever waits goes on. */
+  releaseAll(): void {
+    for (const resolve of this.waiting.values()) resolve();
+    this.waiting.clear();
+  }
+}
+
 /** The samples of a device's samples, by slot (those not loaded yet are missing). */
 const samplesOf = (samples: DeviceSamples | undefined, source: SampleSource): Record<string, SampleData> =>
   Object.fromEntries(Object.entries(samples ?? {}).flatMap(([slot, id]) => {
@@ -62,8 +89,7 @@ class WorkletInstrument implements Instrument {
   private arp: Readonly<Record<string, number>> = {};
   private bpm: number;
   private anchor: TransportAnchor | null;
-  private pings = 0;
-  private readonly waiting = new Map<number, () => void>();
+  private readonly pings = new Pings();
   private heads: readonly number[] = [];
 
   constructor(
@@ -143,19 +169,14 @@ class WorkletInstrument implements Instrument {
     this.send({ type: 'dispose' });
     this.node?.disconnect();
     this.output.disconnect();
-    for (const resolve of this.waiting.values()) resolve();
-    this.waiting.clear();
+    this.pings.releaseAll();
     this.onDispose();
   }
 
   /** Resolves when the processor has received the messages sent so far. */
   settle(): Promise<void> {
     if (!this.node) return Promise.resolve();
-    const id = ++this.pings;
-    return new Promise(resolve => {
-      this.waiting.set(id, resolve);
-      this.send({ type: 'ping', id });
-    });
+    return this.pings.next(id => this.send({ type: 'ping', id }));
   }
 
   /** Only the changed slots: a sample already in the engine isn't sent again. */
@@ -183,8 +204,7 @@ class WorkletInstrument implements Instrument {
         return;
       }
       if (m.type === 'fault') return this.onFault(m.error);
-      this.waiting.get(m.id)?.();
-      this.waiting.delete(m.id);
+      this.pings.answered(m.id);
     };
     this.node.connect(this.output);
   }
@@ -304,8 +324,7 @@ class WorkletEffect implements Effect {
   private bpm: number;
   private anchor: TransportAnchor | null;
   private disposed = false;
-  private pings = 0;
-  private readonly waiting = new Map<number, () => void>();
+  private readonly pings = new Pings();
   private watcher: DynamicsListener | null = null;
 
   constructor(
@@ -359,11 +378,7 @@ class WorkletEffect implements Effect {
   /** Resolves when the processor has received the messages sent so far. */
   settle(): Promise<void> {
     if (!this.node) return Promise.resolve();
-    const id = ++this.pings;
-    return new Promise(resolve => {
-      this.waiting.set(id, resolve);
-      this.send({ type: 'ping', id });
-    });
+    return this.pings.next(id => this.send({ type: 'ping', id }));
   }
 
   dispose(): void {
@@ -372,8 +387,7 @@ class WorkletEffect implements Effect {
     this.node?.disconnect();
     for (const n of [this.input, this.post, this.output]) n.disconnect();
     this.sidechain?.disconnect();
-    for (const resolve of this.waiting.values()) resolve();
-    this.waiting.clear();
+    this.pings.releaseAll();
     this.onDispose();
   }
 
@@ -391,8 +405,7 @@ class WorkletEffect implements Effect {
       const m = e.data;
       if (m.type === 'fault') return this.onFault(m.error);
       if (m.type === 'dynamics') return this.watcher?.(m.input, m.reduction);
-      this.waiting.get(m.id)?.();
-      this.waiting.delete(m.id);
+      this.pings.answered(m.id);
     };
     if (this.watcher) this.send({ type: 'watch', on: true });
     // only the direct connection: those towards the spectrum stay

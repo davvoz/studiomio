@@ -1,5 +1,5 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
-import type { TrackId } from '../core/id';
+import type { SampleId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { zipParts } from '../dsp/codec/zip';
 import type { AudioData } from '../dsp/types';
@@ -15,7 +15,6 @@ import { starterProject } from '../store/edits';
 import { importSample } from '../store/selection-edits';
 import { importSampleToSlot } from '../store/session-edits';
 import { springsAtRest } from '../store/rack-edits';
-import type { SampleId } from '../core/id';
 import type { AudioAnalysis } from '../dsp/analysis/analyze';
 
 /** What the session uses of the audio (AudioSystem satisfies it; tests use a fake). */

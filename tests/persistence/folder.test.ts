@@ -78,7 +78,7 @@ describe('ProjectFolder', () => {
     const folder = new ProjectFolder(dir);
     const { store, ids } = setup({ sample: true });
     store.apply(addSample(sampleRef(ids, { file: 'audio/used.wav' })));
-    for (const f of ['loop.wav', 'used.wav', 'old.wav']) await dir.writeBytes(`audio/${f}`, bytes(1));
+    await Promise.all(['loop.wav', 'used.wav', 'old.wav'].map(f => dir.writeBytes(`audio/${f}`, bytes(1))));
     expect(await folder.unusedAudio(store.project)).toEqual(['audio/old.wav']);
   });
 

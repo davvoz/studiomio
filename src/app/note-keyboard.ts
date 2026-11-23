@@ -92,7 +92,7 @@ export class NoteKeyboard {
   }
 
   releaseAll(): void {
-    for (const code of [...this.held.keys()]) this.up(code);
+    for (const code of this.held.keys()) this.up(code);
   }
 
   /** The notes of the tracks that turned the keyboard off stop. */

@@ -58,7 +58,7 @@ export class Peaks {
 
   static from({ channels, sampleRate }: AudioData): Peaks {
     const levels: Level[] = [baseLevel(channels)];
-    while (levels[levels.length - 1].min.length > FACTOR) levels.push(coarser(levels[levels.length - 1]));
+    while (levels.at(-1)!.min.length > FACTOR) levels.push(coarser(levels.at(-1)!));
     return new Peaks(levels, sampleRate, channels[0].length);
   }
 
@@ -77,7 +77,7 @@ export class Peaks {
     const b = Math.min(this.length, Math.ceil(Math.max(t0, t1) * this.sampleRate));
     if (b <= a) return [0, 0];
     // the finest level requiring reading at most ~16 groups
-    const level = this.levels.find(l => (b - a) / l.bucket <= 16) ?? this.levels[this.levels.length - 1];
+    const level = this.levels.find(l => (b - a) / l.bucket <= 16) ?? this.levels.at(-1)!;
     const i0 = Math.floor(a / level.bucket), i1 = Math.min(level.min.length, Math.ceil(b / level.bucket));
     let lo = Infinity, hi = -Infinity;
     for (let i = i0; i < i1; i++) {

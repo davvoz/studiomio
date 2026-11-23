@@ -33,7 +33,7 @@ type Phase = 'identity' | 'challenge' | 'ready';
 /** What the mixer controls do: nothing (the grid launches), a function per track
  *  (stop, mute, solo), or the faders on the grid (volume, pan, device parameters). */
 type Mode = 'none' | 'stop' | 'mute' | 'solo' | 'volume' | 'pan' | 'device';
-const FADER_MODES: readonly Mode[] = ['volume', 'pan', 'device'];
+const FADER_MODES: ReadonlySet<Mode> = new Set(['volume', 'pan', 'device']);
 type TrackMode = 'select' | 'stop' | 'mute' | 'solo';
 
 /** The functions' colours, as in Live's skin (novation/skin.py). */
@@ -346,7 +346,7 @@ export class Launchpad extends SessionSurface {
   /** MK2: Mixer opens the mixer on the grid; pressed again, it goes back to Session. */
   private mk2Mixer(): void {
     this.overview = false;
-    this.mixer = !this.mixer || FADER_MODES.includes(this.mode);
+    this.mixer = !this.mixer || FADER_MODES.has(this.mode);
     this.setMode('none');
   }
 
@@ -373,7 +373,7 @@ export class Launchpad extends SessionSurface {
   // ---------------------------------------------------------------- modes and layout
 
   private get faders(): boolean {
-    return FADER_MODES.includes(this.mode);
+    return FADER_MODES.has(this.mode);
   }
 
   private setMode(mode: Mode): void {

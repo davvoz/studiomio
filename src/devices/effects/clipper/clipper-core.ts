@@ -71,7 +71,9 @@ export class ClipperCore implements EffectCore {
     }
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the clipper has no tempo-dependent parameters.
+  }
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     this.fresh = false;

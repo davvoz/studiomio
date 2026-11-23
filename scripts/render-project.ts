@@ -17,8 +17,8 @@ export async function main([projectDir, out, stemsDir]: string[]): Promise<void>
   const folder = new ProjectFolder(new NodeDirectory(projectDir));
   const { project, missing } = await folder.load();
   if (missing.length) throw new Error(`missing: ${missing.map(s => s.file).join(', ')}`);
-  const samples = new Map<SampleId, SampleData>();
-  for (const s of project.samples) samples.set(s.id, decodeWav(await folder.readAudio(s)));
+  const decoded = await Promise.all(project.samples.map(async s => [s.id, decodeWav(await folder.readAudio(s))] as const));
+  const samples = new Map<SampleId, SampleData>(decoded);
   const t0 = performance.now();
   const r = renderProject(project, samples, {
     stems: !!stemsDir,
@@ -31,6 +31,6 @@ export async function main([projectDir, out, stemsDir]: string[]): Promise<void>
   await writeFile(out, new Uint8Array(encodeWav([r.left, r.right], r.sampleRate, out.endsWith('.24.wav') ? 24 : 32)));
   if (stemsDir) {
     await mkdir(stemsDir, { recursive: true });
-    for (const [name, s] of r.stems) await writeFile(join(stemsDir, `${name}.wav`), new Uint8Array(encodeWav([s.l, s.r], r.sampleRate, 32)));
+    await Promise.all([...r.stems].map(([name, s]) => writeFile(join(stemsDir, `${name}.wav`), new Uint8Array(encodeWav([s.l, s.r], r.sampleRate, 32)))));
   }
 }

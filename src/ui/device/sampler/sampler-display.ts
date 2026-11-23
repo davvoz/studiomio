@@ -556,7 +556,7 @@ export class SamplerDisplay implements DeviceDisplay {
   private showEnv(env: number): void {
     view.env = env;
     this.envTabs.forEach((b, i) => b.classList.toggle('on', i + 1 === env));
-    for (const id of [...this.controls.keys()]) if (/^e\d[AHDSR]$/.test(id)) this.controls.delete(id);
+    for (const id of this.controls.keys()) if (/^e\d[AHDSR]$/.test(id)) this.controls.delete(id);
     this.envKnobs.replaceChildren(...['A', 'H', 'D', 'S', 'R'].map(k => this.control(`e${env}${k}`)));
     this.envView.show(env);
     this.update(this.settings, this.enabled);

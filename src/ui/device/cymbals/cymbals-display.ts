@@ -132,7 +132,7 @@ export class CymbalsDisplay implements DeviceDisplay {
 
   private select(i: number): void {
     view.piece = i;
-    for (const id of [...this.controls.keys()]) if (!GLOBAL_CONTROLS.includes(id)) this.controls.delete(id);
+    for (const id of this.controls.keys()) if (!GLOBAL_CONTROLS.includes(id)) this.controls.delete(id);
     this.sourceSlot.replaceChildren(this.control(pieceParam(i, 'source'), true));
     this.knobs.replaceChildren(...PIECE_CONTROLS.map(k => this.control(pieceParam(i, k))));
     this.refresh();

@@ -71,7 +71,9 @@ export class NoiseGateCore implements EffectCore, KeyedEffect, DynamicsMeter {
     this.lpK = 1 - coef(1 / (2 * Math.PI * v('scLp', 20000)), this.sampleRate);
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the noise gate has no tempo-dependent parameters.
+  }
 
   setKey(left: Float32Array | null, right: Float32Array | null): void {
     this.keyL = left;

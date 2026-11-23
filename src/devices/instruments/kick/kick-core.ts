@@ -46,7 +46,7 @@ function mono(d: SampleData | null): MonoSample | null {
 /** Reading between samples (4-point Hermite). */
 function hermite(x: Float32Array, k: number, f: number): number {
   const n = x.length - 1;
-  const y0 = x[k > 0 ? k - 1 : 0], y1 = x[k], y2 = x[k + 1 > n ? n : k + 1], y3 = x[k + 2 > n ? n : k + 2];
+  const y0 = x[Math.max(k - 1, 0)], y1 = x[k], y2 = x[Math.min(k + 1, n)], y3 = x[Math.min(k + 2, n)];
   const c1 = 0.5 * (y2 - y0), c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3, c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2);
   return ((c3 * f + c2) * f + c1) * f + y1;
 }
@@ -392,7 +392,9 @@ export class KickCore implements InstrumentCore, SamplePlayer {
   }
 
   /** The kick rings to the end, like a drum hit: the note's release doesn't count. */
-  noteOff(): void {}
+  noteOff(): void {
+    // Intentionally no-op: kicks ring naturally and ignore note-off release.
+  }
 
   silence(): void {
     for (const v of this.voices) v.choke();

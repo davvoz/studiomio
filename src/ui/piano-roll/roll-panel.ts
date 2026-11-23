@@ -65,7 +65,8 @@ export class RollPanel {
   update(clip: MidiClip, instrumentLabel: string, drawMode: boolean, folded: boolean, selected: number, barBeats: number): void {
     if (document.activeElement !== this.name) this.name.value = clip.name;
     const bars = (clip.region.end - clip.region.start) / barBeats;
-    this.info.textContent = `${+bars.toFixed(2)} bars · ${clip.notes.length} notes${selected ? ` · ${selected} selected` : ''}`;
+    const chosen = selected ? ` · ${selected} selected` : '';
+    this.info.textContent = `${+bars.toFixed(2)} bars · ${clip.notes.length} notes${chosen}`;
     this.instrument.textContent = `${instrumentLabel} ▸`;
     this.sound.textContent = clip.sound ? clip.sound.preset ?? 'custom' : 'none';
     this.clearSound.hidden = !clip.sound;

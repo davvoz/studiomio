@@ -46,8 +46,8 @@ export class ProjectFolder {
 
   /** The file holding the saved project, null if there's none. */
   private async savedFile(): Promise<string | null> {
-    for (const file of PROJECT_FILES) if (await this.dir.exists(file)) return file;
-    return null;
+    const there = await Promise.all(PROJECT_FILES.map(file => this.dir.exists(file)));
+    return PROJECT_FILES.find((_, i) => there[i]) ?? null;
   }
 
   async save(project: Project): Promise<void> {
@@ -97,7 +97,11 @@ export class ProjectFolder {
     const [base, ext] = dot > 0 ? [safe.slice(0, dot), safe.slice(dot)] : [safe, ''];
     const taken = new Set((await this.dir.list(AUDIO_DIR)).map(n => n.toLowerCase()));
     let name = safe;
-    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} ${n}${ext}`;
+    let n = 2;
+    while (taken.has(name.toLowerCase())) {
+      name = `${base} ${n}${ext}`;
+      n++;
+    }
     const path = `${AUDIO_DIR}/${name}`;
     await this.dir.writeBytes(path, data);
     return path;

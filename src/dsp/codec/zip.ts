@@ -10,7 +10,7 @@ export function crc32(u8: Uint8Array): number {
     }
   }
   let c = 0xffffffff;
-  for (let i = 0; i < u8.length; i++) c = crcTable[(c ^ u8[i]) & 255] ^ (c >>> 8);
+  for (const byte of u8) c = crcTable[(c ^ byte) & 255] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
@@ -74,13 +74,13 @@ export async function readZip(zip: Uint8Array): Promise<ZipEntry[]> {
   const count = v.getUint16(end + 10, true);
   let p = v.getUint32(end + 16, true);
   if (count === 0xffff || p === 0xffffffff) throw new Error('ZIP64 archive (over 4 GB): not supported');
-  const out: ZipEntry[] = [];
+  const entries: CentralEntry[] = [];
   for (let n = 0; n < count; n++) {
     const entry = centralEntry(zip, v, p);
     p = entry.next;
-    if (!entry.name.endsWith('/')) out.push({ name: entry.name, data: await entryData(zip, v, entry) });
+    if (!entry.name.endsWith('/')) entries.push(entry);
   }
-  return out;
+  return Promise.all(entries.map(async (entry): Promise<ZipEntry> => ({ name: entry.name, data: await entryData(zip, v, entry) })));
 }
 
 const invalid = (why: string) => new Error(`invalid ZIP archive: ${why}`);

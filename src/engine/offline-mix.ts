@@ -27,7 +27,8 @@ export interface MixDeps {
 export async function renderMix(
   project: Project, from: Beats, to: Beats, deps: MixDeps, sampleRate = 44100, tailSeconds = 1,
 ): Promise<Float32Array[]> {
-  if (!(to > from)) throw new RangeError('empty interval');
+  const ordered = to > from;
+  if (!ordered) throw new RangeError('empty interval');
   const seconds = project.tempo.secondsAt(to - from) + tailSeconds;
   const graph = deps.createGraph(Math.ceil(seconds * sampleRate), sampleRate);
   const clips = new ClipAudio(graph, deps.library, deps.renders);

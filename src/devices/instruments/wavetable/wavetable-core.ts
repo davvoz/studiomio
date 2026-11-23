@@ -169,7 +169,7 @@ class Osc {
 function frameOf(x: number): number {
   const f = Math.trunc(x);
   if (f >= LAST_FRAME) return LAST_FRAME - 1;
-  return f < 0 ? 0 : f;
+  return Math.max(f, 0);
 }
 
 class WavetableVoice implements PolyVoice, MonoVoice {

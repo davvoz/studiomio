@@ -85,7 +85,7 @@ describe('ready-made shapes', () => {
   it('the sine starts and returns to neutral, without jumps between the cycles', () => {
     const p = shapePoints(choice({ shape: 'sine', cycle: 1 }), 0, 2, param);
     expect(p[0].value).toBeCloseTo(0);
-    expect(p[p.length - 1].value).toBeCloseTo(0);
+    expect(p.at(-1)!.value).toBeCloseTo(0);
     expect(Math.max(...values(p))).toBeCloseTo(1);
     for (let i = 1; i < p.length; i++) expect(Math.abs(p[i].value - p[i - 1].value)).toBeLessThan(0.5);
   });

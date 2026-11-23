@@ -2,7 +2,6 @@
  * and, with "Map" on, the mappings of the chosen macro (minimum, maximum, remove) and the way to
  * add some, also on the macros of the racks it has inside. Every change goes through the store. With ★
  * the rack is saved for the other projects. */
-import type { DeviceId } from '../../core/id';
 import { activeSections } from '../../devices/device-type';
 import { formatParam, type NumberParam, type ParamSpec } from '../../devices/params';
 import { deviceAt, deviceTypeAt, macroSpec, mappingSpec } from '../../devices/rack-params';
@@ -159,8 +158,9 @@ export class RackPanel {
     e.dataset.param = spec.id;
     e.classList.toggle('used', m.mappings.length > 0);
     e.classList.toggle('chosen', o.mapping === index);
+    const mappingLabel = (x: (typeof m.mappings)[number]) => `${o.deviceLabel(x.device)} · ${mappingSpec(p, o.owner, x)?.label ?? x.param}`;
     e.title = m.mappings.length
-      ? `${spec.label}: moves ${m.mappings.map(x => `${o.deviceLabel(x.device)} · ${mappingSpec(p, o.owner, x)?.label ?? x.param}`).join(', ')}`
+      ? `${spec.label}: moves ${m.mappings.map(x => mappingLabel(x)).join(', ')}`
       : `${spec.label}: no mapped parameter (turn on Map, choose the macro and click a parameter)`;
     if (spring) {
       e.title += '\nSpring: released it returns to rest (↺: drag it up and down) within the return time (click to choose it).';
@@ -273,7 +273,7 @@ export class RackPanel {
    *  name. */
   private saveMenu(): MenuItem[] {
     const name = rackName(this.o.rack);
-    const saved = !!userRacks.find(name);
+    const saved = userRacks.has(name);
     return [
       { label: 'Save the rack…', run: () => this.askName() },
       { label: `Update the saved rack «${name}»`, disabled: !saved, run: () => void this.save(name) },
@@ -291,7 +291,7 @@ export class RackPanel {
   /** Saves the rack as it is now; the rack takes the name it's saved with, as in Live. */
   private async save(name: string): Promise<void> {
     const { store, owner, rack, say } = this.o;
-    const existed = !!userRacks.find(name);
+    const existed = userRacks.has(name);
     try {
       await userRacks.save(captureRack(springsAtRest(store.project), owner, rack.id, name));
     } catch (e) {
@@ -357,23 +357,38 @@ export class RackPanel {
     const mapped = (device: DeviceKey, param: string) => o.rack.macros[index].mappings.some(m => m.device === device && m.param === param);
     const racks = innerRacks(p.racksOf(o.owner), o.rack).map(rack => ({
       label: o.deviceLabel(rack.id),
-      run: () => showContextMenu(x, y, rack.macros.map((_, i) => {
-        const spec = macroSpec(p, o.owner, rack, i);
-        return { label: spec.label, checked: mapped(rack.id, spec.id), run: () => this.apply(mapMacro(o.owner, o.rack.id, index, rack.id, spec.id)) };
-      })),
+      run: () => showContextMenu(x, y, this.macroItems(p, index, rack, mapped)),
     }));
     showContextMenu(x, y, [...o.rack.devices.map(device => {
-      const type = deviceTypeAt(p, o.owner, device), settings = deviceAt(p, o.owner, device);
+      const type = deviceTypeAt(p, o.owner, device);
       return {
         label: o.deviceLabel(device),
         disabled: !type,
-        run: () => showContextMenu(x, y, (type ? activeSections(type, settings?.params ?? {}) : []).flatMap(section => section.params.filter(spec => !spec.hidden).map(spec => ({
-          label: type!.sections.length > 1 ? `${section.label} · ${spec.label}` : spec.label,
-          checked: mapped(device, spec.id),
-          run: () => this.apply(mapMacro(o.owner, o.rack.id as DeviceId, index, device, spec.id)),
-        })))),
+        run: () => showContextMenu(x, y, this.paramItems(p, index, device, mapped)),
       };
     }), ...(racks.length ? [SEPARATOR, ...racks] : [])]);
+  }
+
+  /** The macros of a rack inside, to map to macro `index`. */
+  private macroItems(p: Project, index: number, rack: Rack, mapped: (device: DeviceKey, param: string) => boolean): MenuItem[] {
+    const { o } = this;
+    return rack.macros.map((_, i) => {
+      const spec = macroSpec(p, o.owner, rack, i);
+      return { label: spec.label, checked: mapped(rack.id, spec.id), run: () => this.apply(mapMacro(o.owner, o.rack.id, index, rack.id, spec.id)) };
+    });
+  }
+
+  /** The device's visible parameters, to map to macro `index` (prefixed with their section when it has several). */
+  private paramItems(p: Project, index: number, device: DeviceKey, mapped: (device: DeviceKey, param: string) => boolean): MenuItem[] {
+    const { o } = this;
+    const type = deviceTypeAt(p, o.owner, device), settings = deviceAt(p, o.owner, device);
+    if (!type) return [];
+    const several = type.sections.length > 1;
+    return activeSections(type, settings?.params ?? {}).flatMap(section => section.params.filter(spec => !spec.hidden).map(spec => ({
+      label: several ? `${section.label} · ${spec.label}` : spec.label,
+      checked: mapped(device, spec.id),
+      run: () => this.apply(mapMacro(o.owner, o.rack.id, index, device, spec.id)),
+    })));
   }
 
   private apply(edit: Edit): void {

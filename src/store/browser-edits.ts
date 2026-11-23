@@ -52,10 +52,13 @@ export const loadSampler = (track: TrackId, sample: SampleRef): Edit =>
     return setInstrumentSamples(track, { [SAMPLE_SLOT]: sample }).apply(next, ctx);
   });
 
+/** What's loaded: the device's name, with the preset's after a colon. */
+export const loadedLabel = (label: string, preset: Preset | null): string => (preset ? `${label}: ${preset.name}` : label);
+
 /** An effect (with the preset) at the end of `owner`'s chain (a track, a bus or the master);
  *  without, on a new audio track, as when in Live it's dropped below the tracks. */
 export const loadEffect = (owner: ChainOwner | null, type: string, label: string, preset: Preset | null): Edit =>
-  edit(`Load ${preset ? `${label}: ${preset.name}` : label}`, (p, ctx) => {
+  edit(`Load ${loadedLabel(label, preset)}`, (p, ctx) => {
     let next = p, target = owner;
     // whoever works on notes wants an instrument: outside a MIDI track one is created
     const notes = !!effectType(type)?.notes;

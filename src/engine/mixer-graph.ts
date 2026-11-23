@@ -47,11 +47,11 @@ export const audibleTracks = (tracks: readonly Track[], buses: readonly Track[] 
 /** Settling time of the controls, to avoid audible jumps. */
 const SMOOTH = 0.01;
 
-/** A control's value: right away the first time, then with a smooth transition. */
-function setParam(param: AudioParamLike, value: number, time: number, first: boolean): void {
-  if (first) param.setValueAtTime(value, time);
-  else param.setTargetAtTime(value, time, SMOOTH);
-}
+type SetParam = (param: AudioParamLike, value: number, time: number) => void;
+/** A control's value right away (the first time)… */
+const setNow: SetParam = (param, value, time) => param.setValueAtTime(value, time);
+/** …then with a smooth transition. */
+const glideTo: SetParam = (param, value, time) => param.setTargetAtTime(value, time, SMOOTH);
 
 /** Puts the meter (if any) between `from` and `to`: it measures what reaches `to`. */
 function metered(from: AudioNodeLike, to: AudioNodeLike, meter: Meter | null): void {
@@ -136,11 +136,11 @@ class ChannelStrip {
   apply(mixer: MixerSettings, audible: boolean, sending: boolean): void {
     const a = this.applied;
     if (a?.mixer === mixer && a.audible === audible && a.sending === sending) return;
-    const t = this.graph.currentTime, first = a === null;
-    setParam(this.fader.gain, dbToGain(mixer.volumeDb), t, first);
-    setParam(this.panner.pan, Math.max(-1, Math.min(1, mixer.pan)), t, first);
-    setParam(this.gate.gain, audible ? 1 : 0, t, first);
-    setParam(this.sendGate.gain, sending ? 1 : 0, t, first);
+    const t = this.graph.currentTime, setParam = a === null ? setNow : glideTo;
+    setParam(this.fader.gain, dbToGain(mixer.volumeDb), t);
+    setParam(this.panner.pan, Math.max(-1, Math.min(1, mixer.pan)), t);
+    setParam(this.gate.gain, audible ? 1 : 0, t);
+    setParam(this.sendGate.gain, sending ? 1 : 0, t);
     this.applied = { mixer, audible, sending };
   }
 
@@ -160,7 +160,7 @@ class ChannelStrip {
         wire.gain.connect(to);
         this.sends.set(bus, wire);
       } else if (wire.db === db) continue;
-      setParam(wire.gain.gain, dbToGain(db), this.graph.currentTime, first);
+      (first ? setNow : glideTo)(wire.gain.gain, dbToGain(db), this.graph.currentTime);
       wire.db = db;
     }
   }
@@ -183,7 +183,7 @@ class ChannelStrip {
       if (param === 'volume') {
         // right after the fader: fader → new → (the previous ones) → volume modulation
         const gain = this.graph.createGain();
-        const next = [...this.channels.values()].map(x => x.volume).filter(g => !!g).at(-1) ?? this.modGain;
+        const next = [...this.channels.values()].map(x => x.volume).findLast(g => !!g) ?? this.modGain;
         unlink(this.fader, next);
         this.fader.connect(gain);
         gain.connect(next);
@@ -296,7 +296,8 @@ export class MixerGraph {
     if (this.masterSettings !== project.master) {
       // the master has no pan or solo: only volume and mute
       const m = project.master;
-      setParam(this.master.gain, m.mute ? 0 : dbToGain(m.volumeDb), this.graph.currentTime, this.masterSettings === null);
+      const setParam = this.masterSettings === null ? setNow : glideTo;
+      setParam(this.master.gain, m.mute ? 0 : dbToGain(m.volumeDb), this.graph.currentTime);
       this.masterSettings = m;
     }
     this.syncSidechains(project);

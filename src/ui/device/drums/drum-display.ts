@@ -215,7 +215,7 @@ export class DrumDisplay implements DeviceDisplay {
 
   private select(i: number): void {
     this.selected = i;
-    for (const id of [...this.padControls.keys()]) if (/^p\d+[a-z]/.test(id)) this.padControls.delete(id);
+    for (const id of this.padControls.keys()) if (/^p\d+[a-z]/.test(id)) this.padControls.delete(id);
     const instrument = padInstrument(this.pads[i].model);
     const keys = instrument ? INSTRUMENT_CONTROLS.filter(k => paramActive(paramSpec(this.ctx.type, padParam(i, k))!, this.values)) : PAD_CONTROLS;
     this.controls.replaceChildren(...keys.map(k => this.control(paramSpec(this.ctx.type, padParam(i, k))!)));
@@ -405,17 +405,17 @@ export class DrumDisplay implements DeviceDisplay {
     b.addEventListener('pointercancel', up, { once: true });
   }
 
-  private movePad(from: number, to: number, copy: boolean): void {
-    const a = this.pads[from], b = this.pads[to];
+  private movePad(source: number, target: number, copy: boolean): void {
+    const a = this.pads[source], b = this.pads[target];
     // with the pad's values go those of its instruments
     const values = copy
-      ? { ...padValues(a, to), ...this.innerValues(from, to) }
-      : { ...padValues(a, to), ...this.innerValues(from, to), ...padValues(b, from), ...this.innerValues(to, from) };
-    const samples = { ...this.padSamples(from, to), ...(copy ? {} : this.padSamples(to, from)) };
+      ? { ...padValues(a, target), ...this.innerValues(source, target) }
+      : { ...padValues(a, target), ...this.innerValues(source, target), ...padValues(b, source), ...this.innerValues(target, source) };
+    const samples = { ...this.padSamples(source, target), ...(copy ? {} : this.padSamples(target, source)) };
     // the samples go with the pads
-    if (this.ctx.samples && Object.values(samples).some(x => x)) this.ctx.samples.assign(samples, values);
+    if (this.ctx.samples && Object.values(samples).some(Boolean)) this.ctx.samples.assign(samples, values);
     else this.ctx.setParams(values, true);
-    this.select(to);
+    this.select(target);
   }
 
   /** The parameters of the instruments of pad `from`, with the prefix of pad `to`. */

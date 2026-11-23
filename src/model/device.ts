@@ -62,7 +62,7 @@ export function withTarget(e: EffectSettings, slot: number, target: ModTarget | 
   const targets = [...(e.targets ?? [])];
   while (targets.length <= slot) targets.push(null);
   targets[slot] = target;
-  while (targets.length && targets[targets.length - 1] === null) targets.pop();
+  while (targets.length && targets.at(-1) === null) targets.pop();
   const { targets: _old, ...rest } = e;
   return targets.length ? { ...rest, targets } : rest;
 }

@@ -61,20 +61,32 @@ export function springTimeLabel({ time, sync }: MacroSpring): string {
   return time % 4 === 0 ? countOf(time / 4, 'bar') : `${+time.toFixed(2)} beats`;
 }
 
+/** The units a spring's time can be written in: milliseconds (also with no unit), seconds, bars or beats. */
+interface SpringUnit {
+  readonly times: number;
+  readonly sync: boolean;
+}
+const named = (names: readonly string[], unit: SpringUnit) => names.map((name): [string, SpringUnit] => [name, unit]);
+const SPRING_UNITS: ReadonlyMap<string, SpringUnit> = new Map([
+  ...named(['', 'ms'], { times: 1, sync: false }),
+  ...named(['s', 'sec', 'secs', 'second', 'seconds'], { times: 1000, sync: false }),
+  ...named(['bar', 'bars'], { times: 4, sync: true }),
+  ...named(['beat', 'beats'], { times: 1, sync: true }),
+]);
+
 /** A return time written by hand: "300 ms", "1.5 s", "3/16" (of a note), "2 bars",
  *  "3 beats"; a number alone is in milliseconds. null: it can't be understood. */
 export function parseSpringTime(text: string): { time: number; sync: boolean } | null {
   const t = text.trim().toLowerCase().replace(',', '.');
   const fraction = /^(\d+)\s*\/\s*(\d+)$/.exec(t);
   if (fraction) return Number(fraction[2]) > 0 ? { time: (4 * Number(fraction[1])) / Number(fraction[2]), sync: true } : null;
-  const m = /^(\d+(?:\.\d+)?)\s*(ms|s|secs?|seconds?|bars?|beats?)?$/.exec(t);
-  if (!m) return null;
-  const n = Number(m[1]), unit = m[2] ?? 'ms';
-  if (!(n > 0)) return null;
-  if (unit === 'ms') return { time: n, sync: false };
-  if (unit.startsWith('s')) return { time: n * 1000, sync: false };
-  if (unit.startsWith('bar')) return { time: n * 4, sync: true };
-  return { time: n, sync: true };
+  const m = /^(\d+(?:\.\d+)?)\s*([a-z]*)$/.exec(t);
+  const unit = m && SPRING_UNITS.get(m[2]);
+  if (!unit) return null;
+  const n = Number(m[1]);
+  const positive = n > 0;
+  if (!positive) return null;
+  return { time: n * unit.times, sync: unit.sync };
 }
 
 /** A valid spring (rest within the travel, positive and not huge time). */
@@ -144,7 +156,7 @@ export function macroIndex(param: string): number {
 export const EMPTY_MACRO: Macro = { name: null, value: 0, mappings: [] };
 
 export const newRack = (id: DeviceId, devices: readonly DeviceKey[]): Rack =>
-  ({ id, name: null, devices: [...devices], macros: Array<Macro>(MACRO_COUNT).fill(EMPTY_MACRO) });
+  ({ id, name: null, devices: [...devices], macros: new Array<Macro>(MACRO_COUNT).fill(EMPTY_MACRO) });
 
 export const findRack = (racks: RackList, id: DeviceId): Rack | undefined => racks.find(r => r.id === id);
 

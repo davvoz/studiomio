@@ -213,7 +213,7 @@ export abstract class Track<C extends Clip = Clip, P extends TrackProps<C> = Tra
 }
 
 const emptyProps = (id: TrackId, name: string, color: Color, sceneCount: number) => ({
-  id, name, color, mixer: DEFAULT_MIXER, arrangement: [], slots: Array<null>(sceneCount).fill(null), effects: [],
+  id, name, color, mixer: DEFAULT_MIXER, arrangement: [], slots: new Array<null>(sceneCount).fill(null), effects: [],
 });
 
 export class AudioTrack extends Track<AudioClip> {
@@ -299,7 +299,7 @@ export class GroupTrack extends Track<never, GroupTrackProps> {
   get folded(): boolean { return this.props.folded ?? false; }
 
   withFolded(folded: boolean): this {
-    return folded === this.folded ? this : this.with({ folded: folded || undefined });
+    return folded === this.folded ? this : this.with({ folded });
   }
 
   accepts(_clip: Clip): _clip is never {
@@ -337,7 +337,7 @@ export class BusTrack extends Track<never, BusTrackProps> {
   get folded(): boolean { return this.props.folded ?? false; }
 
   withFolded(folded: boolean): this {
-    return folded === this.folded ? this : this.with({ folded: folded || undefined });
+    return folded === this.folded ? this : this.with({ folded });
   }
 
   accepts(_clip: Clip): _clip is never {

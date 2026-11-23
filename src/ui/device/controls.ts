@@ -57,19 +57,33 @@ function svg(tag: string, attrs: Record<string, string>): SVGElement {
   return e;
 }
 
+/** What the controls have in common: the value and how far a curve moves it (`offset`),
+ *  redrawn when they change. */
+abstract class ModulatedControl {
+  protected value = 0;
+  protected offset = 0;
+
+  modulate(offset: number): void {
+    offset = offsetOf(offset);
+    if (offset === this.offset) return;
+    this.offset = offset;
+    this.render();
+  }
+
+  protected abstract render(): void;
+}
+
 /** Knob: drag vertically (Shift for fine adjustment), wheel, double click
  *  to go back to the default value. Moved by a curve, the pointer and the number go to the value
  *  that's heard and an arc joins the knob to there. */
-class Knob implements ParamControl {
+class Knob extends ModulatedControl implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'knob', tabIndex: 0 });
   private readonly valueArc = svg('path', { class: 'knob-value' });
   private readonly autoArc = svg('path', { class: 'knob-auto' });
   private readonly pointer = svg('line', { class: 'knob-pointer', x1: '20', y1: '20', x2: '20', y2: '7' });
   private readonly readout = Object.assign(document.createElement('div'), { className: 'knob-readout' });
-  private value: number;
-  private offset = 0;
-
   constructor(private readonly spec: NumberParam, value: number, private readonly onChange: ParamChange) {
+    super();
     this.value = value;
     const face = svg('svg', { viewBox: '0 0 40 40', class: 'knob-face' });
     face.append(svg('path', { class: 'knob-track', d: arc(-SWEEP / 2, SWEEP / 2) }), this.valueArc, this.autoArc, this.pointer);
@@ -82,13 +96,6 @@ class Knob implements ParamControl {
   set(value: number): void {
     if (value === this.value) return;
     this.value = value;
-    this.render();
-  }
-
-  modulate(offset: number): void {
-    offset = offsetOf(offset);
-    if (offset === this.offset) return;
-    this.offset = offset;
     this.render();
   }
 
@@ -132,7 +139,7 @@ class Knob implements ParamControl {
     }, { passive: false });
   }
 
-  private render(): void {
+  protected render(): void {
     const unit = paramToUnit(this.spec, this.value), heard = Math.max(0, Math.min(1, unit + this.offset));
     const deg = -SWEEP / 2 + unit * SWEEP;
     // with a negative minimum (e.g. envelope −100..100) the arc starts from zero
@@ -148,13 +155,11 @@ class Knob implements ParamControl {
 
 /** Choice among few options: buttons side by side. Moved by a curve, the option
  *  that's heard is also marked. */
-class Choice implements ParamControl {
+class Choice extends ModulatedControl implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'choice' });
   private readonly buttons: HTMLButtonElement[];
-  private value = 0;
-  private offset = 0;
-
   constructor(private readonly spec: ChoiceParam, value: number, onChange: ParamChange) {
+    super();
     this.buttons = spec.options.map((o, i) => Object.assign(document.createElement('button'), {
       textContent: o, onclick: () => { this.set(i); onChange(i, true); },
     }));
@@ -169,14 +174,7 @@ class Choice implements ParamControl {
     this.render();
   }
 
-  modulate(offset: number): void {
-    offset = offsetOf(offset);
-    if (offset === this.offset) return;
-    this.offset = offset;
-    this.render();
-  }
-
-  private render(): void {
+  protected render(): void {
     const heard = heardOption(this.spec, this.value, this.offset);
     this.buttons.forEach((b, i) => {
       b.classList.toggle('on', i === this.value);
@@ -191,13 +189,11 @@ const heardOption = (spec: ChoiceParam, value: number, offset: number) =>
 
 /** Choice among many options (e.g. the delay's divisions): a drop-down menu. Moved by a curve,
  *  it shows the option that's heard. */
-class ChoiceMenu implements ParamControl {
+class ChoiceMenu extends ModulatedControl implements ParamControl {
   readonly element = Object.assign(document.createElement('div'), { className: 'choice' });
   private readonly select = document.createElement('select');
-  private value = 0;
-  private offset = 0;
-
   constructor(private readonly spec: ChoiceParam, value: number, onChange: ParamChange) {
+    super();
     this.select.append(...spec.options.map((o, i) => Object.assign(document.createElement('option'), { value: String(i), textContent: o })));
     this.select.onchange = () => onChange(Number(this.select.value), true);
     this.element.append(this.select, Object.assign(document.createElement('div'), { className: 'knob-label', textContent: spec.label }));
@@ -209,14 +205,7 @@ class ChoiceMenu implements ParamControl {
     this.render();
   }
 
-  modulate(offset: number): void {
-    offset = offsetOf(offset);
-    if (offset === this.offset) return;
-    this.offset = offset;
-    this.render();
-  }
-
-  private render(): void {
+  protected render(): void {
     const heard = heardOption(this.spec, this.value, this.offset);
     this.select.value = String(heard);
     this.select.classList.toggle('automated', heard !== this.value);

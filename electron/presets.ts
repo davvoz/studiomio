@@ -38,9 +38,8 @@ export async function writeJson(path: string, body: unknown): Promise<void> {
 
 /** Deletes the preset's files (type and name). */
 export async function removePreset(root: string, type: string, name: string): Promise<void> {
-  for (const f of await scan(root)) {
-    if (f.type === type && f.name === name) await rm(f.path, { force: true });
-  }
+  const files = (await scan(root)).filter(f => f.type === type && f.name === name);
+  await Promise.all(files.map(f => rm(f.path, { force: true })));
 }
 
 /** A name valid as a file name on Windows (and elsewhere). */

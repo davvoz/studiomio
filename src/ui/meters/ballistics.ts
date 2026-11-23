@@ -21,7 +21,8 @@ const SCALE: readonly (readonly [db: number, pos: number])[] = [
 
 /** Position (0 at the bottom, 1 at the top) of a level in dB. */
 export function meterPosition(db: number): number {
-  if (!(db > FLOOR_DB)) return 0;
+  const audible = db > FLOOR_DB;
+  if (!audible) return 0;
   for (let i = 1; i < SCALE.length; i++) {
     const [d1, p1] = SCALE[i];
     if (db <= d1) {

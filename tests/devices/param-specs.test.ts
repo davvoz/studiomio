@@ -3,12 +3,15 @@ import { paramsOf } from '../../src/devices/device-type';
 import { paramFromUnit, paramToUnit } from '../../src/devices/params';
 import { EFFECT_TYPES, INSTRUMENT_TYPES } from '../../src/devices/registry';
 
+/** Above zero (NaN isn't). */
+const aboveZero = (x: number): boolean => x > 0;
+
 describe('parameter specs', () => {
   const types = [...INSTRUMENT_TYPES, ...EFFECT_TYPES];
 
   it('a log knob starts above zero (log of 0: the knob and the macros would get NaN)', () => {
     const bad = types.flatMap(t => paramsOf(t)
-      .filter(p => p.kind === 'number' && p.scale === 'log' && !(p.min > 0))
+      .filter(p => p.kind === 'number' && p.scale === 'log' && !aboveZero(p.min))
       .map(p => `${t.label} · ${p.label}`));
     expect(bad).toEqual([]);
   });

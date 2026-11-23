@@ -1006,7 +1006,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     for (const d of s.touched) offsets[d] = 0;
     for (const slot of s.slots) {
       let x = src[slot.src];
-      if (slot.exponent !== 1) x = Math.pow(x < 0 ? 0 : x, slot.exponent);
+      if (slot.exponent !== 1) x = Math.pow(Math.max(x, 0), slot.exponent);
       if (slot.bipolar) x = 2 * x - 1;
       x *= fade[slot.src];
       if (slot.aux) x *= src[slot.aux] * fade[slot.aux];

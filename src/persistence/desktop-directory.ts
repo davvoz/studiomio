@@ -53,7 +53,7 @@ export class DesktopDirectory implements Directory {
 
   /** The folder's name: the last part of the path. */
   get name(): string {
-    return this.path.split(/[\\/]/).filter(Boolean).pop() ?? this.path;
+    return this.path.split(/[\\/]/).findLast(Boolean) ?? this.path;
   }
 
   async exists(path: string): Promise<boolean> {

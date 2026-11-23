@@ -135,7 +135,9 @@ export class DriveCore implements EffectCore {
     for (const c of this.channels) c.setFilters(this.split, this.tone, this.sampleRate * this.factor);
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the drive effect has no tempo-dependent parameters.
+  }
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     if (isSilent(inL, n) && isSilent(inR, n)) this.silent += n;

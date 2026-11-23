@@ -137,7 +137,7 @@ export function rescalePoints(points: readonly EnvelopePoint[], from: ModScale, 
 export function simplify(points: readonly EnvelopePoint[]): EnvelopePoint[] {
   const out: EnvelopePoint[] = [];
   for (const p of points) {
-    const a = out[out.length - 1], b = out[out.length - 2];
+    const a = out.at(-1), b = out.at(-2);
     if (a?.beat === p.beat && a.value === p.value) continue;
     if (a && b && a.value === p.value && b.value === p.value) out.pop();
     out.push(p);
@@ -430,7 +430,7 @@ export class EnvelopeLane {
   /** The range the commands work on: the chosen one, or the whole curve. */
   private rangeOrAll(): LaneRange | null {
     const pts = this.points();
-    return this.range ?? (pts.length ? { from: pts[0].beat, to: pts[pts.length - 1].beat } : null);
+    return this.range ?? (pts.length ? { from: pts[0].beat, to: pts.at(-1)!.beat } : null);
   }
 
   private copy(): boolean {
@@ -466,7 +466,10 @@ export class EnvelopeLane {
     const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
     const run = (): boolean => {
       if (ctrl && key === 'c') return this.copy();
-      if (ctrl && key === 'x') { if (this.copy()) this.clear('Cut modulation'); return true; }
+      if (ctrl && key === 'x') {
+      if (this.copy()) this.clear('Cut modulation');
+      return true;
+    }
       if (ctrl && key === 'v') { this.paste(); return true; }
       if (ctrl) return false;
       if (key === 'b') { this.setDraw(!this.draw); return true; }
@@ -622,8 +625,8 @@ export class EnvelopeLane {
       g.beginPath();
       g.moveTo(Math.min(0, xs[0]), ys[0]);
       xs.forEach((x, i) => g.lineTo(x, ys[i]));
-      g.lineTo(Math.max(w, xs[xs.length - 1]), ys[ys.length - 1]);
-      g.lineTo(Math.max(w, xs[xs.length - 1]), ny);
+      g.lineTo(Math.max(w, xs.at(-1)!), ys.at(-1)!);
+      g.lineTo(Math.max(w, xs.at(-1)!), ny);
       g.lineTo(Math.min(0, xs[0]), ny);
       g.closePath();
       g.fillStyle = withAlpha(color, 0.18);
@@ -631,7 +634,7 @@ export class EnvelopeLane {
       g.beginPath();
       g.moveTo(Math.min(0, xs[0]), ys[0]);
       xs.forEach((x, i) => g.lineTo(x, ys[i]));
-      g.lineTo(Math.max(w, xs[xs.length - 1]), ys[ys.length - 1]);
+      g.lineTo(Math.max(w, xs.at(-1)!), ys.at(-1)!);
       g.strokeStyle = color;
       g.lineWidth = 1.5;
       g.stroke();

@@ -11,7 +11,7 @@ export type RecentProject = FileSystemDirectoryHandle | string;
 
 /** The folder's name, for the menu. */
 export const recentName = (r: RecentProject): string =>
-  (typeof r === 'string' ? r.split(/[\\/]/).filter(Boolean).pop() ?? r : r.name);
+  (typeof r === 'string' ? r.split(/[\\/]/).findLast(Boolean) ?? r : r.name);
 
 /** Two paths are the same folder whatever the case and the separators (Windows). */
 const samePath = (a: string, b: string): boolean =>

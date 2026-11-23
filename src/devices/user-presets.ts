@@ -140,6 +140,10 @@ export class UserPresets {
     return [...(this.presets.get(type) ?? [])];
   }
 
+  has(type: string, name: string): boolean {
+    return this.find(type, name) !== undefined;
+  }
+
   find(type: string, name: string): Preset | undefined {
     return this.presets.get(type)?.find(p => p.name === name);
   }

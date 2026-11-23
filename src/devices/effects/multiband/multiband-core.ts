@@ -126,7 +126,9 @@ export class MultibandCore implements EffectCore {
     }
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the multiband effect has no tempo-dependent parameters.
+  }
 
   /** The gain (dB) band `b` would want for a level of `x` (dBFS). */
   private wanted(b: number, x: number): number {

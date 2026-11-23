@@ -7,13 +7,12 @@ import {
   MOVING_HATS, WOBBLE, PUMP_RACK, GATED, LIVELY_ACID, SIREN_RACK, HIT,
 } from '../../src/devices/factory-racks';
 import { isModulatorType } from '../../src/devices/modulators/modulators';
-import type { RackPreset } from '../../src/model/rack-preset';
+import { type RackPreset, rackPresetFrom } from '../../src/model/rack-preset';
 import { effectType, instrumentType } from '../../src/devices/registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from '../../src/devices/worklet/cores';
 import type { DeviceSettings, EffectSettings } from '../../src/model/device';
 import { MACRO_COUNT, MACRO_MAX } from '../../src/model/rack';
 import { INSTRUMENT_DEVICE } from '../../src/model/envelope';
-import { rackPresetFrom } from '../../src/model/rack-preset';
 import { AudioTrack, MidiTrack } from '../../src/model/track';
 import { loadRack } from '../../src/store/browser-edits';
 import { setMacro } from '../../src/store/rack-edits';
@@ -96,7 +95,7 @@ describe('factory racks', () => {
       expect(rackPresetFrom(JSON.parse(JSON.stringify(rack)))).toEqual(rack);
       // the devices by position: the instrument, if there is one, is the first
       const types = [...(rack.instrument ? [instrumentType(rack.instrument.type)!] : []), ...rack.effects.map(e => effectType(e.type)!)];
-      expect(types.every(t => t)).toBe(true);
+      expect(types.every(Boolean)).toBe(true);
       [...(rack.instrument ? [rack.instrument] : []), ...rack.effects].forEach((d, i) => {
         for (const id of Object.keys(d.params)) expect(paramSpec(types[i], id), `${rack.name}: ${d.type}.${id}`).toBeDefined();
       });

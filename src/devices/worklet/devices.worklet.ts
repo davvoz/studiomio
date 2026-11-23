@@ -2,11 +2,10 @@
  * effects. Each creates the engine of the requested type and receives parameters (and notes) from the port. */
 import { ARP } from '../arp/arp';
 import { Arpeggiator } from '../arp/arpeggiator';
-import { metersDynamics } from '../dsp/core';
-import { paramsOf, type DeviceType } from '../device-type';
 import {
-  followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type KeyedEffect, type SampleData, type TransportFollower,
+  type EffectCore, followsTransport, type InstrumentCore, isKeyed, type KeyedEffect, metersDynamics, playsSamples, type SampleData, type TransportFollower,
 } from '../dsp/core';
+import { paramsOf, type DeviceType } from '../device-type';
 import type { ParamSpec } from '../params';
 import { effectType, instrumentType } from '../registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from './cores';
@@ -45,10 +44,33 @@ function listen<M extends { type: string }>(port: MessagePort, handlers: Handler
 // ------------------------------------------------------------------ strumenti
 
 /** Silent engine for an unknown type: the project opens anyway. */
-const silentInstrument: InstrumentCore = { setParams() {}, noteOn() {}, noteOff() {}, silence() {}, render() {} };
+const silentInstrument: InstrumentCore = {
+  setParams() {
+    // Intentionally no-op: this fallback instrument has no parameters.
+  },
+  noteOn() {
+    // Intentionally no-op: this fallback instrument produces no sound.
+  },
+  noteOff() {
+    // Intentionally no-op: this fallback instrument produces no sound.
+  },
+  silence() {
+    // Intentionally no-op: this fallback instrument has no voices to silence.
+  },
+  render() {
+    // Intentionally no-op: this fallback instrument produces no audio.
+  },
+};
 
 /** Every how many seconds the voices' positions are sent (for whoever has them). */
 const PLAYHEADS_POST = 1 / 30;
+
+/** What went wrong, as text: an Error says its type and message, anything else is written as JSON. */
+function faultText(e: unknown): string {
+  if (e instanceof Error) return e.toString();
+  if (typeof e === 'string') return e;
+  return JSON.stringify(e) ?? typeof e;
+}
 
 class InstrumentProcessor extends AudioWorkletProcessor {
   private readonly type: string;
@@ -147,7 +169,7 @@ class InstrumentProcessor extends AudioWorkletProcessor {
       right.fill(0);
       if (this.faults.restart(currentFrame / sampleRate)) {
         this.arp = this.build();
-        this.port.postMessage({ type: 'fault', error: error === null ? null : String(error) } satisfies InstrumentReply);
+        this.port.postMessage({ type: 'fault', error: error === null ? null : faultText(error) } satisfies InstrumentReply);
       }
     }
     return this.alive;
@@ -179,7 +201,12 @@ class InstrumentProcessor extends AudioWorkletProcessor {
 
 /** Effect of unknown type: lets the sound through. */
 const passThrough: EffectCore = {
-  setParams() {}, setTempo() {},
+  setParams() {
+    // Intentionally no-op: the pass-through effect has no parameters.
+  },
+  setTempo() {
+    // Intentionally no-op: the pass-through effect has no tempo-dependent parameters.
+  },
   process: (inL, inR, outL, outR, n) => { outL.set(inL.subarray(0, n)); outR.set(inR.subarray(0, n)); },
 };
 
@@ -300,7 +327,7 @@ class EffectProcessor extends AudioWorkletProcessor {
       outR.fill(0);
       if (this.faults.restart(currentFrame / sampleRate)) {
         [this.core, this.runner] = this.build();
-        this.port.postMessage({ type: 'fault', error: error === null ? null : String(error) } satisfies EffectReply);
+        this.port.postMessage({ type: 'fault', error: error === null ? null : faultText(error) } satisfies EffectReply);
       }
     }
     return this.alive;

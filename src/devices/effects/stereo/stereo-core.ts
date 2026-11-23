@@ -42,7 +42,9 @@ export class StereoCore implements EffectCore {
     }
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the stereo effect has no tempo-dependent parameters.
+  }
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     this.fresh = false;

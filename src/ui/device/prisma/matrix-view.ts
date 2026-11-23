@@ -120,7 +120,7 @@ class Row {
     const amount = host.slider(p('Amt'));
     this.curve = host.slider(p('Curve'), '⤴ ');
     this.curve.element.classList.add('prisma-curve');
-    this.curve.element.removeAttribute('data-param');
+    delete this.curve.element.dataset.param;
     this.curve.element.title = 'Source curve: positive rises right away, negative late (double click: straight)';
     this.element = el('div', { className: 'prisma-row' },
       el('span', { className: 'prisma-row-n', textContent: String(n) }), this.src, amount.element, this.pol, this.curve.element, this.aux, this.dst, this.clear);

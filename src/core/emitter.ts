@@ -22,6 +22,8 @@ export class Emitter<E extends EventMap> {
   }
 
   emit<K extends keyof E>(event: K, ...args: E[K]): void {
-    for (const l of [...(this.listeners.get(event) ?? [])]) l(...args);
+    // a copy: a listener added while emitting hears the next event, not this one
+    const listeners = Array.from(this.listeners.get(event) ?? []);
+    for (const l of listeners) l(...args);
   }
 }

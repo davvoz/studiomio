@@ -116,7 +116,7 @@ export class Scheduler {
 
   /** How far on the clock everything is already scheduled: a change decided now can apply from here. */
   get scheduledClock(): number {
-    const run = this.runs[this.runs.length - 1];
+    const run = this.runs.at(-1);
     return run ? this.scheduledUntil + run.shift : 0;
   }
 
@@ -127,7 +127,7 @@ export class Scheduler {
 
   /** Instant at which the clock is `clock` (it flows without jumps, so the last run is enough). */
   timeAtClock(clock: number): number {
-    const run = this.runs[this.runs.length - 1];
+    const run = this.runs.at(-1);
     if (!run || !this.tempo) return 0;
     return run.time0 + this.tempo.secondsAt(clock - run.shift - run.beat0);
   }
@@ -138,7 +138,7 @@ export class Scheduler {
     if (!tempo || !this.runs.length) return;
     const horizon = now + this.lookahead;
     for (;;) {
-      const run = this.runs[this.runs.length - 1];
+      const run = this.runs.at(-1)!;
       const target = Math.min(run.beat0 + tempo.beatAt(horizon - run.time0), run.end);
       if (target > this.scheduledUntil) {
         this.emit(run, this.scheduledUntil, target);

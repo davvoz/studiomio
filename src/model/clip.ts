@@ -88,8 +88,9 @@ export abstract class Clip<P extends ClipProps = ClipProps> {
   }
 
   private static validate({ region, loop }: ClipProps): void {
-    if (!(region.end > region.start)) throw new RangeError(`empty clip region: ${region.start}–${region.end}`);
-    if (!(loop.end > loop.start)) throw new RangeError(`empty clip loop: ${loop.start}–${loop.end}`);
+    const regionOk = region.end > region.start, loopOk = loop.end > loop.start;
+    if (!regionOk) throw new RangeError(`empty clip region: ${region.start}–${region.end}`);
+    if (!loopOk) throw new RangeError(`empty clip loop: ${loop.start}–${loop.end}`);
     if (loop.enabled && region.start >= loop.end) throw new RangeError('the clip starts after the end of the loop');
   }
 }

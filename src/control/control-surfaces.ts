@@ -202,8 +202,8 @@ export class ControlSurfaces {
     ];
     if (c) lines.push(...this.connectionReport(c));
     const ring = this.host.ui.sessionRing;
-    lines.push(`Box: ${ring ? `tracks ${ring.track + 1}–${ring.track + ring.width}, scenes ${ring.scene + 1}–${ring.scene + ring.height}` : 'none'}`);
-    lines.push(`Latest MIDI messages (${this.history.length}, oldest first):`, ...this.history);
+    const box = ring ? `tracks ${ring.track + 1}–${ring.track + ring.width}, scenes ${ring.scene + 1}–${ring.scene + ring.height}` : 'none';
+    lines.push(`Box: ${box}`, `Latest MIDI messages (${this.history.length}, oldest first):`, ...this.history);
     return lines.join('\n');
   }
 
@@ -359,7 +359,8 @@ export class ControlSurfaces {
     if (!lp || this.unknownSaid) return;
     this.unknownSaid = true;
     const model = modelOfPort(lp.name ?? '');
-    console.warn(`Controller: ${model ? `${model.name} without the DAW port` : 'Launchpad not recognized'}`, this.ports());
+    const what = model ? `${model.name} without the DAW port` : 'Launchpad not recognized';
+    console.warn(`Controller: ${what}`, this.ports());
     this.host.say(model
       ? `Controller: can't find the DAW port of the ${model.name} (from the console: studiomio.surfaces.ports()).`
       : `Controller: "${lp.name}" isn't a Launchpad studiomio knows (X, Mini MK3, Pro MK3, MK2).`);

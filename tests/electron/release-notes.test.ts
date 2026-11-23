@@ -40,7 +40,8 @@ describe('releaseNotesText', () => {
   });
 
   it('too many lines: it\'s cut with an ellipsis', () => {
-    const long = `<ul>${Array.from({ length: 30 }, (_, i) => `<li>item ${i}</li>`).join('')}</ul>`;
+    const items = Array.from({ length: 30 }, (_, i) => `<li>item ${i}</li>`).join('');
+    const long = `<ul>${items}</ul>`;
     const lines = releaseNotesText(long).split('\n');
     expect(lines).toHaveLength(21);
     expect(lines.at(-2)).toBe('• item 19');

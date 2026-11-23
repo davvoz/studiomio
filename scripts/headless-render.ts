@@ -4,10 +4,9 @@
  * mixer-graph.ts (effects → volume → squared volume modulation → Web Audio stereo
  * pan). It's for measuring a project (loudness, spectrum, peaks) while building it;
  * it can also give the separate tracks (stems). */
-import { resolveParams } from '../src/devices/device-type';
+import { paramsOf, resolveParams } from '../src/devices/device-type';
 import { dbToGain, followsTransport, isKeyed, playsSamples, type EffectCore, type InstrumentCore, type SampleData } from '../src/devices/dsp/core';
 import type { ParamSpec } from '../src/devices/params';
-import { paramsOf } from '../src/devices/device-type';
 import { effectType, instrumentType } from '../src/devices/registry';
 import { EFFECT_CORES, INSTRUMENT_CORES } from '../src/devices/worklet/cores';
 import { EffectRunner } from '../src/devices/worklet/effect-runner';

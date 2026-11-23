@@ -49,11 +49,12 @@ function buildJob(): WarpJob {
 async function showEnvironment(): Promise<void> {
   const yes = (v: boolean, ok: string, ko: string) => `<span class="${v ? 'ok' : 'bad'}">${v ? ok : ko}</span>`;
   const info = await dsp.info();
+  const impls = Object.entries(info).map(([m, impl]) => `${m}: ${impl}`).join(' · ');
   $('env').innerHTML = `
     <dt>Cross-origin isolation</dt><dd>${yes(crossOriginIsolated, 'active', 'missing (the COOP/COEP headers are needed)')}</dd>
     <dt>SharedArrayBuffer</dt><dd>${yes(typeof SharedArrayBuffer !== 'undefined' && crossOriginIsolated, 'available: the workers share the samples', 'not available: the samples are copied')}</dd>
     <dt>Core / worker DSP</dt><dd>${navigator.hardwareConcurrency} / ${dsp.workers}</dd>
-    <dt>Implementazioni</dt><dd>${Object.entries(info).map(([m, impl]) => `${m}: ${impl}`).join(' · ')}</dd>`;
+    <dt>Implementazioni</dt><dd>${impls}</dd>`;
 }
 
 async function loadSource(name: string, audio: AudioData): Promise<void> {

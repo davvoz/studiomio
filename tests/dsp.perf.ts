@@ -26,7 +26,7 @@ function time(fn: () => void, runs = 5): number {
     fn();
     t.push(performance.now() - t0);
   }
-  return t.sort((a, b) => a - b)[runs >> 1];
+  return t.toSorted((a, b) => a - b)[runs >> 1];
 }
 
 it('DSP benchmark', () => {

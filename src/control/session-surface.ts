@@ -5,8 +5,7 @@
  * only when they change and in limited bursts. Each controller brings its protocol: how
  * it starts, what each button does, what colour each LED is and how it's lit. */
 import type { DeviceId, TrackId } from '../core/id';
-import type { Beats } from '../core/music-time';
-import { MAX_BPM, MIN_BPM } from '../core/music-time';
+import { type Beats, MAX_BPM, MIN_BPM } from '../core/music-time';
 import { resolveParams, visibleParamsOf, type DeviceType } from '../devices/device-type';
 import { paramFromUnit, paramToUnit, type ParamSpec } from '../devices/params';
 import { mappingSpec } from '../devices/rack-params';
@@ -350,7 +349,8 @@ export abstract class SessionSurface {
     const c = this.controlled();
     if (!c) return;
     const names = c.params.map(p => p.label).join(', ');
-    this.host.say(`${this.label} · ${c.device.type.label}${c.banks > 1 ? ` · bank ${c.bank + 1}/${c.banks}` : ''}: ${names}`);
+    const bank = c.banks > 1 ? ` · bank ${c.bank + 1}/${c.banks}` : '';
+    this.host.say(`${this.label} · ${c.device.type.label}${bank}: ${names}`);
   }
 
   /** The device the controls move: the locked one, or the chosen one in the chosen track. */

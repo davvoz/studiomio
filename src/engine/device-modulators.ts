@@ -158,7 +158,7 @@ class Modulator {
   /** Adds the starts `hits` (in order). */
   addTriggers(hits: readonly Hit[]): void {
     for (const h of hits) {
-      const last = this.triggers[this.triggers.length - 1];
+      const last = this.triggers.at(-1);
       // after a rescheduling the starts arrive again: those already seen aren't repeated
       if (last && h.on < last.on + EPS) continue;
       let env: EnvTrigger | null = null;

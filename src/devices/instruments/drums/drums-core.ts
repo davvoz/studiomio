@@ -129,7 +129,7 @@ class Kick extends PitchedDrum {
   private readonly noise = new Noise(11);
   private readonly clickFilter = new Svf(this.sampleRate);
   private click = 0;
-  private clickK = decayCoef(0.008, this.sampleRate);
+  private readonly clickK = decayCoef(0.008, this.sampleRate);
   private drive = 0;
 
   protected start(hit: Hit): void {
@@ -230,7 +230,7 @@ class Clap extends DrumVoice {
   private n = 0;
   private gap = 0;
   private burst = 0;
-  private burstK = decayCoef(0.012, this.sampleRate);
+  private readonly burstK = decayCoef(0.012, this.sampleRate);
   private tail = 0;
   private tailK = 0;
   private burstMix = 0;
@@ -270,7 +270,7 @@ class Rim extends DrumVoice {
   private dtB = 0;
   private ampK = 0;
   private click = 0;
-  private clickK = decayCoef(0.004, this.sampleRate);
+  private readonly clickK = decayCoef(0.004, this.sampleRate);
 
   protected start(hit: Hit): void {
     this.phaseA = this.phaseB = 0;
@@ -347,7 +347,7 @@ class Cowbell extends DrumVoice {
   private dtA = 0;
   private dtB = 0;
   private strike = 0;
-  private strikeK = decayCoef(0.03, this.sampleRate);
+  private readonly strikeK = decayCoef(0.03, this.sampleRate);
   private ampK = 0;
   private strikeMix = 0;
 
@@ -742,7 +742,9 @@ export class DrumCore implements InstrumentCore, SamplePlayer {
   }
 
   /** The hits ring to the end: the note's length doesn't count. */
-  noteOff(): void {}
+  noteOff(): void {
+    // Intentionally no-op: drum hits ring naturally and ignore note-off release.
+  }
 
   silence(): void {
     for (const p of this.pads) p.choke();

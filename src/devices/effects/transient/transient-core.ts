@@ -121,7 +121,9 @@ export class TransientCore implements EffectCore {
     }
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the transient effect has no tempo-dependent parameters.
+  }
 
   /** The gain in dB for one detector value. */
   private gainDb(x: number): number {

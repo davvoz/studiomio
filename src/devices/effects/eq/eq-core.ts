@@ -134,7 +134,9 @@ export class EqCore implements EffectCore {
     } else bands.forEach((b, i) => this.bands![i].set(b));
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the equalizer has no tempo-dependent parameters.
+  }
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     outL.set(inL.subarray(0, n));

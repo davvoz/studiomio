@@ -44,7 +44,7 @@ function mapPoints(markers: WarpMarkers, duration: number, sr: number, tempo: Te
   const ts = [0, duration, ...markers.markers.map(m => m.t).filter(t => t > 0 && t < duration)].sort((a, b) => a - b);
   const points: MapPoint[] = [];
   for (const t of ts) {
-    if (points.length && t * sr - points[points.length - 1][1] < 1) continue;
+    if (points.length && t * sr - points.at(-1)![1] < 1) continue;
     points.push([tempo.secondsAt(markers.beatOf(t) - b0) * sr, t * sr]);
   }
   return points;
@@ -74,7 +74,7 @@ export function clipRender(clip: AudioClip, sample: SampleRef, tempo: TempoMap, 
   return {
     job: {
       points,
-      outLength: Math.max(1, Math.round(points[points.length - 1][0])),
+      outLength: Math.max(1, Math.round(points.at(-1)![0])),
       transpose: shiftedPitch(clip, shift),
       settings,
       // only if needed: the straight clips keep their usual render key

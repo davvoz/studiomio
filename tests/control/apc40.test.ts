@@ -22,7 +22,7 @@ import { UiState } from '../../src/ui/ui-state';
 
 /** The replies of a real APC40 mkII (from the MIDI monitor). */
 const IDENTITY_REPLY = [0xf0, 0x7e, 0x00, 0x06, 0x02, 0x47, 0x29, 0x00, 0x19, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7f, 0x7f, 0x7f, 0x7f, 0x41, 0xf7];
-const DONGLE_REPLY = [0xf0, 0x47, 0x00, 0x29, 0x51, 0x00, 0x10, ...Array(16).fill(0), 0xf7];
+const DONGLE_REPLY = [0xf0, 0x47, 0x00, 0x29, 0x51, 0x00, 0x10, ...new Array(16).fill(0), 0xf7];
 
 class FakeEngine implements SurfaceEngine {
   playing = false;
@@ -91,17 +91,17 @@ function rig(opts: { tracks?: number; scenes?: number; clips?: readonly (readonl
   /** The last value sent to a LED (note) or to a ring (CC). */
   const led = (note: number, channel = 0) => {
     settle();
-    return out.filter(m => m[0] === (0x90 | channel) && m[1] === note).at(-1)?.[2];
+    return out.findLast(m => m[0] === (0x90 | channel) && m[1] === note)?.[2];
   };
   /** The last message to a pad: channel (the mode: steady, pulse, blink) and colour. */
   const pad = (note: number) => {
     settle();
-    const m = out.filter(x => (x[0] & 0xf0) === 0x90 && x[1] === note).at(-1);
+    const m = out.findLast(x => (x[0] & 0xf0) === 0x90 && x[1] === note);
     return m && { mode: m[0] & 0x0f, color: m[2] };
   };
   const ring = (n: number) => {
     settle();
-    return out.filter(m => m[0] === 0xb0 && m[1] === n).at(-1)?.[2];
+    return out.findLast(m => m[0] === 0xb0 && m[1] === n)?.[2];
   };
   return {
     store, ui, engine, apc, out, said, start, opened, t, press, release, cc, led, pad, ring, settle,
@@ -172,7 +172,7 @@ describe('APC40 on the session', () => {
     expect(r.ui.sessionRing).toBeNull(); // no LEDs or controls before the reply
     r.press(padNote(0, 0));
     expect(r.engine.calls).toEqual([]);
-    r.apc.receive([0xf0, 0x47, 0x05, 0x29, 0x51, 0x00, 0x10, ...Array(16).fill(0), 0xf7]);
+    r.apc.receive([0xf0, 0x47, 0x05, 0x29, 0x51, 0x00, 0x10, ...new Array(16).fill(0), 0xf7]);
     expect(r.ui.sessionRing).toEqual({ track: 0, scene: 0, width: 8, height: 5 });
   });
 

@@ -123,7 +123,7 @@ export class FakeGraph implements AudioGraph {
 
   /** Sources started and not stopped before starting. */
   started() {
-    return this.sources.filter(s => s.started && !(s.stoppedAt === -1));
+    return this.sources.filter(s => s.started && s.stoppedAt !== -1);
   }
 }
 

@@ -235,7 +235,7 @@ interface ReadPlan {
 /** A reading position held inside the sample [0, last]. */
 function clampToSample(q: number, last: number): number {
   if (q < 0) return 0;
-  return q > last ? last : q;
+  return Math.min(q, last);
 }
 
 class SamplerVoice implements PolyVoice, MonoVoice {

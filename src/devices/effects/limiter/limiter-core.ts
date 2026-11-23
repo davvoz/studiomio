@@ -22,7 +22,7 @@ const TRUE_PEAK_FACTOR = 4;
 /** `y` held within ±`limit`. */
 const clampTo = (y: number, limit: number): number => {
   if (y > limit) return limit;
-  return y < -limit ? -limit : y;
+  return Math.max(y, -limit);
 };
 
 export class LimiterCore implements EffectCore {
@@ -101,7 +101,9 @@ export class LimiterCore implements EffectCore {
     if (this.fresh) this.gain = this.targetGain;
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the limiter has no tempo-dependent parameters.
+  }
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
     const xl = this.gained(inL, inR, n), xr = this.scratchR;

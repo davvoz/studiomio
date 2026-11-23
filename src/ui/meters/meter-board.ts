@@ -1,8 +1,7 @@
 /* The level meters in the interface: one drawing loop for all (at every frame
  * it reads each track's levels once and updates whoever shows them). */
 import { signGlyph } from '../../core/math';
-import type { MeterReading } from '../../engine/meters';
-import { SILENT } from '../../engine/meters';
+import { type MeterReading, SILENT } from '../../engine/meters';
 import type { ChainOwner } from '../../model/project';
 import { Ballistics, FLOOR_DB, meterPosition } from './ballistics';
 

@@ -102,7 +102,7 @@ export function consolidatedMidiClip(id: ClipId, placements: readonly Placement<
 export function sessionClip(id: ClipId, placements: readonly Placement[], from: Beats, to: Beats): Clip | null {
   const segments = placements.length === 1 ? placementSegments(placements[0]) : [];
   const [first] = segments, same = (a: number, b: number) => Math.abs(a - b) < EPS;
-  if (first && same(first.start, from) && same(segments[segments.length - 1].end, to)
+  if (first && same(first.start, from) && same(segments.at(-1)!.end, to)
     && segments.every(s => same(s.contentStart, first.contentStart) && same(s.end - s.start, first.end - first.start))) {
     const piece = { start: first.contentStart, end: first.contentStart + first.end - first.start };
     return placements[0].clip.withId(id).withRegion(piece).withLoop({ enabled: true, ...piece });

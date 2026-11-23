@@ -238,7 +238,7 @@ export class Apc40 extends SessionSurface {
     const playing = this.host.engine.sessionState(track).playing;
     const r = this.ring;
     const inRing = track.slots.findIndex((c, s) => c && s >= r.scene && s < r.scene + SCENES);
-    const slot = playing?.slot ?? (inRing >= 0 ? inRing : track.slots.findIndex(c => c));
+    const slot = playing?.slot ?? (inRing >= 0 ? inRing : track.slots.findIndex(Boolean));
     const clip = slot >= 0 ? track.slots[slot] : null;
     return clip ? slotRef(id, clip.id) : null;
   }

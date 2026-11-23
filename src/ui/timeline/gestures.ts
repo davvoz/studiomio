@@ -4,9 +4,8 @@ import { placementEnd } from '../../model/arrangement';
 import { setFades, setLoopRegion } from '../../store/edits';
 import type { TimeRange } from '../../model/note-edits';
 import type { LoopRegion, Project } from '../../model/project';
-import { edit } from '../../store/project-store';
+import { edit, type ProjectStore } from '../../store/project-store';
 import { dragLoop, LOOP_CURSOR, loopPartAt, type LoopPart } from '../loop-drag';
-import type { ProjectStore } from '../../store/project-store';
 import {
   addedPlacements, cutOutRange, findPlacement, relocate, resizeMany, type PlacementRef, type Relocation, type ResizePlan,
 } from '../../store/selection-edits';

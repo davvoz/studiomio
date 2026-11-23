@@ -225,7 +225,7 @@ export class ProjectCodec {
       group: r.has('group') ? asId<'track'>(r.str('group')) : undefined,
       mixer: decodeMixer(r.get('mixer')),
       sends: r.has('sends') ? decodeSends(r.get('sends')) : undefined,
-      arrangement: arrangement.sort((a, b) => a.start - b.start),
+      arrangement: arrangement.toSorted((a, b) => a.start - b.start),
       slots: r.array('slots').map(s => (s.raw === null ? null : clipFor(s))),
       effects: r.array('effects').map(decodeEffect),
       racks: decodeRacks(r, 'racks'),

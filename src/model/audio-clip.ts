@@ -105,34 +105,34 @@ export class AudioClip extends Clip<AudioClipProps> {
     return this.transpose + this.detune / 100;
   }
 
-  withWarp(patch: Partial<WarpSettings>): AudioClip {
+  withWarp(patch: Partial<WarpSettings>): this {
     return this.with({ warp: { ...this.warp, ...patch } });
   }
 
-  withMarkers(markers: WarpMarkers): AudioClip {
+  withMarkers(markers: WarpMarkers): this {
     return this.withWarp({ markers });
   }
 
-  withWarpOptions<M extends keyof WarpOptions>(mode: M, patch: Partial<WarpOptions[M]>): AudioClip {
+  withWarpOptions<M extends keyof WarpOptions>(mode: M, patch: Partial<WarpOptions[M]>): this {
     return this.withWarp({ options: { ...this.warp.options, [mode]: { ...this.warp.options[mode], ...patch } } });
   }
 
-  withTranspose(semitones: number): AudioClip {
+  withTranspose(semitones: number): this {
     return this.with({ transpose: Math.max(-48, Math.min(48, Math.round(semitones))) });
   }
 
-  withDetune(cents: number): AudioClip {
+  withDetune(cents: number): this {
     return this.with({ detune: Math.max(-50, Math.min(50, cents)) });
   }
 
-  withGain(db: number): AudioClip {
+  withGain(db: number): this {
     return this.with({ gainDb: Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, db)) });
   }
 
   /** Reversed (or straight again). Region and loop stay where they are and the markers are
    *  mirrored around the playing part (the loop, if active): you hear the same stretch
    *  of audio, reversed. Reversing twice brings the clip back as it was. */
-  withReversed(reversed: boolean, duration: Seconds): AudioClip {
+  withReversed(reversed: boolean, duration: Seconds): this {
     if (reversed === this.reversed) return this;
     const { region, loop } = this;
     const axis = loop.enabled ? loop.start + loop.end : region.start + region.end;
@@ -149,7 +149,8 @@ export class AudioClip extends Clip<AudioClipProps> {
     const warp = this.warp.enabled, rate = Math.pow(2, this.pitch / 12);
     const toSeconds = (b: Beats) => (warp ? this.warp.markers.timeOf(b) : tempo.secondsAt(b) * rate);
     const t0 = Math.max(0, toSeconds(start)), t1 = Math.min(duration, toSeconds(end));
-    if (!(t1 - t0 > 1e-3)) return null;
+    const lasts = t1 - t0 > 1e-3;
+  if (!lasts) return null;
     // without warp the new file restarts from beat 0: everything shifts back by as much as is cut
     const shift = warp ? 0 : tempo.beatAt(t0 / rate);
     const cropped = this.warp.markers.cropped(t0, t1);

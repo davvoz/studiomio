@@ -109,7 +109,8 @@ function chainTargets(chain: ModChain): TargetDevice[] {
     seen.set(name, n);
     // the instrument and the arpeggiator (which plays inside it) can't be switched off by a curve
     const switchable = key !== INSTRUMENT_DEVICE && !isArpType(name);
-    const d = deviceTargets(key, `${type?.label ?? name}${n > 1 ? ` ${n}` : ''}`, type, values, switchable);
+    const label = n > 1 ? `${type?.label ?? name} ${n}` : type?.label ?? name;
+    const d = deviceTargets(key, label, type, values, switchable);
     if (d) out.push(d);
   };
   const label = (k: DeviceKey, param: string): string | undefined => {

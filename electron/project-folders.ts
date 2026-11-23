@@ -61,9 +61,10 @@ export async function remove(root: string, path: string): Promise<void> {
  *  itself ("Open in studiomio" on it: whether it holds a project the app says when opening it).
  *  The options (-…) and what doesn't exist are skipped; null if there's none. */
 export async function projectFolderIn(args: readonly string[]): Promise<string | null> {
-  for (const arg of args) {
-    if (arg.startsWith('-')) continue;
-    const info = await stat(arg).catch(() => null);
+  const paths = args.filter(arg => !arg.startsWith('-'));
+  const infos = await Promise.all(paths.map(arg => stat(arg).catch(() => null)));
+  for (const [i, arg] of paths.entries()) {
+    const info = infos[i];
     if (info?.isFile() && extname(arg).toLowerCase() === PROJECT_EXTENSION) return dirname(resolve(arg));
     if (info?.isDirectory()) return resolve(arg);
   }

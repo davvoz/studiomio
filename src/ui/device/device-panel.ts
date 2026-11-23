@@ -166,7 +166,7 @@ export class DevicePanel {
   /** The current preset's name, if it's a user one. */
   private userPreset(): string | null {
     const name = this.settings.preset;
-    return name && userPresets.find(this.options.type.type, name) ? name : null;
+    return name && userPresets.has(this.options.type.type, name) ? name : null;
   }
 
   /** The drop-down: first the user's presets, then the factory ones. */
@@ -200,7 +200,7 @@ export class DevicePanel {
       say?.(`«${name}» is a factory preset of ${type.label}: choose another name.`);
       return;
     }
-    const existed = !!userPresets.find(type.type, name);
+    const existed = userPresets.has(type.type, name);
     const preset: Preset = { name, params: presetParams(type, this.settings.params) };
     try {
       await userPresets.save(type.type, preset);

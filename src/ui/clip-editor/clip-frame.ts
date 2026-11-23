@@ -211,7 +211,7 @@ export function beatLevel(b: Beats, beatsPerBar: number): 0 | 1 | 2 | 3 {
  *  grid divides it, then the bar, then groups of 4 bars. */
 export function gridBand(grid: Beats, beatsPerBar: number): Beats {
   const bands = [1, beatsPerBar, 4 * beatsPerBar, 16 * beatsPerBar, 64 * beatsPerBar];
-  return bands.find(s => s >= 2 * grid - 1e-9) ?? bands[bands.length - 1];
+  return bands.find(s => s >= 2 * grid - 1e-9) ?? bands.at(-1)!;
 }
 
 /** Vertical grid from `top` down, as in Live: alternating bands (the beats, or the bars

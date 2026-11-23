@@ -28,7 +28,7 @@ export class CompressorCore implements EffectCore, KeyedEffect, DynamicsMeter {
   private curve: Curve = { threshold: -18, ratio: 4, knee: 6 };
   private attackK = 0;
   private releaseK = 0;
-  private rmsK = 0;
+  private readonly rmsK: number;
   private rms = false;
   private hpK = 0;
   /** State: detector filters, RMS level, current reduction (dB, positive). */
@@ -76,7 +76,9 @@ export class CompressorCore implements EffectCore, KeyedEffect, DynamicsMeter {
     }
   }
 
-  setTempo(): void {}
+  setTempo(): void {
+    // Intentionally no-op: the compressor has no tempo-dependent parameters.
+  }
 
   setKey(left: Float32Array | null, right: Float32Array | null): void {
     this.keyL = left;

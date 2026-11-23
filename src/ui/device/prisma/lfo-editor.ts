@@ -247,7 +247,8 @@ export class LfoEditor {
     g.globalAlpha = 1;
     g.font = '10px system-ui, sans-serif';
     g.fillStyle = LABEL;
-    g.fillText(`LFO ${this.lfo} · ${LFO_SHAPES[shape] ?? ''}${points ? ` · ${points.length} points` : ''}`, 6, 12);
+    const count = points ? ` · ${points.length} points` : '';
+    g.fillText(`LFO ${this.lfo} · ${LFO_SHAPES[shape] ?? ''}${count}`, 6, 12);
   }
 
   /** The points (the shape's, faded, when it isn't drawn) and the curve handles between drawn points. */

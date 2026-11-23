@@ -29,9 +29,13 @@ export class TransportAnchors implements ScheduledSource {
     this.send(null);
   }
 
-  stopAll(): void {}
+  stopAll(): void {
+    // Intentionally no-op: this scheduled source has no independently running work to stop.
+  }
 
-  retake(): void {}
+  retake(): void {
+    // Intentionally no-op: retakes are handled by the scheduling code that owns this source.
+  }
 
   private announce(anchor: TransportAnchor): void {
     this.last = anchor;

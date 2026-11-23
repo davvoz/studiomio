@@ -25,6 +25,8 @@ const MIN_SPAN = 0.0005;
 
 /** A marker: a position with its parameter (the slices: the parameter's number). */
 type Marker = { readonly kind: 'start' | 'end' | 'loopStart' | 'loopEnd' } | { readonly kind: 'slice'; readonly param: number };
+/** What the pointer is over: a marker, the loop, nothing. */
+type Hot = Marker | 'loop' | null;
 
 export interface WaveHost {
   values(): Readonly<Record<string, number>>;
@@ -60,7 +62,7 @@ export class WaveView {
   private v0 = 0;
   private v1 = 1;
   private peaks: { data: SampleData; forward: Peaks; reversed: Peaks } | null = null;
-  private hot: Marker | 'loop' | null = null;
+  private hot: Hot = null;
   private heads: readonly number[] = [];
   private enabled = true;
 
@@ -151,7 +153,7 @@ export class WaveView {
     return out;
   }
 
-  private hit(e: MouseEvent): Marker | 'loop' | null {
+  private hit(e: MouseEvent): Hot {
     if (!this.host.audio()) return null;
     const r = this.canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, h = r.height;
     const v = this.host.values();
@@ -225,7 +227,7 @@ export class WaveView {
       if (h && h !== 'loop' && h.kind === 'slice') points.splice(h.param - 1, 1);
       else if (!h) points.push(clamp01(this.fracAt(e.clientX)));
       else return;
-      this.host.set(sliceValues(points.sort((a, b) => a - b)), true);
+      this.host.set(sliceValues(points.toSorted((a, b) => a - b)), true);
       return;
     }
     if (!h) this.zoomAll();
@@ -435,5 +437,5 @@ export class WaveView {
   }
 }
 
-const same = (a: Marker | 'loop' | null, b: Marker | 'loop' | null): boolean =>
+const same = (a: Hot, b: Hot): boolean =>
   a === b || (!!a && !!b && a !== 'loop' && b !== 'loop' && a.kind === b.kind && (a.kind !== 'slice' || (b.kind === 'slice' && a.param === b.param)));

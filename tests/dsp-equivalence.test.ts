@@ -52,7 +52,7 @@ describe('warp: TypeScript equal to the original WarpMio', () => {
   for (const transpose of [0, 3, -5.25]) {
     it.each(cases())(`%s (transpose ${transpose})`, (_, settings) => {
       const points = warpPoints(src[0].length);
-      const job: WarpJob = { points, outLength: Math.round(points[points.length - 1][0]), transpose, settings };
+      const job: WarpJob = { points, outLength: Math.round(points.at(-1)![0]), transpose, settings };
       const ours = new WarpRenderer().render({ channels: src, sampleRate: SR }, job);
       const ref = legacy.render(src, SR, legacyJob(job));
       expect(ours.length).toBe(ref.length);

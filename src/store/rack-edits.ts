@@ -3,7 +3,7 @@
  * macros of the racks it has inside, which in turn move theirs): the engine plays the parameters
  * as always and knows nothing of the racks. */
 import type { DeviceId } from '../core/id';
-import { clampParam, paramToUnit } from '../devices/params';
+import { clampParam, paramToUnit, type ParamSpec } from '../devices/params';
 import { mappedParamValue, mappedValue, mappingSpec } from '../devices/rack-params';
 import { newEffect, withParams, type ParamValues } from '../model/device';
 import * as chain from '../model/effect-list';
@@ -51,12 +51,16 @@ function applyMacro(p: Project, owner: ChainOwner, macro: Macro): Project {
   return p;
 }
 
+/** The project with macro `index` of rack `id` (in `owner`'s chain) changed by `change`. */
+const updatingMacro = (p: Project, owner: ChainOwner, id: DeviceId, index: number, change: (m: Macro) => Macro): Project =>
+  p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, change)));
+
 /** The macro at `value` (a toggle or a button snaps), without touching the parameters. */
 const withValue = (p: Project, owner: ChainOwner, id: DeviceId, index: number, value: number): Project =>
-  p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
+  updatingMacro(p, owner, id, index, m => {
     const v = macroValueFor(macroMode(m), value);
     return m.value === v ? m : { ...m, value: v };
-  })));
+  });
 
 /** Brings the mapped parameters back to the values of the macros of all the chain's racks (e.g. after a
  *  preset that changed them). */
@@ -142,19 +146,61 @@ function withMacroValue(p: Project, owner: ChainOwner, id: DeviceId, index: numb
   return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
 }
 
+/** The macro of another kind (see setMacroMode). */
+function withMode(m: Macro, mode: MacroMode): Macro {
+  if (macroMode(m) === mode) return m;
+  const from = springOf(m)?.rest ?? m.value;
+  const value = mode === 'button' ? 0 : macroValueFor(mode, from);
+  const { mode: _old, spring: _spring, ...rest } = m;
+  if (mode === 'spring') return { ...rest, value, mode, spring: springFor(value, 1, true) };
+  return mode === 'knob' ? { ...rest, value } : { ...rest, value, mode };
+}
+
+/** The spring macro with the new rest or return time (see setMacroSpring). */
+function withSpring(m: Macro, patch: Partial<MacroSpring>): Macro {
+  const s = springOf(m);
+  if (!s) throw new TypeError('the macro isn\'t a spring');
+  const spring = springFor(patch.rest ?? s.rest, patch.time ?? s.time, patch.sync ?? s.sync);
+  if (spring.rest === s.rest && spring.time === s.time && spring.sync === s.sync && m.spring) return m;
+  return { ...m, spring, ...(patch.rest !== undefined ? { value: spring.rest } : {}) };
+}
+
+/** The macro without the mapping of `device`'s `param` (itself if it didn't have it). */
+function withoutMapping(m: Macro, device: DeviceKey, param: string): Macro {
+  const others = m.mappings.filter(x => x.device !== device || x.param !== param);
+  return others.length === m.mappings.length ? m : { ...m, mappings: others };
+}
+
+/** The macro with `mapping` added (see mapMacro): empty, it takes the parameter's position
+ *  (`current`), and a switch makes it a toggle. */
+function withMapping(m: Macro, mapping: MacroMapping, spec: ParamSpec, current: number): Macro {
+  const others = m.mappings.filter(x => x.device !== mapping.device || x.param !== mapping.param);
+  const value = others.length ? m.value : paramToUnit(spec, clampParam(spec, current)) * MACRO_MAX;
+  const toggle = !others.length && !m.mode && spec.kind === 'choice' && spec.options.length === 2;
+  return toggle
+    ? { ...m, mode: 'toggle' as const, value: macroValueFor('toggle', value), mappings: [...others, mapping] }
+    : { ...m, value: macroValueFor(macroMode(m), value), mappings: [...others, mapping] };
+}
+
+/** The rack with `mapping` on macro `index`, taken off its other macros. */
+function withMappingAt(r: Rack, index: number, mapping: MacroMapping, spec: ParamSpec, current: number): Rack {
+  return {
+    ...r,
+    macros: r.macros.map((m, i) => (i === index ? withMapping(m, mapping, spec, current) : withoutMapping(m, mapping.device, mapping.param))),
+  };
+}
+
+/** The macro with the range of `device`'s `param` changed. */
+function withRange(m: Macro, device: DeviceKey, param: string, range: { min?: number; max?: number }): Macro {
+  return { ...m, mappings: m.mappings.map(x => (x.device === device && x.param === param ? { ...x, ...range } : x)) };
+}
+
 /** Changes a macro's kind. Becoming a toggle it snaps to the nearest end; a button
  *  starts off (it lights up only while held down); a spring rests where it is (and returns in
  *  1/4), and when it stops being one it stays at its rest. */
 export const setMacroMode = (owner: ChainOwner, id: DeviceId, index: number, mode: MacroMode): Edit =>
   edit(`Macro: ${MACRO_MODES.find(([m]) => m === mode)?.[1] ?? mode}`, p => {
-    const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
-      if (macroMode(m) === mode) return m;
-      const from = springOf(m)?.rest ?? m.value;
-      const value = mode === 'button' ? 0 : macroValueFor(mode, from);
-      const { mode: _old, spring: _spring, ...rest } = m;
-      if (mode === 'spring') return { ...rest, value, mode, spring: springFor(value, 1, true) };
-      return mode === 'knob' ? { ...rest, value } : { ...rest, value, mode };
-    })));
+    const next = updatingMacro(p, owner, id, index, m => withMode(m, mode));
     return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
   });
 
@@ -162,13 +208,7 @@ export const setMacroMode = (owner: ChainOwner, id: DeviceId, index: number, mod
  *  a still spring sits at rest. */
 export const setMacroSpring = (owner: ChainOwner, id: DeviceId, index: number, patch: Partial<MacroSpring>): Edit =>
   edit(patch.rest !== undefined ? 'Spring rest' : 'Spring return', p => {
-    const next = p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => {
-      const s = springOf(m);
-      if (!s) throw new TypeError('the macro isn\'t a spring');
-      const spring = springFor(patch.rest ?? s.rest, patch.time ?? s.time, patch.sync ?? s.sync);
-      if (spring.rest === s.rest && spring.time === s.time && spring.sync === s.sync && m.spring) return m;
-      return { ...m, spring, ...(patch.rest !== undefined ? { value: spring.rest } : {}) };
-    })));
+    const next = updatingMacro(p, owner, id, index, m => withSpring(m, patch));
     return next === p ? p : applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
   });
 
@@ -188,7 +228,7 @@ export function springsAtRest(p: Project): Project {
 }
 
 export const renameMacro = (owner: ChainOwner, id: DeviceId, index: number, name: string | null): Edit =>
-  edit('Rename macro', p => p.updatingRacks(owner, racks => updateRack(racks, id, r => updateMacro(r, index, m => ({ ...m, name })))));
+  edit('Rename macro', p => updatingMacro(p, owner, id, index, m => ({ ...m, name })));
 
 /** Maps a parameter of a device of the rack (also inside a rack it has inside), or the
  *  macro of a rack it has inside (`device` the rack, `param` "macroN"), to a macro, over its whole
@@ -207,18 +247,7 @@ export const mapMacro = (owner: ChainOwner, id: DeviceId, index: number, device:
       ? { device, param, min: spec.min, max: spec.max }
       : { device, param, min: 0, max: spec.options.length - 1 };
     const current = mappedParamValue(p, owner, { device, param }) ?? spec.default;
-    const next = p.updatingRacks(owner, racks => updateRack(withoutParam(racks, device, param, id), id, r => ({
-      ...r,
-      macros: r.macros.map((m, i) => {
-        const others = m.mappings.filter(x => x.device !== device || x.param !== param);
-        if (i !== index) return others.length === m.mappings.length ? m : { ...m, mappings: others };
-        const value = others.length ? m.value : paramToUnit(spec, clampParam(spec, current)) * MACRO_MAX;
-        const toggle = !others.length && !m.mode && spec.kind === 'choice' && spec.options.length === 2;
-        return toggle
-          ? { ...m, mode: 'toggle' as const, value: macroValueFor('toggle', value), mappings: [...others, mapping] }
-          : { ...m, value: macroValueFor(macroMode(m), value), mappings: [...others, mapping] };
-      }),
-    })));
+    const next = p.updatingRacks(owner, racks => updateRack(withoutParam(racks, device, param, id), id, r => withMappingAt(r, index, mapping, spec, current)));
     return applyMacro(next, owner, requireRack(next, owner, id).macros[index]);
   });
 
@@ -227,9 +256,7 @@ export const unmapParam = (owner: ChainOwner, device: DeviceKey, param: string):
   edit('Remove from the macro', p => {
     const found = macroOf(p.racksOf(owner), device, param);
     if (!found) return p;
-    return p.updatingRacks(owner, racks => updateRack(racks, found.rack.id, r => updateMacro(r, found.index, m => ({
-      ...m, mappings: m.mappings.filter(x => x.device !== device || x.param !== param),
-    }))));
+    return updatingMacro(p, owner, found.rack.id, found.index, m => withoutMapping(m, device, param));
   });
 
 /** Changes minimum and/or maximum of a mapping; the parameter follows right away. */
@@ -237,8 +264,6 @@ export const setMappingRange = (owner: ChainOwner, device: DeviceKey, param: str
   edit('Macro range', p => {
     const found = macroOf(p.racksOf(owner), device, param);
     if (!found) throw new RangeError(`parameter ${param} isn't mapped`);
-    const next = p.updatingRacks(owner, racks => updateRack(racks, found.rack.id, r => updateMacro(r, found.index, m => ({
-      ...m, mappings: m.mappings.map(x => (x.device === device && x.param === param ? { ...x, ...range } : x)),
-    }))));
+    const next = updatingMacro(p, owner, found.rack.id, found.index, m => withRange(m, device, param, range));
     return applyMacro(next, owner, requireRack(next, owner, found.rack.id).macros[found.index]);
   });

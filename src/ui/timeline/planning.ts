@@ -5,8 +5,7 @@ import type { PlacementId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import { placementEnd, type Placement } from '../../model/arrangement';
 import type { Project } from '../../model/project';
-import type { PlacementRef, Relocation, ResizePlan } from '../../store/selection-edits';
-import { findPlacement } from '../../store/selection-edits';
+import { findPlacement, type PlacementRef, type Relocation, type ResizePlan } from '../../store/selection-edits';
 import { snapTo } from './geometry';
 
 /** The selected clips, with their current track (clip ids are unique in the project). */

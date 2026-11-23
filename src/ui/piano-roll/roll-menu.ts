@@ -40,7 +40,7 @@ const noteMenu = (r: RollMenuActions): MenuItem[] => [
   { label: 'An octave up', shortcut: 'Shift+↑', run: () => r.transpose(12) },
   { label: 'An octave down', shortcut: 'Shift+↓', run: () => r.transpose(-12) },
   SEPARATOR,
-  { label: `Delete${r.selection.size > 1 ? ` (${r.selection.size} notes)` : ''}`, shortcut: KEY.delete, run: () => r.deleteSelected() },
+  { label: r.selection.size > 1 ? `Delete (${r.selection.size} notes)` : 'Delete', shortcut: KEY.delete, run: () => r.deleteSelected() },
 ];
 
 const MENUS: { readonly [K in RollHit['kind']]: (r: RollMenuActions, hit: Extract<RollHit, { kind: K }>) => MenuItem[] } = {

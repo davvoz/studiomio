@@ -116,7 +116,7 @@ export function steppedRuns(points: readonly EnvelopePoint[], from: Beats, to: B
   const out: { from: Beats; to: Beats; value: number }[] = [];
   const add = (a: Beats, b: Beats, value: number) => {
     if (b - a <= 1e-9) return;
-    const last = out[out.length - 1];
+    const last = out.at(-1);
     if (last?.value === value) last.to = b;
     else out.push({ from: a, to: b, value });
   };

@@ -92,7 +92,7 @@ function rig(id: ModelId, opts: { tracks?: number; scenes?: number; clips?: read
   const led = (kind: 'note' | 'cc', n: number) => {
     settle();
     const status = kind === 'note' ? 0x90 : 0xb0;
-    const last = out.map((x, i) => [x, i] as const).filter(([x]) => (x[0] & 0xf0) === status && (x[0] & 0x0f) <= 2 && x[1] === n).at(-1);
+    const last = out.map((x, i) => [x, i] as const).findLast(([x]) => (x[0] & 0xf0) === status && (x[0] & 0x0f) <= 2 && x[1] === n);
     if (!last) return undefined;
     const [msg, i] = last;
     const channel = msg[0] & 0x0f;
@@ -256,9 +256,9 @@ describe('Launchpad X on the session', () => {
     expect(r.led('cc', sceneButton(0))?.color).toBe(COLOR.green);
     // track 2's fader: value and colour on channels 5 and 6
     r.settle();
-    expect(r.out.filter(m => m[0] === 0xb4 && m[1] === 22).at(-1)?.[2]).toBe(dbToFader(0));
-    expect(r.out.filter(m => m[0] === 0xb5 && m[1] === 22).at(-1)?.[2]).toBe(COLOR.green);
-    expect(r.out.filter(m => m[0] === 0xb5 && m[1] === 25).at(-1)?.[2]).toBe(COLOR.off); // the track isn't there
+    expect(r.out.findLast(m => m[0] === 0xb4 && m[1] === 22)?.[2]).toBe(dbToFader(0));
+    expect(r.out.findLast(m => m[0] === 0xb5 && m[1] === 22)?.[2]).toBe(COLOR.green);
+    expect(r.out.findLast(m => m[0] === 0xb5 && m[1] === 25)?.[2]).toBe(COLOR.off); // the track isn't there
     r.cc(22, 40, 4);
     r.cc(22, 60, 4);
     r.lp.tick();
@@ -422,8 +422,8 @@ describe('Launchpad MK2', () => {
     r.pressScene(5); // removes the mute from all
     expect(r.store.project.tracks[0].mixer.mute).toBe(false);
     r.pressScene(0);
-    const faders = r.sysex().filter(m => m[6] === 0x2b);
-    expect(faders[0]).toEqual([0xf0, 0x00, 0x20, 0x29, 0x02, 0x18, 0x2b, 0, 0, COLOR.green, dbToFader(0), 0xf7]);
+    const fader = r.sysex().find(m => m[6] === 0x2b);
+    expect(fader).toEqual([0xf0, 0x00, 0x20, 0x29, 0x02, 0x18, 0x2b, 0, 0, COLOR.green, dbToFader(0), 0xf7]);
     r.cc(21, 30);
     r.lp.tick();
     expect(r.store.project.tracks[0].mixer.volumeDb).toBe(faderToDb(30));

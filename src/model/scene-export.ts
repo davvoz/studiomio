@@ -48,7 +48,8 @@ export interface SceneArrangement extends SceneLength {
 export function sceneArrangement(project: Project, index: number, ids: IdFactory, maxBeats: Beats): SceneArrangement | null {
   const tracks = project.tracks.filter(t => !(t instanceof GroupTrack));
   const len = sceneLength(sceneClips(project, index), maxBeats);
-  if (!len || !(len.length > 0)) return null;
+  const filled = !!len && len.length > 0;
+  if (!filled) return null;
   let out = project;
   for (const t of tracks) {
     out = out.updatingTrack(t.id, track => {

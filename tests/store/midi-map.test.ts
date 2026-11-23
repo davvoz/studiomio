@@ -78,7 +78,11 @@ describe('MIDI: the macros and the parameters', () => {
     expect(r.fx(r.delay).params.mix).toBe(100);
     r.store.apply(moveMidi(cc(1), 0));
     expect(r.fx(r.delay).params.mix).toBe(0);
-    expect([0, 64, 127].map(v => (r.store.apply(moveMidi(cc(2), v)), r.fx(r.stop).params.curve))).toEqual([0, 1, 2]);
+    const curves = [0, 64, 127].map(v => {
+      r.store.apply(moveMidi(cc(2), v));
+      return r.fx(r.stop).params.curve;
+    });
+    expect(curves).toEqual([0, 1, 2]);
     r.store.apply(setMidi(r.paramAt(INSTRUMENT_DEVICE, 'cutoff'), cc(3)));
     const before = r.track().instrument.params.cutoff;
     r.store.apply(moveMidi(cc(3), 0));

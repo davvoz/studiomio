@@ -70,7 +70,9 @@ export class BrowserCatalog<F extends FolderReader = FolderReader> {
 
   /** Adds a folder (if it's already there, the same one); returns its source. */
   async addFolder(folder: F, same: (a: F, b: F) => Promise<boolean> = async (a, b) => a === b): Promise<BrowserSource> {
-    for (const p of this.places) if (await same(p.folder, folder)) return p.source;
+    const known = await Promise.all(this.places.map(p => same(p.folder, folder)));
+    const found = this.places.find((_, i) => known[i]);
+    if (found) return found.source;
     const place = this.place(folder);
     this.places = [...this.places, place];
     await this.store?.save(this.places.map(p => p.folder));

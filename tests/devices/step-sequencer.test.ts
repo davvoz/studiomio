@@ -67,8 +67,8 @@ describe('step sequencer', () => {
       expect(e.pitch).toBe(36);
     });
     // gate at 50 %: each note ends halfway through its step
-    const offs = events.filter(e => e.kind === 'off');
-    expect(offs[0].frame).toBe(STEP / 2);
+    const off = events.find(e => e.kind === 'off');
+    expect(off?.frame).toBe(STEP / 2);
     expect(events.at(-1)!.kind).toBe('off');
   });
 

@@ -30,7 +30,7 @@ export const writeText = (d: Directory, path: string, text: string): Promise<voi
 export function splitPath(path: string): { dirs: string[]; file: string } {
   const parts = path.split('/').filter(p => p !== '' && p !== '.');
   if (parts.length === 0 || parts.includes('..') || path.startsWith('/')) throw new Error(`invalid path: "${path}"`);
-  return { dirs: parts.slice(0, -1), file: parts[parts.length - 1] };
+  return { dirs: parts.slice(0, -1), file: parts.at(-1)! };
 }
 
 /** In-memory folder: for tests and for projects not saved yet. */
@@ -54,7 +54,8 @@ export class MemoryDirectory implements Directory {
   }
 
   async list(dir: string): Promise<string[]> {
-    const prefix = dir ? `${splitPath(`${dir}/x`).dirs.join('/')}/` : '';
+    const dirs = dir ? splitPath(`${dir}/x`).dirs : null;
+    const prefix = dirs ? `${dirs.join('/')}/` : '';
     return [...this.files.keys()]
       .filter(k => k.startsWith(prefix) && !k.slice(prefix.length).includes('/'))
       .map(k => k.slice(prefix.length));

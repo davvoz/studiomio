@@ -12,7 +12,7 @@ import { MASTER, type ChainOwner } from '../model/project';
 import type { RackPreset } from '../model/rack-preset';
 import type { SampleRef } from '../model/sample';
 import { MidiTrack } from '../model/track';
-import { loadEffect, loadInstrument, loadRack, loadSampler } from '../store/browser-edits';
+import { loadEffect, loadInstrument, loadRack, loadSampler, loadedLabel } from '../store/browser-edits';
 import type { ProjectStore } from '../store/project-store';
 import { addedPlacements, importSample } from '../store/selection-edits';
 import { importSampleToSlot } from '../store/session-edits';
@@ -55,7 +55,7 @@ export class BrowserLoader {
     if (!track) return;
     ui.selectTrack(track.id);
     this.deps.openDevices(track.id);
-    this.deps.say(`${preset ? `${label}: ${preset.name}` : label} su "${track.name}".`);
+    this.deps.say(`${loadedLabel(label, preset)} su "${track.name}".`);
   }
 
   private effect(type: string, preset: Preset | null, target: LoadTarget): void {
@@ -68,7 +68,7 @@ export class BrowserLoader {
     if (!where) return;
     this.deps.openDevices(where);
     const name = where === MASTER ? 'Master' : store.project.track(where)?.name;
-    this.deps.say(`${preset ? `${label}: ${preset.name}` : label} at the end of "${name}"'s effects.`);
+    this.deps.say(`${loadedLabel(label, preset)} at the end of "${name}"'s effects.`);
   }
 
   private rack(rack: RackPreset, target: LoadTarget): void {

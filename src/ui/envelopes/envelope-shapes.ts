@@ -103,7 +103,7 @@ export function shapePoints(choice: ShapeChoice, from: Beats, to: Beats, scale: 
         continue;
       }
       // the cycle doesn't fit: it's cut at the end of the range, on the line it was drawing
-      const last = out[out.length - 1];
+      const last = out.at(-1)!;
       out.push({ beat: to, value: last.value + ((value - last.value) * (to - last.beat)) / (beat - last.beat) });
       return out;
     }

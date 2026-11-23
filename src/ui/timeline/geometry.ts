@@ -105,9 +105,16 @@ export function nudgeGrid(g: GridSetting, by: -1 | 1): GridSetting {
   return { ...g, density: Math.max(GRID_DENSITY.min, Math.min(GRID_DENSITY.max, g.density + by)) };
 }
 
+/** An adaptive grid's density, as " +1" or " -2" (nothing at 0). */
+function densityLabel(density: number): string {
+  if (!density) return '';
+  const sign = density > 0 ? '+' : '';
+  return ` ${sign}${density}`;
+}
+
 /** The grid's label: "Adaptive" (with its density) or the fixed value, "T" for triplets. */
 export function gridLabel(g: GridSetting): string {
-  const name = g.fixed === null ? `Adaptive${g.density ? ` ${g.density > 0 ? '+' : ''}${g.density}` : ''}` : FIXED_GRIDS[g.fixed].label;
+  const name = g.fixed === null ? `Adaptive${densityLabel(g.density)}` : FIXED_GRIDS[g.fixed].label;
   return g.triplet ? `${name} T` : name;
 }
 
@@ -120,7 +127,7 @@ export function gridStep(pxPerBeat: number, signature: TimeSignature, minPx = 14
   if (fixed) return triplet(fixed.step(signature));
   const steps = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, bar, 2 * bar, 4 * bar, 8 * bar, 16 * bar, 32 * bar].map(triplet);
   const need = minPx * Math.pow(2, setting.density);
-  return steps.find(s => s * pxPerBeat >= need) ?? steps[steps.length - 1];
+  return steps.find(s => s * pxPerBeat >= need) ?? steps.at(-1)!;
 }
 
 /** Lines closer than this aren't drawn (a fixed grid zoomed out would be a grey wall). */
