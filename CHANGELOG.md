@@ -6,6 +6,10 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- Internal rework of the session, device, timeline views and of the app: their rules now live in
+  separate tested modules. Nothing changes in use.
+
 ## [0.3.66] - 2026-11-23
 
 ### Fixed
