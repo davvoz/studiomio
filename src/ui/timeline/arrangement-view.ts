@@ -2,23 +2,20 @@ import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { PlacementId, TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
-import { placementEnd } from '../../model/arrangement';
 import type { AudioClip } from '../../model/audio-clip';
 import type { TimeRange } from '../../model/note-edits';
 import { addMidiClip } from '../../store/edits';
 import type { ProjectStore } from '../../store/project-store';
+import { acceptBrowserDrops } from '../browser/browser-drag';
+import { Surface } from '../surface';
 import type { UiState } from '../ui-state';
 import type { PeakStore } from '../waveform';
-import { geometryShowing, hitTest, snapTo, type ClipZone, type Hit, type TimelineGeometry } from './geometry';
-import {
-  FadeGesture, LoopRegionGesture, MarqueeGesture, MoveClipsGesture, PanGesture, ResizeClipGesture, RulerZoomGesture, ScrubGesture,
-  type Gesture, type GestureHost, type Pointer,
-} from './gestures';
-import { TimelineScrollbar } from './scrollbar';
-import { acceptBrowserDrops } from '../browser/browser-drag';
-import { LOOP_CURSOR, loopPartAt } from '../loop-drag';
-import { Surface } from '../surface';
+import { geometryShowing, hitTest, type Hit } from './geometry';
+import { LoopRegionGesture, PanGesture, RulerZoomGesture, ScrubGesture, type Gesture, type GestureHost, type Pointer } from './gestures';
+import { dropPlace, gestureFor, hoverCursor, isPan, newClipAt, rulerCursor } from './lane-actions';
 import { paintLanes, paintPlayhead, paintRuler, rulerZoneAt, type RulerZone } from './painters';
+import { TimelineScrollbar } from './scrollbar';
+import { ZoomHistory, fitRange, revealing, scrollbarRange, scrolledWithin, selectionSpan, wheelMove } from './timeline-nav';
 
 export interface ArrangementDeps {
   readonly store: ProjectStore;
@@ -37,29 +34,9 @@ export interface ArrangementDeps {
   readonly rulerMenu?: (x: number, y: number) => void;
 }
 
-type HitKey = `clip:${ClipZone}` | 'lane' | 'empty';
-const keyOf = (h: Hit): HitKey => (h.kind === 'clip' ? `clip:${h.zone}` : h.kind);
-
-/** Which gesture starts by pressing on each thing. */
-const gestureFor: Readonly<Record<HitKey, (host: GestureHost, hit: Hit, p: Pointer) => Gesture>> = {
-  'clip:body': (h, hit, p) => new MoveClipsGesture(h, hit as Extract<Hit, { kind: 'clip' }>, p),
-  'clip:start': (h, hit) => new ResizeClipGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
-  'clip:end': (h, hit) => new ResizeClipGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
-  'clip:fadeIn': (h, hit) => new FadeGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
-  'clip:fadeOut': (h, hit) => new FadeGesture(h, hit as Extract<Hit, { kind: 'clip' }>),
-  lane: (h, _hit, p) => new MarqueeGesture(h, p),
-  empty: (h, _hit, p) => new MarqueeGesture(h, p),
-};
-
-const hoverCursor: Readonly<Record<HitKey, string>> = {
-  'clip:body': 'grab', 'clip:start': 'ew-resize', 'clip:end': 'ew-resize', 'clip:fadeIn': 'col-resize', 'clip:fadeOut': 'col-resize',
-  lane: 'default', empty: 'default',
-};
-
-/** How many views X can go back through. */
-const ZOOM_HISTORY = 32;
-
-/** The timeline: ruler with loop and playhead, lanes with the clips, mouse gestures. */
+/** The timeline: ruler with loop and playhead, lanes with the clips, mouse gestures.
+ *  This file draws, measures and wires the events: what the mouse does is in lane-actions, the
+ *  scrolling and zooming in timeline-nav, the gestures in gestures, the drawing in painters. */
 export class ArrangementView implements GestureHost {
   readonly element: HTMLElement;
   readonly store: ProjectStore;
@@ -73,7 +50,7 @@ export class ArrangementView implements GestureHost {
   });
   private gesture: Gesture | null = null;
   /** The views before each Z or W, for X (zoom back), as in Live. */
-  private readonly zoomHistory: TimelineGeometry[] = [];
+  private readonly zoomHistory = new ZoomHistory();
   /** The clip under the pointer (shows the fade handles). */
   private hovered: PlacementId | null = null;
   private dirty = true;
@@ -120,7 +97,7 @@ export class ArrangementView implements GestureHost {
   }
 
   snapStep(p: Pointer): Beats | null {
-    return this.ui.snap && !p.alt ? this.ui.gridStep(this.geo.pxPerBeat, this.store.project.signature) : null;
+    return this.ui.snap && !p.alt ? this.grid() : null;
   }
 
   seek(beat: Beats): void {
@@ -134,26 +111,19 @@ export class ArrangementView implements GestureHost {
 
   /** Brings beat `beat` into view (for example the playhead leaving the screen). */
   reveal(beat: Beats): void {
-    const g = this.geo, w = this.lanes.width;
-    const x = g.beatToX(beat);
-    if (x < 0 || x > w * 0.92) this.ui.setGeometry(g.scrolled(beat - (w * 0.1) / g.pxPerBeat, g.scrollY));
+    const g = revealing(this.geo, beat, this.lanes.width);
+    if (g) this.ui.setGeometry(g);
   }
 
   /** Brings the view to beat `beat` (left edge) and `y` pixels scrolled vertically,
    *  without going past the last track. */
   private scrollTo(beat: Beats, y: number): void {
-    const g = this.geo;
-    const maxY = Math.max(0, this.store.project.visibleTracks.length * g.trackHeight - this.lanes.height + 40);
-    this.ui.setGeometry(g.scrolled(beat, Math.min(maxY, y)));
+    this.ui.setGeometry(scrolledWithin(this.store.project, this.geo, beat, y, this.lanes.height));
   }
 
-  /** The bar under the timeline: it scrolls up to bringing the end of the piece (or of the loop,
-   *  or the playhead) to the left edge. */
-  private updateScrollbar(): void {
-    const { project } = this.store, g = this.geo;
-    const visible = this.lanes.width / g.pxPerBeat;
-    const content = Math.max(project.arrangementEnd, project.loop.end, this.deps.engine.position);
-    this.scrollbar.update({ total: Math.max(content, g.scrollBeat) + visible, start: g.scrollBeat, visible });
+  /** The grid at the current zoom. */
+  private grid(): Beats {
+    return this.ui.gridStep(this.geo.pxPerBeat, this.store.project.signature);
   }
 
   // ---------------------------------------------------------------- drawing
@@ -170,14 +140,14 @@ export class ArrangementView implements GestureHost {
     if (engine.playing && this.ui.following && !this.gesture) this.reveal(engine.position);
     if (this.dirty) {
       this.dirty = false;
-      const grid = this.ui.gridStep(this.geo.pxPerBeat, project.signature);
+      const grid = this.grid();
       paintRuler(this.ruler.g, project, this.geo, this.ruler.width, this.ruler.height, grid);
       paintLanes(this.lanes.g, {
         project: this.gesture?.preview ?? project, geo: this.geo, width: this.lanes.width, height: this.lanes.height, grid,
         selection: this.ui.selection, range: this.ui.range, hovered: this.hovered, hidden: this.gesture?.hidden ?? new Set(), taken: engine.takenTracks, selectedTracks: this.ui.selectedTracks,
         peaks: (c: AudioClip) => this.deps.peaks.get(c.sample, c.reversed),
       });
-      this.updateScrollbar();
+      this.scrollbar.update(scrollbarRange(project, this.geo, this.lanes.width, engine.position));
     }
     const o = this.overlay;
     o.g.clearRect(0, 0, o.width, o.height);
@@ -190,6 +160,12 @@ export class ArrangementView implements GestureHost {
   private pointer(e: PointerEvent | MouseEvent, el: HTMLElement): Pointer {
     const r = el.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey };
+  }
+
+  /** What's under the pointer on the lanes. */
+  private hitAt(e: MouseEvent, el: HTMLElement): Hit {
+    const p = this.pointer(e, el);
+    return hitTest(this.store.project, this.geo, p.x, p.y);
   }
 
   private startGesture(e: PointerEvent, el: HTMLElement, make: (p: Pointer) => Gesture, button = 0): void {
@@ -228,11 +204,9 @@ export class ArrangementView implements GestureHost {
     if (this.deps.engine.playing) this.ui.pauseFollow();
   }
 
-  /** Dragging with the middle button, or with Ctrl+Alt as in Live (no middle button on a
-   *  touchpad), moves the view. True if the gesture started. */
+  /** Dragging with the middle button, or with Ctrl+Alt, moves the view. True if the gesture started. */
   private startPan(e: PointerEvent, el: HTMLElement): boolean {
-    const hand = e.button === 0 && (e.ctrlKey || e.metaKey) && e.altKey;
-    if (e.button !== 1 && !hand) return false;
+    if (!isPan({ button: e.button, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey })) return false;
     this.pauseFollow();
     this.startGesture(e, el, p => new PanGesture(this, p, (beat, y) => this.scrollTo(beat, y)), e.button);
     return true;
@@ -242,19 +216,17 @@ export class ArrangementView implements GestureHost {
     el.addEventListener('pointerdown', e => {
       if (this.startPan(e, el)) return;
       if (e.button === 0) this.pauseFollow();
-      const p = this.pointer(e, el);
-      const hit = hitTest(this.store.project, this.geo, p.x, p.y);
+      const hit = this.hitAt(e, el);
       if (hit.kind === 'clip' || hit.kind === 'lane') this.ui.selectTrack(hit.track);
-      this.startGesture(e, el, pp => gestureFor[keyOf(hit)](this, hit, pp));
+      this.startGesture(e, el, p => gestureFor(this, hit, p));
     });
     el.addEventListener('pointermove', e => {
-      const p = this.pointer(e, el);
       if (this.gesture) {
-        this.gesture.move(p);
+        this.gesture.move(this.pointer(e, el));
         return;
       }
-      const hit = hitTest(this.store.project, this.geo, p.x, p.y);
-      el.style.cursor = hoverCursor[keyOf(hit)];
+      const hit = this.hitAt(e, el);
+      el.style.cursor = hoverCursor(hit);
       this.hover(hit.kind === 'clip' ? hit.placement.id : null);
     });
     el.addEventListener('pointerleave', () => this.hover(null));
@@ -262,21 +234,17 @@ export class ArrangementView implements GestureHost {
     el.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (this.gesture) return;
-      const p = this.pointer(e, el);
-      const hit = hitTest(this.store.project, this.geo, p.x, p.y);
+      const hit = this.hitAt(e, el);
       // right click on an unselected clip: it becomes the selection, as in Live
       if (hit.kind === 'clip' && !this.ui.selection.has(hit.placement.id)) this.ui.select([hit.placement.id]);
       this.deps.contextMenu(hit, e.clientX, e.clientY);
     });
     el.addEventListener('dblclick', e => {
-      const p = this.pointer(e, el);
-      const hit = hitTest(this.store.project, this.geo, p.x, p.y);
-      if (hit.kind === 'clip') this.deps.openClip(hit.track, hit.placement.id);
-      else if (hit.kind === 'lane' && this.store.project.track(hit.track)?.kind === 'midi') {
-        // double click on an empty MIDI track: a one-bar clip
-        const bar = this.store.project.signature.beatsPerBar;
-        this.store.apply(addMidiClip(hit.track, Math.floor(hit.beat / bar) * bar, bar));
-      }
+      const hit = this.hitAt(e, el);
+      if (hit.kind === 'clip') return this.deps.openClip(hit.track, hit.placement.id);
+      // double click on an empty MIDI track: a one-bar clip
+      const clip = newClipAt(this.store.project, hit);
+      if (clip) this.store.apply(addMidiClip(clip.track, clip.start, clip.length));
     });
   }
 
@@ -291,7 +259,7 @@ export class ArrangementView implements GestureHost {
     el.addEventListener('pointermove', e => {
       const p = this.pointer(e, el);
       if (this.gesture) this.gesture.move(p);
-      else el.style.cursor = this.rulerCursor(rulerZoneAt(p.y), p.x);
+      else el.style.cursor = rulerCursor(rulerZoneAt(p.y), this.store.project.loop, p.x, b => this.geo.beatToX(b));
     });
     this.bindGestureEnd(el);
     el.addEventListener('contextmenu', e => {
@@ -312,25 +280,18 @@ export class ArrangementView implements GestureHost {
     });
   }
 
-  private rulerCursor(zone: RulerZone, x: number): string {
-    if (zone === 'numbers') return 'zoom-in';
-    if (zone === 'scrub') return 'text';
-    return LOOP_CURSOR[loopPartAt(this.store.project.loop, x, b => this.geo.beatToX(b))];
-  }
-
   // ---------------------------------------------------------------- zoom commands (Live's Z, X, W)
 
   /** Z: the time selection (or the selected clips) fills the view. False if nothing is selected. */
   zoomToSelection(): boolean {
-    const span = this.selectionSpan();
+    const span = selectionSpan(this.store.project, this.ui.range, this.ui.selection);
     if (span) this.show(span);
     return span !== null;
   }
 
   /** W: the whole piece in view, up to the end of the last clip (or of the loop). */
   zoomToFit(): void {
-    const p = this.store.project;
-    this.show({ start: 0, end: Math.max(p.arrangementEnd, p.loop.end, 4 * p.signature.beatsPerBar) });
+    this.show(fitRange(this.store.project));
   }
 
   /** X: back to the view before the last Z or W. False if there's none. */
@@ -343,17 +304,7 @@ export class ArrangementView implements GestureHost {
   private show(range: TimeRange): void {
     this.pauseFollow();
     this.zoomHistory.push(this.geo);
-    if (this.zoomHistory.length > ZOOM_HISTORY) this.zoomHistory.shift();
     this.ui.setGeometry(geometryShowing(this.geo, range.start, range.end, this.lanes.width));
-  }
-
-  /** The time range drawn in the clips, otherwise the span of the selected clips. */
-  private selectionSpan(): TimeRange | null {
-    if (this.ui.range) return this.ui.range;
-    const ids = this.ui.selection;
-    const chosen = this.store.project.tracks.flatMap(t => t.arrangement.filter(pl => ids.has(pl.id)));
-    if (!chosen.length) return null;
-    return { start: Math.min(...chosen.map(pl => pl.start)), end: Math.max(...chosen.map(placementEnd)) };
   }
 
   /** Wheel: scrolls; with Ctrl it zooms around the pointer; with Shift it scrolls horizontally.
@@ -362,17 +313,15 @@ export class ArrangementView implements GestureHost {
   bindWheel(el: HTMLElement): void {
     el.addEventListener('wheel', e => {
       e.preventDefault();
-      const g = this.geo;
       const r = this.lanes.canvas.getBoundingClientRect();
-      if (e.ctrlKey || e.metaKey) {
+      const move = wheelMove(this.geo, { deltaX: e.deltaX, deltaY: e.deltaY, zoom: e.ctrlKey || e.metaKey, shift: e.shiftKey, x: e.clientX - r.left });
+      if (move.kind === 'zoom') {
         this.pauseFollow();
-        this.ui.setGeometry(g.zoomed(g.pxPerBeat * Math.exp(-e.deltaY * 0.0025), Math.max(0, e.clientX - r.left)));
+        this.ui.setGeometry(move.geometry);
         return;
       }
-      // Shift+wheel: Chromium on Windows already delivers it as deltaX (with deltaY at 0)
-      const dx = e.shiftKey ? e.deltaX || e.deltaY : e.deltaX, dy = e.shiftKey ? 0 : e.deltaY;
-      if (dx) this.pauseFollow();
-      this.scrollTo(g.scrollBeat + dx / g.pxPerBeat, g.scrollY + dy);
+      if (move.horizontal) this.pauseFollow();
+      this.scrollTo(move.beat, move.y);
     }, { passive: false });
   }
 
@@ -386,10 +335,7 @@ export class ArrangementView implements GestureHost {
     // where something falls: the track underneath (null below the tracks) and the beat, on the grid
     const place = (e: DragEvent) => {
       const r = el.getBoundingClientRect();
-      const x = e.clientX - r.left, y = e.clientY - r.top;
-      const track = this.store.project.visibleTracks[this.geo.trackIndexAt(y)];
-      const step = this.ui.gridStep(this.geo.pxPerBeat, this.store.project.signature);
-      return { track: track?.id ?? null, beat: Math.max(0, snapTo(this.geo.xToBeat(x), step)) };
+      return dropPlace(this.store.project, this.geo, this.grid(), e.clientX - r.left, e.clientY - r.top);
     };
     el.addEventListener('drop', e => {
       const files = [...(e.dataTransfer?.files ?? [])];
