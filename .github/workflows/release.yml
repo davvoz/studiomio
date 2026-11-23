@@ -31,6 +31,10 @@ jobs:
       - run: npm run electron:build
       - run: npx electron-builder --win --publish never
 
+      # the packaged app must start (window, app, devices, no errors) before it reaches users:
+      # v0.3.63 passed the build and never opened its window. Not skipped by "[skip tests]".
+      - run: node scripts/check-startup.mjs release/win-unpacked/studiomio.exe
+
       # the release is created in one go with all the files: electron-builder uploaded them in
       # parallel and created two per tag (or a half one, without latest.yml for updates).
       # The text is the version's section in CHANGELOG.md. The copy with the fixed name is for the

@@ -1,0 +1,23 @@
+# Does the app start? Builds the Windows app as the release does (without the installer and without
+# publishing anything) and checks that it opens and starts without errors (scripts/check-startup.mjs).
+# Run it by hand from Actions → startup → Run workflow; the release does the same check on its own.
+name: startup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: ./.github/actions/setup
+
+      - run: npm run build
+      - run: npm run electron:build
+      - run: npx electron-builder --win --dir --publish never
+      - run: node scripts/check-startup.mjs release/win-unpacked/studiomio.exe
