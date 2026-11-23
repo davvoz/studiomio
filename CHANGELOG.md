@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.60] - 2026-11-23
+
 ### Added
 - Piano roll: every key shows its note name (when the rows are tall enough to read it); the C
   that marks the octave stays darker, the sharps are written on the black keys.
