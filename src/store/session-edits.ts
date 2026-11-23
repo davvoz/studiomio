@@ -3,12 +3,12 @@
 import type { ClipId, SceneId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { AudioClip } from '../model/audio-clip';
-import type { Clip, Color } from '../model/clip';
+import { fullRange, type Clip, type Color } from '../model/clip';
 import { paletteColor } from '../model/colors';
-import { MidiClip } from '../model/midi-clip';
+import { MidiClip, type Note } from '../model/midi-clip';
 import type { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
-import { AudioTrack, GroupTrack, type Track } from '../model/track';
+import { AudioTrack, GroupTrack, MidiTrack, type Track } from '../model/track';
 import { edit, type Edit } from './project-store';
 
 export interface SlotRef {
@@ -30,6 +30,17 @@ export const newSlotMidiClip = ({ track, slot }: SlotRef): Edit =>
   edit('New MIDI clip', (p, { ids }) => {
     const t = requireTrack(p, track);
     return p.updatingTrack(track, x => x.withSlot(slot, MidiClip.empty(ids.next('clip'), 'Clip MIDI', t.color, p.signature.beatsPerBar)));
+  });
+
+/** A recorded take in the slot: a looping clip `length` beats long with `notes`, named after the
+ *  track. Whatever was in the slot is replaced. Applied again with the same `id` (the notes played up to
+ *  the end of the take), the clip stays the same one: the engine keeps playing it. */
+export const recordedClip = ({ track, slot }: SlotRef, id: ClipId, notes: readonly Note[], length: Beats): Edit =>
+  edit('Record clip', p => {
+    const t = requireTrack(p, track);
+    if (!(t instanceof MidiTrack)) throw new TypeError(`the track ${t.name} isn't a MIDI track`);
+    const clip = MidiClip.create({ id, name: t.name, color: t.color, ...fullRange(0, length, true), notes });
+    return p.updatingTrack(track, x => x.withSlot(slot, clip));
   });
 
 /** Empties several slots in a single step. */

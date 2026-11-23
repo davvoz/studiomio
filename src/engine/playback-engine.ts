@@ -211,6 +211,34 @@ export class PlaybackEngine {
     this.switchTracks(busy, (at, id) => this.session.stop(id, at));
   }
 
+  /** A recording into a slot of `track` begins: the track stops at the next boundary (it no longer
+   *  follows the timeline, as when launching a slot) and the recording starts there; with the
+   *  transport stopped it starts now, with play. Returns the clock where it starts. */
+  startRecording(track: TrackId): number {
+    if (this.playing) {
+      let start = this.boundary();
+      this.switchTracks([track], (at, id) => {
+        this.session.stop(id, at);
+        start = at;
+      });
+      return start;
+    }
+    this.session.stop(track, this.cursor);
+    this.play();
+    this.events.emit('session');
+    return this.cursor;
+  }
+
+  /** The continuous clock now, in beats: it doesn't jump back with the loop (recordings are timed on it). */
+  get sessionClock(): number {
+    return this.clock;
+  }
+
+  /** Where something asked for now happens while playing: the next launch boundary. */
+  get nextBoundary(): number {
+    return this.boundary();
+  }
+
   /** The tracks taken by the session go back to their timeline right away. */
   backToArrangement(): void {
     const at = this.playing ? this.scheduler.scheduledClock : -Infinity;

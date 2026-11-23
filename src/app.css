@@ -490,6 +490,14 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 .slot .clip-name + .rename, .slot .rename { flex: 1; min-width: 0; padding: 0 3px; font-size: 11.5px; }
 .slot .slot-stop { width: 13px; height: 13px; padding: 0; font-size: 7px; line-height: 1; border-radius: 2px; background: transparent; color: var(--muted); opacity: .5; }
 .slot .slot-stop:hover { opacity: 1; }
+.slot .record {
+  flex: none; width: 18px; height: 18px; padding: 0; font-size: 11px; line-height: 1; border-radius: 3px;
+  border: none; background: transparent; color: #c0504a;
+}
+.slot .record:hover { background: #0004; color: #ff6a5f; }
+.slot .record.on { background: #e0463c; color: #fff; animation: record-pulse 1s ease-in-out infinite; }
+.slot.recording { box-shadow: inset 0 0 0 1px #e0463c; }
+@keyframes record-pulse { 50% { background: #8f2a24; } }
 .slot.selected { outline: 2px solid #fff; outline-offset: -2px; }
 .slot.playing .launch { background: #3ec46d; color: #0c1a10; }
 .slot.queued .launch, .track-stop.queued { animation: session-blink .3s steps(2, jump-none) infinite; }

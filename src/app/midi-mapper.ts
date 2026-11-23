@@ -39,8 +39,8 @@ export class MidiMapper {
   ) {
     surfaces.onMidi(data => this.receive(data));
     addEventListener('keydown', e => this.key(e), true);
-    // the ports open when mapping or if the project has mappings
-    const listen = () => { surfaces.listening = ui.midiMapping || store.project.midiMap.length > 0; };
+    // the ports open when mapping, if the project has mappings, or with an armed track (a MIDI keyboard plays it)
+    const listen = () => { surfaces.listening = ui.midiMapping || store.project.midiMap.length > 0 || ui.keyboardTracks.size > 0; };
     store.onChange(listen);
     ui.onChange(() => {
       listen();

@@ -6,6 +6,15 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- MIDI recording into the session, as in Live: on a MIDI track armed with ⌨ the empty slots show
+  ●. A click records from the next launch boundary (with the transport stopped it starts it); ●
+  again ends the take at the next boundary, where the new clip starts looping. "Record here" in a
+  slot's menu also records over a clip (the take replaces it). Stopping the transport ends the take
+  at the beat after the last note. The whole take is one undo step.
+- MIDI keyboards play the armed tracks too (any port that isn't an APC40 or a Launchpad, any channel,
+  with velocity), and are recorded. A note mapped to a macro or parameter stays a mapping.
+
 ## [0.3.64] - 2026-11-23
 
 ### Fixed

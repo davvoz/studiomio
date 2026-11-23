@@ -309,3 +309,27 @@ describe('session: building blocks', () => {
     expect(offs.toSorted((a, b) => a - b)).toEqual([1, 2]); // 60 and 62 end at 500
   });
 });
+
+describe('session: recording into a slot', () => {
+  it('when stopped the recording starts now, with play, and the track leaves its timeline', () => {
+    const r = rig();
+    expect(r.engine.startRecording(r.t(0))).toBe(0);
+    expect(r.engine.playing).toBe(true);
+    r.runUntil(1);
+    expect(r.played(0, 40)).toEqual([]);
+    expect(r.played(1, 45)).toEqual([[45, 0.05]]);
+  });
+
+  it('during play it starts at the next bar, where the track stops', () => {
+    const r = rig();
+    r.engine.play(0);
+    r.runUntil(0.6);
+    expect(r.engine.startRecording(r.t(0))).toBe(4);
+    r.runUntil(3.2);
+    expect(r.played(0, 40)).toEqual([[40, 0.05], [40, 0.55], [40, 1.05], [40, 1.55]]);
+    expect(r.state(0)).toMatchObject({ playing: null });
+    // the clock keeps going (it doesn't jump back with the loop): the next boundary is the bar after
+    expect(r.engine.sessionClock).toBeGreaterThan(6);
+    expect(r.engine.nextBoundary).toBe(8);
+  });
+});

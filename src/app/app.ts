@@ -5,6 +5,8 @@ import type { Color } from '../model/clip';
 import type { Placement } from '../model/arrangement';
 import { AudioClip } from '../model/audio-clip';
 import { MidiClip } from '../model/midi-clip';
+import { launchQuantumBeats } from '../model/launch';
+import { midiTargetsOf } from '../model/midi-map';
 import type { SampleRef } from '../model/sample';
 import { BrowserCatalog, standardSources } from '../browser/catalog';
 import { FsFolder, indexedDbPlaces } from '../browser/fs-folder';
@@ -65,6 +67,8 @@ import { BrowserLoader } from './browser-loader';
 import { KeyMapper } from './key-mapper';
 import { keyboardBase, NoteKeyboard, NoteKeys } from './note-keyboard';
 import { MidiMapper } from './midi-mapper';
+import { MidiNoteInput } from './midi-note-input';
+import { SessionRecorder } from './session-recorder';
 import { mainMenu } from './main-menu';
 import { recentName, RecentProjects, type RecentProject } from './recent-projects';
 import { ProjectSession } from './project-session';
@@ -132,6 +136,8 @@ export class App implements Commands, TimelineActions {
   readonly drawMode = new DrawMode();
   /** The keyboard and MIDI inputs: they listen from construction on, kept here for their whole life. */
   readonly noteKeys: NoteKeys;
+  /** Recording what's played into the session's slots. */
+  readonly recorder: SessionRecorder;
   readonly keyMapper: KeyMapper;
   readonly midiMapper: MidiMapper;
   readonly midiTargets: MidiTargets;
@@ -216,7 +222,12 @@ export class App implements Commands, TimelineActions {
     const pasteDeviceItems = (owner: ChainOwner) => this.pasteDeviceItems(owner);
     const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner), dropItem, showAutomation, pasteDeviceItems };
     const meters = new MeterBoard(owner => this.audio.engine.levels(owner));
+    this.recorder = new SessionRecorder(this.audio.engine, this.store, () => {
+      const p = this.store.project;
+      return launchQuantumBeats(p.launchQuantization, p.signature);
+    }, t => this.say(t));
     this.sessionView = new SessionView({
+      recorder: this.recorder,
       store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard, showAutomation,
       openClip: ref => this.openClip(ref),
       openDevices: owner => this.openDevices(owner),
@@ -287,16 +298,31 @@ export class App implements Commands, TimelineActions {
         this.ui.selectTrack(p.groupsOf(this.ui.track).findLast(g => g.folded)?.id ?? null);
       }
     });
+    // what's played by hand (computer keyboard, MIDI keyboard) sounds and is recorded
+    const playing = {
+      press: (track: TrackId, pitch: number, velocity: number) => {
+        this.audio.pressNote(track, pitch, velocity);
+        this.recorder.press(track, pitch, velocity);
+      },
+      release: (track: TrackId, pitch: number) => {
+        this.audio.releaseNote(track, pitch);
+        this.recorder.release(track, pitch);
+      },
+    };
     // before mapped keys: with ⌨ on the note keys play, even if they're mapped
     this.noteKeys = new NoteKeys(this.ui, new NoteKeyboard({
       base: id => keyboardBase(this.store.project, id),
-      press: (track, pitch, velocity) => this.audio.pressNote(track, pitch, velocity),
-      release: (track, pitch) => this.audio.releaseNote(track, pitch),
+      ...playing,
       say: t => this.say(t),
     }));
     // before the shortcuts: the keys mapped to macros and parameters
     this.keyMapper = new KeyMapper(this.store, this.ui, t => this.say(t), this.springs);
     this.midiMapper = new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
+    const midiNotes = new MidiNoteInput(() => this.ui.keyboardTracks,
+      (channel, number) => this.ui.midiMapping || midiTargetsOf(this.store.project.midiMap, { type: 'note', channel, number }).length > 0,
+      playing);
+    this.surfaces.onMidi(data => midiNotes.receive(data));
+    this.ui.onChange(() => midiNotes.keepTracks(this.ui.keyboardTracks));
     this.midiTargets = new MidiTargets(this.store, this.ui, t => this.say(t));
     bindKeys(document, this, KEYMAP);
     releaseSelectsAfterClick(document);

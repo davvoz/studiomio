@@ -2,6 +2,7 @@
  * scene), below the track's stop and the mixer; after the tracks the buses (without clips, only the
  * mixer); on the right the master with the scene launch. A click on ▶ launches a clip (at the next quantization boundary), ▶ of a
  * scene launches the row. The clips are dragged from one slot to another (Ctrl copies). */
+import type { Unsubscribe } from '../../core/emitter';
 import type { BrowserItem, LoadTarget } from '../../browser/item';
 import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
@@ -36,8 +37,18 @@ import { groupMenuItems, newTrackHereItems, toggleFold } from '../track-groups';
 import { clickTrack, type UiState } from '../ui-state';
 import { MasterStripView, TrackStrip } from './mixer-strip';
 
+/** Recording into the slots (see app/session-recorder). */
+export interface SlotRecorder {
+  /** The slot the track is recording into, null if none. */
+  recordingSlot(track: TrackId): number | null;
+  /** Starts recording into the slot, or ends the track's take. */
+  toggle(ref: SlotRef): void;
+  onChange(fn: () => void): Unsubscribe;
+}
+
 export interface SessionViewDeps {
   readonly store: ProjectStore;
+  readonly recorder: SlotRecorder;
   readonly ui: UiState;
   readonly engine: PlaybackEngine;
   readonly meters: MeterBoard;
@@ -184,6 +195,8 @@ export class SessionView {
   /** The picker of the audio files to put in a slot (the slot is `pickFor`). */
   private readonly picker = el<HTMLInputElement>('input', { type: 'file', accept: 'audio/*', multiple: true, hidden: true });
   private pickFor: SlotRef | null = null;
+  /** The armed tracks when the slots were last drawn. */
+  private armedShown: ReadonlySet<TrackId> = new Set();
 
   constructor(private readonly deps: SessionViewDeps) {
     const { store } = deps;
@@ -213,9 +226,12 @@ export class SessionView {
     bindKeys(this.element, this, SESSION_KEYS, true);
     store.onChange(() => this.render());
     deps.ui.onChange(() => {
+      // arming a track shows ● on its empty slots
+      if (deps.ui.keyboardTracks !== this.armedShown) this.render();
       this.highlightTrack();
       this.placeRing();
     });
+    deps.recorder.onChange(() => this.render());
     deps.engine.onSessionChange(() => this.refreshState());
     this.render();
     requestAnimationFrame(this.frame);
@@ -338,6 +354,7 @@ export class SessionView {
   /** The columns are the visible tracks (a closed group hides those of its
    *  tracks); the buses sit on the right, next to the master. */
   private render(): void {
+    this.armedShown = this.deps.ui.keyboardTracks;
     const p = this.deps.store.project, tracks = p.visibleTracks;
     const T = tracks.length, B = p.buses.length, S = p.scenes.length, rights = busRights(p.buses);
     // the leftover space sits between the tracks and the buses: buses and master stay on the right edge
@@ -621,13 +638,20 @@ export class SessionView {
     const cell = el('div', { className: clip ? 'slot filled' : 'slot' });
     cell.dataset.track = t.id;
     cell.dataset.slot = String(s);
+    const ref = { track: t.id, slot: s }, recording = this.deps.recorder.recordingSlot(t.id) === s;
+    cell.classList.toggle('recording', recording);
     if (clip) {
       cell.style.setProperty('--clip', clip.color);
       cell.title = `${clip.name}: ▶ launches, a click opens the editor, drag to move (Ctrl copies)`;
       cell.append(
-        el('button', { className: 'launch', textContent: '▶', title: 'Launch the clip', onclick: () => this.deps.engine.launchSlot(t.id, s) }),
+        recording
+          ? this.recordButton(ref, true)
+          : el('button', { className: 'launch', textContent: '▶', title: 'Launch the clip', onclick: () => this.deps.engine.launchSlot(t.id, s) }),
         el('span', { className: 'clip-name', textContent: clip.name }),
         el('div', { className: 'progress' }));
+    } else if (recording || this.armed(t)) {
+      cell.title = 'Click ● to record a clip here (double click: an empty MIDI clip)';
+      cell.append(this.recordButton(ref, recording));
     } else {
       if (t.kind === 'audio') cell.title = 'Double click: import an audio file into this slot (or drag it here)';
       cell.append(el('button', { className: 'slot-stop', textContent: '■', title: 'Stop the track', onclick: () => this.deps.engine.stopTrack(t.id) }));
@@ -635,6 +659,27 @@ export class SessionView {
     if (this.picked.has(slotKey(t.id, s))) cell.classList.add('selected');
     this.slots.set(slotKey(t.id, s), cell);
     return cell;
+  }
+
+  /** A MIDI track armed for playing (⌨): its empty slots record. */
+  private armed(t: Track): boolean {
+    return t.kind === 'midi' && this.deps.ui.keyboardTracks.has(t.id);
+  }
+
+  /** ● of a slot: lit while it's recording there. */
+  private recordButton(ref: SlotRef, on: boolean): HTMLButtonElement {
+    return el('button', {
+      className: on ? 'record on' : 'record', textContent: '●',
+      title: on ? 'Stop recording: the clip ends at the next boundary and starts looping' : 'Record a clip here (from the next boundary)',
+      onclick: () => this.record(ref),
+    });
+  }
+
+  /** Records into the slot (arming the track if it isn't), or ends the track's take. */
+  private record(ref: SlotRef): void {
+    const { ui, recorder } = this.deps;
+    if (recorder.recordingSlot(ref.track) === null && !ui.keyboardTracks.has(ref.track)) ui.toggleKeyboardTrack(ref.track);
+    recorder.toggle(ref);
   }
 
   /** A group's slot, as in Live: if at least one of its tracks has a clip in the row, ▶
@@ -875,6 +920,7 @@ export class SessionView {
     }
     if (!clip) {
       return [
+        ...this.recordItems(ref, track),
         track.kind === 'midi'
           ? { label: 'New MIDI clip', shortcut: 'double click', run: () => { this.apply(newSlotMidiClip(ref)); this.openSlot(ref); } }
           : { label: 'Import audio…', shortcut: 'double click', run: () => this.importAudioTo(ref) },
@@ -903,6 +949,7 @@ export class SessionView {
     return [
       { label: 'Launch', shortcut: 'Enter', run: () => this.launchSelected() },
       { label: 'Open in the editor', shortcut: 'click', run: () => this.openSlot(ref) },
+      ...this.recordItems(ref, track),
       SEPARATOR,
       { label: 'Cut', shortcut: KEY.cut, run: () => this.cutSelected() },
       { label: 'Copy', shortcut: KEY.copy, run: () => this.copySelected() },
@@ -913,6 +960,15 @@ export class SessionView {
       SEPARATOR,
       { label: 'Delete', shortcut: KEY.delete, run: () => this.clearSelected() },
     ];
+  }
+
+  /** On a MIDI track: record into the slot (a clip there is replaced), or stop the recording. */
+  private recordItems(ref: SlotRef, track: Track): MenuItem[] {
+    if (track.kind !== 'midi') return [];
+    const at = this.deps.recorder.recordingSlot(track.id);
+    if (at !== null) return at === ref.slot ? [{ label: 'Stop recording', run: () => this.record(ref) }] : [];
+    const label = track.slots[ref.slot] ? 'Record here (replaces the clip)' : 'Record here';
+    return [{ label, run: () => this.record(ref) }];
   }
 
   // ---------------------------------------------------------------- helpers
