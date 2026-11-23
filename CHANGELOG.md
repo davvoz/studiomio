@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.65] - 2026-11-23
+
 ### Added
 - MIDI recording into the session, as in Live: on a MIDI track armed with ⌨ the empty slots show
   ●. A click records from the next launch boundary (with the transport stopped it starts it); ●
