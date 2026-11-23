@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.64] - 2026-11-23
+
 ### Fixed
 - Ripristinato l'avvio dell'app dopo che gli await agli entrypoint impedivano la creazione della finestra.
 
