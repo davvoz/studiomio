@@ -11,10 +11,11 @@ import { setMasterAutomation, setMasterAutomationOn } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import { BeatAxis } from './clip-editor/clip-geometry';
 import { el } from './dom';
+import type { DrawMode } from './draw-mode';
 import type { LaneCurves } from './envelopes/envelope-lane';
 import { masterChain, masterTargetDevices } from './envelopes/mod-targets';
 import { ModulationEditor } from './envelopes/modulation-editor';
-import { gridStep, type TimelineGeometry } from './timeline/geometry';
+import type { TimelineGeometry } from './timeline/geometry';
 import type { UiState } from './ui-state';
 
 /** The colour of the master's curves (orange already belongs to the playhead). */
@@ -31,13 +32,14 @@ export class MasterAutomation {
   private axisOf: { geo: TimelineGeometry; axis: BeatAxis } | null = null;
   private curvesOf: { project: Project; curves: LaneCurves } | null = null;
 
-  constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, clipboard: Clipboard) {
+  constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, clipboard: Clipboard, drawMode: DrawMode) {
     const self = this;
     this.editor = new ModulationEditor({
       get axis() { return self.axis(); },
       clipboard,
+      drawMode,
       curves: () => this.curves(),
-      grid: () => gridStep(ui.geometry.pxPerBeat, store.project.signature),
+      grid: () => ui.gridStep(ui.geometry.pxPerBeat, store.project.signature),
       signature: () => store.project.signature,
       playhead: () => engine.position,
       commit: (_label, target, points) => {

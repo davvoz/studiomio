@@ -6,7 +6,7 @@ import { AudioClip } from '../../src/model/audio-clip';
 import { WarpMarkers } from '../../src/model/warp-markers';
 import { autoWarp, firstHit, followTempo, scaleTempo } from '../../src/model/warp-tools';
 import {
-  BeatAxis, contentBeatAt, contentToSeconds, secondsToContent, shiftAudioUnderMarker, timelineBeatOf, withLoopSafe, withRegionSafe,
+  BeatAxis, contentBeatAt, contentToSeconds, secondsToContent, shiftAudioUnderMarker, timelineBeatOf, withLoopMoved, withLoopSafe, withRegionSafe,
 } from '../../src/ui/clip-editor/clip-geometry';
 import { sampleRef } from '../helpers/fixtures';
 
@@ -74,6 +74,17 @@ describe('editor: computations', () => {
     const late = clip.withRegion({ start: 6, end: 8 });
     expect(withLoopSafe(late, 0, 2).region.start).toBe(0); // the clip can't start after the loop
     expect(withRegionSafe(looped, 7, 8).region.start).toBeLessThan(4);
+  });
+
+  it('the loop dragged whole carries the start marker with it', () => {
+    const c = withLoopSafe(clip.withRegion({ start: 1, end: 6 }), 2, 4);
+    const moved = withLoopMoved(c, 3.5, 5.5);
+    expect(moved.loop).toEqual({ enabled: true, start: 3.5, end: 5.5 });
+    expect(moved.region).toEqual({ start: 2.5, end: 7.5 });
+    // backwards too, and with the loop off it turns on as before
+    const back = withLoopMoved(c.withLoop({ ...c.loop, enabled: false }), 0.5, 2.5);
+    expect(back.loop).toEqual({ enabled: true, start: 0.5, end: 2.5 });
+    expect(back.region).toEqual({ start: -0.5, end: 4.5 });
   });
 
   it('Shift+drag: the audio slides under the marker, the beat stays', () => {

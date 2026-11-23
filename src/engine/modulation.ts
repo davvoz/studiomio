@@ -6,7 +6,7 @@
  * on the timeline. */
 import type { Placement } from '../model/arrangement';
 import type { Clip } from '../model/clip';
-import { envelopeValueAt, scaleKindOf, scaleOf, targetKey, type ClipEnvelope, type ModScaleKind, type ModTarget } from '../model/envelope';
+import { envelopeValueAt, ONOFF_REST, scaleKindOf, scaleOf, targetKey, type ClipEnvelope, type ModScaleKind, type ModTarget } from '../model/envelope';
 import type { Track } from '../model/track';
 import type { AudioParamLike } from './audio-graph';
 import { timeAtClock, type ScheduledSource, type ScheduleWindow } from './scheduler';
@@ -80,13 +80,22 @@ export function switchSink(inner: ModSink, on: boolean): ModSink {
 
 /** How a curve's value reaches the target. `curved`: the map isn't a straight line, so
  *  the ramps are broken into short stretches to follow the drawn curve. */
-const OUTPUT: { readonly [K in ModScaleKind]: { readonly map: (v: number) => number; readonly curved: boolean } } = {
+const OUTPUT: {
+  readonly [K in ModScaleKind]: {
+    readonly map: (v: number) => number;
+    readonly curved: boolean;
+    /** What goes out where there's no curve, if it isn't the scale's neutral. */
+    readonly rest?: number;
+  }
+} = {
   // the volume goes to the gain with a square: half curve ≈ −12 dB, as it's heard
   volume: { map: v => v * v, curved: true },
   pan: { map: v => v, curved: false },
   param: { map: v => v, curved: false },
   // the transpose is played by the audio clip itself (see AudioTrackPlayer): it doesn't arrive here
   transpose: { map: v => v, curved: false },
+  // an effect's on/off: outside the curves its button decides again
+  onoff: { map: v => v, curved: false, rest: ONOFF_REST },
 };
 
 /** Maximum length (in beats) of a ramp stretch for the curved maps. */
@@ -94,7 +103,10 @@ const CURVE_STEP = 1 / 16;
 const EPS = 1e-9;
 
 /** A target's neutral value, as it reaches the destination. */
-const neutralOf = (t: ModTarget) => OUTPUT[scaleKindOf(t)].map(scaleOf(t).neutral);
+function neutralOf(t: ModTarget): number {
+  const out = OUTPUT[scaleKindOf(t)];
+  return out.rest ?? out.map(scaleOf(t).neutral);
+}
 
 /** True if some clip of the track (timeline or slot) has modulations. */
 const hasEnvelopes = (t: Track) => t.arrangement.some(p => p.clip.envelopes.length) || t.slots.some(c => !!c?.envelopes.length);

@@ -5,9 +5,9 @@ import type { Beats, TimeSignature } from '../../core/music-time';
 import type { Clip } from '../../model/clip';
 import { dragLoop, LOOP_CURSOR, loopPartAt, type BeatRange, type LoopPart } from '../loop-drag';
 import type { Pointer } from '../timeline/gestures';
-import { snapTo } from '../timeline/geometry';
+import { drawnGridStep, rulerZoom, snapTo } from '../timeline/geometry';
 import { COLORS } from '../timeline/painters';
-import { withLoopSafe, withRegionSafe, type BeatAxis } from './clip-geometry';
+import { withLoopMoved, withLoopSafe, withRegionSafe, type BeatAxis } from './clip-geometry';
 
 /** Ruler bands, from the top. */
 export const FRAME = { loopBand: 10, ruler: 28 } as const;
@@ -114,7 +114,7 @@ export class LoopBandGesture<C extends Clip> implements ClipGesture<C> {
   end(): void {
     const r = this.range;
     if (!this.dragged) return this.host.commit('Clip loop', c => withLoopSafe(c, c.loop.start, c.loop.end, !c.loop.enabled));
-    if (r) this.host.commit('Clip loop', c => withLoopSafe(c, r.start, r.end));
+    if (r) this.host.commit('Clip loop', c => this.applied(c, r));
   }
 
   cancel(): void {
@@ -124,29 +124,40 @@ export class LoopBandGesture<C extends Clip> implements ClipGesture<C> {
 
   preview(clip: C): C {
     const r = this.range;
-    return r ? withLoopSafe(clip, r.start, r.end) : clip;
+    return r ? this.applied(clip, r) : clip;
+  }
+
+  /** Dragged whole, the loop carries the start marker with it; by an edge it doesn't. */
+  private applied(clip: C, r: BeatRange): C {
+    return this.part === 'body' ? withLoopMoved(clip, r.start, r.end) : withLoopSafe(clip, r.start, r.end);
   }
 }
 
-/** Dragging moves the view. On the ruler (`seekOnClick`) a click brings the timeline cursor
- *  there; elsewhere a click does nothing, so as not to interrupt playback. */
+/** Dragging moves the view. On the ruler (`onRuler`) it also zooms as in Live: down zooms in,
+ *  up zooms out, around the grabbed point; and a click brings the timeline cursor there. Elsewhere
+ *  a click does nothing, so as not to interrupt playback. */
 export class PanGesture<C extends Clip> implements ClipGesture<C> {
-  readonly cursor = 'grabbing';
+  readonly cursor: string;
   private dragged = false;
   private readonly start: BeatAxis;
+  private readonly anchor: Beats;
 
-  constructor(private readonly host: ClipHost<C>, private readonly origin: Pointer, private readonly seekOnClick = false) {
+  constructor(private readonly host: ClipHost<C>, private readonly origin: Pointer, private readonly onRuler = false) {
     this.start = host.axis;
+    this.anchor = this.start.xToBeat(origin.x);
+    this.cursor = onRuler ? 'zoom-in' : 'grabbing';
   }
 
   move(p: Pointer): void {
     if (!this.dragged && !moved(p, this.origin)) return;
     this.dragged = true;
-    this.host.setAxis(this.start.scrolled(this.start.startBeat - (p.x - this.origin.x) / this.start.pxPerBeat));
+    const axis = this.onRuler ? this.start.zoomed(this.start.pxPerBeat * rulerZoom(p.y - this.origin.y), this.origin.x) : this.start;
+    // the grabbed beat follows the pointer
+    this.host.setAxis(axis.scrolled(this.anchor - p.x / axis.pxPerBeat));
   }
 
   end(p: Pointer): void {
-    if (!this.dragged && this.seekOnClick) this.host.seekContent(this.host.axis.xToBeat(p.x));
+    if (!this.dragged && this.onRuler) this.host.seekContent(this.host.axis.xToBeat(p.x));
   }
 
   cancel(): void { /* niente */ }
@@ -177,7 +188,7 @@ export const frameGestureFor: { readonly [K in FrameHit['kind']]: <C extends Cli
 export const frameCursor: { readonly [K in FrameHit['kind']]: (hit: Extract<FrameHit, { kind: K }>) => string } = {
   loop: hit => LOOP_CURSOR[hit.part],
   flag: () => 'ew-resize',
-  ruler: () => 'pointer',
+  ruler: () => 'zoom-in',
 };
 
 // ------------------------------------------------------------------ drawing
@@ -206,8 +217,10 @@ export function gridBand(grid: Beats, beatsPerBar: number): Beats {
 /** Vertical grid from `top` down, as in Live: alternating bands (the beats, or the bars
  *  from afar) and stronger lines for bars, beats and half beats. */
 export function paintBeatGrid(
-  g: CanvasRenderingContext2D, axis: BeatAxis, width: number, top: number, height: number, grid: Beats, signature: TimeSignature,
+  g: CanvasRenderingContext2D, axis: BeatAxis, width: number, top: number, height: number, snapStep: Beats, signature: TimeSignature,
 ): void {
+  // a fixed grid zoomed out draws a line every few steps, not a grey wall
+  const grid = drawnGridStep(snapStep, axis.pxPerBeat);
   const bar = signature.beatsPerBar, band = gridBand(grid, bar);
   g.fillStyle = GRID_BAND;
   for (let i = Math.floor(axis.xToBeat(0) / band); axis.beatToX(i * band) < width; i++) {

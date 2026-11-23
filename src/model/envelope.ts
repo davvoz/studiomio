@@ -19,6 +19,13 @@ export const CLIP_TRANSPOSE: ModTarget = { kind: 'clip', param: 'transpose' };
 /** The "instrument" device in the targets (the effects have their own id). */
 export const INSTRUMENT_DEVICE = 'instrument';
 
+/** An effect's on/off as a target (Live's "Device On"): the curve says on or off while the clip
+ *  plays, outside it the effect's button decides again. Not a real parameter (no device has it). */
+export const DEVICE_ON = '@on';
+
+/** What the engine sends to an effect's on/off outside the curves: "the button decides". */
+export const ONOFF_REST = -1;
+
 export interface EnvelopePoint {
   /** Clip beat (like the notes and the warp). */
   readonly beat: Beats;
@@ -37,6 +44,8 @@ export interface ModScale {
   readonly min: number;
   readonly max: number;
   readonly neutral: number;
+  /** The values go in steps of this size (absent: continuous). */
+  readonly step?: number;
 }
 
 /** Volume: how much of the track's volume remains (1 = all, 0 = silence). Pan: offset
@@ -47,11 +56,21 @@ export const MOD_SCALES = {
   pan: { min: -1, max: 1, neutral: 0 },
   param: { min: -1, max: 1, neutral: 0 },
   transpose: { min: -48, max: 48, neutral: 0 },
+  /** An effect's on/off: 1 on, 0 off (the engine switches at half). */
+  onoff: { min: 0, max: 1, neutral: 1, step: 1 },
 } as const satisfies Readonly<Record<string, ModScale>>;
 
 export type ModScaleKind = keyof typeof MOD_SCALES;
 
-export const scaleKindOf = (t: ModTarget): ModScaleKind => (t.kind === 'device' ? 'param' : t.param);
+export function scaleKindOf(t: ModTarget): ModScaleKind {
+  if (t.kind !== 'device') return t.param;
+  return t.param === DEVICE_ON ? 'onoff' : 'param';
+}
+
+/** The value on the scale's steps, if it has them (an on/off is 0 or 1). */
+export function snapToScale(v: number, s: ModScale): number {
+  return s.step ? Math.max(s.min, Math.min(s.max, Math.round(v / s.step) * s.step)) : v;
+}
 
 export const scaleOf = (t: ModTarget): ModScale => MOD_SCALES[scaleKindOf(t)];
 

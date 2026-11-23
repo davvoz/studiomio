@@ -36,7 +36,6 @@ import { findClip, placementRef, setClipColor, slotRef, type ClipRef } from '../
 import { showContextMenu, type MenuItem } from '../ui/context-menu';
 import { choose } from '../ui/dialog';
 import { chooseImport } from '../ui/import-dialog';
-import { gridStep } from '../ui/timeline/geometry';
 import { rulerMenu, timelineMenu, type TimelineActions } from './menus';
 import { edit, ProjectStore } from '../store/project-store';
 import { addedPlacements, cutOutRange, deleteMany, duplicateLoopRegion, duplicateMany, splitMany } from '../store/selection-edits';
@@ -46,10 +45,12 @@ import { BrowserView } from '../ui/browser/browser-view';
 import { ClipEditor } from '../ui/clip-editor/clip-editor';
 import { DeviceView } from '../ui/device/device-view';
 import { PianoRoll } from '../ui/piano-roll/piano-roll';
-import { bindKeys, KEYMAP, type Commands } from '../ui/keymap';
+import { bindKeys, KEYMAP, releaseSelectsAfterClick, type Commands } from '../ui/keymap';
 import { ArrangementView } from '../ui/timeline/arrangement-view';
 import { resolveSelection } from '../ui/timeline/planning';
 import { MasterAutomation } from '../ui/master-automation';
+import { DrawMode } from '../ui/draw-mode';
+import { gridLabel, nudgeGrid, type GridSetting } from '../ui/timeline/geometry';
 import { MasterStrip } from '../ui/master-strip';
 import { SessionView } from '../ui/session/session-view';
 import { MeterBoard } from '../ui/meters/meter-board';
@@ -128,6 +129,8 @@ export class App implements Commands, TimelineActions {
   private readonly bottom = new BottomPanel();
   /** Clipboard shared by timeline and piano roll. */
   readonly clipboard = new Clipboard();
+  /** Draw mode (B), shared by the piano roll and the modulation lanes. */
+  readonly drawMode = new DrawMode();
   /** The keyboard and MIDI inputs: they listen from construction on, kept here for their whole life. */
   readonly noteKeys: NoteKeys;
   readonly keyMapper: KeyMapper;
@@ -178,11 +181,11 @@ export class App implements Commands, TimelineActions {
       store: this.store, engine: this.audio.engine, peaks: this.peaks,
       trackBeats: (sample, bpm) => this.audio.dsp.trackBeats(sample.id, bpm),
       cropSample: (sample, from, to) => this.cropSample(sample, from, to),
-      say: t => this.say(t), clipboard: this.clipboard,
+      say: t => this.say(t), clipboard: this.clipboard, drawMode: this.drawMode, ui: this.ui,
     });
     const audition = (track: TrackId, pitch: number, velocity = 100) => this.run(() => this.audio.audition(track, pitch, velocity));
     this.pianoRoll = new PianoRoll({
-      store: this.store, engine: this.audio.engine, audition, clipboard: this.clipboard,
+      store: this.store, engine: this.audio.engine, audition, clipboard: this.clipboard, drawMode: this.drawMode, ui: this.ui,
       openInstrument: track => this.openDevices(track, true),
       pasteDevices: () => this.pasteDevices(),
       say: t => this.say(t),
@@ -230,7 +233,7 @@ export class App implements Commands, TimelineActions {
     });
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
     this.arrangement.bindWheel(headers.element);
-    const automation = this.automation = new MasterAutomation(this.store, this.ui, this.audio.engine, this.clipboard);
+    const automation = this.automation = new MasterAutomation(this.store, this.ui, this.audio.engine, this.clipboard, this.drawMode);
     const master = new MasterStrip(this.store, headerActions, meters, automation);
     const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this);
     const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
@@ -297,12 +300,13 @@ export class App implements Commands, TimelineActions {
     this.midiMapper = new MidiMapper(this.store, this.ui, this.surfaces, t => this.say(t), this.springs);
     this.midiTargets = new MidiTargets(this.store, this.ui, t => this.say(t));
     bindKeys(document, this, KEYMAP);
+    releaseSelectsAfterClick(document);
     // closing the window with unsaved changes asks for confirmation (in Electron the main process asks)
     addEventListener('beforeunload', e => { if (this.session.changed) e.preventDefault(); });
     // every so often unsaved changes go into the recovery copy: if the app hangs
     // they're not lost (when the project is reopened it asks whether to recover them)
     setInterval(() => this.session.autosave().catch(e => console.warn('recovery copy:', e)), AUTOSAVE_MS);
-    this.say('Drag audio files onto the timeline or open File › Load the demo project. Ctrl+wheel to zoom, Alt to drag without the grid.');
+    this.say('Drag audio files onto the timeline or open File › Load the demo project. Drag up/down on the bar numbers to zoom, sideways to scroll; Alt drags without the grid.');
   }
 
   // ---------------------------------------------------------------- commands
@@ -505,7 +509,7 @@ export class App implements Commands, TimelineActions {
   }
 
   snap(beat: Beats): Beats {
-    const step = gridStep(this.ui.geometry.pxPerBeat, this.store.project.signature);
+    const step = this.ui.gridStep(this.ui.geometry.pxPerBeat, this.store.project.signature);
     return this.ui.snap ? Math.max(0, Math.round(beat / step) * step) : beat;
   }
 
@@ -651,6 +655,27 @@ export class App implements Commands, TimelineActions {
     this.ui.setSnap(!this.ui.snap);
   }
 
+  toggleDraw(): void {
+    this.drawMode.toggle();
+  }
+
+  narrowGrid(): void {
+    this.changeGrid(nudgeGrid(this.ui.grid, -1));
+  }
+
+  widenGrid(): void {
+    this.changeGrid(nudgeGrid(this.ui.grid, 1));
+  }
+
+  toggleTriplet(): void {
+    this.changeGrid({ ...this.ui.grid, triplet: !this.ui.grid.triplet });
+  }
+
+  private changeGrid(grid: GridSetting): void {
+    this.ui.setGrid(grid);
+    this.say(`Grid: ${gridLabel(grid)}`);
+  }
+
   toggleFollow(): void {
     this.ui.setFollow(this.ui.followPaused || !this.ui.follow);
   }
@@ -658,6 +683,18 @@ export class App implements Commands, TimelineActions {
   zoom(factor: number): void {
     const g = this.ui.geometry;
     this.ui.setGeometry(g.zoomed(g.pxPerBeat * factor, Math.max(0, g.beatToX(this.audio.engine.position))));
+  }
+
+  zoomToSelection(): void {
+    if (!this.arrangement.zoomToSelection()) this.say('Z zooms to the selection: first select some clips or draw a time range in them.');
+  }
+
+  zoomBack(): void {
+    this.arrangement.zoomBack();
+  }
+
+  zoomToFit(): void {
+    this.arrangement.zoomToFit();
   }
 
   // ---------------------------------------------------------------- file

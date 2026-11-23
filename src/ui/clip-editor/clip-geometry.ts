@@ -71,6 +71,14 @@ export function withLoopSafe<C extends Clip>(clip: C, start: Beats, end: Beats, 
   return c.withLoop({ enabled, start: s, end: e });
 }
 
+/** The loop band dragged whole from where it was to [start, end): the start marker (and the
+ *  region's end) move with it by the same amount, so the clip still starts where it did in the loop. */
+export function withLoopMoved<C extends Clip>(clip: C, start: Beats, end: Beats): C {
+  const shift = start - clip.loop.start;
+  const looped = withLoopSafe(clip, start, end);
+  return withRegionSafe(looped, clip.region.start + shift, clip.region.end + shift);
+}
+
 /** Dragging with Shift: the audio slides under marker `i`, which stays on its beat.
  *  The offset is measured on the map as it was at the start of the gesture. */
 export function shiftAudioUnderMarker(

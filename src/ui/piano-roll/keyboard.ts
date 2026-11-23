@@ -87,15 +87,21 @@ export class RollKeyboard {
       g.fillRect(0, y, black ? width * 0.62 : width, h);
       g.fillStyle = 'rgba(0,0,0,0.35)';
       g.fillRect(0, Math.round(y + h) - 1, width, 1);
-      // with Fold the rows aren't in sequence: each has its name
-      if ((axis.folded || p % 12 === 0) && h >= 9) {
-        g.fillStyle = p === this.pressed ? '#141414' : '#555b66';
-        g.fillText(pitchName(p), width - 26, y + h - 2.5);
-      }
+      if (h >= 9) this.paintKeyName(p, y + h - 2.5, black);
     }
     g.restore();
     g.fillStyle = '#2b2f36';
     g.fillRect(width - 1, 0, 1, height);
+  }
+
+  /** Every key has its name (when the rows are tall enough to read it): the C, which marks the
+   *  octave, darker; a black key's name on the key itself, in light grey. */
+  private paintKeyName(p: number, baseline: number, black: boolean): void {
+    const g = this.surface.g;
+    if (p === this.pressed) g.fillStyle = '#141414';
+    else if (black) g.fillStyle = '#9aa0aa';
+    else g.fillStyle = p % 12 === 0 ? '#3a3f48' : '#7d838e';
+    g.fillText(pitchName(p), black ? 3 : this.surface.width - 26, baseline);
   }
 
   /** Rows with a name (the pads): the name on the left, the note on the right; the others stay dark. */

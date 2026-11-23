@@ -18,9 +18,22 @@ export interface Commands {
   duplicateLoop(): void;
   toggleMetronome(): void;
   toggleSnap(): void;
+  /** Ctrl+1 / Ctrl+2, as in Live: a narrower or wider grid. */
+  narrowGrid(): void;
+  widenGrid(): void;
+  /** Ctrl+3: triplet grid. */
+  toggleTriplet(): void;
+  /** Draw mode (B): notes in the piano roll, steps in the modulation lanes. */
+  toggleDraw(): void;
   /** Follow the playhead (Ctrl+Shift+F); if it's suspended, it resumes it. */
   toggleFollow(): void;
   zoom(factor: number): void;
+  /** Z, as in Live: the time selection (or the selected clips) fills the timeline. */
+  zoomToSelection(): void;
+  /** X: back to the view before the last Z or W. */
+  zoomBack(): void;
+  /** W: the whole piece in view. */
+  zoomToFit(): void;
   newProject(): void;
   save(): void;
   saveAs(): void;
@@ -69,10 +82,17 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'a', ctrl: true, run: c => c.selectAll() },
   { key: 'l', ctrl: true, run: c => c.toggleLoop() },
   { key: 'm', ctrl: true, shift: true, run: c => c.toggleMetronome() },
+  { key: '1', ctrl: true, run: c => c.narrowGrid() },
+  { key: '2', ctrl: true, run: c => c.widenGrid() },
+  { key: '3', ctrl: true, run: c => c.toggleTriplet() },
   { key: '4', ctrl: true, run: c => c.toggleSnap() },
+  { key: 'b', run: c => c.toggleDraw() },
   { key: '+', run: c => c.zoom(1.25) },
   { key: '=', run: c => c.zoom(1.25) },
   { key: '-', run: c => c.zoom(0.8) },
+  { key: 'z', run: c => c.zoomToSelection() },
+  { key: 'x', run: c => c.zoomBack() },
+  { key: 'w', run: c => c.zoomToFit() },
   { key: 'n', ctrl: true, run: c => c.newProject() },
   { key: 's', ctrl: true, run: c => c.save() },
   { key: 's', ctrl: true, shift: true, run: c => c.saveAs() },
@@ -91,11 +111,25 @@ const TEXT_INPUTS = new Set(['text', 'number', 'search', 'email', 'url', 'passwo
 /** Keys a slider (volume) uses for itself; the others, like Ctrl+Z, stay shortcuts. */
 const SLIDER_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
 
-/** The key belongs to a text field (or a slider), not to the shortcuts. */
+/** The key belongs to a text field (or a slider, or a select box), not to the shortcuts. A select box
+ *  keeps only the keys that move through its choices: the focus stays there after a choice, and
+ *  the other keys (Space, B…) must stay shortcuts instead of being swallowed. */
 export function ownedByField(t: HTMLElement | null, e: KeyboardEvent): boolean {
   if (!t) return false;
-  if (t.isContentEditable || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') return true;
+  if (t.isContentEditable || t.tagName === 'TEXTAREA') return true;
+  if (t.tagName === 'SELECT') return SLIDER_KEYS.has(e.key) || e.key === 'Enter';
   return t instanceof HTMLInputElement && (TEXT_INPUTS.has(t.type) || SLIDER_KEYS.has(e.key));
+}
+
+/** After a choice made with the mouse a select box gives the focus back, so the arrows go
+ *  back to the editors too; chosen with the keyboard it keeps it (to go on choosing). */
+export function releaseSelectsAfterClick(root: Document): void {
+  let clicked: EventTarget | null = null;
+  root.addEventListener('pointerdown', e => { clicked = e.target; }, true);
+  root.addEventListener('change', e => {
+    const t = e.target as HTMLElement | null;
+    if (t?.tagName === 'SELECT' && t === clicked) t.blur();
+  }, true);
 }
 
 /** The shortcut of a pressed key, if there is one. */

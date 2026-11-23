@@ -13,11 +13,11 @@ import type { LoopRegion, Project } from '../../model/project';
 import { GroupTrack } from '../../model/track';
 import { contentToSeconds } from '../clip-editor/clip-geometry';
 import type { Peaks } from '../waveform';
-import { CLIP_HEADER, FADE_HANDLE_PX, fadeHandles, type TimelineGeometry } from './geometry';
+import { CLIP_HEADER, drawnGridStep, FADE_HANDLE_PX, fadeHandles, type TimelineGeometry } from './geometry';
 
 export const COLORS = {
   bg: '#16191d', laneAlt: '#1a1d22', grid: 'rgba(255,255,255,0.05)', bar: 'rgba(255,255,255,0.13)',
-  ruler: '#1d2025', rulerText: '#9aa0aa', loop: 'rgba(255,157,46,0.85)', loopOff: 'rgba(154,160,170,0.45)',
+  ruler: '#1d2025', rulerNumbers: '#23272d', rulerText: '#9aa0aa', loop: 'rgba(255,157,46,0.85)', loopOff: 'rgba(154,160,170,0.45)',
   loopShade: 'rgba(255,157,46,0.06)', playhead: '#ff9d2e', cursor: 'rgba(232,234,238,0.6)',
   select: '#ffffff', clipText: '#111317', ghost: 'rgba(255,255,255,0.35)', box: 'rgba(91,141,239,0.18)',
 };
@@ -108,10 +108,11 @@ function paintGroupLane(g: CanvasRenderingContext2D, group: GroupTrack, index: n
   });
 }
 
-function paintGrid(g: CanvasRenderingContext2D, geo: TimelineGeometry, sig: TimeSignature, step: Beats, width: number, height: number): void {
-  const bar = sig.beatsPerBar;
-  const first = Math.floor(geo.xToBeat(0) / step) * step;
-  for (let b = first; geo.beatToX(b) < width; b += step) {
+/** The grid's lines (not closer than a few pixels: a fixed grid zoomed out draws a line every few steps). */
+function paintGrid(g: CanvasRenderingContext2D, geo: TimelineGeometry, sig: TimeSignature, grid: Beats, width: number, height: number): void {
+  const bar = sig.beatsPerBar, step = drawnGridStep(grid, geo.pxPerBeat);
+  for (let i = Math.floor(geo.xToBeat(0) / step); geo.beatToX(i * step) < width; i++) {
+    const b = i * step;
     const isBar = Math.abs(b / bar - Math.round(b / bar)) < 1e-6;
     g.fillStyle = isBar ? COLORS.bar : COLORS.grid;
     g.fillRect(Math.round(geo.beatToX(b)), 0, 1, height);
@@ -251,33 +252,48 @@ function paintNotes(g: CanvasRenderingContext2D, pl: Placement<MidiClip>, body: 
 
 // ------------------------------------------------------------------ ruler and overlaps
 
-export const RULER_LOOP_BAND = 11;
+/** The timeline ruler's bands from the top, as in Live: the numbers (Live's beat-time ruler:
+ *  dragging zooms and scrolls), the loop band, then the scrub area (a click moves the playhead). */
+export const RULER = { numbers: 16, loop: 11 } as const;
+
+export type RulerZone = 'numbers' | 'loop' | 'scrub';
+
+export function rulerZoneAt(y: number): RulerZone {
+  if (y < RULER.numbers) return 'numbers';
+  return y < RULER.numbers + RULER.loop ? 'loop' : 'scrub';
+}
 
 export function paintRuler(g: CanvasRenderingContext2D, project: Project, geo: TimelineGeometry, width: number, height: number, grid: Beats): void {
   g.fillStyle = COLORS.ruler;
   g.fillRect(0, 0, width, height);
-  const loop = project.loop;
+  g.fillStyle = COLORS.rulerNumbers;
+  g.fillRect(0, 0, width, RULER.numbers);
+  const loop = project.loop, loopTop = RULER.numbers;
   const lx0 = geo.beatToX(loop.start), lx1 = geo.beatToX(loop.end);
   g.fillStyle = loop.enabled ? COLORS.loop : COLORS.loopOff;
-  g.fillRect(lx0, 1, lx1 - lx0, RULER_LOOP_BAND - 2);
-  const sig = project.signature, bar = sig.beatsPerBar;
+  g.fillRect(lx0, loopTop + 1, lx1 - lx0, RULER.loop - 2);
+  const bar = project.signature.beatsPerBar;
   // labels every N bars, so that they don't overlap
   const labelEvery = [1, 2, 4, 8, 16, 32, 64].find(n => n * bar * geo.pxPerBeat >= 36) ?? 64;
-  const step = Math.max(grid, 1 / 4);
+  const step = Math.max(drawnGridStep(grid, geo.pxPerBeat), 1 / 4);
   g.font = '10.5px system-ui, sans-serif';
-  const first = Math.floor(geo.xToBeat(0) / step) * step;
-  for (let b = first; geo.beatToX(b) < width; b += step) {
+  g.fillStyle = COLORS.rulerText;
+  for (let i = Math.floor(geo.xToBeat(0) / step); geo.beatToX(i * step) < width; i++) {
+    const b = i * step;
     const x = Math.round(geo.beatToX(b));
-    const barIndex = b / bar;
-    const isBar = Math.abs(barIndex - Math.round(barIndex)) < 1e-6;
-    g.fillStyle = COLORS.rulerText;
-    let tick: number;
-    if (isBar) tick = height - RULER_LOOP_BAND;
-    else tick = Number.isInteger(b) ? 6 : 3;
-    g.fillRect(x, height - tick, 1, tick);
-    if (isBar && Math.round(barIndex) % labelEvery === 0) g.fillText(String(Math.round(barIndex) + 1), x + 3, height - 5);
+    const barIndex = Math.round(b / bar);
+    if (Math.abs(b / bar - barIndex) < 1e-6) {
+      // a bar: its line in the numbers and in the scrub area, the number every labelEvery bars
+      g.fillRect(x, 0, 1, RULER.numbers);
+      g.fillRect(x, loopTop + RULER.loop, 1, height - loopTop - RULER.loop);
+      if (barIndex % labelEvery === 0) g.fillText(String(barIndex + 1), x + 3, RULER.numbers - 4);
+    } else {
+      const tick = Number.isInteger(b) ? 5 : 3;
+      g.fillRect(x, height - tick, 1, tick);
+    }
   }
   g.fillStyle = 'rgba(0,0,0,0.4)';
+  g.fillRect(0, RULER.numbers, width, 1);
   g.fillRect(0, height - 1, width, 1);
 }
 

@@ -2,6 +2,7 @@ import type { PlaybackEngine } from '../engine/playback-engine';
 import { setTempo } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
 import type { Commands } from './keymap';
+import { FIXED_GRIDS, GRID_DENSITY, gridLabel } from './timeline/geometry';
 import type { UiState } from './ui-state';
 
 const button = (text: string, title: string, onclick: () => void, className = '') =>
@@ -19,6 +20,10 @@ export class TransportBar {
   private readonly follow: HTMLButtonElement;
   private readonly keys: HTMLButtonElement;
   private readonly midi: HTMLButtonElement;
+  private readonly grid = Object.assign(document.createElement('select'), {
+    className: 'grid', title: 'The grid of the timeline and the editors: adaptive (it follows the zoom) or fixed (Ctrl+1 narrower, Ctrl+2 wider)',
+  });
+  private readonly triplet: HTMLButtonElement;
 
   constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, commands: Commands) {
     this.play = button('▶', 'Play / Stop (Space)', () => commands.togglePlay(), 'play');
@@ -36,9 +41,16 @@ export class TransportBar {
       () => commands.toggleKeyMap(), 'key-map');
     this.midi = button('MIDI', 'Map any controller\'s MIDI to the macros, the parameters and the mixer (Ctrl+M)',
       () => commands.toggleMidiMap(), 'midi-map');
+    this.grid.append(new Option('Adaptive', ADAPTIVE), ...FIXED_GRIDS.map((g, i) => new Option(g.label, String(i))));
+    this.grid.onchange = () => {
+      const fixed = this.grid.value === ADAPTIVE ? null : Number(this.grid.value);
+      ui.setGrid({ ...ui.grid, fixed });
+    };
+    this.triplet = button('3', 'Triplet grid (Ctrl+3)', () => commands.toggleTriplet(), 'triplet');
     this.element.append(
       group(this.play, button('■', 'Stop and return to the start (Enter)', () => commands.stopAndRewind()), this.pos, this.follow),
       group(labelled('BPM', this.bpm), this.loop, this.metro, this.keys, this.midi),
+      group(labelled('Grid', this.grid), this.triplet),
     );
     store.onChange(() => this.render());
     ui.onChange(() => this.render());
@@ -67,6 +79,7 @@ export class TransportBar {
     this.metro.classList.toggle('on', this.engine.metronomeOn);
     this.keys.classList.toggle('on', this.ui.keyMapping);
     this.midi.classList.toggle('on', this.ui.midiMapping);
+    this.renderGrid();
     const paused = this.ui.followPaused;
     this.follow.classList.toggle('on', this.ui.following);
     this.follow.classList.toggle('paused', paused);
@@ -74,7 +87,19 @@ export class TransportBar {
       ? 'Follow is paused because you moved the view: click here, on the ruler or Play again to resume (Ctrl+Shift+F)'
       : 'Follow the playhead while playing (Ctrl+Shift+F)';
   }
+
+  private renderGrid(): void {
+    const g = this.ui.grid;
+    this.grid.value = g.fixed === null ? ADAPTIVE : String(g.fixed);
+    // the adaptive choice shows its density (Ctrl+1 / Ctrl+2 change it)
+    this.grid.options[0].text = gridLabel({ ...g, fixed: null, triplet: false });
+    this.grid.options[0].title = `Density ${GRID_DENSITY.min} (narrowest) … +${GRID_DENSITY.max} (widest)`;
+    this.triplet.classList.toggle('on', g.triplet);
+  }
 }
+
+/** The value of the grid menu's "Adaptive" choice (the others are FIXED_GRIDS' indexes). */
+const ADAPTIVE = 'adaptive';
 
 function group(...nodes: Node[]): HTMLElement {
   const d = Object.assign(document.createElement('div'), { className: 'group' });

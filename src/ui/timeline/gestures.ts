@@ -11,7 +11,7 @@ import {
   addedPlacements, cutOutRange, findPlacement, relocate, resizeMany, type PlacementRef, type Relocation, type ResizePlan,
 } from '../../store/selection-edits';
 import type { UiState } from '../ui-state';
-import { placementsInBox, snapTo, type Hit, type TimelineGeometry } from './geometry';
+import { placementsInBox, rulerZoom, snapTo, type Hit, type TimelineGeometry } from './geometry';
 import { paintBox, paintGhost } from './painters';
 import { planMove, planResizeMany, resolveSelection, snappedDelta } from './planning';
 
@@ -344,6 +344,39 @@ export class PanGesture implements Gesture {
   }
 
   end(): void { /* niente */ }
+  cancel(): void { /* niente */ }
+  paint(): void { /* niente */ }
+}
+
+/** In the ruler's numbers, as in Live's beat-time ruler: dragging down zooms in and up zooms out,
+ *  around the grabbed point; sideways the grabbed beat follows the pointer (the view scrolls). It
+ *  needs no middle button, so it works on a laptop's touchpad. A click without dragging moves the playhead. */
+export class RulerZoomGesture implements Gesture {
+  readonly cursor = 'zoom-in';
+  readonly hidden = NONE;
+  private dragged = false;
+  private readonly start: TimelineGeometry;
+  private readonly anchor: Beats;
+
+  constructor(
+    private readonly host: GestureHost, private readonly origin: Pointer,
+    private readonly view: (g: TimelineGeometry) => void, private readonly click: (beat: Beats) => void,
+  ) {
+    this.start = host.geo;
+    this.anchor = this.start.xToBeat(origin.x);
+  }
+
+  move(p: Pointer): void {
+    if (!this.dragged && Math.abs(p.x - this.origin.x) + Math.abs(p.y - this.origin.y) < CLICK_PX) return;
+    this.dragged = true;
+    const zoomed = this.start.zoomed(this.start.pxPerBeat * rulerZoom(p.y - this.origin.y), this.origin.x);
+    this.view(zoomed.scrolled(this.anchor - p.x / zoomed.pxPerBeat, zoomed.scrollY));
+  }
+
+  end(p: Pointer): void {
+    if (!this.dragged) this.click(snapped(this.host, p, this.host.geo.xToBeat(p.x)));
+  }
+
   cancel(): void { /* niente */ }
   paint(): void { /* niente */ }
 }

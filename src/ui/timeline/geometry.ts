@@ -48,11 +48,91 @@ export class TimelineGeometry {
   }
 }
 
-/** Grid step for the current zoom: the finest subdivision at least `minPx` wide. */
-export function gridStep(pxPerBeat: number, signature: TimeSignature, minPx = 14): Beats {
+/** Dragging in a ruler's numbers, as in Live: every pixel down zooms in by this much (up: out). */
+const RULER_ZOOM_PER_PX = 0.012;
+
+/** How much a vertical drag of `dy` pixels in a ruler zooms (×2 every ~58 px down). */
+export const rulerZoom = (dy: number): number => Math.exp(dy * RULER_ZOOM_PER_PX);
+
+/** Margin left on each side when a range is brought into view, in fractions of the range. */
+const SHOW_MARGIN = 0.04;
+
+/** The view showing [start, end) across `width` pixels, with a small margin on each side
+ *  (Live's Z on the selection and W on the whole piece); the vertical scroll stays. */
+export function geometryShowing(g: TimelineGeometry, start: Beats, end: Beats, width: number): TimelineGeometry {
+  const span = Math.max(end - start, 1 / 4) * (1 + 2 * SHOW_MARGIN);
+  const px = Math.max(MIN_PX_PER_BEAT, Math.min(MAX_PX_PER_BEAT, Math.max(1, width) / span));
+  const middle = (start + end) / 2;
+  return new TimelineGeometry(px, Math.max(0, middle - width / px / 2), g.scrollY, g.trackHeight);
+}
+
+/** A fixed grid the user can choose, as in Live: note values (a beat is a quarter) and bars. */
+export interface FixedGrid {
+  readonly label: string;
+  step(signature: TimeSignature): Beats;
+}
+
+export const FIXED_GRIDS: readonly FixedGrid[] = [
+  { label: '1/32', step: () => 1 / 8 },
+  { label: '1/16', step: () => 1 / 4 },
+  { label: '1/8', step: () => 1 / 2 },
+  { label: '1/4', step: () => 1 },
+  { label: '1/2', step: () => 2 },
+  { label: '1 bar', step: s => s.beatsPerBar },
+  { label: '2 bars', step: s => 2 * s.beatsPerBar },
+  { label: '4 bars', step: s => 4 * s.beatsPerBar },
+  { label: '8 bars', step: s => 8 * s.beatsPerBar },
+];
+
+/** The grid chosen by the user, as in Live: adaptive (it follows the zoom) or fixed; with
+ *  triplets the steps shorter than a bar last 2/3. */
+export interface GridSetting {
+  /** Index in FIXED_GRIDS, or null: adaptive. */
+  readonly fixed: number | null;
+  /** Adaptive only: from −2 (narrowest) to +2 (widest); each step halves or doubles the lines' spacing. */
+  readonly density: number;
+  readonly triplet: boolean;
+}
+
+export const ADAPTIVE_GRID: GridSetting = { fixed: null, density: 0, triplet: false };
+
+export const GRID_DENSITY = { min: -2, max: 2 } as const;
+
+/** Ctrl+1 (`by` −1, narrower) and Ctrl+2 (+1, wider), as in Live: a fixed grid moves to the next
+ *  value, an adaptive one changes its density. */
+export function nudgeGrid(g: GridSetting, by: -1 | 1): GridSetting {
+  if (g.fixed !== null) return { ...g, fixed: Math.max(0, Math.min(FIXED_GRIDS.length - 1, g.fixed + by)) };
+  return { ...g, density: Math.max(GRID_DENSITY.min, Math.min(GRID_DENSITY.max, g.density + by)) };
+}
+
+/** The grid's label: "Adaptive" (with its density) or the fixed value, "T" for triplets. */
+export function gridLabel(g: GridSetting): string {
+  const name = g.fixed === null ? `Adaptive${g.density ? ` ${g.density > 0 ? '+' : ''}${g.density}` : ''}` : FIXED_GRIDS[g.fixed].label;
+  return g.triplet ? `${name} T` : name;
+}
+
+/** Grid step (the snap's too): with the adaptive grid the finest subdivision at least `minPx`
+ *  wide at this zoom, with a fixed one its value. */
+export function gridStep(pxPerBeat: number, signature: TimeSignature, minPx = 14, setting: GridSetting = ADAPTIVE_GRID): Beats {
   const bar = signature.beatsPerBar;
-  const steps = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, bar, 2 * bar, 4 * bar, 8 * bar, 16 * bar, 32 * bar];
-  return steps.find(s => s * pxPerBeat >= minPx) ?? steps[steps.length - 1];
+  const triplet = (s: Beats) => (setting.triplet && s < bar ? (s * 2) / 3 : s);
+  const fixed = setting.fixed === null ? undefined : FIXED_GRIDS[setting.fixed];
+  if (fixed) return triplet(fixed.step(signature));
+  const steps = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, bar, 2 * bar, 4 * bar, 8 * bar, 16 * bar, 32 * bar].map(triplet);
+  const need = minPx * Math.pow(2, setting.density);
+  return steps.find(s => s * pxPerBeat >= need) ?? steps[steps.length - 1];
+}
+
+/** Lines closer than this aren't drawn (a fixed grid zoomed out would be a grey wall). */
+const MIN_LINE_PX = 4;
+
+/** The step at which to draw the grid's lines: the grid's, or a multiple of it if the lines would
+ *  be too close (the snap stays on the grid's step). */
+export function drawnGridStep(step: Beats, pxPerBeat: number): Beats {
+  if (!(step > 0 && pxPerBeat > 0)) return step;
+  let s = step;
+  while (s * pxPerBeat < MIN_LINE_PX) s *= 2;
+  return s;
 }
 
 export const snapTo = (b: Beats, step: Beats): Beats => Math.round(b / step) * step;

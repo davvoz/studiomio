@@ -56,6 +56,8 @@ describe('EQ', () => {
     ['low shelf −6 dB a 200 Hz', { type: BAND.lowShelf, freq: 200, gain: -6, q: 0.71 }],
     ['high shelf +4 dB a 5 kHz', { type: BAND.highShelf, freq: 5000, gain: 4, q: 1.5 }],
     ['low cut 48 dB a 100 Hz', { type: BAND.lowCut, freq: 100, q: 0.71, slope: 2 }],
+    ['high cut 96 dB at 2 kHz', { type: BAND.highCut, freq: 2000, q: 0.71, slope: 3 }],
+    ['low cut 96 dB at 200 Hz', { type: BAND.lowCut, freq: 200, q: 0.71, slope: 3 }],
     ['resonant high cut 12 dB at 3 kHz', { type: BAND.highCut, freq: 3000, q: 2, slope: 0 }],
     ['notch a 1 kHz', { type: BAND.notch, freq: 1000, q: 2 }],
   ])('the sound is the drawn curve: %s', (_name, band) => {
@@ -73,11 +75,11 @@ describe('EQ', () => {
     const band = (o: Record<string, number>) => bandsOf(resolveParams(EQ, oneBand(o)))[2];
     expect(bandResponseDb(band({ type: BAND.bell, freq: 1000, gain: 6 }), 1000, SR)).toBeCloseTo(6, 5);
     expect(bandResponseDb(band({ type: BAND.lowShelf, freq: 200, gain: -6 }), 25, SR)).toBeCloseTo(-6, 1);
-    for (const slope of [0, 1, 2]) {
+    for (const slope of [0, 1, 2, 3]) {
       const cut = band({ type: BAND.lowCut, freq: 1000, q: Math.SQRT1_2, slope });
       expect(bandResponseDb(cut, 1000, SR)).toBeCloseTo(-3.01, 1);
-      // an octave below: about 12, 24, 48 dB less
-      expect(bandResponseDb(cut, 250, SR) - bandResponseDb(cut, 500, SR)).toBeCloseTo(-12 * [1, 2, 4][slope], 0);
+      // an octave below: about 12, 24, 48, 96 dB less
+      expect(bandResponseDb(cut, 250, SR) - bandResponseDb(cut, 500, SR)).toBeCloseTo(-12 * [1, 2, 4, 8][slope], 0);
     }
     expect(butterworthQs(2).map(q => +q.toFixed(3))).toEqual([0.541, 1.307]);
   });

@@ -2,6 +2,7 @@
  * for each parameter steps and ramps with their instant, as with an AudioParam; here the
  * offset is computed at each block and added to the knob's value. Pure: it's also tested
  * in Node. */
+import { DEVICE_ON, ONOFF_REST } from '../../model/envelope';
 import { paramFromUnit, paramToUnit, type ParamSpec } from '../params';
 
 /** A step to the value at the given instant, or a linear ramp reaching it. */
@@ -66,6 +67,33 @@ export class ModTimeline {
       prev = e;
     }
     return prev.value;
+  }
+}
+
+/** An effect's on/off (see DEVICE_ON) at one instant: outside the curves (ONOFF_REST) its button
+ *  decides, on a curve it's on from half up. */
+export function effectOn(curve: number, button: boolean): boolean {
+  if (curve < ONOFF_REST / 2) return button;
+  return curve >= 0.5;
+}
+
+/** An effect's on/off moved by the clip curves and the automation (Live's "Device On"). The
+ *  other sources (LFOs, envelopes) don't switch it: their events are ignored. */
+export class OnOffModulation {
+  private readonly line = new ModTimeline(ONOFF_REST);
+
+  /** True if the event is the on/off's (and so it's taken here). */
+  event(param: string, kind: ModEvent['kind'] | 'hold', value: number, time: number, channel?: string): boolean {
+    if (param !== DEVICE_ON) return false;
+    if (channel) return true;
+    if (kind === 'hold') this.line.hold(time);
+    else this.line.add({ kind, value, time });
+    return true;
+  }
+
+  /** On or off at instant `time` (which only goes forward), with the button `button`. */
+  onAt(time: number, button: boolean): boolean {
+    return effectOn(this.line.valueAt(time), button);
   }
 }
 

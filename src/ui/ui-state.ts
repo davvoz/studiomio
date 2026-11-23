@@ -4,9 +4,10 @@ import { sameTarget, type KeyTarget } from '../model/key-map';
 import type { TimeRange } from '../model/note-edits';
 import { sameMidiTarget, type MidiTarget } from '../model/midi-map';
 import type { ChainOwner } from '../model/project';
-import { TimelineGeometry } from './timeline/geometry';
+import type { Beats, TimeSignature } from '../core/music-time';
+import { ADAPTIVE_GRID, gridStep, TimelineGeometry, type GridSetting } from './timeline/geometry';
 
-type UiEvents = { change: [] };
+type UiEvents = { change: []; grid: [] };
 
 /** The session box a controller (the APC40, a Launchpad) plays: first track and first scene,
  *  width and height (Live's "red box"). */
@@ -33,6 +34,7 @@ export class UiState {
   private _track: TrackId | null = null;
   private _tracks: ReadonlySet<TrackId> = new Set();
   private _snap = true;
+  private _grid: GridSetting = ADAPTIVE_GRID;
   private _follow = true;
   private _followPaused = false;
   private _ring: SessionRing | null = null;
@@ -118,6 +120,25 @@ export class UiState {
       this._track = id;
     }
     this.events.emit('change');
+  }
+
+  /** The grid chosen by the user (adaptive or fixed), shared by the timeline and the editors. */
+  get grid(): GridSetting { return this._grid; }
+
+  setGrid(grid: GridSetting): void {
+    this._grid = grid;
+    this.events.emit('grid');
+    this.events.emit('change');
+  }
+
+  /** Only the grid's changes (the editors redraw, without following every other change). */
+  onGridChange(fn: () => void): Unsubscribe {
+    return this.events.on('grid', fn);
+  }
+
+  /** The grid's step at this zoom (see gridStep), with the chosen grid. */
+  gridStep(pxPerBeat: number, signature: TimeSignature, minPx?: number): Beats {
+    return gridStep(pxPerBeat, signature, minPx, this._grid);
   }
 
   setSnap(on: boolean): void {

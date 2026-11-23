@@ -14,6 +14,7 @@ import { NOISE_GATE } from './effects/noise-gate/noise-gate';
 import { MULTIBAND } from './effects/multiband/multiband';
 import { PHASER } from './effects/phaser/phaser';
 import { PITCH_SHIFTER } from './effects/pitch-shifter/pitch-shifter';
+import { SPECTRAL_RESONATOR } from './effects/spectral-resonator/spectral-resonator';
 import { REDUX } from './effects/redux/redux';
 import { REVERB } from './effects/reverb/reverb';
 import { REVERSE } from './effects/reverse/reverse';
@@ -37,7 +38,7 @@ import { ENVELOPE_DEVICE, LFO_DEVICE } from './modulators/modulators';
 export const INSTRUMENT_TYPES: readonly DeviceType[] = [ANALOG, WAVETABLE, PRISMA, NEURO, SAMPLER, DRUMS, KICK, SNARE, CYMBALS];
 
 /** The available effects, as above. */
-export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, NOISE_GATE, MULTIBAND, TRANSIENT, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER, LFO_DEVICE, ENVELOPE_DEVICE, ARP];
+export const EFFECT_TYPES: readonly DeviceType[] = [EQ, COMPRESSOR, NOISE_GATE, MULTIBAND, TRANSIENT, DRIVE, CLIPPER, REDUX, AUTO_FILTER, AUTO_PAN, CHORUS, PHASER, PITCH_SHIFTER, SPECTRAL_RESONATOR, GATE, BEAT_REPEAT, TAPE_STOP, REVERSE, DELAY, REVERB, STEREO, LIMITER, LFO_DEVICE, ENVELOPE_DEVICE, ARP];
 
 /** The effects that can be added to a chain: the note ones only if there's an instrument. */
 export const chainEffectTypes = (midi: boolean): readonly DeviceType[] => (midi ? EFFECT_TYPES : EFFECT_TYPES.filter(t => !t.notes));

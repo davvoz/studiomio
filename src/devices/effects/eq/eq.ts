@@ -18,8 +18,11 @@ export const BAND_TYPES = [
 /** Values of the "type" parameter. */
 export const BAND = { lowCut: 0, lowShelf: 1, bell: 2, notch: 3, highShelf: 4, highCut: 5 } as const;
 
-/** Slopes of the cuts: how many 12 dB/octave sections. */
-export const SLOPES = [{ label: '12 dB', stages: 1 }, { label: '24 dB', stages: 2 }, { label: '48 dB', stages: 4 }] as const;
+/** Slopes of the cuts: how many 12 dB/octave sections. 96 dB is the "wall": past the frequency
+ *  the sound falls almost at once (a truly vertical cut doesn't exist without ringing and latency). */
+export const SLOPES = [
+  { label: '12 dB', stages: 1 }, { label: '24 dB', stages: 2 }, { label: '48 dB', stages: 4 }, { label: '96 dB', stages: 8 },
+] as const;
 
 export const EQ_BANDS = 8;
 export const MIN_FREQ = 20, MAX_FREQ = 20000;

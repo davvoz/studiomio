@@ -8,7 +8,8 @@ import { activeSections, paramSpec, resolveParams, type DeviceType } from '../..
 import { paramFromUnit, paramToUnit, type ChoiceParam } from '../../devices/params';
 import { effectType, instrumentType } from '../../devices/registry';
 import type { EffectSettings, InstrumentSettings, ParamValues } from '../../model/device';
-import { CLIP_TRANSPOSE, INSTRUMENT_DEVICE, scaleKindOf, type ModScaleKind, type ModTarget } from '../../model/envelope';
+import { CLIP_TRANSPOSE, DEVICE_ON, INSTRUMENT_DEVICE, scaleKindOf, type ModScaleKind, type ModTarget } from '../../model/envelope';
+import { isArpType } from '../../devices/arp/arp';
 import { MASTER, type Project } from '../../model/project';
 import { chainItems, macroIndex, macroName, macroParam, rackName, type ChainItem, type DeviceKey, type Rack, type RackList } from '../../model/rack';
 import { AudioTrack, MidiTrack, type Track } from '../../model/track';
@@ -61,8 +62,9 @@ const MIXER: TargetDevice = {
 };
 
 /** A device's parameters, section by section (not those of the graphic panel only, nor
- *  of the sections that aren't there with these values). */
-function deviceTargets(key: string, label: string, type: DeviceType | undefined, values: ParamValues): TargetDevice | null {
+ *  of the sections that aren't there with these values). An effect (`switchable`) has its
+ *  on/off first, as in Live. */
+function deviceTargets(key: string, label: string, type: DeviceType | undefined, values: ParamValues, switchable: boolean): TargetDevice | null {
   if (!type) return null;
   const device = key as DeviceId;
   const sections = activeSections(type, values)
@@ -71,7 +73,8 @@ function deviceTargets(key: string, label: string, type: DeviceType | undefined,
       params: s.params.filter(p => !p.hidden).map(p => ({ target: { kind: 'device', device, param: p.id } as ModTarget, label: p.label })),
     }))
     .filter(s => s.params.length);
-  return { key, label, sections };
+  const onOff: TargetSection = { label: 'Device', params: [{ target: { kind: 'device', device, param: DEVICE_ON }, label: 'On/Off' }] };
+  return { key, label, sections: switchable ? [onOff, ...sections] : sections };
 }
 
 /** On an audio track the clip itself: its transpose, as in Live. */
@@ -104,7 +107,9 @@ function chainTargets(chain: ModChain): TargetDevice[] {
     // two effects of the same type: "Delay", "Delay 2"
     const n = (seen.get(name) ?? 0) + 1;
     seen.set(name, n);
-    const d = deviceTargets(key, `${type?.label ?? name}${n > 1 ? ` ${n}` : ''}`, type, values);
+    // the instrument and the arpeggiator (which plays inside it) can't be switched off by a curve
+    const switchable = key !== INSTRUMENT_DEVICE && !isArpType(name);
+    const d = deviceTargets(key, `${type?.label ?? name}${n > 1 ? ` ${n}` : ''}`, type, values, switchable);
     if (d) out.push(d);
   };
   const label = (k: DeviceKey, param: string): string | undefined => {
@@ -149,6 +154,7 @@ const FORMATS: { readonly [K in ModScaleKind]: (v: number) => string } = {
   param: v => `${signGlyph(v)}${Math.round(Math.abs(v) * 100)} %`,
   // the clip plays the nearest semitone
   transpose: v => { const st = Math.round(v); return `${signGlyph(st)}${Math.abs(st)} st`; },
+  onoff: v => (v >= 0.5 ? 'On' : 'Off'),
 };
 
 /** How a value of the curve is written; for a choice (with its chain) also the option

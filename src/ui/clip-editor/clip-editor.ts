@@ -6,10 +6,11 @@ import { autoWarp, followTempo } from '../../model/warp-tools';
 import { cropClipAt, findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
 import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
+import type { DrawMode } from '../draw-mode';
 import { addHeightHandle } from '../editor-height';
 import { Surface } from '../surface';
 import type { Pointer } from '../timeline/gestures';
-import { gridStep } from '../timeline/geometry';
+import type { UiState } from '../ui-state';
 import type { PeakStore } from '../waveform';
 import { BeatAxis, playheadIn, seekBeatOf } from './clip-geometry';
 import { ClipPanel } from './clip-panel';
@@ -31,6 +32,10 @@ export interface ClipEditorDeps {
   readonly say: (text: string) => void;
   /** The app's clipboard (for the modulation curves). */
   readonly clipboard: Clipboard;
+  /** The app's draw mode (B), for the modulation lane. */
+  readonly drawMode: DrawMode;
+  /** For the grid chosen by the user. */
+  readonly ui: UiState;
 }
 
 interface Target {
@@ -76,9 +81,10 @@ export class ClipEditor implements EditorHost {
       get axis() { return editor._axis; },
       curves: () => editor.clip(),
       span: () => { const c = editor.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },
-      grid: () => gridStep(editor._axis.pxPerBeat, deps.store.project.signature, 10),
+      grid: () => deps.ui.gridStep(editor._axis.pxPerBeat, deps.store.project.signature, 10),
       signature: () => deps.store.project.signature,
       playhead: () => { const t = editor.target(); return t ? playheadIn(t.found, deps.engine) : null; },
+      drawMode: deps.drawMode,
       commit: (label, target, points) => editor.commit(label, c => c.withEnvelope(target, points) as AudioClip),
       wheel: (e, x) => editor.setAxis(wheelTime(e, x, editor._axis)),
       devices: () => { const t = editor.target()?.found.track ?? null; return t && targetDevices(t); },
@@ -98,6 +104,7 @@ export class ClipEditor implements EditorHost {
     }).observe(wrap);
     this.bind(this.surface.canvas);
     deps.store.onChange(() => this.sync());
+    deps.ui.onGridChange(() => this.invalidate());
     requestAnimationFrame(this.frame);
   }
 
@@ -150,7 +157,7 @@ export class ClipEditor implements EditorHost {
   }
 
   snapStep(p: Pointer): number | null {
-    return p.alt ? null : gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10);
+    return p.alt ? null : this.deps.ui.gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10);
   }
 
   commit(label: string, fn: (c: AudioClip) => AudioClip, mergeKey?: string): void {
@@ -206,7 +213,7 @@ export class ClipEditor implements EditorHost {
   }
 
   private quantize(): void {
-    const step = Math.min(1, gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10));
+    const step = Math.min(1, this.deps.ui.gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10));
     this.commit('Quantize warp markers', c => c.withMarkers(c.warp.markers.quantized(step)));
   }
 
@@ -275,7 +282,7 @@ export class ClipEditor implements EditorHost {
           g: this.surface.g, width: this.surface.width, height: this.surface.height, axis: this._axis,
           clip, duration: sampleDuration(t.sample), transients: this.transients(),
           peaks: this.deps.peaks.get(t.sample.id, clip.reversed), tempo: project.tempo, signature: project.signature,
-          grid: gridStep(this._axis.pxPerBeat, project.signature, 10), selectedMarker: this.selected, hoverTransient: this.hover,
+          grid: this.deps.ui.gridStep(this._axis.pxPerBeat, project.signature, 10), selectedMarker: this.selected, hoverTransient: this.hover,
           playhead: playheadIn(t.found, engine),
         });
       }

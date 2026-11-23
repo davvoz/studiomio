@@ -13,7 +13,7 @@ import { EFFECT_CORES, INSTRUMENT_CORES } from './cores';
 import { EffectRunner } from './effect-runner';
 import { cleaned, FaultGate, hasInvalid } from './guard';
 import { METER_VALUES, MeterCore } from './meter-core';
-import { ParamModulation } from './mod-timeline';
+import { OnOffModulation, ParamModulation } from './mod-timeline';
 import { NoteQueue } from './note-queue';
 import { TransportClock } from './transport-clock';
 import {
@@ -188,6 +188,8 @@ class EffectProcessor extends AudioWorkletProcessor {
   private core: EffectCore;
   private runner: EffectRunner;
   private readonly mod: ParamModulation;
+  /** The on/off moved by the curves; with none, the button (`enabled`) decides. */
+  private readonly onOff = new OnOffModulation();
   /** The engine, if its detector listens to the second input (sidechain). */
   private keyed: KeyedEffect | null = null;
   /** The engine, if it follows the bar, and where the transport is. */
@@ -221,7 +223,9 @@ class EffectProcessor extends AudioWorkletProcessor {
     this.clock.set(o.transport);
     listen<EffectMessage>(this.port, {
       params: m => this.mod.setBase(m.params),
-      mod: m => this.mod.event(m.param, m.kind, m.value, m.time, m.channel),
+      mod: m => {
+        if (!this.onOff.event(m.param, m.kind, m.value, m.time, m.channel)) this.mod.event(m.param, m.kind, m.value, m.time, m.channel);
+      },
       enabled: m => this.runner.setEnabled((this.enabled = m.enabled)),
       tempo: m => this.core.setTempo((this.bpm = m.bpm)),
       keyed: m => this.setKeyed((this.keyedOn = m.keyed)),
@@ -270,6 +274,7 @@ class EffectProcessor extends AudioWorkletProcessor {
       const params = this.mod.paramsAt(now);
       if (params) this.core.setParams((this.params = params));
       this.follower?.setTransport(this.clock.at(now));
+      this.runner.setEnabled(this.onOff.onAt(now, this.enabled));
       this.runner.process(l, r, outL, outR);
       if (this.watched) this.postDynamics(outL.length);
     } catch (e) {

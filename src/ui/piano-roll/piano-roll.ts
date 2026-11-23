@@ -18,7 +18,7 @@ import { showContextMenu } from '../context-menu';
 import { Surface } from '../surface';
 import { rollMenu } from './roll-menu';
 import type { Pointer } from '../timeline/gestures';
-import { gridStep } from '../timeline/geometry';
+import type { UiState } from '../ui-state';
 import { RollKeyboard } from './keyboard';
 import { foldRows, PitchAxis, sameRows } from './pitch-axis';
 import { rollCursor, rollGestureFor, rollHit, type RollGesture, type RollHit, type RollHost } from './roll-gestures';
@@ -26,6 +26,7 @@ import { notesBottom, paintRoll, ROLL } from './roll-painter';
 import { RollPanel } from './roll-panel';
 import { wheelTime } from '../envelopes/envelope-lane';
 import { ModulationEditor } from '../envelopes/modulation-editor';
+import type { DrawMode } from '../draw-mode';
 import { targetDevices, trackChain } from '../envelopes/mod-targets';
 
 export interface PianoRollDeps {
@@ -38,6 +39,10 @@ export interface PianoRollDeps {
   readonly pasteDevices?: () => void;
   /** Clipboard shared with the timeline. */
   readonly clipboard: Clipboard;
+  /** The app's draw mode (B): notes here, steps in the modulation lanes. */
+  readonly drawMode: DrawMode;
+  /** For the grid chosen by the user. */
+  readonly ui: UiState;
   readonly say: (text: string) => void;
 }
 
@@ -98,7 +103,6 @@ export class PianoRoll implements RollHost {
   /** The notes' names given by the instrument (the drum machine), or null. */
   private names: ReadonlyMap<number, string> | null = null;
   noteLength: Beats = 0.25;
-  drawMode = false;
   /** Fold (as in Live): only the rows of the pitches that have notes. It stays from one clip to the next. */
   folded = false;
 
@@ -126,6 +130,7 @@ export class PianoRoll implements RollHost {
       grid: () => roll.grid,
       signature: () => deps.store.project.signature,
       playhead: () => { const t = roll.target(); return t ? playheadIn(t.found, deps.engine) : null; },
+      drawMode: deps.drawMode,
       commit: (label, target, points) => roll.commit(label, c => c.withEnvelope(target, points) as MidiClip),
       wheel: (e, x) => roll.setAxis(wheelTime(e, x, roll._axis)),
       devices: () => { const t = roll.target()?.track ?? null; return t && targetDevices(t); },
@@ -151,6 +156,8 @@ export class PianoRoll implements RollHost {
     this.keyboard.element.title = 'Ctrl+wheel: vertical zoom';
     bindKeys(this.element, this, ROLL_KEYS, true);
     deps.store.onChange(() => this.sync());
+    deps.drawMode.onChange(() => this.sync());
+    deps.ui.onGridChange(() => this.invalidate());
     requestAnimationFrame(this.frame);
   }
 
@@ -376,9 +383,12 @@ export class PianoRoll implements RollHost {
     if (c?.notes.length) this.commitNotes('Quantize notes', quantizeNotes(c.notes, this._selection, Math.min(this.grid, 1)));
   }
 
+  get drawMode(): boolean {
+    return this.deps.drawMode.on;
+  }
+
   toggleDraw(): void {
-    this.drawMode = !this.drawMode;
-    this.sync();
+    this.deps.drawMode.toggle();
   }
 
   toggleFold(): void {
@@ -395,7 +405,7 @@ export class PianoRoll implements RollHost {
   // ---------------------------------------------------------------- state
 
   private get grid(): Beats {
-    return gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 12);
+    return this.deps.ui.gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 12);
   }
 
   private get notesHeight(): number {

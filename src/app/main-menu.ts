@@ -5,12 +5,15 @@ import { definitionTable, showDialog } from '../ui/dialog';
 import type { Menu } from '../ui/menu-bar';
 import type { App } from './app';
 import { recentName } from './recent-projects';
+import { gridLabel } from '../ui/timeline/geometry';
 
 /** Shortcuts that aren't in any menu, for the shortcuts window. */
 const OTHER_KEYS: readonly (readonly [string, string])[] = [
   ['Play / Stop', 'Space'],
   ['Stop and return to the start', 'Enter'],
-  ['Timeline zoom', 'Ctrl+wheel'],
+  ['Timeline zoom and scroll', 'Drag on the bar numbers: up/down zooms, sideways scrolls'],
+  ['Timeline zoom', 'Ctrl+wheel (pinch on a touchpad)'],
+  ['Move the timeline view', 'Ctrl+Alt+drag, or the middle button'],
   ['Piano roll horizontal zoom', 'Ctrl+wheel'],
   ['Piano roll vertical zoom', 'Ctrl+wheel on the keys, Ctrl+Shift+wheel anywhere'],
   ['Drag without the grid', 'Alt'],
@@ -92,6 +95,9 @@ export function mainMenu(app: App): Menu[] {
         SEPARATOR,
         { label: 'Zoom in', shortcut: '+', run: () => app.zoom(1.25) },
         { label: 'Zoom out', shortcut: '−', run: () => app.zoom(0.8) },
+        { label: 'Zoom to the selection', shortcut: 'Z', run: () => app.zoomToSelection() },
+        { label: 'Zoom back', shortcut: 'X', run: () => app.zoomBack() },
+        { label: 'Show the whole piece', shortcut: 'W', run: () => app.zoomToFit() },
         SEPARATOR,
         { label: 'Back to the arrangement', disabled: !engine.arrangementOverridden, run: () => engine.backToArrangement() },
       ],
@@ -107,6 +113,10 @@ export function mainMenu(app: App): Menu[] {
         };
         return [
           { label: 'Snap to grid', shortcut: 'Ctrl+4', checked: app.ui.snap, run: () => app.toggleSnap() },
+          { label: `Narrower grid (${gridLabel(app.ui.grid)})`, shortcut: 'Ctrl+1', run: () => app.narrowGrid() },
+          { label: 'Wider grid', shortcut: 'Ctrl+2', run: () => app.widenGrid() },
+          { label: 'Triplet grid', shortcut: 'Ctrl+3', checked: app.ui.grid.triplet, run: () => app.toggleTriplet() },
+          { label: 'Draw mode', shortcut: 'B', checked: app.drawMode.on, run: () => app.toggleDraw() },
           { label: 'Loop', shortcut: 'Ctrl+L', checked: store.project.loop.enabled, run: () => app.toggleLoop() },
           { label: 'Metronome', shortcut: 'Ctrl+Shift+M', checked: engine.metronomeOn, run: () => app.toggleMetronome() },
           { label: 'Follow the playhead', shortcut: 'Ctrl+Shift+F', checked: app.ui.follow, run: () => app.toggleFollow() },

@@ -6,6 +6,46 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Piano roll: every key shows its note name (when the rows are tall enough to read it); the C
+  that marks the octave stays darker, the sharps are written on the black keys.
+- EQ: a 96 dB/octave slope for the low and high cuts, a near-vertical "wall" past the frequency.
+- Timeline navigation as in Live, with no middle button needed (laptops, touchpads): drag up or
+  down on the bar numbers to zoom out or in around that point, sideways to scroll; a click there
+  moves the playhead. The ruler now has three bands: numbers, loop, and the scrub area.
+- Ctrl+Alt+drag moves the timeline view (Live's hand), like the middle button.
+- Z zooms to the selection (the time range, otherwise the selected clips), W shows the whole
+  piece, X goes back to the view before. Also in the View menu.
+- Clip editors: dragging up or down on the ruler zooms too, as on the timeline.
+- Grid, as in Live: Grid in the control bar chooses Adaptive (it follows the zoom) or a fixed value
+  from 1/32 to 8 bars, the same in the timeline, piano roll, audio editor and curves; "3" turns
+  on triplets. Ctrl+1 and Ctrl+2 make it narrower or wider (an adaptive grid gets denser or
+  sparser), Ctrl+3 toggles triplets; also in Options.
+- Automation of an effect's on/off (Live's "Device On"), for effects without dry/wet such as
+  Beat Repeat: every effect has On/Off first in the curve menus of clips and of the master
+  automation. The curve goes in steps: on or off while the clip plays; outside it the effect's
+  button decides again.
+- Spectral Resonator: a new effect that makes any sound ring at a chosen note, in the spirit of
+  Live's. The sound's spectrum rings only near the partials of the Note (with Fine) and of its
+  Chord (octave, fifth, power, major, minor, sus4, 7ths, phrygian), for the Decay; Damping darkens
+  the high partials, Stretch and Shift pull them off the harmonic series (bells, metal), Unison
+  doubles the note detuned and spread in stereo, Mod moves the partials (Chorus, Wander) or chops
+  them into grains (Granular). Resolution trades precision on low notes against delay: the
+  resonance comes 21, 43 or 85 ms after the dry sound. Presets: Tuned drums, Dark choir, Phrygian
+  drone, Metal bells, Broken radio, Glass grains, Wide pad, Sub resonance.
+
+### Changed
+- Draw mode (B) is one for the whole app, as in Live: it turns on note drawing in the piano roll
+  and step drawing in the modulation lanes and the master automation together. B works from
+  anywhere, and Options › Draw mode shows it.
+- Clip editors: dragging the loop bar whole carries the start marker with it, so the clip still
+  starts in the same place in the loop. Dragging an edge leaves it where it is.
+
+### Fixed
+- A drop-down menu (the warp algorithm, presets, modulation targets…) no longer traps the
+  keyboard: after a choice with the mouse it gives the focus back, and while it has focus it keeps
+  only the arrows and Enter, so Space, B and the other shortcuts keep working.
+
 ## [0.3.59] - 2026-11-22
 
 ### Added

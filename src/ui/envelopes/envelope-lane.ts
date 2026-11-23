@@ -11,12 +11,13 @@
 import type { Beats, TimeSignature } from '../../core/music-time';
 import type { Color } from '../../model/clip';
 import type { Clipboard } from '../../store/clipboard';
-import { envelopeValueAt, scaleOf, type ClipEnvelope, type EnvelopePoint, type ModScale, type ModTarget } from '../../model/envelope';
+import { envelopeValueAt, scaleOf, snapToScale, type ClipEnvelope, type EnvelopePoint, type ModScale, type ModTarget } from '../../model/envelope';
 import type { BeatAxis } from '../clip-editor/clip-geometry';
 import { paintBeatGrid } from '../clip-editor/clip-frame';
 import { KEY, SEPARATOR, showContextMenu } from '../context-menu';
 import { drag as dragPointer } from '../device/prisma/canvas';
 import { el } from '../dom';
+import type { DrawMode } from '../draw-mode';
 import { Surface } from '../surface';
 import { snapTo } from '../timeline/geometry';
 import { COLORS, withAlpha } from '../timeline/painters';
@@ -51,6 +52,8 @@ export interface LaneHost {
   chain?(): ModChain | null;
   /** The app's clipboard: a curve can also be pasted elsewhere. */
   readonly clipboard: Clipboard;
+  /** The app's draw mode (B), shared with the piano roll and the other lanes. */
+  readonly drawMode: DrawMode;
 }
 
 /** The wheel on the lane: Ctrl zooms the time, otherwise it scrolls it. */
@@ -181,9 +184,8 @@ export class EnvelopeLane {
   private hover: { x: number; y: number } | null = null;
   /** Where the curve starts: with the shapes open, under their little bar. */
   private top = PAD;
-  private drawMode = false;
   private dirty = true;
-  private last: { axis: BeatAxis; curves: LaneCurves | null; playhead: Beats | null } | null = null;
+  private last: { axis: BeatAxis; curves: LaneCurves | null; playhead: Beats | null; grid: Beats } | null = null;
 
   constructor(private readonly host: LaneHost, private readonly onDrawMode: (on: boolean) => void, private readonly onShapes: (on: boolean) => void) {
     this.surface.canvas.tabIndex = 0;
@@ -195,6 +197,10 @@ export class EnvelopeLane {
       this.placeCurve();
     }).observe(this.element);
     this.bind(this.surface.canvas);
+    host.drawMode.onChange(on => {
+      this.onDrawMode(on);
+      this.invalidate();
+    });
   }
 
   private bindHeight(grip: HTMLElement): void {
@@ -225,13 +231,11 @@ export class EnvelopeLane {
   }
 
   get draw(): boolean {
-    return this.drawMode;
+    return this.host.drawMode.on;
   }
 
   setDraw(on: boolean): void {
-    this.drawMode = on;
-    this.onDrawMode(on);
-    this.invalidate();
+    this.host.drawMode.set(on);
   }
 
   get shapes(): boolean {
@@ -257,9 +261,9 @@ export class EnvelopeLane {
   /** Redraws if something changed (to call at every frame of the editor). */
   frame(): void {
     if (!this.target || this.element.hidden) return;
-    const state = { axis: this.host.axis, curves: this.host.curves(), playhead: this.host.playhead() };
+    const state = { axis: this.host.axis, curves: this.host.curves(), playhead: this.host.playhead(), grid: this.host.grid() };
     const l = this.last;
-    if (!this.dirty && l && l.axis === state.axis && l.curves === state.curves && l.playhead === state.playhead) return;
+    if (!this.dirty && l && l.axis === state.axis && l.curves === state.curves && l.playhead === state.playhead && l.grid === state.grid) return;
     this.dirty = false;
     this.last = state;
     this.paint(state.curves, state.playhead);
@@ -280,10 +284,11 @@ export class EnvelopeLane {
     return this.top + (1 - (v - min) / (max - min)) * this.curveHeight;
   }
 
+  /** The value at height `y`; on a scale in steps (an on/off) the nearest step. */
   private yToValue(y: number): number {
     const { min, max } = this.scale;
     const u = 1 - (y - this.top) / this.curveHeight;
-    return Math.max(min, Math.min(max, min + u * (max - min)));
+    return snapToScale(Math.max(min, Math.min(max, min + u * (max - min))), this.scale);
   }
 
   private points(): readonly EnvelopePoint[] {
@@ -324,7 +329,7 @@ export class EnvelopeLane {
           fineY = null;
           fineValue = this.yToValue(y);
         }
-        const p = { beat, value: fineValue };
+        const p = { beat, value: snapToScale(fineValue, this.scale) };
         drag.points = start.map((q, i) => (i === index ? p : q));
         drag.changed = true;
       },
@@ -355,7 +360,7 @@ export class EnvelopeLane {
         const c0 = Math.floor(Math.min(a.beat, beat) / grid + EPS), c1 = Math.floor(Math.max(a.beat, beat) / grid + EPS);
         for (let c = c0; c <= c1; c++) {
           const u = beat === a.beat ? 1 : Math.max(0, Math.min(1, ((c + 0.5) * grid - a.beat) / (beat - a.beat)));
-          drag.points = paintStep(drag.points, c * grid, (c + 1) * grid, a.value + (value - a.value) * u, this.scale.neutral);
+          drag.points = paintStep(drag.points, c * grid, (c + 1) * grid, snapToScale(a.value + (value - a.value) * u, this.scale), this.scale.neutral);
         }
         last = { beat, value };
         drag.changed = true;
@@ -464,7 +469,7 @@ export class EnvelopeLane {
       if (ctrl && key === 'x') { if (this.copy()) this.clear('Cut modulation'); return true; }
       if (ctrl && key === 'v') { this.paste(); return true; }
       if (ctrl) return false;
-      if (key === 'b') { this.setDraw(!this.drawMode); return true; }
+      if (key === 'b') { this.setDraw(!this.draw); return true; }
       if (key === 'f') { this.setShapes(!this.shapes); return true; }
       if ((key === 'delete' || key === 'backspace') && this.range) { this.clear('Clear modulation range'); return true; }
       if (key === 'escape' && this.range) { this.range = null; this.invalidate(); return true; }
@@ -499,9 +504,9 @@ export class EnvelopeLane {
         // a click outside the range just leaves it
         this.range = null;
         this.invalidate();
-        if (!this.drawMode) return;
+        if (!this.draw) return;
       }
-      if (this.drawMode) this.drag = this.drawDrag(pts);
+      if (this.draw) this.drag = this.drawDrag(pts);
       else if (e.shiftKey) this.drag = this.sweepDrag(pts, x);
       else if (inRange) this.drag = this.rangeDrag(pts, range!, x, y);
       else if (hit >= 0) this.drag = this.pointDrag(pts, hit, 'Move modulation point', false);
@@ -512,7 +517,7 @@ export class EnvelopeLane {
         this.drag = this.pointDrag([...pts.slice(0, i), p, ...pts.slice(i)], i, 'Add modulation point', true);
       }
       this.drag.move(x, y, e.altKey, false);
-      if (!this.drawMode && (hit >= 0 || inRange)) this.drag.changed = false; // a click on a point doesn't move it
+      if (!this.draw && (hit >= 0 || inRange)) this.drag.changed = false; // a click on a point doesn't move it
       this.invalidate();
     });
     canvas.addEventListener('pointermove', e => {
@@ -537,7 +542,7 @@ export class EnvelopeLane {
     canvas.addEventListener('pointercancel', () => finish(false));
     canvas.addEventListener('pointerleave', () => { this.hover = null; this.invalidate(); });
     canvas.addEventListener('dblclick', e => {
-      if (this.drawMode) return;
+      if (this.draw) return;
       const { x, y } = pos(e), i = this.pointAt(x, y);
       if (i >= 0) this.commit('Delete modulation point', this.points().filter((_, k) => k !== i));
     });
@@ -556,7 +561,7 @@ export class EnvelopeLane {
         { label: 'Delete the point', disabled: i < 0, run: () => this.commit('Delete modulation point', pts.filter((_, k) => k !== i)) },
         { label: this.range ? 'Clear the range' : 'Clear the modulation', disabled: !pts.length, run: () => this.clear('Clear modulation') },
         SEPARATOR,
-        { label: 'Step drawing', shortcut: KEY.draw, checked: this.drawMode, run: () => this.setDraw(!this.drawMode) },
+        { label: 'Step drawing', shortcut: KEY.draw, checked: this.draw, run: () => this.setDraw(!this.draw) },
         { label: 'Ready-made shapes', shortcut: KEY.shapes, checked: this.shapes, run: () => this.setShapes(!this.shapes) },
       ]);
     });
@@ -565,7 +570,7 @@ export class EnvelopeLane {
   }
 
   private cursor(x: number, y: number, shift: boolean): string {
-    if (this.drawMode) return 'crosshair';
+    if (this.draw) return 'crosshair';
     if (shift) return 'text';
     const beat = this.host.axis.xToBeat(x), r = this.range;
     if (r && beat >= r.from && beat <= r.to) return 'move';
@@ -610,7 +615,7 @@ export class EnvelopeLane {
     g.font = '10.5px system-ui, sans-serif';
     if (!pts.length) {
       g.fillStyle = COLORS.rulerText;
-      g.fillText(this.drawMode ? 'Drag to draw in steps · with Alt freehand · B to exit' : 'Click: a point · B: draw · F: ready-made shapes · Shift+drag: choose a range · Ctrl+V: paste', 8, h - 8);
+      g.fillText(this.draw ? 'Drag to draw in steps · with Alt freehand · B to exit' : 'Click: a point · B: draw · F: ready-made shapes · Shift+drag: choose a range · Ctrl+V: paste', 8, h - 8);
     } else {
       // the curve: flat before the first point and after the last
       const xs = pts.map(p => axis.beatToX(p.beat)), ys = pts.map(p => this.valueToY(p.value));
