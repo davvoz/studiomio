@@ -6,6 +6,10 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- The release build no longer fails on GitHub's slower machines: the speed tests run only locally.
+  Same app as 0.3.65 (whose build didn't come out), with MIDI recording in the session.
+
 ## [0.3.65] - 2026-11-23
 
 ### Added
