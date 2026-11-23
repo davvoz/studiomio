@@ -242,14 +242,15 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => app.quit());
 
-  await app.whenReady();
-  protocol.handle(SCHEME, serve);
-  handlePresets();
-  handleProjectFolders(() => win, await folders.projectFolderIn(launchArgs(process.argv)));
-  // MIDI (APC40), project folders and the rest: granted only to the app itself.
-  const ours = (url: string) => url.startsWith(ORIGIN);
-  session.defaultSession.setPermissionRequestHandler((wc, _permission, callback) => callback(ours(wc.getURL())));
-  session.defaultSession.setPermissionCheckHandler((_wc, _permission, origin) => ours(origin));
-  win = createWindow();
-  checkForUpdates(win);
+  void app.whenReady().then(async () => {
+    protocol.handle(SCHEME, serve);
+    handlePresets();
+    handleProjectFolders(() => win, await folders.projectFolderIn(launchArgs(process.argv)));
+    // MIDI (APC40), project folders and the rest: granted only to the app itself.
+    const ours = (url: string) => url.startsWith(ORIGIN);
+    session.defaultSession.setPermissionRequestHandler((wc, _permission, callback) => callback(ours(wc.getURL())));
+    session.defaultSession.setPermissionCheckHandler((_wc, _permission, origin) => ours(origin));
+    win = createWindow();
+    checkForUpdates(win);
+  });
 }
