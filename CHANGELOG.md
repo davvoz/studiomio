@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.63] - 2026-11-23
+
 ### Fixed
 - Risolte segnalazioni SonarCloud sui metodi vuoti documentando i no-op intenzionali.
 
