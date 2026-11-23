@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.61] - 2026-11-23
+
 ### Changed
 - Code quality clean-up (SonarCloud): long functions of instruments, effects, time-stretch,
   controllers and editors split into smaller pieces. The sound is unchanged: every preset of
