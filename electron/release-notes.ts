@@ -28,14 +28,14 @@ export function releaseNotesText(notes: ReleaseNotes): string {
 /** From the releases' HTML (titles, paragraphs, lists) to lines of text with bullet points. */
 export function htmlToText(html: string): string {
   const lines = html
-    .replace(/<li[^>]*>/gi, '\n• ')
-    .replace(/<br\s*\/?>|<\/(p|h\d|li|ul|ol|div)>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(Number(dec)))
-    .replace(/&(lt|gt|quot|apos|nbsp|amp);/g, (_, name: string) => ENTITIES[name])
+    .replaceAll(/<li[^<>]*>/gi, '\n• ')
+    .replaceAll(/<br\s*\/?>|<\/(p|h\d|li|ul|ol|div)>/gi, '\n')
+    .replaceAll(/<[^<>]*>/g, '')
+    .replaceAll(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replaceAll(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(Number(dec)))
+    .replaceAll(/&(lt|gt|quot|apos|nbsp|amp);/g, (_, name: string) => ENTITIES[name])
     .split('\n')
-    .map(line => line.replace(/\s+/g, ' ').trim())
+    .map(line => line.replaceAll(/\s+/g, ' ').trim())
     .filter(Boolean);
     // in a "loose" list the item's text is in a <p>: the bullet stays alone on a line
   return lines.reduce<string[]>((out, line) => {

@@ -20,9 +20,19 @@ export interface LoadedProject {
   readonly missing: readonly SampleRef[];
 }
 
+const isDotOrSpace = (c: string): boolean => c === '.' || c.trim() === '';
+
+/** `s` without dots and white space at its ends (a loop: a regular expression for it backtracks). */
+function trimDotsAndSpaces(s: string): string {
+  let start = 0, end = s.length;
+  while (start < end && isDotOrSpace(s[start])) start++;
+  while (end > start && isDotOrSpace(s[end - 1])) end--;
+  return s.slice(start, end);
+}
+
 /** Removes from the name the characters file systems don't accept. */
 export function safeFileName(name: string): string {
-  const clean = name.normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/^[\s.]+|[\s.]+$/g, '');
+  const clean = trimDotsAndSpaces(name.normalize('NFC').replaceAll(/[<>:"/\\|?*\u0000-\u001f]/g, '_'));
   return clean.slice(0, 120) || 'audio';
 }
 

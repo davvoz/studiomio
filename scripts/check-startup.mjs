@@ -1,14 +1,23 @@
-// node scripts/check-startup.mjs [app executable]
+// node scripts/check-startup.mjs [--packaged]
 // Starts the desktop app as a user does and checks that it really comes up: the window opens, the
 // app inside it starts, and no error is thrown while it loads (the devices' AudioWorklet included).
 // Without an argument it starts the development build (`electron .`, after npm run build and
-// npm run electron:build); the release passes the packaged app (release/win-unpacked/studiomio.exe).
+// npm run electron:build); --packaged the app electron-builder made (release/win-unpacked).
+// Which program runs is fixed here, never taken from the command line.
 // It never touches the user's installed studiomio: its own data folder, thrown away at the end.
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+/** The packaged app electron-builder leaves in release/, by system. */
+const PACKAGED = {
+  win32: join(ROOT, 'release', 'win-unpacked', 'studiomio.exe'),
+  linux: join(ROOT, 'release', 'linux-unpacked', 'studiomio'),
+};
 
 const PORT = 9339;
 const TIMEOUT = 90_000;   // a cold start on a shared CI machine
@@ -19,14 +28,20 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 class StartupError extends Error {}
 
-/** The app's process: the given executable, or Electron with this folder. */
-function launch(executable, userData) {
-  const dev = !executable;
-  const program = executable ?? createRequire(import.meta.url)('electron');
+/** The program to start: the packaged app, or Electron with this folder (development). */
+function program(packaged) {
+  if (!packaged) return { file: createRequire(import.meta.url)('electron'), args: ['.'] };
+  const file = PACKAGED[process.platform];
+  if (!file) throw new StartupError(`no packaged app on ${process.platform}`);
+  return { file, args: [] };
+}
+
+/** The app's process, with its own data folder and the DevTools port open. */
+function launch(packaged, userData) {
+  const { file, args } = program(packaged);
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  const args = [...(dev ? ['.'] : []), `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`];
-  return spawn(program, args, { env, stdio: 'inherit' });
+  return spawn(file, [...args, `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`], { cwd: ROOT, env, stdio: 'inherit' });
 }
 
 /** Waits until `probe` gives a value, failing if the app closes or the time is up. */
@@ -100,9 +115,13 @@ async function check(page, alive) {
 
 async function main() {
   const userData = await mkdtemp(join(tmpdir(), 'studiomio-startup-'));
-  const app = launch(process.argv[2], userData);
+  const app = launch(process.argv.includes('--packaged'), userData);
   let running = true;
   app.on('exit', () => { running = false; });
+  app.on('error', e => {
+    running = false;
+    console.error(`startup: the app can't be started: ${e.message}`);
+  });
   const alive = () => running;
   let page;
   try {

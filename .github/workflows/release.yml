@@ -33,7 +33,7 @@ jobs:
 
       # the packaged app must start (window, app, devices, no errors) before it reaches users:
       # v0.3.63 passed the build and never opened its window. Not skipped by "[skip tests]".
-      - run: node scripts/check-startup.mjs release/win-unpacked/studiomio.exe
+      - run: node scripts/check-startup.mjs --packaged
 
       # the release is created in one go with all the files: electron-builder uploaded them in
       # parallel and created two per tag (or a half one, without latest.yml for updates).

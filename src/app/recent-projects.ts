@@ -14,8 +14,14 @@ export const recentName = (r: RecentProject): string =>
   (typeof r === 'string' ? r.split(/[\\/]/).findLast(Boolean) ?? r : r.name);
 
 /** Two paths are the same folder whatever the case and the separators (Windows). */
-const samePath = (a: string, b: string): boolean =>
-  a.replace(/[\\/]+$/, '').replaceAll('\\', '/').toLowerCase() === b.replace(/[\\/]+$/, '').replaceAll('\\', '/').toLowerCase();
+const samePath = (a: string, b: string): boolean => folderKey(a) === folderKey(b);
+
+/** The path without its final separators, with "/" and in lower case. */
+function folderKey(path: string): string {
+  let end = path.length;
+  while (end > 0 && (path[end - 1] === '/' || path[end - 1] === '\\')) end--;
+  return path.slice(0, end).replaceAll('\\', '/').toLowerCase();
+}
 
 async function same(a: RecentProject, b: RecentProject): Promise<boolean> {
   if (typeof a === 'string' || typeof b === 'string') return typeof a === typeof b && samePath(a as string, b as string);

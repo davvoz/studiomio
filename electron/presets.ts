@@ -42,9 +42,17 @@ export async function removePreset(root: string, type: string, name: string): Pr
   await Promise.all(files.map(f => rm(f.path, { force: true })));
 }
 
+/** `s` without the dots and spaces at its end, which Windows drops from file names (a loop: a
+ *  regular expression for it backtracks on long names). */
+function withoutTrailingDots(s: string): string {
+  let end = s.length;
+  while (end > 0 && (s[end - 1] === '.' || s[end - 1] === ' ')) end--;
+  return s.slice(0, end);
+}
+
 /** A name valid as a file name on Windows (and elsewhere). */
 export function safeName(name: string): string {
-  let s = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 100).trim().replace(/[. ]+$/, '');
+  let s = withoutTrailingDots(name.replaceAll(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 100).trim());
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(s)) s = `_${s}`;
   return s || 'preset';
 }

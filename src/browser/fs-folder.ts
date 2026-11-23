@@ -61,7 +61,7 @@ function open(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB, 1);
     req.onupgradeneeded = () => req.result.createObjectStore(STORE);
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB: the database did not open'));
   });
 }
 
@@ -69,7 +69,7 @@ function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<
   return open().then(db => new Promise<T>((resolve, reject) => {
     const req = fn(db.transaction(STORE, mode).objectStore(STORE));
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB: the request failed'));
   }).finally(() => db.close()));
 }
 
