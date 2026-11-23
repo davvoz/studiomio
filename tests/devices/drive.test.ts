@@ -4,6 +4,7 @@ import { Oversampler } from '../../src/devices/dsp/oversampler';
 import { DRIVE, SHAPE } from '../../src/devices/effects/drive/drive';
 import { DriveCore } from '../../src/devices/effects/drive/drive-core';
 import { autoGain, IntegralTable, SHAPES, transfer } from '../../src/devices/effects/drive/drive-math';
+import { itTimed } from '../helpers/timing';
 
 const SR = 48000, BLOCK = 128;
 
@@ -176,7 +177,7 @@ describe('Drive: sound', () => {
     }
   });
 
-  it('cost: a stereo track at 4× is a small fraction of real time', () => {
+  itTimed('cost: a stereo track at 4× is a small fraction of real time', () => {
     const core = new DriveCore(SR);
     core.setParams(resolveParams(DRIVE, {}));
     const l = new Float32Array(BLOCK), r = new Float32Array(BLOCK), x = sine(220, 0.5, BLOCK);

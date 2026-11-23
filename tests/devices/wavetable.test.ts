@@ -7,6 +7,7 @@ import { FRAMES, LEVELS, levelFor, maxHarmonic, STRIDE, TABLE_SIZE, TABLES, wave
 import { LFO_SHAPE, LFO_SYNC, MOD_DEST, TABLE, VOICE_MODE, WAVETABLE } from '../../src/devices/instruments/wavetable/wavetable';
 import { WavetableCore } from '../../src/devices/instruments/wavetable/wavetable-core';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
+import { itTimed } from '../helpers/timing';
 
 const SR = 48000, BLOCK = 128;
 
@@ -252,7 +253,7 @@ describe('Wavetable: sound', () => {
     }
   });
 
-  it('it costs little: ten seconds of four notes with seven copies, two oscillators, in less than a second', () => {
+  itTimed('it costs little: ten seconds of four notes with seven copies, two oscillators, in less than a second', () => {
     const { core, queue } = synth({ ...WAVETABLE.presets.find(p => p.name === 'Breathing pad')!.params, unison: 7 });
     for (const p of [48, 55, 60, 64]) queue.add(p, 100, 0, 10 * SR);
     run(core, queue, SR / 10); // the tables are computed at the first note

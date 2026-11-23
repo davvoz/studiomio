@@ -24,5 +24,14 @@ export default defineConfig({
     // the (slow) benchmarks run only with `npm run bench`
     include: process.env.BENCH ? ['tests/**/*.perf.ts'] : ['tests/**/*.test.ts'],
     testTimeout: 60_000,
+    // `npm run coverage` (SonarCloud reads coverage/lcov.info): which code the tests run
+    coverage: {
+      provider: 'v8',
+      reporter: ['lcov', 'text-summary'],
+      include: ['src/**/*.ts', 'electron/**/*.ts', 'scripts/**/*.ts'],
+      exclude: ['src/dsp/wasm/pkg/**'],
+      // the report is written even if a test fails: SonarCloud still gets the coverage
+      reportOnFailure: true,
+    },
   },
 });

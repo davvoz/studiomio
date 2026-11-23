@@ -8,3 +8,4 @@ dist-electron/
 release/
 # the script that publishes releases stays local only
 release.bat
+coverage/

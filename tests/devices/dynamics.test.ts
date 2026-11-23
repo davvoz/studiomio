@@ -13,6 +13,7 @@ import { ReverbCore } from '../../src/devices/effects/reverb/reverb-core';
 import { MULTIBAND } from '../../src/devices/effects/multiband/multiband';
 import { MultibandCore } from '../../src/devices/effects/multiband/multiband-core';
 import type { EffectCore } from '../../src/devices/dsp/core';
+import { itTimed } from '../helpers/timing';
 
 const SR = 48000, BLOCK = 128;
 const db = (a: number) => 20 * Math.log10(Math.max(1e-12, a));
@@ -315,7 +316,7 @@ describe('Multiband', () => {
 });
 
 describe('cost', () => {
-  it('compressor, limiter and stereo reverb: a small fraction of real time', () => {
+  itTimed('compressor, limiter and stereo reverb: a small fraction of real time', () => {
     const x = sine(220, 0.8, BLOCK);
     for (const [name, core] of [['compressor', compressor({})], ['limiter', limiter({ gain: 6 })], ['reverb', reverb({})], ['multiband', multiband({})]] as const) {
       const l = new Float32Array(BLOCK), r = new Float32Array(BLOCK);

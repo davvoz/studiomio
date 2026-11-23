@@ -1,0 +1,13 @@
+{
+  "name": "studiomio-lint",
+  "private": true,
+  "description": "The SonarCloud rules, checked locally (npm run lint from the root). Separate because the app is on TypeScript 7, which has no JavaScript API for the linter: TypeScript 5 here serves only the lint.",
+  "type": "module",
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "eslint-plugin-sonarjs": "^3.0.7",
+    "eslint-plugin-unicorn": "^56.0.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.73.0"
+  }
+}

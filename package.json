@@ -17,6 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "coverage": "cross-env COVERAGE=1 vitest run --coverage",
+    "lint": "node tools/lint/run.mjs",
     "bench": "cross-env BENCH=1 vitest run --silent=false --reporter=verbose",
     "wasm": "wasm-pack build crates/dsp --target web --out-dir ../../src/dsp/wasm/pkg --out-name studiomio_dsp --release",
     "wasm:test": "wasm-pack build crates/dsp --target nodejs --out-dir ../../tests/wasm-pkg --out-name studiomio_dsp --release",
@@ -31,6 +33,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.1.1",
     "cross-env": "^10.1.0",
     "electron": "^44.9.0",
     "electron-builder": "^26.15.3",

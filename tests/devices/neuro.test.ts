@@ -4,6 +4,7 @@ import { midiToHz } from '../../src/devices/dsp/core';
 import { LFO_RATE, LFO_SHAPE, MOD_DEST, NEURO, NEURO_MODE } from '../../src/devices/instruments/neuro/neuro';
 import { NeuroCore } from '../../src/devices/instruments/neuro/neuro-core';
 import { NoteQueue } from '../../src/devices/worklet/note-queue';
+import { itTimed } from '../helpers/timing';
 
 const SR = 48000, BLOCK = 128;
 
@@ -156,7 +157,7 @@ describe('Neuro', () => {
     }
   });
 
-  it('it costs little: ten seconds of the heaviest preset in less than a second', () => {
+  itTimed('it costs little: ten seconds of the heaviest preset in less than a second', () => {
     const { core, queue } = synth({ ...NEURO.presets.find(p => p.name === 'Neuro growl')!.params, unison: 7, formant: 100 });
     queue.add(31, 100, 0, 10 * SR);
     const t = performance.now();

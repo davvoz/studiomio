@@ -4,6 +4,7 @@ import { partialHz, partialsOf, resonatorSettings, voicesOf } from '../../src/de
 import { PartialMotion } from '../../src/devices/effects/spectral-resonator/partial-motion';
 import { MOD, noteHz, SPECTRAL_RESONATOR } from '../../src/devices/effects/spectral-resonator/spectral-resonator';
 import { SpectralResonatorCore } from '../../src/devices/effects/spectral-resonator/spectral-resonator-core';
+import { itTimed } from '../helpers/timing';
 
 const SR = 48000, BLOCK = 128;
 
@@ -161,7 +162,7 @@ describe('Spectral Resonator: the sound', () => {
     }
   });
 
-  it('it costs little: ten seconds of the heaviest setting in a fraction of that (about 0.4 s here)', () => {
+  itTimed('it costs little: ten seconds of the heaviest setting in a fraction of that (about 0.4 s here)', () => {
     const core = resonator(wet({ chord: 8, unison: 8, partials: 64, resolution: 2, mod: MOD.wander }));
     const x = noise(SR);
     const outL = new Float32Array(BLOCK), outR = new Float32Array(BLOCK);
