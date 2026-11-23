@@ -1,5 +1,5 @@
 // Runs one of the app's TypeScript scripts with modules resolved by Vite (same imports as src/):
-//   node scripts/run.mjs scripts/build-acid-live.ts <arguments…>
+//   node scripts/run.mjs scripts/render-project.ts <arguments…>
 // The script exports `main(args)`.
 import { resolve } from 'node:path';
 import { runnerImport } from 'vite';

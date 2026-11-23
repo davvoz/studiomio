@@ -11,7 +11,7 @@
  * The Instrument Racks start from an instrument preset and add effects to it; the macros
  * move instrument and effects together, and start where the sound is already nice.
  *
- * Levare, 303, Acido FX and Macchina come from the live "Rave illegale" (src/demo/rave-live.ts).
+ * Levare, 303, Acido FX and Macchina come from the live "Rave illegale".
  * Salsiccia is the master rack of the live "Cripta": it fattens the whole mix, like a Sausage Fattener.
  *
  * Wobble, Pompa, Cancello, Acido vivo, Sirena and Colpo have modulators inside (LFO and

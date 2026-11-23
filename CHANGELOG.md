@@ -6,6 +6,10 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- Removed the scripts that built the old example lives from code (and their tests); the demo
+  project opened from the app stays.
+
 ## [0.3.61] - 2026-11-23
 
 ### Changed
