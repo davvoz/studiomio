@@ -140,7 +140,7 @@ function buildDrumMachineScenes(store: ProjectStore, machine: TrackId): void {
   // the last scene: bass and arpeggio over the Drum Machine's beat
   const p = store.project;
   const [bass, pad] = [p.tracks[1], p.tracks[2]];
-  const copyOf = (c: Clip | null) => c && c.withId(store.ids.next('clip'));
+  const copyOf = (c: Clip | null) => c?.withId(store.ids.next('clip'));
   const bassClip = copyOf(bass.slots[1]), arp = copyOf(pad.slots[3]);
   if (bassClip) store.apply(setSlot(bass.id, 4, bassClip));
   if (arp) store.apply(setSlot(pad.id, 4, arp));

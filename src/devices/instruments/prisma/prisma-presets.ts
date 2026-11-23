@@ -37,7 +37,8 @@ let cache: readonly Preset[] | null = null;
 
 /** The presets, built the first time they're needed. */
 export function prismaPresets(): readonly Preset[] {
-  return (cache ??= build());
+  cache ??= build();
+  return cache;
 }
 
 /** The tables, by name. */

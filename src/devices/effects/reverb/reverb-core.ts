@@ -93,6 +93,8 @@ export class ReverbCore implements EffectCore {
   private phase = 0;
   private readonly smoothK: number;
   private readonly fb = new Float64Array(LINES);
+  /** The pre-delayed, diffused input of this sample (left, right): it feeds the lines. */
+  private readonly inlet = new Float64Array(2);
   /** Before the first block dry and wet don't glide: they start from the right ones. */
   private fresh = true;
 
@@ -130,58 +132,74 @@ export class ReverbCore implements EffectCore {
   setTempo(): void {}
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
-    const { lines, lengths, gains, dampK, hpK, diffusion, fb, pre, smoothK } = this;
-    const [dl, dr] = this.diffusers;
     this.fresh = false;
-    const preSize = pre[0].length, phaseStep = (2 * Math.PI * MOD_RATE) / this.sampleRate;
+    const phaseStep = (2 * Math.PI * MOD_RATE) / this.sampleRate;
     for (let i = 0; i < n; i++) {
-      // pre-delay
-      pre[0][this.prePos] = inL[i];
-      pre[1][this.prePos] = inR[i];
-      const rp = (this.prePos - this.predelay + preSize) % preSize;
-      let a = pre[0][rp], b = pre[1][rp];
-      if (++this.prePos >= preSize) this.prePos = 0;
-      // diffusion
-      for (const ap of dl) a = ap.process(a, diffusion);
-      for (const ap of dr) b = ap.process(b, diffusion);
-      // the lines: read (two modulated in antiphase), damping, decay
+      this.diffuse(inL[i], inR[i]);
       this.phase += phaseStep;
       if (this.phase > 2 * Math.PI) this.phase -= 2 * Math.PI;
-      const mod = Math.sin(this.phase) * MOD_DEPTH;
-      for (let k = 0; k < LINES; k++) {
-        const line = lines[k];
-        const d = lengths[k] + MOD_SIGN[k] * mod;
-        line.lp += dampK * (line.read(d) - line.lp);
-        fb[k] = line.lp * gains[k];
-      }
+      this.readLines(Math.sin(this.phase) * MOD_DEPTH);
       // the outputs before mixing: sums with different signs for the two channels
+      const fb = this.fb;
       const wl = fb[0] - fb[1] + fb[2] - fb[3] + fb[4] - fb[5] + fb[6] - fb[7];
       const wr = fb[0] + fb[1] - fb[2] - fb[3] + fb[4] + fb[5] - fb[6] - fb[7];
-      // Hadamard 8×8 (fast, in three steps), normalized: it preserves energy
-      for (let h = 1; h < LINES; h <<= 1) {
-        for (let k = 0; k < LINES; k += h << 1) {
-          for (let j = k; j < k + h; j++) {
-            const x = fb[j], y = fb[j + h];
-            fb[j] = x + y;
-            fb[j + h] = x - y;
-          }
-        }
-      }
-      const norm = 1 / Math.sqrt(LINES);
-      for (let k = 0; k < LINES; k++) lines[k].write(fb[k] * norm + (k < 4 ? a : b) * 0.5);
-      // low cut on the tail, width, mix
-      this.hpL = hpK * (this.hpL + wl - this.hpPrevL);
-      this.hpR = hpK * (this.hpR + wr - this.hpPrevR);
-      this.hpPrevL = wl;
-      this.hpPrevR = wr;
-      const mid = (this.hpL + this.hpR) * 0.5, side = (this.hpL - this.hpR) * 0.5 * this.width;
-      this.wet += (this.targetWet - this.wet) * smoothK;
-      this.dry += (this.targetDry - this.dry) * smoothK;
-      const g = this.wet * 0.35;
-      outL[i] = inL[i] * this.dry + (mid + side) * g;
-      outR[i] = inR[i] * this.dry + (mid - side) * g;
+      hadamard(fb);
+      const norm = 1 / Math.sqrt(LINES), [a, b] = this.inlet;
+      for (let k = 0; k < LINES; k++) this.lines[k].write(fb[k] * norm + (k < 4 ? a : b) * 0.5);
+      this.mix(wl, wr, inL[i], inR[i], outL, outR, i);
     }
     this.hpL = flush(this.hpL);
     this.hpR = flush(this.hpR);
+  }
+
+  /** The input through the pre-delay and the diffusers, into `inlet`. */
+  private diffuse(l: number, r: number): void {
+    const pre = this.pre, preSize = pre[0].length, [dl, dr] = this.diffusers;
+    pre[0][this.prePos] = l;
+    pre[1][this.prePos] = r;
+    const rp = (this.prePos - this.predelay + preSize) % preSize;
+    let a = pre[0][rp], b = pre[1][rp];
+    if (++this.prePos >= preSize) this.prePos = 0;
+    for (const ap of dl) a = ap.process(a, this.diffusion);
+    for (const ap of dr) b = ap.process(b, this.diffusion);
+    this.inlet[0] = a;
+    this.inlet[1] = b;
+  }
+
+  /** The lines read into `fb` (two modulated in antiphase by `mod`), damped, with their decay. */
+  private readLines(mod: number): void {
+    for (let k = 0; k < LINES; k++) {
+      const line = this.lines[k];
+      line.lp += this.dampK * (line.read(this.lengths[k] + MOD_SIGN[k] * mod) - line.lp);
+      this.fb[k] = line.lp * this.gains[k];
+    }
+  }
+
+  /** The tail's low cut, its width, and the mix with the dry sound (both gliding to the knobs). */
+  private mix(wl: number, wr: number, dryL: number, dryR: number, outL: Float32Array, outR: Float32Array, i: number): void {
+    const hpK = this.hpK;
+    this.hpL = hpK * (this.hpL + wl - this.hpPrevL);
+    this.hpR = hpK * (this.hpR + wr - this.hpPrevR);
+    this.hpPrevL = wl;
+    this.hpPrevR = wr;
+    const mid = (this.hpL + this.hpR) * 0.5, side = (this.hpL - this.hpR) * 0.5 * this.width;
+    this.wet += (this.targetWet - this.wet) * this.smoothK;
+    this.dry += (this.targetDry - this.dry) * this.smoothK;
+    const g = this.wet * 0.35;
+    outL[i] = dryL * this.dry + (mid + side) * g;
+    outR[i] = dryR * this.dry + (mid - side) * g;
+  }
+}
+
+/** Hadamard 8×8 in place (fast, in three steps); with 1/√8 it preserves energy. */
+function hadamard(fb: Float64Array | number[]): void {
+  for (let h = 1; h < LINES; h <<= 1) {
+    for (let k = 0; k < LINES; k += h << 1) {
+      for (let j = k; j < k + h; j++) {
+        const x = fb[j], y = fb[j + h];
+        fb[j] = x + y;
+        fb[j + h] = x - y;
+      }
+    }
   }
 }

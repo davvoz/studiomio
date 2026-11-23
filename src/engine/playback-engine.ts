@@ -303,7 +303,7 @@ export class PlaybackEngine {
     const master = curves || (!!prev && (prev.masterEffects !== next.masterEffects || prev.masterRacks !== next.masterRacks) && next.playingMasterAutomation.length > 0);
     if (!this.playing) return;
     if (prev && prev.signature !== next.signature) this.anchors.resend();
-    if (!prev || prev.tempo !== next.tempo || prev.loop !== next.loop) this.resume();
+    if (prev?.tempo !== next.tempo || prev.loop !== next.loop) this.resume();
     else if (changed.size || master || mods.length) this.retake(changed, master, mods);
   }
 
@@ -499,33 +499,16 @@ export class PlaybackEngine {
       // a group plays no clips: it's only a mixer channel
       if (t instanceof GroupTrack) continue;
       present.add(t.id);
+      this.syncModulator(t);
       const entry = this.players.get(t.id);
-      const mod = this.modulators.get(t.id);
-      if (mod) mod.update(t);
-      else this.modulators.set(t.id, new TrackModulator(t, () => this.session.programs(t.id), target => this.modSink(t.id, target), () => this.graph.currentTime));
-      if (entry && entry.kind === t.kind) {
+      if (entry?.kind === t.kind) {
         const prev = prevTracks.get(t.id);
         if (prev?.arrangement !== t.arrangement || (prev && this.playingClipChanged(prev, t))) changed.add(t.id);
         entry.player.update(t);
         continue;
       }
       entry?.player.dispose();
-      const factory = this.factories[t.kind];
-      if (!factory) {
-        console.warn(`no player for "${t.kind}" tracks`);
-        this.players.delete(t.id);
-        continue;
-      }
-      const id = t.id;
-      const notes = new NoteActivity();
-      this.activity.set(id, notes);
-      const ctx: PlayerContext = {
-        graph: this.graph, output: this.mixer.input(id), missing: () => { this.missed.add(id); },
-        programs: () => this.session.programs(id), notes, tempo: () => this.project?.tempo.bpm ?? 120,
-        sound: sound => queueMicrotask(() => this.events.emit('sound', id, sound)),
-      };
-      this.players.set(t.id, { kind: t.kind, player: factory(t, ctx, this.services) });
-      changed.add(id);
+      if (this.createPlayer(t)) changed.add(t.id);
     }
     for (const [id, { player }] of this.players) {
       if (!present.has(id)) {
@@ -540,6 +523,33 @@ export class PlaybackEngine {
     }
     this.previousTracks = new Map(project.tracks.map(t => [t.id, t]));
     return changed;
+  }
+
+  /** The track's clip-curve modulator: updated, or created the first time. */
+  private syncModulator(t: Track): void {
+    const mod = this.modulators.get(t.id);
+    if (mod) mod.update(t);
+    else this.modulators.set(t.id, new TrackModulator(t, () => this.session.programs(t.id), target => this.modSink(t.id, target), () => this.graph.currentTime));
+  }
+
+  /** A new player for the track, from the factory of its kind; false if there's none. */
+  private createPlayer(t: Track): boolean {
+    const factory = this.factories[t.kind];
+    if (!factory) {
+      console.warn(`no player for "${t.kind}" tracks`);
+      this.players.delete(t.id);
+      return false;
+    }
+    const id = t.id;
+    const notes = new NoteActivity();
+    this.activity.set(id, notes);
+    const ctx: PlayerContext = {
+      graph: this.graph, output: this.mixer.input(id), missing: () => { this.missed.add(id); },
+      programs: () => this.session.programs(id), notes, tempo: () => this.project?.tempo.bpm ?? 120,
+      sound: sound => queueMicrotask(() => this.events.emit('sound', id, sound)),
+    };
+    this.players.set(id, { kind: t.kind, player: factory(t, ctx, this.services) });
+    return true;
   }
 
   /** Aligns the chains' modulators (tracks, buses, master); returns those to resume:

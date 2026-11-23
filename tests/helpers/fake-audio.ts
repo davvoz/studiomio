@@ -18,8 +18,8 @@ export class FakeParam implements AudioParamLike {
   setValueAtTime(value: number, time: number) { this.events.push({ type: 'set', value, time }); this.value = value; }
   linearRampToValueAtTime(value: number, time: number) { this.events.push({ type: 'ramp', value, time }); this.value = value; }
   setTargetAtTime(value: number, time: number) { this.events.push({ type: 'target', value, time }); this.value = value; }
-  cancelScheduledValues(time: number) { this.events.push({ type: 'cancel', value: NaN, time }); }
-  cancelAndHoldAtTime(time: number) { this.events.push({ type: 'hold', value: NaN, time }); }
+  cancelScheduledValues(time: number) { this.events.push({ type: 'cancel', value: Number.NaN, time }); }
+  cancelAndHoldAtTime(time: number) { this.events.push({ type: 'hold', value: Number.NaN, time }); }
 }
 
 /** Fake modulations of a device: they record the events per parameter. */
@@ -30,7 +30,7 @@ export class FakeModulation implements DeviceModulation {
     return {
       set: (value, time) => { this.events.push({ param, type: 'set', value, time, ...c }); },
       ramp: (value, time) => { this.events.push({ param, type: 'ramp', value, time, ...c }); },
-      hold: time => { this.events.push({ param, type: 'hold', value: NaN, time, ...c }); },
+      hold: time => { this.events.push({ param, type: 'hold', value: Number.NaN, time, ...c }); },
     };
   }
 }

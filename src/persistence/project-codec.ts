@@ -90,7 +90,7 @@ const migrations: Record<number, Migration> = {
     ...json,
     tracks: (json.tracks as JsonObject[]).map(t => {
       const inst = t.instrument as JsonObject | undefined;
-      if (!inst || inst.type !== SAMPLER.type) return t;
+      if (inst?.type !== SAMPLER.type) return t;
       const params = upgradeZoneTune(inst.params as Record<string, number>, inst.samples as JsonObject | undefined);
       return { ...t, instrument: { ...inst, params } };
     }),
@@ -197,7 +197,7 @@ export class ProjectCodec {
 
   private encodeClip(c: Clip): JsonObject {
     const codec = this.clips.get(c.kind);
-    if (!codec || !codec.handles(c)) throw new Error(`no codec for "${c.kind}" clips`);
+    if (!codec?.handles(c)) throw new Error(`no codec for "${c.kind}" clips`);
     return codec.encode(c);
   }
 

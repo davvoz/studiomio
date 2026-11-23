@@ -74,23 +74,27 @@ export class EffectChain {
   sync(effects: readonly EffectSettings[], bpm: number): void {
     const next = new Map<DeviceId, Slot>();
     let rewire = effects.length !== this.order.length || effects.some((e, i) => e.id !== this.order[i]);
-    for (const e of effects) {
-      const slot = this.slots.get(e.id);
-      if (slot && slot.effect.type === e.type) {
-        if (slot.settings !== e) slot.effect.update(e);
-        slot.settings = e;
-        next.set(e.id, slot);
-      } else {
-        slot?.effect.dispose();
-        next.set(e.id, { settings: e, effect: this.host.create(this.graph, e, bpm) });
-        rewire = true;
-      }
-    }
+    for (const e of effects) if (this.keepOrCreate(e, bpm, next)) rewire = true;
     for (const [id, slot] of this.slots) if (!next.has(id)) slot.effect.dispose();
     if (bpm !== this.bpm) for (const [id, slot] of next) if (this.slots.get(id) === slot) slot.effect.setTempo(bpm);
     this.slots = next;
     this.bpm = bpm;
     if (rewire) this.connect(effects.map(e => e.id));
+  }
+
+  /** Effect `e` into `next`: the playing one updated, or (new or of another type) created. True if
+   *  it was created (the chain must be rewired). */
+  private keepOrCreate(e: EffectSettings, bpm: number, next: Map<DeviceId, Slot>): boolean {
+    const slot = this.slots.get(e.id);
+    if (slot?.effect.type === e.type) {
+      if (slot.settings !== e) slot.effect.update(e);
+      slot.settings = e;
+      next.set(e.id, slot);
+      return false;
+    }
+    slot?.effect.dispose();
+    next.set(e.id, { settings: e, effect: this.host.create(this.graph, e, bpm) });
+    return true;
   }
 
   dispose(): void {

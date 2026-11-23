@@ -229,7 +229,32 @@ export class ZoneView {
     g.fillStyle = BACKGROUND;
     g.fillRect(0, 0, w, h);
     g.globalAlpha = this.enabled ? 1 : 0.5;
-    const rows = this.host.rows(), values = this.host.values(), selected = this.host.selected(), shown = this.visibleRows();
+    const rows = this.host.rows(), selected = this.host.selected(), shown = this.visibleRows();
+    this.revealSelected(rows, selected, shown);
+    const lo = Math.floor(this.k0), hi = Math.min(127, Math.ceil(this.k1));
+    const keyW = this.keysWidth / (this.k1 - this.k0);
+    this.paintColumns(g, h, lo, hi, keyW);
+    // the zones' rows
+    g.font = '10.5px system-ui, sans-serif';
+    g.textBaseline = 'middle';
+    const frame: RowFrame = { g, w, keyW, selected, values: this.host.values(), pitched: this.host.pitched() };
+    rows.slice(this.top, this.top + shown).forEach((row, i) => this.paintRow(frame, row, KEYS_H + i * ROW_H));
+    this.paintFreeRow(g, rows.length, shown);
+    g.fillStyle = GRID;
+    g.fillRect(NAME_W - 1, KEYS_H, 1, h - KEYS_H);
+    // more rows than are visible: where you are
+    if (rows.length + 1 > shown) {
+      const span = h - KEYS_H, total = rows.length + 1;
+      g.fillStyle = 'rgba(255,255,255,0.3)';
+      g.fillRect(NAME_W - 4, KEYS_H + (this.top / total) * span, 2, Math.max(6, (shown / total) * span));
+    }
+    this.paintKeyboard(g, h, lo, hi, keyW, w);
+    g.globalAlpha = 1;
+    g.textBaseline = 'alphabetic';
+  }
+
+  /** A newly selected zone scrolls into view; the scroll stays within the rows. */
+  private revealSelected(rows: readonly ZoneRow[], selected: number, shown: number): void {
     if (selected !== this.revealed) {
       this.revealed = selected;
       const at = rows.findIndex(r => r.index === selected);
@@ -237,10 +262,10 @@ export class ZoneView {
       else if (at >= this.top + shown) this.top = at - shown + 1;
     }
     this.top = Math.max(0, Math.min(this.top, rows.length + 1 - shown));
-    const lo = Math.floor(this.k0), hi = Math.min(127, Math.ceil(this.k1));
-    const keyW = this.keysWidth / (this.k1 - this.k0);
+  }
 
-    // the columns of the black keys and the octaves, under the rows
+  /** The columns of the black keys and the octaves, under the rows. */
+  private paintColumns(g: CanvasRenderingContext2D, h: number, lo: number, hi: number, keyW: number): void {
     for (let k = lo; k <= hi; k++) {
       const x = this.xOf(k);
       if (isBlack(k)) {
@@ -252,65 +277,61 @@ export class ZoneView {
         g.fillRect(Math.round(x), KEYS_H, 1, h - KEYS_H);
       }
     }
+  }
 
-    // the zones' rows
-    g.font = '10.5px system-ui, sans-serif';
-    g.textBaseline = 'middle';
-    const pitched = this.host.pitched();
-    rows.slice(this.top, this.top + shown).forEach((row, i) => {
-      const y = KEYS_H + i * ROW_H, z = zoneMap(values, row.index), on = row.index === selected;
-      const hot = this.hot && 'zone' in this.hot && this.hot.zone === row.index;
-      if (on || this.lit.has(row.index)) {
-        g.fillStyle = this.lit.has(row.index) ? 'rgba(255,157,46,0.16)' : 'rgba(255,255,255,0.06)';
-        g.fillRect(0, y, w, ROW_H);
-      }
-      // the bar, as tall as the velocities
-      const xa = Math.max(NAME_W, this.xOf(z.lo)), xb = Math.min(w, this.xOf(z.hi + 1));
-      if (xb > xa) {
-        const inner = ROW_H - 3, yb = y + ROW_H - 1.5;
-        const y0 = yb - (z.vhi / 127) * inner, y1 = yb - ((z.vlo - 1) / 127) * inner;
-        if (on) g.fillStyle = ACCENT;
-        else g.fillStyle = hot ? 'rgba(255,157,46,0.7)' : 'rgba(255,157,46,0.45)';
-        g.fillRect(xa, y0, Math.max(2, xb - xa - 1), Math.max(2, y1 - y0));
-        const range = z.lo === z.hi ? noteName(z.lo) : `${noteName(z.lo)}–${noteName(z.hi)}`;
-        const textEnd = xa + 8 + g.measureText(range).width, dot = this.xOf(z.root + 0.5);
-        // the keys' name, if it fits and doesn't cover the root note's dot
-        if (textEnd < xb && !(pitched && dot > xa && dot < textEnd + 3)) {
-          g.fillStyle = on ? '#141414' : 'rgba(255,255,255,0.85)';
-          g.fillText(range, xa + 4, y + ROW_H / 2 + 0.5);
-        }
-      }
-      if (pitched && z.root >= this.k0 && z.root < this.k1) {
-        g.fillStyle = on ? '#fff' : 'rgba(255,255,255,0.75)';
-        g.beginPath();
-        g.arc(this.xOf(z.root + 0.5), y + ROW_H / 2, Math.min(3, Math.max(1.5, keyW / 3)), 0, 2 * Math.PI);
-        g.fill();
-      }
-      // the name over everything, with the column's background
-      g.fillStyle = on ? '#262b31' : BACKGROUND;
-      g.fillRect(0, y, NAME_W, ROW_H);
-      g.fillStyle = on ? ACCENT : 'rgba(255,255,255,0.8)';
-      g.fillText(clip(g, `${row.index + 1}  ${row.name}`, NAME_W - 10), 5, y + ROW_H / 2 + 0.5);
-    });
-    // the empty row at the bottom: new zones are loaded
-    const free = rows.length - this.top;
-    if (free >= 0 && free < shown) {
-      const y = KEYS_H + free * ROW_H;
-      g.fillStyle = BACKGROUND;
-      g.fillRect(0, y, NAME_W, ROW_H);
-      g.fillStyle = LABEL;
-      g.fillText(rows.length ? '+ zones (double click or files)' : 'Drag audio files here', 5, y + ROW_H / 2 + 0.5);
+  /** A zone's row at `y`: highlighted if chosen or playing, its bar, its root note, its name. */
+  private paintRow(f: RowFrame, row: ZoneRow, y: number): void {
+    const { g, w } = f, z = zoneMap(f.values, row.index), on = row.index === f.selected;
+    if (on || this.lit.has(row.index)) {
+      g.fillStyle = this.lit.has(row.index) ? 'rgba(255,157,46,0.16)' : 'rgba(255,255,255,0.06)';
+      g.fillRect(0, y, w, ROW_H);
     }
-    g.fillStyle = GRID;
-    g.fillRect(NAME_W - 1, KEYS_H, 1, h - KEYS_H);
-    // more rows than are visible: where you are
-    if (rows.length + 1 > shown) {
-      const span = h - KEYS_H, total = rows.length + 1;
-      g.fillStyle = 'rgba(255,255,255,0.3)';
-      g.fillRect(NAME_W - 4, KEYS_H + (this.top / total) * span, 2, Math.max(6, (shown / total) * span));
+    const xa = Math.max(NAME_W, this.xOf(z.lo)), xb = Math.min(w, this.xOf(z.hi + 1));
+    if (xb > xa) this.paintBar(f, row, z, y, xa, xb);
+    if (f.pitched && z.root >= this.k0 && z.root < this.k1) {
+      g.fillStyle = on ? '#fff' : 'rgba(255,255,255,0.75)';
+      g.beginPath();
+      g.arc(this.xOf(z.root + 0.5), y + ROW_H / 2, Math.min(3, Math.max(1.5, f.keyW / 3)), 0, 2 * Math.PI);
+      g.fill();
     }
+    // the name over everything, with the column's background
+    g.fillStyle = on ? '#262b31' : BACKGROUND;
+    g.fillRect(0, y, NAME_W, ROW_H);
+    g.fillStyle = on ? ACCENT : 'rgba(255,255,255,0.8)';
+    g.fillText(clip(g, `${row.index + 1}  ${row.name}`, NAME_W - 10), 5, y + ROW_H / 2 + 0.5);
+  }
 
-    // the keyboard
+  /** The zone's bar over its keys, as tall as its velocities, with the keys' name if it fits and
+   *  doesn't cover the root note's dot. */
+  private paintBar(f: RowFrame, row: ZoneRow, z: ZoneMap, y: number, xa: number, xb: number): void {
+    const { g } = f, on = row.index === f.selected;
+    const hot = this.hot && 'zone' in this.hot && this.hot.zone === row.index;
+    const inner = ROW_H - 3, yb = y + ROW_H - 1.5;
+    const y0 = yb - (z.vhi / 127) * inner, y1 = yb - ((z.vlo - 1) / 127) * inner;
+    if (on) g.fillStyle = ACCENT;
+    else g.fillStyle = hot ? 'rgba(255,157,46,0.7)' : 'rgba(255,157,46,0.45)';
+    g.fillRect(xa, y0, Math.max(2, xb - xa - 1), Math.max(2, y1 - y0));
+    const range = z.lo === z.hi ? noteName(z.lo) : `${noteName(z.lo)}–${noteName(z.hi)}`;
+    const textEnd = xa + 8 + g.measureText(range).width, dot = this.xOf(z.root + 0.5);
+    if (textEnd < xb && !(f.pitched && dot > xa && dot < textEnd + 3)) {
+      g.fillStyle = on ? '#141414' : 'rgba(255,255,255,0.85)';
+      g.fillText(range, xa + 4, y + ROW_H / 2 + 0.5);
+    }
+  }
+
+  /** The empty row at the bottom: new zones are loaded there. */
+  private paintFreeRow(g: CanvasRenderingContext2D, count: number, shown: number): void {
+    const free = count - this.top;
+    if (free < 0 || free >= shown) return;
+    const y = KEYS_H + free * ROW_H;
+    g.fillStyle = BACKGROUND;
+    g.fillRect(0, y, NAME_W, ROW_H);
+    g.fillStyle = LABEL;
+    g.fillText(count ? '+ zones (double click or files)' : 'Drag audio files here', 5, y + ROW_H / 2 + 0.5);
+  }
+
+  /** The keyboard at the top (the keys just played lit), and where the zoom is. */
+  private paintKeyboard(g: CanvasRenderingContext2D, h: number, lo: number, hi: number, keyW: number, w: number): void {
     g.fillStyle = BACKGROUND;
     g.fillRect(0, 0, w, KEYS_H);
     const now = performance.now();
@@ -332,14 +353,21 @@ export class ZoneView {
     g.fillStyle = LABEL;
     g.font = '10px system-ui, sans-serif';
     g.fillText('Zone', 5, KEYS_H / 2 + 0.5);
-    // the zoom: where you are on the keyboard
     if (this.k1 - this.k0 < 127.9) {
       g.fillStyle = 'rgba(255,255,255,0.25)';
       g.fillRect(NAME_W + (this.k0 / 128) * this.keysWidth, h - 2, Math.max(2, ((this.k1 - this.k0) / 128) * this.keysWidth), 2);
     }
-    g.globalAlpha = 1;
-    g.textBaseline = 'alphabetic';
   }
+}
+
+/** What the zones' rows are drawn with. */
+interface RowFrame {
+  readonly g: CanvasRenderingContext2D;
+  readonly w: number;
+  readonly keyW: number;
+  readonly selected: number;
+  readonly values: Readonly<Record<string, number>>;
+  readonly pitched: boolean;
 }
 
 /** The text shortened with "…" to fit in `width`. */

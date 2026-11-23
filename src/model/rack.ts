@@ -205,28 +205,34 @@ export const macroName = (m: Macro, index: number, paramLabel: (x: MacroMapping)
  *  one inside the other or have no devices in common; each rack has MACRO_COUNT macros, which
  *  map only devices of the rack or the macros of the racks it has inside. */
 export function checkRacks(order: readonly DeviceKey[], racks: RackList): void {
-  for (const r of racks) {
-    if (!r.devices.length) throw new Error(`rack ${r.id} is empty`);
-    if (r.macros.length !== MACRO_COUNT) throw new Error(`rack ${r.id} has ${r.macros.length} macros`);
-    if (new Set(r.devices).size !== r.devices.length) throw new Error(`rack ${r.id} has the same device twice`);
-    const first = order.indexOf(r.devices[0]);
-    r.devices.forEach((k, i) => {
-      if (first < 0 || order[first + i] !== k) throw new Error(`the devices of rack ${r.id} aren't consecutive in the chain`);
-    });
-  }
+  for (const r of racks) checkRackDevices(r, order);
   for (const a of racks) {
     for (const b of racks) {
       const shared = a.devices.filter(k => b.devices.includes(k)).length;
       if (a !== b && shared && shared < a.devices.length && shared < b.devices.length) throw new Error(`racks ${a.id} and ${b.id} overlap`);
     }
   }
-  for (const r of racks) {
-    for (const m of r.macros) {
-      for (const x of m.mappings) {
-        if (r.devices.includes(x.device)) continue;
-        const inner = findRack(racks, x.device as DeviceId);
-        if (!inner || !isInside(racks, inner, r) || macroIndex(x.param) < 0) throw new Error(`a macro of rack ${r.id} moves a device outside the rack`);
-      }
+  for (const r of racks) checkRackMappings(r, racks);
+}
+
+/** A rack has devices, each once, consecutive in the chain, and all its macros. */
+function checkRackDevices(r: Rack, order: readonly DeviceKey[]): void {
+  if (!r.devices.length) throw new Error(`rack ${r.id} is empty`);
+  if (r.macros.length !== MACRO_COUNT) throw new Error(`rack ${r.id} has ${r.macros.length} macros`);
+  if (new Set(r.devices).size !== r.devices.length) throw new Error(`rack ${r.id} has the same device twice`);
+  const first = order.indexOf(r.devices[0]);
+  r.devices.forEach((k, i) => {
+    if (first < 0 || order[first + i] !== k) throw new Error(`the devices of rack ${r.id} aren't consecutive in the chain`);
+  });
+}
+
+/** A rack's macros move only its devices or the macros of the racks inside it. */
+function checkRackMappings(r: Rack, racks: RackList): void {
+  for (const m of r.macros) {
+    for (const x of m.mappings) {
+      if (r.devices.includes(x.device)) continue;
+      const inner = findRack(racks, x.device as DeviceId);
+      if (!inner || !isInside(racks, inner, r) || macroIndex(x.param) < 0) throw new Error(`a macro of rack ${r.id} moves a device outside the rack`);
     }
   }
 }

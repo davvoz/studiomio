@@ -117,41 +117,51 @@ class CymbalVoice {
     this.riseStep = 1 / Math.max(1, ATTACK_TIME * sr);
     this.synth = hit.synth;
     for (const f of [this.bpL, this.bpR, this.hpL, this.hpR]) f.reset();
-    if (hit.synth) {
-      this.ring = hit.metal === RING;
-      this.noiseMix = hit.noise;
-      this.width = hit.width;
-      METAL_HZ[hit.metal].forEach((hz, i) => {
-        this.phases[i] = (i * 0.37) % 1;
-        this.steps[i] = Math.min(0.45, (hz * hit.ratio * 1.2) / sr);
-      });
-      BELL_RATIOS.forEach((r, i) => {
-        this.bellPhases[i] = 0;
-        this.bellSteps[i] = Math.min(0.45, (BELL_HZ * r * hit.ratio) / sr);
-      });
-      this.bellAmp = hit.bell;
-      this.bellK = decayCoef(Math.min(hit.decay, 0.25 + hit.decay * 0.5), sr);
-      // the brightness raises the band-pass centre and the high-pass together
-      const bright = Math.pow(2, (hit.tone - 0.5) * 2.4);
-      for (const f of [this.bpL, this.bpR]) f.set(8000 * bright, 0.2, BP);
-      for (const f of [this.hpL, this.hpR]) f.set(5500 * bright, 0.15, HP);
-      this.data = null;
-    } else {
-      const d = hit.sample;
-      this.data = d && d.channels.length && d.channels[0].length > 2 ? d : null;
-      if (!this.data) {
-        this.active = false;
-        return;
-      }
-      this.pos = 0;
-      this.step = (hit.ratio * this.data.sampleRate) / sr;
-      // like the Drum Machine's Sample pads: below half a low-pass, above a high-pass
-      const tone = hit.tone - 0.5;
-      this.filtered = Math.abs(tone) > 0.02;
-      if (this.filtered) {
-        const [cutoff, type] = tone < 0 ? [20000 * Math.pow(100 / 20000, -2 * tone), LP] : [20 * Math.pow(250, 2 * tone), HP];
-        for (const f of [this.hpL, this.hpR]) f.set(cutoff, 0.15, type);
-      }
+    if (hit.synth) this.triggerSynth(hit);
+    else this.triggerSample(hit);
+  }
+
+  /** The synthesized metal: six detuned squares (or three ring-modulated pairs), a band of noise
+   *  and the bell's partials. */
+  private triggerSynth(hit: Hit): void {
+    const sr = this.sampleRate;
+    this.ring = hit.metal === RING;
+    this.noiseMix = hit.noise;
+    this.width = hit.width;
+    METAL_HZ[hit.metal].forEach((hz, i) => {
+      this.phases[i] = (i * 0.37) % 1;
+      this.steps[i] = Math.min(0.45, (hz * hit.ratio * 1.2) / sr);
+    });
+    BELL_RATIOS.forEach((r, i) => {
+      this.bellPhases[i] = 0;
+      this.bellSteps[i] = Math.min(0.45, (BELL_HZ * r * hit.ratio) / sr);
+    });
+    this.bellAmp = hit.bell;
+    this.bellK = decayCoef(Math.min(hit.decay, 0.25 + hit.decay * 0.5), sr);
+    // the brightness raises the band-pass centre and the high-pass together
+    const bright = Math.pow(2, (hit.tone - 0.5) * 2.4);
+    for (const f of [this.bpL, this.bpR]) f.set(8000 * bright, 0.2, BP);
+    for (const f of [this.hpL, this.hpR]) f.set(5500 * bright, 0.15, HP);
+    this.data = null;
+  }
+
+  /** A sample, tuned, with the tone as a low-pass or a high-pass. */
+  private triggerSample(hit: Hit): void {
+    const sr = this.sampleRate;
+    const d = hit.sample;
+    this.data = d?.channels.length && d.channels[0].length > 2 ? d : null;
+    if (!this.data) {
+      this.active = false;
+      return;
+    }
+    this.pos = 0;
+    this.step = (hit.ratio * this.data.sampleRate) / sr;
+    // like the Drum Machine's Sample pads: below half a low-pass, above a high-pass
+    const tone = hit.tone - 0.5;
+    this.filtered = Math.abs(tone) > 0.02;
+    if (this.filtered) {
+      const [cutoff, type] = tone < 0 ? [20000 * Math.pow(100 / 20000, -2 * tone), LP] : [20 * Math.pow(250, 2 * tone), HP];
+      for (const f of [this.hpL, this.hpR]) f.set(cutoff, 0.15, type);
     }
   }
 
@@ -179,17 +189,9 @@ class CymbalVoice {
   }
 
   private renderSynth(left: Float32Array, right: Float32Array, from: number, to: number): void {
-    const { phases, steps, bellPhases, bellSteps } = this;
     const n = this.noiseMix, metalMix = 1 - n * 0.85, w = this.width;
     for (let i = from; i < to && this.active; i++) {
-      let metal = 0;
-      if (this.ring) {
-        for (let k = 0; k < 6; k += 2) metal += square(phases, steps, k) * square(phases, steps, k + 1);
-        metal /= 3;
-      } else {
-        for (let k = 0; k < 6; k++) metal += square(phases, steps, k);
-        metal /= 6;
-      }
+      const metal = this.metal();
       const a = this.noiseA.next(), b = this.noiseB.next();
       const noiseL = a, noiseR = a + (b - a) * w;
       const env = this.envelope();
@@ -198,20 +200,39 @@ class CymbalVoice {
       l *= env * 3.5;
       r *= env * 3.5;
       if (this.bellAmp > FLOOR) {
-        let bell = 0;
-        for (let k = 0; k < bellPhases.length; k++) {
-          bellPhases[k] += bellSteps[k];
-          if (bellPhases[k] >= 1) bellPhases[k] -= 1;
-          bell += Math.sin(TWO_PI * bellPhases[k]) * BELL_WEIGHTS[k];
-        }
-        bell *= this.bellAmp * this.fade * Math.min(1, this.rise);
-        this.bellAmp *= this.bellK;
+        const bell = this.bell();
         l += bell;
         r += bell;
       }
       left[i] += l * this.gainL;
       right[i] += r * this.gainR;
     }
+  }
+
+  /** The metal: six detuned squares, or three ring-modulated pairs. */
+  private metal(): number {
+    const { phases, steps } = this;
+    let metal = 0;
+    if (this.ring) {
+      for (let k = 0; k < 6; k += 2) metal += square(phases, steps, k) * square(phases, steps, k + 1);
+      return metal / 3;
+    }
+    for (let k = 0; k < 6; k++) metal += square(phases, steps, k);
+    return metal / 6;
+  }
+
+  /** The bell's partials, fading with their own decay. */
+  private bell(): number {
+    const { bellPhases, bellSteps } = this;
+    let bell = 0;
+    for (let k = 0; k < bellPhases.length; k++) {
+      bellPhases[k] += bellSteps[k];
+      if (bellPhases[k] >= 1) bellPhases[k] -= 1;
+      bell += Math.sin(TWO_PI * bellPhases[k]) * BELL_WEIGHTS[k];
+    }
+    bell *= this.bellAmp * this.fade * Math.min(1, this.rise);
+    this.bellAmp *= this.bellK;
+    return bell;
   }
 
   private renderSample(left: Float32Array, right: Float32Array, from: number, to: number): void {

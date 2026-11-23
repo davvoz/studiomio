@@ -53,23 +53,29 @@ const chains = (p: Project): [ChainOwner, EffectList][] => [...p.channels.map((t
 
 /** The connections, skipping `skip` (the effect whose source is being looked for). */
 function resolve(p: Project, skip?: { owner: ChainOwner; device: DeviceId }): { links: SidechainLink[]; flow: Flow } {
-  const flow = new Flow();
-  for (const t of p.tracks) {
-    if (t.group) flow.add(t.id, t.group);
-    for (const bus of Object.keys(t.sends) as TrackId[]) flow.add(t.id, bus);
-  }
+  const flow = routing(p);
   const links: SidechainLink[] = [];
   for (const [owner, effects] of chains(p)) {
     for (const e of effects) {
       const source = e.sidechain;
-      if (!source || !p.track(source) || (skip && skip.owner === owner && skip.device === e.id)) continue;
+      const skipped = skip?.owner === owner && skip.device === e.id;
       // in track order: in a loop the connection of the lowest track is discarded
-      if (!allowed(flow, owner, source)) continue;
+      if (!source || !p.track(source) || skipped || !allowed(flow, owner, source)) continue;
       links.push({ owner, device: e.id, source });
       if (owner !== MASTER) flow.add(source, owner);
     }
   }
   return { links, flow };
+}
+
+/** Where the sound goes without sidechains: from each track to its group and to its buses. */
+function routing(p: Project): Flow {
+  const flow = new Flow();
+  for (const t of p.tracks) {
+    if (t.group) flow.add(t.id, t.group);
+    for (const bus of Object.keys(t.sends) as TrackId[]) flow.add(t.id, bus);
+  }
+  return flow;
 }
 
 /** The playing connections (those towards tracks that are gone, or that would close a

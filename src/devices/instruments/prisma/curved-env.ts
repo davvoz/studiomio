@@ -85,40 +85,47 @@ export class CurvedEnv {
 
   next(): number {
     switch (this.stage) {
-      case ATTACK:
-        if ((this.t += this.attackStep) >= 1) {
-          this.value = 1;
-          this.begin(HOLD);
-        } else this.value = this.from + (1 - this.from) * this.shaped();
-        break;
+      case ATTACK: this.attackNext(); break;
       case HOLD:
         if ((this.t += this.holdStep) >= 1) this.begin(DECAY);
         break;
-      case DECAY:
-        if ((this.t += this.decayStep) >= 1) {
-          this.value = this.sustain;
-          this.begin(this.sustain > FLOOR ? SUSTAIN : IDLE);
-        } else this.value = 1 - (1 - this.sustain) * this.shaped();
-        break;
+      case DECAY: this.decayNext(); break;
       case SUSTAIN:
         // the sustain can change while the note is held
         this.value = this.sustain;
         if (this.sustain <= FLOOR) this.begin(IDLE);
         break;
-      case RELEASE:
-      case KILL:
-        this.t += this.stage === KILL ? this.killStep : this.releaseStep;
-        if (this.t >= 1) this.value = 0;
-        else this.value = this.from * (1 - (this.stage === KILL ? this.t : this.shaped()));
-        if (this.t >= 1 || this.value < FLOOR) {
-          this.value = 0;
-          this.stage = IDLE;
-        }
-        break;
+      case RELEASE: case KILL: this.releaseNext(); break;
       default:
         this.value = 0;
     }
     return this.value;
+  }
+
+  private attackNext(): void {
+    if ((this.t += this.attackStep) >= 1) {
+      this.value = 1;
+      this.begin(HOLD);
+    } else this.value = this.from + (1 - this.from) * this.shaped();
+  }
+
+  private decayNext(): void {
+    if ((this.t += this.decayStep) >= 1) {
+      this.value = this.sustain;
+      this.begin(this.sustain > FLOOR ? SUSTAIN : IDLE);
+    } else this.value = 1 - (1 - this.sustain) * this.shaped();
+  }
+
+  /** Release, or the quick fade of a killed voice (straight, not curved). */
+  private releaseNext(): void {
+    const kill = this.stage === KILL;
+    this.t += kill ? this.killStep : this.releaseStep;
+    if (this.t >= 1) this.value = 0;
+    else this.value = this.from * (1 - (kill ? this.t : this.shaped()));
+    if (this.t >= 1 || this.value < FLOOR) {
+      this.value = 0;
+      this.stage = IDLE;
+    }
   }
 
   /** How far the stage has gone, bent by its curve (after the step of `t`). */

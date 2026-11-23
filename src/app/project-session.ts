@@ -120,7 +120,7 @@ export class ProjectSession {
   }
 
   /** A new project, with the starting tracks (see `starterProject`); `blank`: without tracks. */
-  async newProject(blank = false): Promise<void> {
+  newProject(blank = false): void {
     this.audio.engine.stop();
     this.folder = new ProjectFolder(new MemoryDirectory('New project'));
     this.onDisk = false;

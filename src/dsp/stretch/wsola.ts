@@ -13,7 +13,10 @@ interface GrainOptions {
 /** Deterministic pseudo-random generator (same result at every render). */
 function lcg(seed: number): () => number {
   let s = seed;
-  return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  return () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
 }
 
 /** Searches, around `target`, for the frame start most similar to the natural continuation `nat`. */

@@ -15,6 +15,72 @@ const loopReaders: Record<Exclude<BeatsLoopMode, 'off'>, LoopReader> = {
   },
 };
 
+/** A slice of the input and where it lands in the output: its own length `sl`, the room it has
+ *  `avail`; when the room is longer, its second half loops (or it fades). */
+interface Slice {
+  readonly first: boolean;
+  readonly inA: number;
+  readonly inB: number;
+  readonly oA: number;
+  readonly avail: number;
+  readonly sl: number;
+  readonly loopStart: number;
+  readonly loopLen: number;
+  readonly xf: number;
+  readonly looping: boolean;
+  /** Where the Envelope starts fading the slice (Infinity: at 100 %, never). */
+  readonly envStart: number;
+}
+
+interface Fades {
+  readonly loop: LoopReader | null;
+  readonly fadeOut: number;
+  readonly fadeIn: number;
+}
+
+/** The input sample a slice reads at its `n`-th output sample, and the gain there (reused). */
+const reading = { src: 0, gain: 1 };
+
+/** A slice into the outputs, with its fades. */
+function renderSlice(slice: Slice, fades: Fades, channels: readonly Float32Array[], outs: Float32Array[], outLength: number): void {
+  const total = slice.avail + fades.fadeOut;
+  for (let n = 0; n < total; n++) {
+    const o = slice.oA + n;
+    if (o < 0) continue;
+    if (o >= outLength || !sourceAt(n, slice, fades)) break;
+    const g = faded(reading.gain, n, slice, fades);
+    if (g <= 0) continue;
+    for (let c = 0; c < channels.length; c++) outs[c][o] += channels[c][reading.src] * g;
+  }
+}
+
+/** Into `reading`: the slice itself (fading out before its end if the room is longer), then the
+ *  loop of its second half. False when the slice has ended and doesn't loop. */
+function sourceAt(n: number, slice: Slice, fades: Fades): boolean {
+  const { sl, avail, looping, xf } = slice;
+  if (n < sl) {
+    reading.src = slice.inA + n;
+    reading.gain = 1;
+    if (n >= sl - xf && looping && sl < avail) reading.gain = (sl - n) / xf;
+    else if (!looping && sl < avail && n >= sl - fades.fadeOut) reading.gain = (sl - n) / fades.fadeOut;
+    return true;
+  }
+  if (!looping) return false;
+  const r = fades.loop!(n - sl, { inB: slice.inB, loopStart: slice.loopStart, loopLen: slice.loopLen, xf });
+  reading.src = r.src;
+  reading.gain = r.gain;
+  return true;
+}
+
+/** The gain with the fades: in at the start (not the first slice), the Envelope, out after the room. */
+function faded(gain: number, n: number, slice: Slice, fades: Fades): number {
+  let g = gain;
+  if (n < fades.fadeIn && !slice.first) g *= n / fades.fadeIn;
+  if (n > slice.envStart) g *= Math.max(0, 1 - (n - slice.envStart) / (slice.avail - slice.envStart + 1));
+  if (n >= slice.avail) g *= 1 - (n - slice.avail) / fades.fadeOut;
+  return g;
+}
+
 /** Beats: each slice (between transients or on the grid) plays at original speed from
  *  its new position; the gaps are filled according to the loop mode. */
 export class BeatsStretcher implements TimeStretcher<SettingsOf<'beats'>> {
@@ -22,12 +88,9 @@ export class BeatsStretcher implements TimeStretcher<SettingsOf<'beats'>> {
 
   stretch({ channels, sampleRate, map, outLength }: StretchInput, s: SettingsOf<'beats'>): Float32Array[] {
     const len = channels[0].length;
-    const loop = s.loopMode === 'off' ? null : loopReaders[s.loopMode];
-    const fadeOut = Math.max(8, Math.round(0.004 * sampleRate));
-    const fadeIn = Math.max(4, Math.round(0.0007 * sampleRate));
+    const fades = { loop: s.loopMode === 'off' ? null : loopReaders[s.loopMode], fadeOut: Math.max(8, Math.round(0.004 * sampleRate)), fadeIn: Math.max(4, Math.round(0.0007 * sampleRate)) };
     const outs = channels.map(() => new Float32Array(outLength));
     const pts = BeatsStretcher.slicePoints(s.slices, len);
-
     pts.forEach((inA, si) => {
       const last = si + 1 >= pts.length;
       const inB = last ? len : pts[si + 1];
@@ -36,32 +99,13 @@ export class BeatsStretcher implements TimeStretcher<SettingsOf<'beats'>> {
       const avail = oB - oA, sl = inB - inA;
       if (avail <= 0 || sl <= 0) return;
       const loopStart = inA + (sl >> 1), loopLen = inB - loopStart;
-      const xf = Math.max(4, Math.min(256, loopLen >> 2));
-      const looping = loop !== null && loopLen >= 64;
-      const envStart = s.envelope >= 100 ? Infinity : (avail * s.envelope) / 100;
-      const total = avail + fadeOut;
-      for (let n = 0; n < total; n++) {
-        const o = oA + n;
-        if (o < 0) continue;
-        if (o >= outLength) break;
-        let src: number, g = 1;
-        if (n < sl) {
-          src = inA + n;
-          if (n >= sl - xf && looping && sl < avail) g = (sl - n) / xf;
-          else if (!looping && sl < avail && n >= sl - fadeOut) g = (sl - n) / fadeOut;
-        } else if (!looping) {
-          break;
-        } else {
-          const r = loop!(n - sl, { inB, loopStart, loopLen, xf });
-          src = r.src;
-          g = r.gain;
-        }
-        if (n < fadeIn && si > 0) g *= n / fadeIn;
-        if (n > envStart) g *= Math.max(0, 1 - (n - envStart) / (avail - envStart + 1));
-        if (n >= avail) g *= 1 - (n - avail) / fadeOut;
-        if (g <= 0) continue;
-        for (let c = 0; c < channels.length; c++) outs[c][o] += channels[c][src] * g;
-      }
+      const slice: Slice = {
+        first: si === 0, inA, inB, oA, avail, sl, loopStart, loopLen,
+        xf: Math.max(4, Math.min(256, loopLen >> 2)),
+        looping: fades.loop !== null && loopLen >= 64,
+        envStart: s.envelope >= 100 ? Infinity : (avail * s.envelope) / 100,
+      };
+      renderSlice(slice, fades, channels, outs, outLength);
     });
     return outs;
   }

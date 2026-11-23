@@ -19,6 +19,12 @@ const SMOOTH = 0.02;
 /** Oversampling of the inter-sample peak measurement. */
 const TRUE_PEAK_FACTOR = 4;
 
+/** `y` held within ±`limit`. */
+const clampTo = (y: number, limit: number): number => {
+  if (y > limit) return limit;
+  return y < -limit ? -limit : y;
+};
+
 export class LimiterCore implements EffectCore {
   private readonly size: number;
   /** The waiting sound and the requested gains, in rings `size` long. */
@@ -98,6 +104,17 @@ export class LimiterCore implements EffectCore {
   setTempo(): void {}
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
+    const xl = this.gained(inL, inR, n), xr = this.scratchR;
+    const upL = this.truePeak ? this.osL.up(xl, n) : xl, upR = this.truePeak ? this.osR.up(xr, n) : xr;
+    for (let i = 0; i < n; i++) {
+      const peak = this.truePeak ? this.truePeakAt(upL, upR, i) : Math.max(Math.abs(xl[i]), Math.abs(xr[i]));
+      this.limit(xl[i], xr[i], peak > this.ceiling ? this.ceiling / peak : 1, outL, outR, i);
+    }
+    this.rebase();
+  }
+
+  /** The input with the Gain (gliding towards the knob), in the scratch buffers. */
+  private gained(inL: Float32Array, inR: Float32Array, n: number): Float32Array {
     if (this.scratchL.length < n) [this.scratchL, this.scratchR] = [new Float32Array(n), new Float32Array(n)];
     const xl = this.scratchL, xr = this.scratchR;
     let gain = this.gain;
@@ -108,69 +125,64 @@ export class LimiterCore implements EffectCore {
     }
     this.gain = gain;
     this.fresh = false;
-    const F = TRUE_PEAK_FACTOR, truePeak = this.truePeak;
-    const upL = truePeak ? this.osL.up(xl, n) : xl, upR = truePeak ? this.osR.up(xr, n) : xr;
-    const { size, delayL, delayR, wanted, queue, boxBuf, lookahead: L, ceiling, releaseK } = this;
-    const delay = L + (truePeak ? this.measureDelay : 0);
-    let { head, tail, boxSum, count, released, lastPeak, minGain } = this;
-    for (let i = 0; i < n; i++) {
-      // 1. the peak: of the samples, or of the four oversampled ones covering this interval
-      let peak = 0;
-      if (truePeak) {
-        for (let j = i * F, end = j + F; j < end; j++) {
-          const a = Math.abs(upL[j]), b = Math.abs(upR[j]);
-          if (a > peak) peak = a;
-          if (b > peak) peak = b;
-        }
-        const p = peak;
-        if (lastPeak > peak) peak = lastPeak;
-        lastPeak = p;
-      } else peak = Math.max(Math.abs(xl[i]), Math.abs(xr[i]));
-      const want = peak > ceiling ? ceiling / peak : 1;
-      const at = count % size;
-      delayL[at] = xl[i];
-      delayR[at] = xr[i];
-      wanted[at] = want;
-      // 2. sliding minimum over the last L+1 (the queue keeps the candidates in increasing order)
-      while (tail > head && wanted[queue[(tail - 1) % size] % size] >= want) tail--;
-      queue[tail % size] = count;
-      tail++;
-      while (queue[head % size] < count - L) head++;
-      const min = wanted[queue[head % size] % size];
-      // 3. down right away, up with the release
-      released = min < released ? min : released + (min - released) * releaseK;
-      // 4. long moving average L
-      const slot = count % L;
-      boxSum += released - boxBuf[slot];
-      boxBuf[slot] = released;
-      const g = boxSum / L;
-      if (g < minGain) minGain = g;
-      // 5. the sound from `delay` samples ago
-      const from = (count - delay + size) % size;
-      let yl = delayL[from] * g, yr = delayR[from] * g;
-      if (yl > ceiling) yl = ceiling; else if (yl < -ceiling) yl = -ceiling;
-      if (yr > ceiling) yr = ceiling; else if (yr < -ceiling) yr = -ceiling;
-      outL[i] = yl;
-      outR[i] = yr;
-      count++;
+    return xl;
+  }
+
+  /** 1. The peak of the four oversampled samples covering sample `i` (and of the previous four: the
+   *  peak between two samples can fall on either side). */
+  private truePeakAt(upL: Float32Array, upR: Float32Array, i: number): number {
+    let peak = 0;
+    for (let j = i * TRUE_PEAK_FACTOR, end = j + TRUE_PEAK_FACTOR; j < end; j++) {
+      const a = Math.abs(upL[j]), b = Math.abs(upR[j]);
+      if (a > peak) peak = a;
+      if (b > peak) peak = b;
     }
-    // the absolute indices stay small: samples and queue positions shift by
-    // multiples of `size` and of L (the rings and the average don't notice)
-    if (count > 1 << 30) {
-      const step = size * L, shift = Math.floor((count - 2 * size) / step) * step;
-      for (let k = head; k < tail; k++) queue[k % size] -= shift;
-      count -= shift;
-      const q = Math.floor(head / size) * size;
-      head -= q;
-      tail -= q;
-    }
-    this.head = head;
-    this.tail = tail;
-    this.boxSum = boxSum;
-    this.count = count;
+    const here = peak;
+    if (this.lastPeak > peak) peak = this.lastPeak;
+    this.lastPeak = here;
+    return peak;
+  }
+
+  /** Steps 2–5 for one sample: `want` is the gain this sample asks for; the output is the sound
+   *  from `delay` samples ago with the gain that holds every peak under the ceiling. */
+  private limit(l: number, r: number, want: number, outL: Float32Array, outR: Float32Array, i: number): void {
+    const { size, wanted, queue, boxBuf, lookahead: L, ceiling } = this;
+    const count = this.count, at = count % size;
+    this.delayL[at] = l;
+    this.delayR[at] = r;
+    wanted[at] = want;
+    // 2. sliding minimum over the last L+1 (the queue keeps the candidates in increasing order)
+    while (this.tail > this.head && wanted[queue[(this.tail - 1) % size] % size] >= want) this.tail--;
+    queue[this.tail % size] = count;
+    this.tail++;
+    while (queue[this.head % size] < count - L) this.head++;
+    const min = wanted[queue[this.head % size] % size];
+    // 3. down right away, up with the release
+    const released = min < this.released ? min : this.released + (min - this.released) * this.releaseK;
     this.released = released;
-    this.lastPeak = lastPeak;
-    this.minGain = minGain;
+    // 4. long moving average L
+    const slot = count % L;
+    this.boxSum += released - boxBuf[slot];
+    boxBuf[slot] = released;
+    const g = this.boxSum / L;
+    if (g < this.minGain) this.minGain = g;
+    // 5. the sound from `delay` samples ago
+    const delay = L + (this.truePeak ? this.measureDelay : 0), from = (count - delay + size) % size;
+    outL[i] = clampTo(this.delayL[from] * g, ceiling);
+    outR[i] = clampTo(this.delayR[from] * g, ceiling);
+    this.count = count + 1;
+  }
+
+  /** The absolute indices stay small: samples and queue positions shift by multiples of `size`
+   *  and of L (the rings and the average don't notice). */
+  private rebase(): void {
+    if (this.count <= 1 << 30) return;
+    const step = this.size * this.lookahead, shift = Math.floor((this.count - 2 * this.size) / step) * step;
+    for (let k = this.head; k < this.tail; k++) this.queue[k % this.size] -= shift;
+    this.count -= shift;
+    const q = Math.floor(this.head / this.size) * this.size;
+    this.head -= q;
+    this.tail -= q;
   }
 
   private resetBox(): void {

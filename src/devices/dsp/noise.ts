@@ -4,7 +4,8 @@ export class Noise {
   private state: number;
 
   constructor(seed = 0x9e3779b9) {
-    this.state = seed | 0 || 1;
+    // the seed as 32 bits (next() works on them); 0 would stay 0 forever
+    this.state = seed >>> 0 || 1;
   }
 
   next(): number {

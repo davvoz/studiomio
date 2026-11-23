@@ -33,7 +33,10 @@ function tornado(preset: RackPreset = TORNADO) {
 /** A noise equal at every round, different on the two channels. */
 function noise(seed: number) {
   let x = seed;
-  return () => ((x = (x * 1103515245 + 12345) >>> 0) / 0xffffffff - 0.5) * 0.8;
+  return () => {
+    x = (x * 1103515245 + 12345) >>> 0;
+    return (x / 0xffffffff - 0.5) * 0.8;
+  };
 }
 
 /** Plays the chain with the transport running from 0: the left and right output, and the input. */
@@ -274,7 +277,7 @@ function playNotes(instrument: DeviceSettings, effects: readonly EffectSettings[
     }
     for (let i = 0; i < BLOCK; i++) {
       const y = Math.max(Math.abs(aL[i]), Math.abs(aR[i]));
-      if (!Number.isFinite(y)) return NaN;
+      if (!Number.isFinite(y)) return Number.NaN;
       peak = Math.max(peak, y);
     }
   }

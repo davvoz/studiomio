@@ -173,7 +173,8 @@ class Lfo {
       this.prev = this.next;
       this.next = this.noise.next();
     }
-    return (this.value = (LFO_WAVES[shape] ?? LFO_WAVES[0])(this.phase, this));
+    this.value = (LFO_WAVES[shape] ?? LFO_WAVES[0])(this.phase, this);
+    return this.value;
   }
 }
 
@@ -332,6 +333,8 @@ class NeuroVoice {
   private readonly formants = [new FormantBank(), new FormantBank()];
   private readonly highCuts = [new HighCut(), new HighCut()];
   private readonly formantGains = new Float64Array(3);
+  /** The oscillators of this sample, left and right, before the body. */
+  private readonly osc = new Float64Array(2);
   private readonly phasesA = new Float64Array(MAX_UNISON);
   private readonly phasesB = new Float64Array(MAX_UNISON);
   private readonly dtsA = new Float64Array(MAX_UNISON);
@@ -425,41 +428,53 @@ class NeuroVoice {
 
   /** Fills `left` and `right` (at the high rate) from `from` to `to`. */
   render(left: Float32Array, right: Float32Array, from: number, to: number, bpm: number): void {
-    const { s, amp, phasesA, phasesB, dtsA, dtsB, panL, panR, filters, formants, highCuts, formantGains } = this;
-    const { waveA, waveB } = s;
+    const { s, amp, filters, formants, highCuts, formantGains, osc } = this;
     const [fl, fr] = filters, [ml, mr] = formants, [hl, hr] = highCuts;
     for (let i = from; i < to; i++) {
       if (--this.countdown <= 0) this.control(bpm);
-      const n = s.unison, mixB = s.mix, mixA = 1 - mixB;
-      const pm = this.fm > 0 ? FM_DEPTH * this.fm * Math.sin(2 * Math.PI * this.fmPhase) : 0;
-      this.fmPhase += this.fmDt;
-      if (this.fmPhase >= 1) this.fmPhase -= 1;
-      let l = 0, r = 0;
-      for (let k = 0; k < n; k++) {
-        let pa = phasesA[k] + pm, pb = phasesB[k] + pm;
-        pa -= Math.floor(pa);
-        pb -= Math.floor(pb);
-        const x = waveA(pa, dtsA[k]) * mixA + waveB(pb, dtsB[k]) * mixB;
-        phasesA[k] += dtsA[k];
-        if (phasesA[k] >= 1) phasesA[k] -= 1;
-        phasesB[k] += dtsB[k];
-        if (phasesB[k] >= 1) phasesB[k] -= 1;
-        l += x * panL[k];
-        r += x * panR[k];
-      }
+      this.oscillators(this.fmNow());
       const env = amp.next() * this.level * this.volume;
       const sub = Math.sin(2 * Math.PI * this.subPhase) * s.sub * SUB_GAIN * env;
       this.subPhase += this.subDt;
       if (this.subPhase >= 1) this.subPhase -= 1;
-      const yl = hl.process(this.body(l, fl, ml, formantGains) * env);
+      const yl = hl.process(this.body(osc[0], fl, ml, formantGains) * env);
       left[i] = yl + sub;
-      right[i] = (this.stereo ? hr.process(this.body(r, fr, mr, formantGains) * env) : yl) + sub;
+      right[i] = (this.stereo ? hr.process(this.body(osc[1], fr, mr, formantGains) * env) : yl) + sub;
       if (!amp.active) {
         left.fill(0, i + 1, to);
         right.fill(0, i + 1, to);
         break;
       }
     }
+  }
+
+  /** The FM's phase offset now (the modulator moves on). */
+  private fmNow(): number {
+    const pm = this.fm > 0 ? FM_DEPTH * this.fm * Math.sin(2 * Math.PI * this.fmPhase) : 0;
+    this.fmPhase += this.fmDt;
+    if (this.fmPhase >= 1) this.fmPhase -= 1;
+    return pm;
+  }
+
+  /** The unison copies of the two waves, mixed and panned, into `osc` (left, right). */
+  private oscillators(pm: number): void {
+    const { s, phasesA, phasesB, dtsA, dtsB, panL, panR } = this;
+    const { waveA, waveB } = s, n = s.unison, mixB = s.mix, mixA = 1 - mixB;
+    let l = 0, r = 0;
+    for (let k = 0; k < n; k++) {
+      let pa = phasesA[k] + pm, pb = phasesB[k] + pm;
+      pa -= Math.floor(pa);
+      pb -= Math.floor(pb);
+      const x = waveA(pa, dtsA[k]) * mixA + waveB(pb, dtsB[k]) * mixB;
+      phasesA[k] += dtsA[k];
+      if (phasesA[k] >= 1) phasesA[k] -= 1;
+      phasesB[k] += dtsB[k];
+      if (phasesB[k] >= 1) phasesB[k] -= 1;
+      l += x * panL[k];
+      r += x * panR[k];
+    }
+    this.osc[0] = l;
+    this.osc[1] = r;
   }
 
   /** A channel's body: fold, drive, filter, formant, distortion. */
@@ -471,7 +486,7 @@ class NeuroVoice {
 
   /** Modulations, glide, pitches, filters and formants, at reduced rate. */
   private control(bpm: number): void {
-    const { s, sampleRate, mods, dtsA, dtsB } = this;
+    const { s, sampleRate, mods } = this;
     this.countdown = CONTROL_RATE;
     if (this.pitch !== this.target) {
       const k = s.glide > 0 ? 1 - Math.exp((-3 * CONTROL_RATE) / (s.glide * sampleRate)) : 1;
@@ -489,18 +504,9 @@ class NeuroVoice {
 
     const pitch = this.pitch + s.transpose + mods.get('pitch');
     const hz = midiToHz(pitch);
-    const n = s.unison, detune = Math.max(0, s.detune + mods.get('detune'));
+    const detune = Math.max(0, s.detune + mods.get('detune'));
     const dtA = Math.min(0.45, hz / sampleRate), dtB = Math.min(0.45, dtA * s.ratioB);
-    this.stereo = n > 1 && s.spread > 0;
-    const norm = 1 / Math.sqrt(n);
-    for (let k = 0; k < n; k++) {
-      const ratio = Math.pow(2, (fan(k, n) * detune) / 1200);
-      dtsA[k] = Math.min(0.45, dtA * ratio);
-      dtsB[k] = Math.min(0.45, dtB * ratio);
-      const p = this.stereo ? fan(k, n) * s.spread : 0;
-      this.panL[k] = Math.sqrt(1 - p) * norm;
-      this.panR[k] = Math.sqrt(1 + p) * norm;
-    }
+    this.fanCopies(dtA, dtB, detune);
     this.fmDt = Math.min(0.45, dtA * s.fmRatio);
     this.subDt = Math.min(0.45, (hz * s.subRatio) / sampleRate);
 
@@ -511,7 +517,33 @@ class NeuroVoice {
     this.formantAmount = clamp01(s.formant + mods.get('formant') / 100);
     this.volume = mods.volume;
 
-    // the filter
+    this.setFilter(pitch);
+    if (this.formantAmount > 0) this.setFormants();
+
+    if (s.crossover !== this.lastCrossover) {
+      this.lastCrossover = s.crossover;
+      for (const h of this.highCuts) h.set(s.crossover, sampleRate);
+    }
+  }
+
+  /** The unison copies: detuned and spread in stereo along the fan, together as loud as one. */
+  private fanCopies(dtA: number, dtB: number, detune: number): void {
+    const s = this.s, n = s.unison;
+    this.stereo = n > 1 && s.spread > 0;
+    const norm = 1 / Math.sqrt(n);
+    for (let k = 0; k < n; k++) {
+      const ratio = Math.pow(2, (fan(k, n) * detune) / 1200);
+      this.dtsA[k] = Math.min(0.45, dtA * ratio);
+      this.dtsB[k] = Math.min(0.45, dtB * ratio);
+      const p = this.stereo ? fan(k, n) * s.spread : 0;
+      this.panL[k] = Math.sqrt(1 - p) * norm;
+      this.panR[k] = Math.sqrt(1 + p) * norm;
+    }
+  }
+
+  /** The filter: its type, the cutoff with key tracking and modulation, the resonance. */
+  private setFilter(pitch: number): void {
+    const { s, mods, sampleRate } = this;
     this.mode = FILTER_MODES[s.filterType] ?? FILTER_MODES[0];
     const octaves = mods.get('cutoff') + (s.keyTrack * (pitch - 60)) / 12;
     const fc = Math.max(20, Math.min(20000, s.cutoff * Math.pow(2, octaves)));
@@ -521,23 +553,19 @@ class NeuroVoice {
       f.first.set(g, Math.SQRT2);
       f.second.set(g, k);
     }
+  }
 
-    // the formants: the vowel between the two nearest, frequencies in octaves and levels in dB
-    if (this.formantAmount > 0) {
-      const pos = (Math.max(0, Math.min(100, s.vowel + mods.get('vowel'))) / 100) * (VOWELS.length - 1);
-      const i0 = Math.min(VOWELS.length - 2, Math.floor(pos)), t = pos - i0;
-      for (let b = 0; b < 3; b++) {
-        const [f0, d0] = VOWELS[i0][b], [f1, d1] = VOWELS[i0 + 1][b];
-        const f = Math.min(sampleRate * 0.45, f0 * Math.pow(f1 / f0, t) * s.formantShift);
-        const gb = Math.tan((Math.PI * f) / sampleRate), kb = FORMANT_BANDWIDTH[b] / f;
-        for (const bank of this.formants) bank.bands[b].set(gb, kb);
-        this.formantGains[b] = dbToGain(d0 + (d1 - d0) * t);
-      }
-    }
-
-    if (s.crossover !== this.lastCrossover) {
-      this.lastCrossover = s.crossover;
-      for (const h of this.highCuts) h.set(s.crossover, sampleRate);
+  /** The formants: the vowel between the two nearest, frequencies in octaves and levels in dB. */
+  private setFormants(): void {
+    const { s, mods, sampleRate } = this;
+    const pos = (Math.max(0, Math.min(100, s.vowel + mods.get('vowel'))) / 100) * (VOWELS.length - 1);
+    const i0 = Math.min(VOWELS.length - 2, Math.floor(pos)), t = pos - i0;
+    for (let b = 0; b < 3; b++) {
+      const [f0, d0] = VOWELS[i0][b], [f1, d1] = VOWELS[i0 + 1][b];
+      const f = Math.min(sampleRate * 0.45, f0 * Math.pow(f1 / f0, t) * s.formantShift);
+      const gb = Math.tan((Math.PI * f) / sampleRate), kb = FORMANT_BANDWIDTH[b] / f;
+      for (const bank of this.formants) bank.bands[b].set(gb, kb);
+      this.formantGains[b] = dbToGain(d0 + (d1 - d0) * t);
     }
   }
 }

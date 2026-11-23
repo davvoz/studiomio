@@ -97,7 +97,10 @@ export class Session {
   /** The track's schedule (at the start: it follows the arrangement). */
   schedule(track: TrackId): TrackSchedule {
     let s = this.tracks.get(track);
-    if (!s) this.tracks.set(track, (s = new TrackSchedule()));
+    if (!s) {
+      s = new TrackSchedule();
+      this.tracks.set(track, s);
+    }
     return s;
   }
 

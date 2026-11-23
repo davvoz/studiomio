@@ -166,7 +166,7 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
   private bpm = 120;
   private transport: TransportPosition | null = null;
   /** The beat expected at the start of the next block: if it doesn't match, the transport jumped. */
-  private expected = NaN;
+  private expected = Number.NaN;
   /** The last interval and the last grid line passed (to recognize the new ones). */
   private lastInterval = 0;
   private lastGrid = 0;
@@ -236,57 +236,74 @@ export class BeatRepeatCore implements EffectCore, TransportFollower {
     const pos = this.transport;
     const bps = pos ? pos.bpm / 60 / this.sampleRate : 0;
     const interval = pos ? this.intervalBeats || this.intervalBars * pos.beatsPerBar : 1;
-    const offset = this.offsetBeats % interval, grid = this.gridBeats;
-    if (pos) {
-      // started, or jumped (loop, cursor): the lines are counted from here, and one falling
-      // exactly here counts
-      if (!(Math.abs(pos.beat - this.expected) <= 4 * bps)) {
-        this.lastInterval = Math.floor((pos.beat - bps - offset) / interval + EPS);
-        this.lastGrid = Math.floor((pos.beat - bps) / grid + EPS);
-      }
-      this.expected = pos.beat + n * bps;
-    } else this.expected = NaN;
+    const offset = this.offsetBeats % interval;
+    this.followTransport(pos, n, bps, interval, offset);
+    this.followRepeatButton();
+    const auto = this.manual === MANUAL.off && !this.only;
+    for (let i = 0; i < n; i++) {
+      if (pos) this.triggerOnLines(pos, pos.beat + i * bps, interval, offset, auto);
+      else if (this.manual === MANUAL.waiting) this.trigger(true, this.bpm);
+      this.renderSample(inL[i], inR[i], outL, outR, i);
+    }
+  }
+
+  /** Started, or jumped (loop, cursor): the lines are counted from here, and one falling exactly
+   *  here counts. */
+  private followTransport(pos: TransportPosition | null, n: number, bps: number, interval: number, offset: number): void {
+    if (!pos) {
+      this.expected = Number.NaN;
+      return;
+    }
+    if (!(Math.abs(pos.beat - this.expected) <= 4 * bps)) {
+      this.lastInterval = Math.floor((pos.beat - bps - offset) / interval + EPS);
+      this.lastGrid = Math.floor((pos.beat - bps) / this.gridBeats + EPS);
+    }
+    this.expected = pos.beat + n * bps;
+  }
+
+  /** Repeat pressed: a repetition waits for the next grid line; released: the one playing stops. */
+  private followRepeatButton(): void {
     if (this.repeat && this.manual === MANUAL.off) this.manual = MANUAL.waiting;
     else if (!this.repeat && this.manual !== MANUAL.off) {
       if (this.manual === MANUAL.playing) this.voices[this.current].release();
       this.manual = MANUAL.off;
     }
+  }
 
-    const { voices, wet, shape, ringL, ringR } = this;
-    const mask = ringL.length - 1;
-    const auto = this.manual === MANUAL.off && !this.only;
-    for (let i = 0; i < n; i++) {
-      const xL = inL[i], xR = inR[i];
-      if (pos) {
-        const b = pos.beat + i * bps;
-        const k = Math.floor((b - offset) / interval + EPS), g = Math.floor(b / grid + EPS);
-        if (auto && k > this.lastInterval && this.random.next() * 0.5 + 0.5 < this.chance) this.trigger(false, pos.bpm);
-        if (this.manual === MANUAL.waiting && g > this.lastGrid) this.trigger(true, pos.bpm);
-        this.lastInterval = k;
-        this.lastGrid = g;
-      } else if (this.manual === MANUAL.waiting) this.trigger(true, this.bpm);
+  /** At beat `b`: a new Interval line may start a repetition (with the Chance), a new grid line
+   *  starts the one Repeat is waiting for. */
+  private triggerOnLines(pos: TransportPosition, b: number, interval: number, offset: number, auto: boolean): void {
+    const k = Math.floor((b - offset) / interval + EPS), g = Math.floor(b / this.gridBeats + EPS);
+    if (auto && k > this.lastInterval && this.random.next() * 0.5 + 0.5 < this.chance) this.trigger(false, pos.bpm);
+    if (this.manual === MANUAL.waiting && g > this.lastGrid) this.trigger(true, pos.bpm);
+    this.lastInterval = k;
+    this.lastGrid = g;
+  }
 
-      wet[0] = wet[1] = 0;
-      let dry = 1;
-      for (const voice of voices) {
-        if (!voice.active) continue;
-        voice.render(xL, xR, shape, wet);
-        dry *= voice.dry;
-      }
-      let yL = wet[0], yR = wet[1];
-      if (this.filter) {
-        yL = this.lp[0].process(this.hp[0].process(yL));
-        yR = this.lp[1].process(this.hp[1].process(yR));
-      }
-      let d = 0;
-      if (this.mode === REPEAT_MODE.mix) d = 1;
-      else if (this.mode === REPEAT_MODE.insert || this.only) d = dry;
-      outL[i] = xL * d + yL;
-      outR[i] = xR * d + yR;
-      ringL[this.ringPos] = xL;
-      ringR[this.ringPos] = xR;
-      this.ringPos = (this.ringPos + 1) & mask;
+  /** One sample: the voices playing, filtered, over the dry sound as the Mode says; the input goes
+   *  into the ring the repetitions read from. */
+  private renderSample(xL: number, xR: number, outL: Float32Array, outR: Float32Array, i: number): void {
+    const { wet, ringL, ringR } = this;
+    wet[0] = wet[1] = 0;
+    let dry = 1;
+    for (const voice of this.voices) {
+      if (!voice.active) continue;
+      voice.render(xL, xR, this.shape, wet);
+      dry *= voice.dry;
     }
+    let yL = wet[0], yR = wet[1];
+    if (this.filter) {
+      yL = this.lp[0].process(this.hp[0].process(yL));
+      yR = this.lp[1].process(this.hp[1].process(yR));
+    }
+    let d = 0;
+    if (this.mode === REPEAT_MODE.mix) d = 1;
+    else if (this.mode === REPEAT_MODE.insert || this.only) d = dry;
+    outL[i] = xL * d + yL;
+    outR[i] = xR * d + yR;
+    ringL[this.ringPos] = xL;
+    ringR[this.ringPos] = xR;
+    this.ringPos = (this.ringPos + 1) & (ringL.length - 1);
   }
 
   /** A repetition from this sample: the one playing fades out. With Repeat it lasts while it

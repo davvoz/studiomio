@@ -130,7 +130,10 @@ class InstrumentProcessor extends AudioWorkletProcessor {
       const now = currentFrame / sampleRate;
       while (this.later.length && this.later[0].frame < currentFrame + left.length) this.later.shift()!.run();
       const params = this.mod.paramsAt(now);
-      if (params) this.arp.setParams((this.params = params));
+      if (params) {
+        this.params = params;
+        this.arp.setParams(params);
+      }
       const position = this.clock.at(now);
       this.follower?.setTransport(position);
       this.arp.setTransport(position);
@@ -226,9 +229,18 @@ class EffectProcessor extends AudioWorkletProcessor {
       mod: m => {
         if (!this.onOff.event(m.param, m.kind, m.value, m.time, m.channel)) this.mod.event(m.param, m.kind, m.value, m.time, m.channel);
       },
-      enabled: m => this.runner.setEnabled((this.enabled = m.enabled)),
-      tempo: m => this.core.setTempo((this.bpm = m.bpm)),
-      keyed: m => this.setKeyed((this.keyedOn = m.keyed)),
+      enabled: m => {
+        this.enabled = m.enabled;
+        this.runner.setEnabled(m.enabled);
+      },
+      tempo: m => {
+        this.bpm = m.bpm;
+        this.core.setTempo(m.bpm);
+      },
+      keyed: m => {
+        this.keyedOn = m.keyed;
+        this.setKeyed(m.keyed);
+      },
       transport: m => this.clock.set(m.anchor),
       watch: m => { this.watched = m.on; },
       ping: m => this.port.postMessage({ type: 'pong', id: m.id } satisfies EffectReply),
@@ -272,7 +284,10 @@ class EffectProcessor extends AudioWorkletProcessor {
       }
       const now = currentFrame / sampleRate;
       const params = this.mod.paramsAt(now);
-      if (params) this.core.setParams((this.params = params));
+      if (params) {
+        this.params = params;
+        this.core.setParams(params);
+      }
       this.follower?.setTransport(this.clock.at(now));
       this.runner.setEnabled(this.onOff.onAt(now, this.enabled));
       this.runner.process(l, r, outL, outR);

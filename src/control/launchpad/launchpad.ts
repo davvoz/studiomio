@@ -105,18 +105,7 @@ export class Launchpad extends SessionSurface {
       if (data) this.layoutReport(data);
       return;
     }
-    if (this.phase === 'identity') {
-      const family = data ? identityFamily(data) : null;
-      if (family) this.identified = family;
-      if (!family && now - this.phaseAt < HANDSHAKE_MS) return;
-      if (family && (family[0] !== this.model.family[0] || family[1] !== this.model.family[1])) {
-        console.warn(`${this.label}: the identity reply is from another family`, family);
-      }
-      if (this.model.id !== 'mk2') return this.begin();
-      this.phase = 'challenge';
-      this.phaseAt = now;
-      this.challengeSent = false;
-    }
+    if (this.phase === 'identity' && !this.identityReply(data, now)) return;
     if (!this.challengeSent) {
       this.out(mk2Challenge(Array.from({ length: 4 }, () => Math.floor(Math.random() * 128))));
       this.challengeSent = true;
@@ -124,6 +113,25 @@ export class Launchpad extends SessionSurface {
       return;
     }
     if ((data && isMk2ChallengeResponse(data)) || now - this.phaseAt >= HANDSHAKE_MS) this.begin();
+  }
+
+  /** The identity reply (or its timeout): X, Mini and Pro begin; the MK2 goes on to the challenge
+   *  (true). False while still waiting, or when it has begun. */
+  private identityReply(data: ArrayLike<number> | null, now: number): boolean {
+    const family = data ? identityFamily(data) : null;
+    if (family) this.identified = family;
+    if (!family && now - this.phaseAt < HANDSHAKE_MS) return false;
+    if (family && (family[0] !== this.model.family[0] || family[1] !== this.model.family[1])) {
+      console.warn(`${this.label}: the identity reply is from another family`, family);
+    }
+    if (this.model.id !== 'mk2') {
+      this.begin();
+      return false;
+    }
+    this.phase = 'challenge';
+    this.phaseAt = now;
+    this.challengeSent = false;
+    return true;
   }
 
   /** After the startup: DAW mode, Session layout, box and LEDs. */
@@ -163,17 +171,7 @@ export class Launchpad extends SessionSurface {
   protected input(kind: number, channel: number, number: number, value: number): boolean {
     const note = kind === 0x90 || kind === 0x80;
     if (note || (kind === 0xb0 && channel === 0 && !this.isFader(number, channel))) {
-      const pressed = kind !== 0x80 && value > 0;
-      const sceneMessage = this.model.sceneKind === (note ? 'note' : 'cc');
-      const scene = sceneMessage ? sceneAt(number) : null;
-      if (note && scene === null) {
-        const pad = padAt(number);
-        if (pad && pressed) this.pad(pad.col, pad.row);
-      } else if (scene !== null) {
-        if (pressed) this.scene(scene);
-      } else if (!note) {
-        this.button(number, pressed);
-      }
+      this.gridOrButton(note, number, kind !== 0x80 && value > 0);
       return false;
     }
     if (kind === 0xb0 && this.isFader(number, channel)) {
@@ -181,6 +179,19 @@ export class Launchpad extends SessionSurface {
       return true;
     }
     return true;
+  }
+
+  /** A pad, a scene button (a note or a CC, by model) or one of the other buttons. */
+  private gridOrButton(note: boolean, number: number, pressed: boolean): void {
+    const sceneMessage = this.model.sceneKind === (note ? 'note' : 'cc');
+    const scene = sceneMessage ? sceneAt(number) : null;
+    if (scene !== null) {
+      if (pressed) this.scene(scene);
+      return;
+    }
+    if (!note) return this.button(number, pressed);
+    const pad = padAt(number);
+    if (pad && pressed) this.pad(pad.col, pad.row);
   }
 
   // ---------------------------------------------------------------- grid and scenes
@@ -482,52 +493,12 @@ export class Launchpad extends SessionSurface {
     const sceneKey = (row: number) => (model.sceneKind === 'cc' ? ccKey(sceneButton(row)) : noteKey(sceneButton(row)));
 
     // the grid: the controller draws the faders, the rest is lit from here
-    if (this.faders) {
-      const values = this.faderValues(this.mode as Layout), look = this.faderLook(this.mode as Layout);
-      const page = model.id === 'pro' ? FADER_PAGE[this.mode as Layout] : 0;
-      for (let i = 0; i < SIZE; i++) {
-        const cc = faderCc(model, page, i);
-        if (model.id === 'mk2') {
-          if (values[i] !== undefined) leds.set(ccKey(cc), values[i]!);
-          continue;
-        }
-        leds.set(ccKey(cc, FADER_CHANNEL), values[i] ?? 0);
-        leds.set(ccKey(cc, FADER_COLOR_CHANNEL), look.colors[i]);
-      }
-    } else {
-      for (let row = 0; row < SIZE; row++) {
-        const fn = this.overview ? null : this.gridFunction(row);
-        for (let col = 0; col < SIZE; col++) {
-          leds.set(noteKey(padNote(col, row)), this.gridColor(fn, col, row, tracks[col]));
-        }
-      }
-    }
-
+    if (this.faders) this.faderLeds(leds);
+    else this.padLeds(leds, tracks);
     // the right column
     for (let row = 0; row < SIZE; row++) leds.set(sceneKey(row), this.sceneColor(row));
-
-    // navigation
-    const nav = (b: 'up' | 'down' | 'left' | 'right') => button(b, this.overview || this.canMove(b) ? COLOR.whiteHalf : COLOR.off);
-    if (model.id === 'pro' && this.mode === 'device') {
-      const dev = this.controlled();
-      button('up', COLOR.off);
-      button('down', COLOR.off);
-      button('left', dev && dev.index > 0 ? COLOR.darkBlueHalf : COLOR.off);
-      button('right', dev && dev.index < dev.chain.length - 1 ? COLOR.darkBlueHalf : COLOR.off);
-    } else {
-      nav('up'); nav('down'); nav('left'); nav('right');
-    }
-
-    // the Session button: X and Mini with the SysEx, the others with their LED
-    if (model.id === 'x' || model.id === 'mini') {
-      leds.set(SESSION_KEY, this.sessionButtonColor() * 128 + COLOR.whiteHalf);
-    } else if (model.id === 'mk2') {
-      button('session', this.mixer ? COLOR.whiteHalf : COLOR.paleGreenHalf);
-      button('mixer', this.mixer ? COLOR.cream : COLOR.whiteHalf);
-      button('user1', COLOR.off);
-      button('user2', COLOR.off);
-    }
-
+    this.navigationLeds(button);
+    this.sessionButtonLeds(leds, button);
     if (model.id === 'x') button('captureMidi', COLOR.off);
     if (model.id === 'pro') this.proLeds(leds, button, tracks);
 
@@ -537,27 +508,63 @@ export class Launchpad extends SessionSurface {
     return leds;
   }
 
+  /** The faders: the controller draws them from their values (and colours, but the MK2's). */
+  private faderLeds(leds: Map<string, number>): void {
+    const { model } = this, layout = this.mode as Layout;
+    const values = this.faderValues(layout), look = this.faderLook(layout);
+    const page = model.id === 'pro' ? FADER_PAGE[layout] : 0;
+    for (let i = 0; i < SIZE; i++) {
+      const cc = faderCc(model, page, i);
+      if (model.id === 'mk2') {
+        if (values[i] !== undefined) leds.set(ccKey(cc), values[i]!);
+        continue;
+      }
+      leds.set(ccKey(cc, FADER_CHANNEL), values[i] ?? 0);
+      leds.set(ccKey(cc, FADER_COLOR_CHANNEL), look.colors[i]);
+    }
+  }
+
+  /** The pads: the slots (or the block map), and the rows with a function. */
+  private padLeds(leds: Map<string, number>, tracks: (Track | undefined)[]): void {
+    for (let row = 0; row < SIZE; row++) {
+      const fn = this.overview ? null : this.gridFunction(row);
+      for (let col = 0; col < SIZE; col++) leds.set(noteKey(padNote(col, row)), this.gridColor(fn, col, row, tracks[col]));
+    }
+  }
+
+  /** The arrows: where the box can move (with the Pro MK3's device, left and right change device). */
+  private navigationLeds(button: (b: Button, color: number) => void): void {
+    if (this.model.id === 'pro' && this.mode === 'device') {
+      const dev = this.controlled();
+      button('up', COLOR.off);
+      button('down', COLOR.off);
+      button('left', dev && dev.index > 0 ? COLOR.darkBlueHalf : COLOR.off);
+      button('right', dev && dev.index < dev.chain.length - 1 ? COLOR.darkBlueHalf : COLOR.off);
+      return;
+    }
+    for (const b of ['up', 'down', 'left', 'right'] as const) button(b, this.overview || this.canMove(b) ? COLOR.whiteHalf : COLOR.off);
+  }
+
+  /** The Session button: X and Mini with the SysEx, the MK2 with its LEDs (and the mixer's). */
+  private sessionButtonLeds(leds: Map<string, number>, button: (b: Button, color: number) => void): void {
+    const { id } = this.model;
+    if (id === 'x' || id === 'mini') {
+      leds.set(SESSION_KEY, this.sessionButtonColor() * 128 + COLOR.whiteHalf);
+    } else if (id === 'mk2') {
+      button('session', this.mixer ? COLOR.whiteHalf : COLOR.paleGreenHalf);
+      button('mixer', this.mixer ? COLOR.cream : COLOR.whiteHalf);
+      button('user1', COLOR.off);
+      button('user2', COLOR.off);
+    }
+  }
+
   /** A button of the right column. */
   private sceneColor(row: number): number {
     const { id } = this.model;
     if (this.overview) return COLOR.off;
     if (id === 'mini' && row === SIZE - 1) return this.mode === 'none' ? COLOR.whiteHalf : MODE_COLOR[this.mode as Exclude<Mode, 'none'>];
-    if (id === 'pro' && this.mode === 'device') {
-      const dev = this.controlled();
-      if (!dev || row >= dev.banks) return COLOR.off;
-      return row === dev.bank ? COLOR.darkBlue : COLOR.whiteHalf;
-    }
-    if ((id === 'x' || id === 'mk2') && this.mixer) {
-      const choice = MIXER_COLUMN[row];
-      if (id === 'mk2' && row >= 4) {
-        const p = this.project, playing = p.tracks.some(t => this.host.engine.sessionState(t).playing);
-        if (choice === 'stop') return playing ? COLOR.red : COLOR.redHalf;
-        if (choice === 'mute') return p.tracks.some(t => t.mixer.mute) ? COLOR.yellow : COLOR.yellowHalf;
-        if (choice === 'solo') return p.tracks.some(t => t.mixer.solo) ? COLOR.blue : COLOR.blueHalf;
-      }
-      if (choice === 'sendA' || choice === 'sendB' || choice === 'arm') return COLOR.off;
-      return this.mode === choice ? MODE_COLOR[choice as Exclude<Mode, 'none'>] : COLOR.whiteHalf;
-    }
+    if (id === 'pro' && this.mode === 'device') return this.bankColor(row);
+    if ((id === 'x' || id === 'mk2') && this.mixer) return this.mixerColumnColor(row);
     const s = this.sceneLight(row);
     switch (s) {
       case 'queued': return blink(COLOR.green);
@@ -565,6 +572,33 @@ export class Launchpad extends SessionSurface {
       case 'off': return COLOR.off;
       default: return s.color ? paletteIndex(s.color) : COLOR.green;
     }
+  }
+
+  /** Pro MK3 with the device: the column chooses the bank. */
+  private bankColor(row: number): number {
+    const dev = this.controlled();
+    if (!dev || row >= dev.banks) return COLOR.off;
+    return row === dev.bank ? COLOR.darkBlue : COLOR.whiteHalf;
+  }
+
+  /** X and MK2 in the mixer: the column chooses the mode (the MK2's lower half acts on all tracks). */
+  private mixerColumnColor(row: number): number {
+    const choice = MIXER_COLUMN[row];
+    if (this.model.id === 'mk2' && row >= 4) {
+      const all = this.allTracksColor(choice);
+      if (all !== null) return all;
+    }
+    if (choice === 'sendA' || choice === 'sendB' || choice === 'arm') return COLOR.off;
+    return this.mode === choice ? MODE_COLOR[choice as Exclude<Mode, 'none'>] : COLOR.whiteHalf;
+  }
+
+  /** The MK2's stop all, mute and solo buttons: lit when something plays, is muted, is soloed. */
+  private allTracksColor(choice: (typeof MIXER_COLUMN)[number]): number | null {
+    const tracks = this.project.tracks;
+    if (choice === 'stop') return tracks.some(t => this.host.engine.sessionState(t).playing) ? COLOR.red : COLOR.redHalf;
+    if (choice === 'mute') return tracks.some(t => t.mixer.mute) ? COLOR.yellow : COLOR.yellowHalf;
+    if (choice === 'solo') return tracks.some(t => t.mixer.solo) ? COLOR.blue : COLOR.blueHalf;
+    return null;
   }
 
   /** Pro MK3: the track row, the modes, the transport. */

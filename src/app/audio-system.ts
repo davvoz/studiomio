@@ -1,6 +1,7 @@
 import type { DeviceId, SampleId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import type { AudioData } from '../dsp/types';
+import type { AudioGraph } from '../engine/audio-graph';
 import { ClipAudio } from '../engine/clip-audio';
 import { renderMix } from '../engine/offline-mix';
 import { PlaybackEngine } from '../engine/playback-engine';
@@ -29,11 +30,10 @@ export class AudioSystem {
   /** Level meters, live only (export doesn't need them). */
   private readonly meters = new WorkletMeters(this.worklet);
   private readonly unsubscribe: () => void;
+  private readonly graph: AudioGraph;
 
   constructor(private readonly store: ProjectStore) {
-    const graph = liveGraph(this.context);
-    // the instruments and effects module loads right away: at the first play it's ready
-    this.instruments.prepare(graph).catch(e => console.error('devices AudioWorklet not loaded', e));
+    const graph = this.graph = liveGraph(this.context);
     this.clips = new ClipAudio(graph, this.library, this.renders);
     this.engine = new PlaybackEngine(graph, { clips: this.clips, instruments: this.instruments, effects: this.effects, meters: this.meters });
     this.clips.on('ready', () => this.engine.refresh());
@@ -44,6 +44,12 @@ export class AudioSystem {
     };
     this.unsubscribe = store.onChange(sync);
     sync(store.project);
+  }
+
+  /** The instruments and effects module starts loading (the app calls it at startup): at the
+   *  first play it's ready. The devices created before wait for it anyway. */
+  loadDevices(): void {
+    this.instruments.prepare(this.graph).catch(e => console.error('devices AudioWorklet not loaded', e));
   }
 
   addSample(id: SampleId, audio: AudioData): Promise<void> {

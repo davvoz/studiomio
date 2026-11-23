@@ -81,7 +81,7 @@ export class EqGraph {
   private updateCurves(state: GraphState): void {
     const { bands, output } = state, w = this.scale.width;
     const f = this.curvesFor;
-    if (f && f.bands === bands && f.output === output && f.width === w) return;
+    if (f?.bands === bands && f.output === output && f.width === w) return;
     const n = Math.ceil(w / STEP) + 1;
     const freqs = Array.from({ length: n }, (_, i) => this.scale.xToFreq(i * STEP));
     this.curves = bands.map(b => Float32Array.from(freqs, fr => bandResponseDb(b, fr, this.sampleRate)));

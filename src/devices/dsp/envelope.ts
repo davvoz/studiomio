@@ -60,7 +60,8 @@ export class Adsr {
   }
 
   private idle(): number {
-    return (this.value = 0);
+    this.value = 0;
+    return 0;
   }
 
   private attack(): number {
@@ -82,7 +83,8 @@ export class Adsr {
   }
 
   private hold(): number {
-    return (this.value = this.sustain);
+    this.value = this.sustain;
+    return this.value;
   }
 
   private releaseStage(): number {

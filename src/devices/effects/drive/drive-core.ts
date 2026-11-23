@@ -34,7 +34,10 @@ const ADAA_EPS = 1e-5;
 const INTEGRALS = new Map<string, (x: number) => number>();
 const integralOf = (s: Shape) => {
   let F = INTEGRALS.get(s.id);
-  if (!F) INTEGRALS.set(s.id, (F = fastIntegral(s)));
+  if (!F) {
+    F = fastIntegral(s);
+    INTEGRALS.set(s.id, F);
+  }
   return F;
 };
 

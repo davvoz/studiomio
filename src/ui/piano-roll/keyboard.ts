@@ -77,21 +77,24 @@ export class RollKeyboard {
     g.font = '9.5px system-ui, sans-serif';
     const rows = axis.visible(ROLL.ruler, bottom);
     if (this.names) this.paintNames(this.names, rows);
-    else for (const p of rows) {
-      const y = axis.pitchToY(p), h = axis.rowHeight, black = isBlackKey(p);
-      // a black key's row: the key on the left, the white one next to it on the right
-      g.fillStyle = '#d9dce2';
-      g.fillRect(0, y, width, h);
-      if (p === this.pressed) g.fillStyle = '#ff9d2e';
-      else g.fillStyle = black ? '#26292f' : '#d9dce2';
-      g.fillRect(0, y, black ? width * 0.62 : width, h);
-      g.fillStyle = 'rgba(0,0,0,0.35)';
-      g.fillRect(0, Math.round(y + h) - 1, width, 1);
-      if (h >= 9) this.paintKeyName(p, y + h - 2.5, black);
-    }
+    else for (const p of rows) this.paintKey(axis, p);
     g.restore();
     g.fillStyle = '#2b2f36';
     g.fillRect(width - 1, 0, 1, height);
+  }
+
+  /** A key's row: a black key on the left with the white one next to it on the right. */
+  private paintKey(axis: PitchAxis, p: number): void {
+    const { g, width } = this.surface;
+    const y = axis.pitchToY(p), h = axis.rowHeight, black = isBlackKey(p);
+    g.fillStyle = '#d9dce2';
+    g.fillRect(0, y, width, h);
+    if (p === this.pressed) g.fillStyle = '#ff9d2e';
+    else g.fillStyle = black ? '#26292f' : '#d9dce2';
+    g.fillRect(0, y, black ? width * 0.62 : width, h);
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    g.fillRect(0, Math.round(y + h) - 1, width, 1);
+    if (h >= 9) this.paintKeyName(p, y + h - 2.5, black);
   }
 
   /** Every key has its name (when the rows are tall enough to read it): the C, which marks the
@@ -108,7 +111,7 @@ export class RollKeyboard {
   private paintNames(names: ReadonlyMap<number, string>, rows: readonly number[]): void {
     const { g, width } = this.surface;
     const axis = this.axis!;
-    const h = axis.rowHeight, text = h >= 9;
+    const h = axis.rowHeight;
     for (const p of rows) {
       const y = axis.pitchToY(p), name = names.get(p);
       if (p === this.pressed) g.fillStyle = '#ff9d2e';
@@ -116,16 +119,21 @@ export class RollKeyboard {
       g.fillRect(0, y, width, h);
       g.fillStyle = 'rgba(0,0,0,0.45)';
       g.fillRect(0, Math.round(y + h) - 1, width, 1);
-      if (!text) continue;
-      const baseline = y + h / 2 + 3.5;
-      if (name) {
-        g.fillStyle = p === this.pressed ? '#141414' : '#e8eaee';
-        g.fillText(name, 5, baseline, width - 34);
-      }
-      if (name || axis.folded || p % 12 === 0) {
-        g.fillStyle = p === this.pressed ? '#141414' : '#6b717c';
-        g.fillText(pitchName(p), width - 26, baseline);
-      }
+      if (h >= 9) this.paintPadNames(p, name, y + h / 2 + 3.5);
+    }
+  }
+
+  /** A pad's row: its name on the left and the note on the right (only the note on the C rows,
+   *  and on every row with Fold). */
+  private paintPadNames(p: number, name: string | undefined, baseline: number): void {
+    const { g, width } = this.surface, pressed = p === this.pressed;
+    if (name) {
+      g.fillStyle = pressed ? '#141414' : '#e8eaee';
+      g.fillText(name, 5, baseline, width - 34);
+    }
+    if (name || this.axis!.folded || p % 12 === 0) {
+      g.fillStyle = pressed ? '#141414' : '#6b717c';
+      g.fillText(pitchName(p), width - 26, baseline);
     }
   }
 }

@@ -24,7 +24,7 @@ export function inside(root: string, path: string): string {
 
 const isMissing = (e: unknown) => (e as NodeJS.ErrnoException | null)?.code === 'ENOENT';
 
-export async function exists(root: string, path: string): Promise<boolean> {
+export function exists(root: string, path: string): Promise<boolean> {
   return stat(inside(root, path)).then(() => true, () => false);
 }
 

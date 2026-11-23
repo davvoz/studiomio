@@ -6,6 +6,15 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- Code quality clean-up (SonarCloud): long functions of instruments, effects, time-stretch,
+  controllers and editors split into smaller pieces. The sound is unchanged: every preset of
+  every instrument and effect renders bit for bit as before.
+- The app starts its devices, recent projects and racks after the window is created, no longer
+  inside constructors.
+- Release builds: GitHub Actions with the least permissions, and dependencies installed without
+  running their install scripts.
+
 ## [0.3.60] - 2026-11-23
 
 ### Added

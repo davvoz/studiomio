@@ -35,34 +35,59 @@ export function detectTransients(mono: Samples, envl: OnsetEnvelope, sensitivity
   const f = flux.map(v => v / max);
   const pre = new Float64Array(n + 1);
   for (let i = 0; i < n; i++) pre[i + 1] = pre[i] + f[i];
-  const w = Math.max(2, Math.round(0.1 * frameRate));
   const sens = Math.max(0, Math.min(1, sensitivity));
-  const delta = 0.02 + (1 - sens) * 0.3;
-  const mult = 1.1 + (1 - sens) * 0.9;
-  const minGap = Math.round(0.035 * frameRate);
-  const peaks: { i: number; v: number }[] = [];
-  for (let i = 1; i < n - 1; i++) {
-    const v = f[i];
-    if (v < delta) continue;
-    let isMax = true;
-    for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) {
-      if (j < i ? f[j] >= v : f[j] > v) { isMax = false; break; }
-    }
-    if (!isMax) continue;
-    const a = Math.max(0, i - w), b = Math.min(n, i + w + 1);
-    const mean = (pre[b] - pre[a]) / (b - a);
-    if (v < mean * mult + delta * 0.5) continue;
-    const last = peaks[peaks.length - 1];
-    if (last && i - last.i < minGap) {
-      if (v > last.v) { last.i = i; last.v = v; }
-      continue;
-    }
-    peaks.push({ i, v });
-  }
+  const rules: PeakRules = {
+    pre,
+    w: Math.max(2, Math.round(0.1 * frameRate)),
+    delta: 0.02 + (1 - sens) * 0.3,
+    mult: 1.1 + (1 - sens) * 0.9,
+    minGap: Math.round(0.035 * frameRate),
+  };
   const out: number[] = [];
-  for (const p of peaks) {
+  for (const p of pickPeaks(f, rules)) {
     const pos = refineOnset(mono, p.i * hop, hop);
     if (!out.length || pos - out[out.length - 1] > hop) out.push(pos);
   }
   return out;
+}
+
+/** How a peak must stand out: over `delta`, over the local mean (window `w` around, from the
+ *  prefix sums `pre`) times `mult`, at least `minGap` frames after the previous one. */
+interface PeakRules {
+  readonly pre: Float64Array;
+  readonly w: number;
+  readonly delta: number;
+  readonly mult: number;
+  readonly minGap: number;
+}
+
+/** The peaks of the curve `f`: of two too close, the higher. */
+function pickPeaks(f: ArrayLike<number>, rules: PeakRules): { i: number; v: number }[] {
+  const n = f.length, peaks: { i: number; v: number }[] = [];
+  for (let i = 1; i < n - 1; i++) {
+    const v = f[i];
+    if (v < rules.delta || !isLocalMax(f, i) || !standsOut(v, i, n, rules)) continue;
+    const last = peaks[peaks.length - 1];
+    if (!last || i - last.i >= rules.minGap) peaks.push({ i, v });
+    else if (v > last.v) {
+      last.i = i;
+      last.v = v;
+    }
+  }
+  return peaks;
+}
+
+/** The highest of the three frames on each side (the first of equal ones). */
+function isLocalMax(f: ArrayLike<number>, i: number): boolean {
+  const v = f[i];
+  for (let j = Math.max(0, i - 3); j <= Math.min(f.length - 1, i + 3); j++) {
+    if (j < i ? f[j] >= v : f[j] > v) return false;
+  }
+  return true;
+}
+
+function standsOut(v: number, i: number, n: number, rules: PeakRules): boolean {
+  const a = Math.max(0, i - rules.w), b = Math.min(n, i + rules.w + 1);
+  const mean = (rules.pre[b] - rules.pre[a]) / (b - a);
+  return v >= mean * rules.mult + rules.delta * 0.5;
 }

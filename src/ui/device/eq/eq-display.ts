@@ -164,7 +164,7 @@ export class EqDisplay implements DeviceDisplay {
       const p = this.local(e);
       this.pointer = p;
       const d = this.drag;
-      if (d && d.pointerId === e.pointerId) this.dragTo(d, p, e.shiftKey);
+      if (d?.pointerId === e.pointerId) this.dragTo(d, p, e.shiftKey);
       else {
         const hit = this.graph.hit(this.bands, p.x, p.y);
         if (hit !== this.hover) this.hover = hit;
@@ -174,7 +174,7 @@ export class EqDisplay implements DeviceDisplay {
     });
     const end = (e: PointerEvent) => {
       const d = this.drag;
-      if (!d || d.pointerId !== e.pointerId) return;
+      if (d?.pointerId !== e.pointerId) return;
       this.drag = null;
       if (d.last) this.ctx.setParams(d.last, true);
     };

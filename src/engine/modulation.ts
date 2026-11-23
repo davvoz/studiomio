@@ -246,7 +246,10 @@ export class TrackModulator extends CurveModulator {
 
   private segmentsOf(p: Placement): Segment[] {
     let s = this.segments.get(p);
-    if (!s) this.segments.set(p, (s = placementSegments(p)));
+    if (!s) {
+      s = placementSegments(p);
+      this.segments.set(p, s);
+    }
     return s;
   }
 }

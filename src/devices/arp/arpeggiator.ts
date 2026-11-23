@@ -204,45 +204,53 @@ export class Arpeggiator implements InstrumentCore, TransportFollower {
     this.endBeat = beatAt(to);
     if (!this.settings.on) return this.inner.render(left, right, from, to);
     const frameAt = (beat: number) => Math.min(to, Math.max(from, from + Math.ceil((beat - beatAt(from)) / perFrame - EPS)));
-    const step = this.settings.stepBeats;
-    if (this.startNow) {
-      this.startNow = false;
-      this.origin = beatAt(from);
-      this.nextIndex = 0;
-      this.missed = null;
-    }
-    if (this.nextIndex === null) {
-      // restart (on, jump, transport started, step changed): the step just begun is recovered
-      const elapsed = (beatAt(from) - this.origin) / step;
-      this.nextIndex = Math.ceil(elapsed - 1e-6);
-      if (this.running && this.nextIndex > elapsed + 1e-6) this.missed = this.nextIndex - 1;
-    }
-    if (this.missed !== null) {
-      if (beatAt(from) - this.stepBeat(this.missed) >= step * CATCH_UP) this.missed = null;
-      else if (this.keys.size) {
-        this.fire(beatAt(from));
-        this.missed = null;
-      }
-    }
+    this.syncSteps(beatAt(from));
     let pos = from;
     for (;;) {
       const off = this.playing.reduce((first, n) => Math.min(first, n.offBeat), Infinity);
-      const next = this.stepBeat(this.nextIndex);
+      const next = this.stepBeat(this.nextIndex!);
       const beat = Math.min(off, next), at = frameAt(beat);
       if (beat >= beatAt(to) - EPS || at >= to) break;
       if (at > pos) {
         this.inner.render(left, right, pos, at);
         pos = at;
       }
-      // at equal times the note-offs first: a note ending where another starts frees the voice
-      if (off <= next) this.endNotes(off);
-      else {
-        const index = this.nextIndex++;
-        if (this.keys.size) this.fire(next);
-        else this.missed = index;
-      }
+      this.event(off, next);
     }
     if (pos < to) this.inner.render(left, right, pos, to);
+  }
+
+  /** At the block's start (beat `now`): a fresh start, or a restart (on, jump, transport started,
+   *  step changed) that recovers the step just begun; then the step missed by a moment plays now. */
+  private syncSteps(now: number): void {
+    const step = this.settings.stepBeats;
+    if (this.startNow) {
+      this.startNow = false;
+      this.origin = now;
+      this.nextIndex = 0;
+      this.missed = null;
+    }
+    if (this.nextIndex === null) {
+      const elapsed = (now - this.origin) / step;
+      this.nextIndex = Math.ceil(elapsed - 1e-6);
+      if (this.running && this.nextIndex > elapsed + 1e-6) this.missed = this.nextIndex - 1;
+    }
+    if (this.missed === null) return;
+    if (now - this.stepBeat(this.missed) >= step * CATCH_UP) this.missed = null;
+    else if (this.keys.size) {
+      this.fire(now);
+      this.missed = null;
+    }
+  }
+
+  /** The next event: at equal times the note-offs first (a note ending where another starts frees
+   *  the voice), otherwise the step (missed if no key is held). */
+  private event(off: number, next: number): void {
+    if (off <= next) return this.endNotes(off);
+    const index = this.nextIndex!;
+    this.nextIndex = index + 1;
+    if (this.keys.size) this.fire(next);
+    else this.missed = index;
   }
 
   /** The beat of step `index`: swing moves the odd ones. */

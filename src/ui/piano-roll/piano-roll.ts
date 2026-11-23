@@ -121,21 +121,22 @@ export class PianoRoll implements RollHost {
       clearSound: () => this.commit('Remove the clip sound', c => c.withSound(null)),
       close: () => this.close(),
     });
-    const roll = this;
+    // the lane's axis is a property: read it through a function (no alias of this)
+    const axis = () => this._axis;
     this.mods = new ModulationEditor({
       clipboard: deps.clipboard,
-      get axis() { return roll._axis; },
-      curves: () => roll.clip(),
-      span: () => { const c = roll.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },
-      grid: () => roll.grid,
+      get axis() { return axis(); },
+      curves: () => this.clip(),
+      span: () => { const c = this.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },
+      grid: () => this.grid,
       signature: () => deps.store.project.signature,
-      playhead: () => { const t = roll.target(); return t ? playheadIn(t.found, deps.engine) : null; },
+      playhead: () => { const t = this.target(); return t ? playheadIn(t.found, deps.engine) : null; },
       drawMode: deps.drawMode,
-      commit: (label, target, points) => roll.commit(label, c => c.withEnvelope(target, points) as MidiClip),
-      wheel: (e, x) => roll.setAxis(wheelTime(e, x, roll._axis)),
-      devices: () => { const t = roll.target()?.track ?? null; return t && targetDevices(t); },
-      chain: () => { const t = roll.target()?.track ?? null; return t && trackChain(t); },
-      layout: visible => roll.element.classList.toggle('with-lane', visible),
+      commit: (label, target, points) => this.commit(label, c => c.withEnvelope(target, points) as MidiClip),
+      wheel: (e, x) => this.setAxis(wheelTime(e, x, this._axis)),
+      devices: () => { const t = this.target()?.track ?? null; return t && targetDevices(t); },
+      chain: () => { const t = this.target()?.track ?? null; return t && trackChain(t); },
+      layout: visible => this.element.classList.toggle('with-lane', visible),
     });
     this.panel.element.append(this.mods.controls);
     const wrap = Object.assign(document.createElement('div'), { className: 'editor-canvas-wrap' });

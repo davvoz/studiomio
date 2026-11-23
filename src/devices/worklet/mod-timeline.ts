@@ -124,7 +124,10 @@ export class ParamModulation {
     if (!this.specs.has(param)) return;
     const key = lineKey(param, channel);
     let entry = this.lines.get(key);
-    if (!entry) this.lines.set(key, (entry = { param, line: new ModTimeline(0) }));
+    if (!entry) {
+      entry = { param, line: new ModTimeline(0) };
+      this.lines.set(key, entry);
+    }
     if (kind === 'hold') entry.line.hold(time);
     else entry.line.add({ kind, value, time });
   }

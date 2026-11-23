@@ -12,6 +12,41 @@ interface Level {
 const BASE_BUCKET = 64;
 const FACTOR = 8;
 
+/** The finest level: minimum and maximum of every BASE_BUCKET samples, over all the channels. */
+function baseLevel(channels: readonly Float32Array[]): Level {
+  const n = channels[0].length;
+  const count = Math.ceil(n / BASE_BUCKET);
+  const min = new Float32Array(count), max = new Float32Array(count);
+  for (let b = 0; b < count; b++) {
+    let lo = Infinity, hi = -Infinity;
+    const end = Math.min(n, (b + 1) * BASE_BUCKET);
+    for (const c of channels) {
+      for (let i = b * BASE_BUCKET; i < end; i++) {
+        const v = c[i];
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+    }
+    min[b] = lo; max[b] = hi;
+  }
+  return { bucket: BASE_BUCKET, min, max };
+}
+
+/** The next level: every FACTOR groups of `prev` in one. */
+function coarser(prev: Level): Level {
+  const m = Math.ceil(prev.min.length / FACTOR);
+  const lmin = new Float32Array(m), lmax = new Float32Array(m);
+  for (let b = 0; b < m; b++) {
+    let lo = Infinity, hi = -Infinity;
+    for (let i = b * FACTOR, e = Math.min(prev.min.length, i + FACTOR); i < e; i++) {
+      if (prev.min[i] < lo) lo = prev.min[i];
+      if (prev.max[i] > hi) hi = prev.max[i];
+    }
+    lmin[b] = lo; lmax[b] = hi;
+  }
+  return { bucket: prev.bucket * FACTOR, min: lmin, max: lmax };
+}
+
 /** Waveform peaks (mono) at several resolutions, to draw it quickly at
  *  any zoom without rereading all the samples. */
 export class Peaks {
@@ -22,37 +57,9 @@ export class Peaks {
   ) {}
 
   static from({ channels, sampleRate }: AudioData): Peaks {
-    const n = channels[0].length;
-    const count = Math.ceil(n / BASE_BUCKET);
-    const min = new Float32Array(count), max = new Float32Array(count);
-    for (let b = 0; b < count; b++) {
-      let lo = Infinity, hi = -Infinity;
-      const end = Math.min(n, (b + 1) * BASE_BUCKET);
-      for (const c of channels) {
-        for (let i = b * BASE_BUCKET; i < end; i++) {
-          const v = c[i];
-          if (v < lo) lo = v;
-          if (v > hi) hi = v;
-        }
-      }
-      min[b] = lo; max[b] = hi;
-    }
-    const levels: Level[] = [{ bucket: BASE_BUCKET, min, max }];
-    while (levels[levels.length - 1].min.length > FACTOR) {
-      const prev = levels[levels.length - 1];
-      const m = Math.ceil(prev.min.length / FACTOR);
-      const lmin = new Float32Array(m), lmax = new Float32Array(m);
-      for (let b = 0; b < m; b++) {
-        let lo = Infinity, hi = -Infinity;
-        for (let i = b * FACTOR, e = Math.min(prev.min.length, i + FACTOR); i < e; i++) {
-          if (prev.min[i] < lo) lo = prev.min[i];
-          if (prev.max[i] > hi) hi = prev.max[i];
-        }
-        lmin[b] = lo; lmax[b] = hi;
-      }
-      levels.push({ bucket: prev.bucket * FACTOR, min: lmin, max: lmax });
-    }
-    return new Peaks(levels, sampleRate, n);
+    const levels: Level[] = [baseLevel(channels)];
+    while (levels[levels.length - 1].min.length > FACTOR) levels.push(coarser(levels[levels.length - 1]));
+    return new Peaks(levels, sampleRate, channels[0].length);
   }
 
   /** The same peaks for the reversed sample (they share the data). */

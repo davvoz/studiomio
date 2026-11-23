@@ -33,9 +33,10 @@ export class MasterAutomation {
   private curvesOf: { project: Project; curves: LaneCurves } | null = null;
 
   constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, clipboard: Clipboard, drawMode: DrawMode) {
-    const self = this;
+    // the lane's axis is a property: read it through a function (no alias of this)
+    const axis = () => this.axis();
     this.editor = new ModulationEditor({
-      get axis() { return self.axis(); },
+      get axis() { return axis(); },
       clipboard,
       drawMode,
       curves: () => this.curves(),

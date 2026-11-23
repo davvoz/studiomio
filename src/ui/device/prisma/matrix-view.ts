@@ -79,7 +79,10 @@ function destinationOptions(): HTMLElement[] {
   const groups = new Map<string, HTMLElement>();
   DESTINATIONS.forEach((d, i) => {
     let g = groups.get(d.group);
-    if (!g) groups.set(d.group, (g = el('optgroup', { label: d.group })));
+    if (!g) {
+      g = el('optgroup', { label: d.group });
+      groups.set(d.group, g);
+    }
     g.append(el('option', { value: String(i + 1), textContent: d.label }));
   });
   return [el('option', { value: '0', textContent: '—' }), ...groups.values()];

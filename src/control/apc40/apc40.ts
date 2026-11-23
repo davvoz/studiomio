@@ -8,6 +8,7 @@
 import { type ParamSpec } from '../../devices/params';
 import type { DeviceId, TrackId } from '../../core/id';
 import { MASTER } from '../../model/project';
+import type { Track } from '../../model/track';
 import { slotRef, type ClipRef } from '../../store/clip-ref';
 import { setEffectEnabled, setMasterMixer, setMixer } from '../../store/edits';
 import {
@@ -33,6 +34,12 @@ const RINGS_AGAIN_MS = 250;
 
 /** The startup, as in Live: ask for the identity, introduce ourselves, do the challenge, then work. */
 type Phase = 'identity' | 'challenge' | 'ready';
+
+/** Sets a button's light (on a track's column, `channel`). */
+type SetNote = (n: number, v: number | boolean, channel?: number) => void;
+
+/** The buttons of the tracks' columns (the channel says which track). */
+const TRACK_BUTTONS: ReadonlySet<number> = new Set([NOTE.clipStop, NOTE.trackSelect, NOTE.activator, NOTE.solo]);
 
 const NOT_YET: Readonly<Record<number, string>> = {
   [NOTE.recordArm]: 'Record arm', [NOTE.record]: 'Recording', [NOTE.session]: 'Session recording',
@@ -123,39 +130,58 @@ export class Apc40 extends SessionSurface {
   // ---------------------------------------------------------------- buttons
 
   private press(note: number, channel: number): void {
-    const { engine } = this.host;
     const pad = padAt(note);
     if (pad) return this.shift ? this.jumpToBlock(pad.col, pad.row) : this.launchPad(pad.col, pad.row);
     if (note >= NOTE.sceneLaunch && note < NOTE.sceneLaunch + SCENES) return this.launchScene(note - NOTE.sceneLaunch);
-    const track = this.trackAt(channel);
-    switch (note) {
-      case NOTE.clipStop: if (track) engine.stopTrack(track.id); return;
-      case NOTE.trackSelect: if (track) this.selectOwner(track.id); return;
-      case NOTE.activator: if (track) this.apply(setMixer(track.id, { mute: !track.mixer.mute })); return;
-      case NOTE.solo: if (track) this.apply(setMixer(track.id, { solo: !track.mixer.solo })); return;
-      case NOTE.master: return this.selectOwner(MASTER);
-      case NOTE.stopAllClips: return engine.stopAllClips();
-      case NOTE.shift: this.shift = true; return;
-      case NOTE.bank: this.bankMode = !this.bankMode; return;
-      case NOTE.up: return this.moveRing(0, -this.step(SCENES));
-      case NOTE.down: return this.moveRing(0, this.step(SCENES));
-      case NOTE.left: return this.moveRing(-this.step(TRACKS), 0);
-      case NOTE.right: return this.moveRing(this.step(TRACKS), 0);
-      case NOTE.play: return this.shift ? this.host.stopAndRewind() : this.host.togglePlay();
-      case NOTE.metronome: return this.host.toggleMetronome();
-      case NOTE.tapTempo: return this.tap();
-      case NOTE.pan: return;
-      case NOTE.deviceLeft: return this.moveDevice(-1);
-      case NOTE.deviceRight: return this.moveDevice(1);
-      case NOTE.bankLeft: return this.moveBank(-1);
-      case NOTE.bankRight: return this.moveBank(1);
-      case NOTE.deviceOnOff: return this.toggleDevice();
-      case NOTE.deviceLock: return this.toggleLock();
-      case NOTE.clipDeviceView: return this.toggleClipDevice();
-      case NOTE.detailView: return this.toggleDetail();
+    if (TRACK_BUTTONS.has(note)) {
+      const track = this.trackAt(channel);
+      if (track) this.pressTrackButton(note, track);
+      return;
     }
+    if (this.pressButton(note)) return;
     const missing = NOT_YET[note];
     if (missing) this.host.say(`APC40: ${missing} isn't in studiomio yet.`);
+  }
+
+  /** A button of a track's column: stop, select, activator (mute), solo. */
+  private pressTrackButton(note: number, track: Track): void {
+    switch (note) {
+      case NOTE.clipStop: return this.host.engine.stopTrack(track.id);
+      case NOTE.trackSelect: return this.selectOwner(track.id);
+      case NOTE.activator: return this.apply(setMixer(track.id, { mute: !track.mixer.mute }));
+      default: return this.apply(setMixer(track.id, { solo: !track.mixer.solo }));
+    }
+  }
+
+  /** The other buttons; false if it isn't one studiomio uses. */
+  private pressButton(note: number): boolean {
+    const { engine } = this.host;
+    switch (note) {
+      case NOTE.master: this.selectOwner(MASTER); return true;
+      case NOTE.stopAllClips: engine.stopAllClips(); return true;
+      case NOTE.shift: this.shift = true; return true;
+      case NOTE.bank: this.bankMode = !this.bankMode; return true;
+      case NOTE.up: this.moveRing(0, -this.step(SCENES)); return true;
+      case NOTE.down: this.moveRing(0, this.step(SCENES)); return true;
+      case NOTE.left: this.moveRing(-this.step(TRACKS), 0); return true;
+      case NOTE.right: this.moveRing(this.step(TRACKS), 0); return true;
+      case NOTE.play:
+        if (this.shift) this.host.stopAndRewind();
+        else this.host.togglePlay();
+        return true;
+      case NOTE.metronome: this.host.toggleMetronome(); return true;
+      case NOTE.tapTempo: this.tap(); return true;
+      case NOTE.pan: return true;
+      case NOTE.deviceLeft: this.moveDevice(-1); return true;
+      case NOTE.deviceRight: this.moveDevice(1); return true;
+      case NOTE.bankLeft: this.moveBank(-1); return true;
+      case NOTE.bankRight: this.moveBank(1); return true;
+      case NOTE.deviceOnOff: this.toggleDevice(); return true;
+      case NOTE.deviceLock: this.toggleLock(); return true;
+      case NOTE.clipDeviceView: this.toggleClipDevice(); return true;
+      case NOTE.detailView: this.toggleDetail(); return true;
+      default: return false;
+    }
   }
 
   private release(note: number): void {
@@ -257,36 +283,21 @@ export class Apc40 extends SessionSurface {
   }
 
   protected leds(): Map<string, number> {
-    const { ui, engine } = this.host;
+    const { engine } = this.host;
     const p = this.project;
-    const ring = this.ring;
     const leds = new Map<string, number>();
     // on = 127 as in Live; the blinking is done by the controller (no timed traffic from here)
     const note = (n: number, v: number | boolean, channel = 0) => leds.set(noteKey(n, channel), ledValue(v));
     const tracks = this.ringTracks();
 
-    // the grid
-    for (let row = 0; row < SCENES; row++) {
-      for (let col = 0; col < TRACKS; col++) {
-        note(padNote(col, row), this.shift ? overviewColor(this.blockLight(col, row)) : padColor(this.slotLight(tracks[col], ring.scene + row)));
-      }
-    }
+    this.gridLeds(note, tracks);
     // scenes (RGB buttons): steady green if one of their clips plays (like the clips), blinking if
     // something in the row is queued; otherwise the scene's colour (white if it has none), off
     // if the row is empty
     for (let i = 0; i < SCENES; i++) {
       note(NOTE.sceneLaunch + i, sceneColor(this.sceneLight(i)));
     }
-    // per track
-    tracks.forEach((t, c) => {
-      const stop = this.stopLight(t);
-      note(NOTE.clipStop, STOP_LED_OF[stop], c);
-      note(NOTE.trackSelect, !!t && !this.masterSelected && t.id === ui.track, c);
-      note(NOTE.activator, !!t && !t.mixer.mute, c);
-      note(NOTE.solo, !!t?.mixer.solo, c);
-      note(NOTE.recordArm, false, c);
-      note(NOTE.crossfadeAssign, 0, c);
-    });
+    tracks.forEach((t, c) => this.trackLeds(note, t, c));
     note(NOTE.master, this.masterSelected);
     note(NOTE.stopAllClips, p.tracks.some(t => engine.sessionState(t).playing));
     // transport and navigation
@@ -307,9 +318,41 @@ export class Apc40 extends SessionSurface {
       leds.set(ccKey(CC.trackRing + c), t ? RING.pan : RING.off);
       leds.set(ccKey(CC.trackKnob + c), t ? panToKnob(t.mixer.pan) : 0);
     });
-    // the controlled device
+    this.deviceLeds(leds, note);
+    note(NOTE.deviceLock, this.locked !== null);
+    note(NOTE.clipDeviceView, this.host.detail === 'devices');
+    note(NOTE.detailView, this.host.detail !== null);
+    return leds;
+  }
+
+  /** The grid (Shift: the overview of the blocks) and the scene buttons. */
+  private gridLeds(note: SetNote, tracks: readonly (Track | undefined)[]): void {
+    const ring = this.ring;
+    for (let row = 0; row < SCENES; row++) {
+      for (let col = 0; col < TRACKS; col++) {
+        note(padNote(col, row), this.shift ? overviewColor(this.blockLight(col, row)) : padColor(this.slotLight(tracks[col], ring.scene + row)));
+      }
+    }
+    // scenes (RGB buttons): steady green if one of their clips plays (like the clips), blinking if
+    // something in the row is queued; otherwise the scene's colour (white if it has none), off
+    // if the row is empty
+    for (let i = 0; i < SCENES; i++) note(NOTE.sceneLaunch + i, sceneColor(this.sceneLight(i)));
+  }
+
+  /** The buttons of the column of track `t` (`c`: its channel). */
+  private trackLeds(note: SetNote, t: Track | undefined, c: number): void {
+    note(NOTE.clipStop, STOP_LED_OF[this.stopLight(t)], c);
+    note(NOTE.trackSelect, !!t && !this.masterSelected && t.id === this.host.ui.track, c);
+    note(NOTE.activator, !!t && !t.mixer.mute, c);
+    note(NOTE.solo, !!t?.mixer.solo, c);
+    note(NOTE.recordArm, false, c);
+    note(NOTE.crossfadeAssign, 0, c);
+  }
+
+  /** The knobs' device: its rings and values, and the buttons that move between devices and banks. */
+  private deviceLeds(leds: Map<string, number>, note: SetNote): void {
     const dev = this.controlled();
-    ui.setControlledDevice(dev ? { owner: dev.owner, device: dev.device.key } : null);
+    this.host.ui.setControlledDevice(dev ? { owner: dev.owner, device: dev.device.key } : null);
     this.ringsAgain(dev ? `${dev.owner}/${dev.device.key}/${dev.bank}` : '');
     for (let i = 0; i < PARAMS_PER_BANK; i++) {
       const spec = dev?.params[i];
@@ -321,10 +364,6 @@ export class Apc40 extends SessionSurface {
     note(NOTE.bankLeft, !!dev && dev.bank > 0);
     note(NOTE.bankRight, !!dev && dev.bank < dev.banks - 1);
     note(NOTE.deviceOnOff, !!dev && dev.device.enabled !== false);
-    note(NOTE.deviceLock, this.locked !== null);
-    note(NOTE.clipDeviceView, this.host.detail === 'devices');
-    note(NOTE.detailView, this.host.detail !== null);
-    return leds;
   }
 
   /** When the knobs' device changes (`shown`), shortly after all its rings (type and value) are

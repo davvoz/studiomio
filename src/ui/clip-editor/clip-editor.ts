@@ -75,21 +75,22 @@ export class ClipEditor implements EditorHost {
       crop: () => void this.crop(),
       close: () => this.close(),
     });
-    const editor = this;
+    // the lane's axis is a property: read it through a function (no alias of this)
+    const axis = () => this._axis;
     this.mods = new ModulationEditor({
       clipboard: deps.clipboard,
-      get axis() { return editor._axis; },
-      curves: () => editor.clip(),
-      span: () => { const c = editor.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },
-      grid: () => deps.ui.gridStep(editor._axis.pxPerBeat, deps.store.project.signature, 10),
+      get axis() { return axis(); },
+      curves: () => this.clip(),
+      span: () => { const c = this.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },
+      grid: () => deps.ui.gridStep(this._axis.pxPerBeat, deps.store.project.signature, 10),
       signature: () => deps.store.project.signature,
-      playhead: () => { const t = editor.target(); return t ? playheadIn(t.found, deps.engine) : null; },
+      playhead: () => { const t = this.target(); return t ? playheadIn(t.found, deps.engine) : null; },
       drawMode: deps.drawMode,
-      commit: (label, target, points) => editor.commit(label, c => c.withEnvelope(target, points) as AudioClip),
-      wheel: (e, x) => editor.setAxis(wheelTime(e, x, editor._axis)),
-      devices: () => { const t = editor.target()?.found.track ?? null; return t && targetDevices(t); },
-      chain: () => { const t = editor.target()?.found.track ?? null; return t && trackChain(t); },
-      layout: visible => editor.element.classList.toggle('with-lane', visible),
+      commit: (label, target, points) => this.commit(label, c => c.withEnvelope(target, points) as AudioClip),
+      wheel: (e, x) => this.setAxis(wheelTime(e, x, this._axis)),
+      devices: () => { const t = this.target()?.found.track ?? null; return t && targetDevices(t); },
+      chain: () => { const t = this.target()?.found.track ?? null; return t && trackChain(t); },
+      layout: visible => this.element.classList.toggle('with-lane', visible),
     });
     // right below name and info: the warp options are long and would hide it
     this.panel.element.children[1].after(this.mods.controls);

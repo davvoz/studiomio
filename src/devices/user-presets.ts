@@ -92,7 +92,10 @@ export class StoragePresets implements PresetBackend {
 
   private write(presets: readonly StoredPreset[]): void {
     const all: Record<string, Preset[]> = {};
-    for (const { type, name, params } of presets) (all[type] ??= []).push({ name, params });
+    for (const { type, name, params } of presets) {
+      all[type] ??= [];
+      all[type].push({ name, params });
+    }
     try {
       this.storage.setItem(KEY, JSON.stringify(all));
     } catch {

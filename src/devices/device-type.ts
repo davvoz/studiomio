@@ -61,7 +61,10 @@ const specsByType = new WeakMap<DeviceType, ReadonlyMap<string, ParamSpec>>();
 
 export const paramSpec = (t: DeviceType, id: string): ParamSpec | undefined => {
   let specs = specsByType.get(t);
-  if (!specs) specsByType.set(t, (specs = new Map(paramsOf(t).map(p => [p.id, p]))));
+  if (!specs) {
+    specs = new Map(paramsOf(t).map(p => [p.id, p]));
+    specsByType.set(t, specs);
+  }
   return specs.get(id);
 };
 

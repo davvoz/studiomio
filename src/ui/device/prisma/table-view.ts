@@ -56,18 +56,20 @@ export function warped(read: (p: number) => number, warp: number, a: number, p: 
       const e = Math.pow(2, warp === WARP.bendUp ? -4 * a : 4 * a);
       return read(p / (p + (1 - p) * e));
     }
-    case WARP.bendBoth: {
-      const k = Math.pow(2, -4 * a), h = p < 0.5 ? 2 * p : 2 * p - 1, e = p < 0.5 ? k : 1 / k;
-      return read(Math.min(0.99999, (p < 0.5 ? 0 : 0.5) + 0.5 * (h / (h + (1 - h) * e))));
-    }
+    case WARP.bendBoth: return read(bendBoth(p, Math.pow(2, -4 * a)));
     case WARP.pwm: {
       const w = 1 - 0.95 * a;
       return p < w ? read(p / w) : 0;
     }
-    case WARP.asymUp: case WARP.asymDown: {
-      const m = warp === WARP.asymUp ? 0.5 + 0.48 * a : 0.5 - 0.48 * a;
-      return read(p < m ? (0.5 * p) / m : 0.5 + (0.5 * (p - m)) / (1 - m));
-    }
+    case WARP.asymUp: case WARP.asymDown:
+      return read(asymmetric(p, warp === WARP.asymUp ? 0.5 + 0.48 * a : 0.5 - 0.48 * a));
+    default: return reshaped(read, warp, a, p);
+  }
+}
+
+/** The warps that change the shape's level or read it twice: mirror, flip, quantize. */
+function reshaped(read: (p: number) => number, warp: number, a: number, p: number): number {
+  switch (warp) {
     case WARP.mirror: return read(p) * (1 - a) + read(Math.min(0.99999, p < 0.5 ? 2 * p : 2 - 2 * p)) * a;
     case WARP.flip: return p >= 1 - a ? -read(p) : read(p);
     case WARP.quantize: {
@@ -77,6 +79,15 @@ export function warped(read: (p: number) => number, warp: number, a: number, p: 
     default: return read(p);
   }
 }
+
+/** Bend both: each half of the cycle bent the opposite way (`k` the first half's bend). */
+function bendBoth(p: number, k: number): number {
+  const first = p < 0.5, h = first ? 2 * p : 2 * p - 1, e = first ? k : 1 / k;
+  return Math.min(0.99999, (first ? 0 : 0.5) + 0.5 * (h / (h + (1 - h) * e)));
+}
+
+/** Asymmetry: the first half of the shape in `m` of the cycle, the second in the rest. */
+const asymmetric = (p: number, m: number) => (p < m ? (0.5 * p) / m : 0.5 + (0.5 * (p - m)) / (1 - m));
 
 export class TableView {
   readonly canvas = el<HTMLCanvasElement>('canvas', {

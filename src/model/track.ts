@@ -309,7 +309,7 @@ export class GroupTrack extends Track<never, GroupTrackProps> {
 
 /** The letter of the bus at position `index`, as in Live: A, B, C… (after Z, A1, B1…). */
 export const busLetter = (index: number): string =>
-  `${String.fromCharCode(65 + (index % 26))}${index >= 26 ? Math.floor(index / 26) : ''}`;
+  `${String.fromCodePoint(65 + (index % 26))}${index >= 26 ? Math.floor(index / 26) : ''}`;
 
 export interface BusTrackProps extends TrackProps<never> {
   /** Collapsed: in the session its column is narrow (only the level, mute and solo), but it plays. */

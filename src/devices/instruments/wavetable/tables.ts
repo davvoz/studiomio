@@ -176,7 +176,10 @@ const cache = new Map<number, Wavetable>();
 export function wavetable(index: number): Wavetable {
   const i = Math.max(0, Math.min(TABLES.length - 1, Math.round(index)));
   let w = cache.get(i);
-  if (!w) cache.set(i, (w = build(TABLES[i].shape)));
+  if (!w) {
+    w = build(TABLES[i].shape);
+    cache.set(i, w);
+  }
   return w;
 }
 
@@ -242,6 +245,24 @@ export function cyclesOf(channels: readonly Float32Array[]): Float32Array[] {
   return out;
 }
 
+/** The spectrum up to harmonic `h` (and its mirror) into `re`, `im`; the rest silent. */
+function keepHarmonics(specRe: Float64Array, specIm: Float64Array, re: Float64Array, im: Float64Array, h: number): void {
+  const n = re.length;
+  re.fill(0);
+  im.fill(0);
+  for (let k = 1; k <= h; k++) {
+    re[k] = specRe[k]; im[k] = specIm[k];
+    re[n - k] = specRe[n - k]; im[n - k] = specIm[n - k];
+  }
+}
+
+/** The gain bringing the shape's peak to 1 (0 for a silent shape). */
+function normalizing(x: Float64Array): number {
+  let peak = 0;
+  for (const v of x) peak = Math.max(peak, Math.abs(v));
+  return peak > 1e-9 ? 1 / peak : 0;
+}
+
 /** The per-octave versions of `count` shapes: `fill` puts each shape in time (in `re`, then
  *  transforms it with `fft`) or directly as a spectrum; with `fromTime` the transform is done here. */
 function buildFrames(count: number, fill: (frame: number, re: Float64Array, im: Float64Array, fft: Fft) => void, fromTime = false): Wavetable {
@@ -257,21 +278,11 @@ function buildFrames(count: number, fill: (frame: number, re: Float64Array, im: 
     specRe[0] = specIm[0] = specRe[n / 2] = specIm[n / 2] = 0; // no DC or Nyquist
     let gain = 1;
     for (let l = 0; l < LEVELS; l++) {
-      const h = maxHarmonic(l);
-      re.fill(0);
-      im.fill(0);
-      for (let k = 1; k <= h; k++) {
-        re[k] = specRe[k]; im[k] = specIm[k];
-        re[n - k] = specRe[n - k]; im[n - k] = specIm[n - k];
-      }
+      keepHarmonics(specRe, specIm, re, im, maxHarmonic(l));
       fft.inverse(re, im);
       // all the versions with the richest's gain: the shape reaches ±1, and the volume
       // doesn't change going up with the notes
-      if (l === 0) {
-        let peak = 0;
-        for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(re[i]));
-        gain = peak > 1e-9 ? 1 / peak : 0;
-      }
+      if (l === 0) gain = normalizing(re);
       const at = (f * LEVELS + l) * STRIDE;
       for (let i = 0; i < n; i++) out[at + i] = re[i] * gain;
       out[at + n] = out[at];

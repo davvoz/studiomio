@@ -47,12 +47,30 @@ type Row =
   | { readonly item: BrowserItem; readonly depth: number; readonly path?: readonly string[] }
   | { readonly note: string; readonly depth: number; readonly action?: { readonly label: string; readonly run: () => void } };
 
+/** A row with an item. */
+type ListRow = Extract<Row, { readonly item: BrowserItem }>;
+
 /** A folder's content: the items, or how far along it is. */
 type Loaded = readonly BrowserItem[] | 'loading' | 'locked' | Error;
 
 const ICONS: Readonly<Record<BrowserItem['icon'], string>> = {
   instrument: '♫', effect: '≋', preset: '◦', 'user-preset': '★', rack: '▦', sample: '∿', folder: '▤',
 };
+
+/** The lowest and highest sample of [from, to) (and 0): each column looks at 64 samples at most,
+ *  so a long file is drawn right away anyway. */
+function columnPeaks(channels: readonly Float32Array[], from: number, to: number): [number, number] {
+  let lo = 0, hi = 0;
+  const step = Math.max(1, Math.floor((to - from) / 64));
+  for (const ch of channels) {
+    for (let i = from; i < to; i += step) {
+      const v = ch[i];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+  }
+  return [lo, hi];
+}
 
 export class BrowserView {
   readonly element = el('aside', { className: 'browser' });
@@ -309,26 +327,31 @@ export class BrowserView {
       case 'End': handled(); return go(items.length - 1);
       case 'ArrowRight':
         handled();
-        if (current?.item.children && !current.path) {
-          if (!this.expanded.has(current.item.id)) this.toggleItem(current.item);
-          else go(at + 1);
-        }
-        return;
-      case 'ArrowLeft': {
+        return this.openFolder(current, () => go(at + 1));
+      case 'ArrowLeft':
         handled();
-        if (!current || current.path) return;
-        if (current.item.children && this.expanded.has(current.item.id)) return this.toggleItem(current.item);
-        // to the folder containing it
-        const parent = items.slice(0, at).reverse().find(x => x.row.depth < current.depth);
-        if (parent) this.select(parent.row.item, true);
-        return;
-      }
+        return this.closeFolder(current, items.slice(0, at));
       case 'Enter':
         handled();
         if (current?.item.payload) this.deps.load(current.item);
         else if (current?.item.children) this.toggleItem(current.item);
         return;
     }
+  }
+
+  /** → on a closed folder opens it; on an open one goes to its first item (`down`). */
+  private openFolder(current: ListRow | undefined, down: () => void): void {
+    if (!current?.item.children || current.path) return;
+    if (!this.expanded.has(current.item.id)) this.toggleItem(current.item);
+    else down();
+  }
+
+  /** ← on an open folder closes it; otherwise it goes to the folder containing the item (among `above`). */
+  private closeFolder(current: ListRow | undefined, above: readonly { row: ListRow }[]): void {
+    if (!current || current.path) return;
+    if (current.item.children && this.expanded.has(current.item.id)) return this.toggleItem(current.item);
+    const parent = [...above].reverse().find(x => x.row.depth < current.depth);
+    if (parent) this.select(parent.row.item, true);
   }
 
   private toggleItem(item: BrowserItem): void {
@@ -444,15 +467,8 @@ export class BrowserView {
     g.fillStyle = getComputedStyle(this.element).getPropertyValue('--accent').trim() || '#ff9d2e';
     const per = n / w, mid = h / 2;
     for (let x = 0; x < w; x++) {
-      let lo = 0, hi = 0;
       const from = Math.floor(x * per), to = Math.min(n, Math.max(from + 1, Math.floor((x + 1) * per)));
-      // each column looks at 64 samples at most: a long file is drawn right away anyway
-      const step = Math.max(1, Math.floor((to - from) / 64));
-      for (const ch of channels) for (let i = from; i < to; i += step) {
-        const v = ch[i];
-        if (v < lo) lo = v;
-        if (v > hi) hi = v;
-      }
+      const [lo, hi] = columnPeaks(channels, from, to);
       g.fillRect(x, mid - hi * mid, 1, Math.max(1, (hi - lo) * mid));
     }
   }

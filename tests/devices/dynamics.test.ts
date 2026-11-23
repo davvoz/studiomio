@@ -166,7 +166,10 @@ function truePeak(x: Float32Array): number {
 describe('Limiter', () => {
   it('no sample above the ceiling, even pushed by 12 dB on noise and hits', () => {
     let s = 7;
-    const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 2 - 1;
+    const rnd = () => {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      return (s / 0x7fffffff) * 2 - 1;
+    };
     // a sound with dynamics: quiet noise, a sine, and loud hits every 100 ms
     const x = Float32Array.from({ length: SR }, (_, i) => rnd() * 0.05 + (i % 4800 < 30 ? 0.9 * rnd() : 0) + Math.sin(i * 0.01) * 0.2);
     const [l, r] = run(limiter({ gain: 12, ceiling: -1 }), x, x.map(v => -v * 0.8));

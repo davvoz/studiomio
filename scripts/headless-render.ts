@@ -39,31 +39,44 @@ function sampleReader(v: DataView, format: number, bits: number): (o: number) =>
 /** A WAV (PCM 8/16/24/32 or float 32/64, also "extensible") into float channels. */
 export function decodeWav(bytes: Uint8Array): SampleData {
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const tag = (at: number) => String.fromCharCode(...bytes.subarray(at, at + 4));
+  const tag = (at: number) => String.fromCodePoint(...bytes.subarray(at, at + 4));
   if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error('not a WAV');
-  let channels = 0, sampleRate = 0, bits = 0, format = 1;
+  const fmt: WavFormat = { channels: 0, sampleRate: 0, bits: 0, format: 1 };
   for (let at = 12; at + 8 <= bytes.length;) {
     const id = tag(at), size = v.getUint32(at + 4, true);
-    if (id === 'fmt ') {
-      format = v.getUint16(at + 8, true);
-      channels = v.getUint16(at + 10, true);
-      sampleRate = v.getUint32(at + 12, true);
-      bits = v.getUint16(at + 22, true);
-      // WAVE_FORMAT_EXTENSIBLE: the real format is in the subtype
-      if (format === 0xfffe && size >= 26) format = v.getUint16(at + 32, true);
-    } else if (id === 'data') {
-      const bps = bits / 8, frames = Math.floor(Math.min(size, bytes.length - at - 8) / (channels * bps));
-      const out = Array.from({ length: Math.min(2, channels) }, () => new Float32Array(frames));
-      const read = sampleReader(v, format, bits);
-      let o = at + 8;
-      for (let i = 0; i < frames; i++) {
-        for (let c = 0; c < channels; c++, o += bps) if (c < out.length) out[c][i] = read(o);
-      }
-      return { sampleRate, channels: out };
-    }
+    if (id === 'fmt ') readFormat(v, at, size, fmt);
+    else if (id === 'data') return { sampleRate: fmt.sampleRate, channels: readSamples(v, at + 8, Math.min(size, bytes.length - at - 8), fmt) };
     at += 8 + size + (size & 1);
   }
   throw new Error('no audio data');
+}
+
+interface WavFormat {
+  channels: number;
+  sampleRate: number;
+  bits: number;
+  format: number;
+}
+
+/** The "fmt " chunk at `at`; with WAVE_FORMAT_EXTENSIBLE the real format is in the subtype. */
+function readFormat(v: DataView, at: number, size: number, fmt: WavFormat): void {
+  fmt.format = v.getUint16(at + 8, true);
+  fmt.channels = v.getUint16(at + 10, true);
+  fmt.sampleRate = v.getUint32(at + 12, true);
+  fmt.bits = v.getUint16(at + 22, true);
+  if (fmt.format === 0xfffe && size >= 26) fmt.format = v.getUint16(at + 32, true);
+}
+
+/** The interleaved samples from `start` (`bytes` long): at most two channels, as floats. */
+function readSamples(v: DataView, start: number, bytes: number, fmt: WavFormat): Float32Array[] {
+  const { channels, bits } = fmt, bps = bits / 8, frames = Math.floor(bytes / (channels * bps));
+  const out = Array.from({ length: Math.min(2, channels) }, () => new Float32Array(frames));
+  const read = sampleReader(v, fmt.format, bits);
+  let o = start;
+  for (let i = 0; i < frames; i++) {
+    for (let c = 0; c < channels; c++, o += bps) if (c < out.length) out[c][i] = read(o);
+  }
+  return out;
 }
 
 /** The parameters the modulations move: all of them, numbers and choices, as in the AudioWorklet. */
@@ -195,14 +208,8 @@ class TrackRender {
     if (!this.audible) return;
     for (let i = 0; i < BLOCK; i++) {
       const t = (frame + i) / sampleRate;
-      let g = this.fader, pan = this.pan;
-      for (const c of this.curves.volume) if (t >= c.start && t < c.end) { const v = c.at(t); g *= v * v; break; }
-      for (const c of this.curves.pan) if (t >= c.start && t < c.end) { pan += c.at(t); break; }
-      pan = Math.max(-1, Math.min(1, pan));
-      // StereoPannerNode with stereo input
-      const x = (pan <= 0 ? pan + 1 : pan) * Math.PI / 2, gl = Math.cos(x), gr = Math.sin(x);
-      const inL = l[i] * g, inR = r[i] * g;
-      const outL = pan <= 0 ? inL + inR * gl : inL * gl, outR = pan <= 0 ? inR * gr : inR + inL * gr;
+      const g = this.volumeAt(t);
+      const { outL, outR } = stereoPan(l[i] * g, r[i] * g, this.panAt(t));
       busL[i] += outL;
       busR[i] += outR;
       if (stem) {
@@ -211,6 +218,26 @@ class TrackRender {
       }
     }
   }
+
+  /** The fader's gain at `t`, times the volume curve playing there (squared, as in the engine). */
+  private volumeAt(t: number): number {
+    const c = this.curves.volume.find(x => t >= x.start && t < x.end);
+    if (!c) return this.fader;
+    const v = c.at(t);
+    return this.fader * (v * v);
+  }
+
+  /** The pan at `t`, with the pan curve playing there, within -1 … +1. */
+  private panAt(t: number): number {
+    const c = this.curves.pan.find(x => t >= x.start && t < x.end);
+    return Math.max(-1, Math.min(1, c ? this.pan + c.at(t) : this.pan));
+  }
+}
+
+/** A StereoPannerNode with stereo input: towards a side the other channel moves into it. */
+function stereoPan(inL: number, inR: number, pan: number): { outL: number; outR: number } {
+  const x = (pan <= 0 ? pan + 1 : pan) * Math.PI / 2, gl = Math.cos(x), gr = Math.sin(x);
+  return pan <= 0 ? { outL: inL + inR * gl, outR: inR * gr } : { outL: inL * gl, outR: inR + inL * gr };
 }
 
 export interface RenderResult {

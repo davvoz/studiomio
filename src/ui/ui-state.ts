@@ -167,7 +167,7 @@ export class UiState {
 
   setSessionRing(ring: SessionRing | null): void {
     const r = this._ring;
-    if (r === ring || (r && ring && r.track === ring.track && r.scene === ring.scene && r.width === ring.width && r.height === ring.height)) return;
+    if (r === ring || (r && r.track === ring?.track && r.scene === ring.scene && r.width === ring.width && r.height === ring.height)) return;
     this._ring = ring;
     this.events.emit('change');
   }
@@ -228,7 +228,7 @@ export class UiState {
 
   setControlledDevice(d: ControlledDevice | null): void {
     const c = this._controlled;
-    if (c === d || (c && d && c.owner === d.owner && c.device === d.device)) return;
+    if (c === d || (c && c.owner === d?.owner && c.device === d.device)) return;
     this._controlled = d;
     this.events.emit('change');
   }

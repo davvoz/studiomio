@@ -222,12 +222,32 @@ class Settings {
   }
 }
 
+/** Where a voice reads in a piece: the region [a, b) and the loop [la, lb) with its crossfade `xf`. */
+interface ReadPlan {
+  a: number;
+  b: number;
+  la: number;
+  lb: number;
+  xf: number;
+  looping: boolean;
+}
+
+/** A reading position held inside the sample [0, last]. */
+function clampToSample(q: number, last: number): number {
+  if (q < 0) return 0;
+  return q > last ? last : q;
+}
+
 class SamplerVoice implements PolyVoice, MonoVoice {
   private readonly amp: CurvedEnv;
   private readonly filterEnv: CurvedEnv;
   private readonly pitchEnv: CurvedEnv;
   private readonly filter: PrismaFilter;
   private readonly bufL = new Float64Array(CONTROL_RATE);
+  /** One sample, left and right (reused). */
+  private readonly frame = new Float64Array(2);
+  /** Where the piece being read reads (reused). */
+  private readonly plan: ReadPlan = { a: 0, b: 0, la: 0, lb: 0, xf: 0, looping: false };
   private readonly bufR = new Float64Array(CONTROL_RATE);
   /** The zone the voice plays, and its sample: it keeps it even if another one arrives in the zone. */
   private zone: Zone;
@@ -365,7 +385,7 @@ class SamplerVoice implements PolyVoice, MonoVoice {
   }
 
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
-    const { amp, bufL, bufR, tailK } = this;
+    const { amp, bufL, bufR, frame } = this;
     for (let i = from; i < to;) {
       if (this.countdown <= 0) this.control();
       const len = Math.min(this.countdown, to - i);
@@ -374,102 +394,120 @@ class SamplerVoice implements PolyVoice, MonoVoice {
       const got = playing ? this.read(len) : 0;
       if (got && this.zone.filterOn) this.filter.process(bufL, bufR, got);
       for (let j = 0; j < len; j++, i++) {
-        let l = 0, r = 0;
-        if (j < got) {
-          const g = amp.next();
-          this.gainL += this.stepL;
-          this.gainR += this.stepR;
-          l = bufL[j] * g * this.gainL;
-          r = bufR[j] * g * this.gainR;
-        }
-        this.lastL = l;
-        this.lastR = r;
-        if (this.tailL !== 0 || this.tailR !== 0) {
-          l += this.tailL;
-          r += this.tailR;
-          this.tailL *= tailK;
-          this.tailR *= tailK;
-          if (Math.abs(this.tailL) < 1e-6 && Math.abs(this.tailR) < 1e-6) this.tailL = this.tailR = 0;
-        }
-        left[i] += l;
-        right[i] += r;
+        this.output(j, got);
+        left[i] += frame[0];
+        right[i] += frame[1];
       }
       if (!this.active) return;
     }
   }
 
+  /** Sample `j` of the piece into `frame`: what was read (if anything) through the volume envelope
+   *  and the gains, plus the tail of a stolen note fading out. */
+  private output(j: number, got: number): void {
+    let l = 0, r = 0;
+    if (j < got) {
+      const g = this.amp.next();
+      this.gainL += this.stepL;
+      this.gainR += this.stepR;
+      l = this.bufL[j] * g * this.gainL;
+      r = this.bufR[j] * g * this.gainR;
+    }
+    this.lastL = l;
+    this.lastR = r;
+    if (this.tailL !== 0 || this.tailR !== 0) {
+      l += this.tailL;
+      r += this.tailR;
+      this.tailL *= this.tailK;
+      this.tailR *= this.tailK;
+      if (Math.abs(this.tailL) < 1e-6 && Math.abs(this.tailR) < 1e-6) this.tailL = this.tailR = 0;
+    }
+    this.frame[0] = l;
+    this.frame[1] = r;
+  }
+
   /** Reads up to `len` samples into the buffers; fewer if the region ends earlier (then the voice is silent). */
   private read(len: number): number {
-    const { s, bufL, bufR, zone } = this;
-    const data = this.data!;
-    const L = data.channels[0], R = data.channels[1] ?? L, stereo = R !== L;
-    const n = L.length, last = n - 1, reverse = zone.reverse;
-    let a: number, b: number;
-    if (this.sliceA >= 0) {
-      a = this.sliceA;
-      b = this.sliceB;
-    } else {
-      a = Math.floor(zone.start * n);
-      b = Math.max(a + 2, Math.min(n, Math.round(zone.end * n)));
-    }
-    // the loop (Classic only): inside the region, at least MIN_LOOP long
-    let la = 0, lb = 0, xf = 0, looping = s.mode === MODE.classic && zone.loop !== LOOP.off && !(this.released && zone.loopExit);
-    if (looping) {
-      la = Math.max(a, Math.min(b - MIN_LOOP, Math.floor(zone.loopStart * n)));
-      lb = Math.max(la + MIN_LOOP, Math.min(b, Math.round(zone.loopEnd * n)));
-      // past the end of the loop (the knob moved it) it goes to the end of the region
-      looping = lb - la >= MIN_LOOP && this.pos <= lb;
-      if (looping && zone.loop === LOOP.forward) xf = Math.min(zone.xfade * (lb - la), la - a);
-    }
-    if (!looping) this.dir = 1;
-    const span = lb - la, pingPong = zone.loop === LOOP.pingPong, speed = this.speed;
-    let pos = this.pos, dir = this.dir;
+    const data = this.data!, plan = this.plan;
+    const L = data.channels[0], R = data.channels[1] ?? L;
+    this.planRead(L.length);
+    if (!plan.looping) this.dir = 1;
     for (let j = 0; j < len; j++) {
-      if (!looping && pos >= b) {
+      if (!plan.looping && this.pos >= plan.b) {
         this.done = true;
-        this.pos = pos;
         return j;
       }
-      let q = reverse ? last - pos : pos;
-      if (q < 0) q = 0;
-      else if (q > last) q = last;
-      let k = Math.floor(q), f = q - k;
-      let l = hermite(L, k, f), r = stereo ? hermite(R, k, f) : l;
-      if (xf > 0 && pos > lb - xf) {
-        // the end of the loop fades into the piece before its start: at the wrap it arrives there
-        const t = (pos - (lb - xf)) / xf, p2 = pos - span;
-        q = reverse ? last - p2 : p2;
-        k = Math.floor(q);
-        f = q - k;
-        const gOut = Math.sqrt(1 - t), gIn = Math.sqrt(t);
-        l = l * gOut + hermite(L, k, f) * gIn;
-        r = stereo ? r * gOut + hermite(R, k, f) * gIn : l;
-      }
-      if (!looping) {
-        const tail = b - pos;
-        if (tail < END_FADE) {
-          l *= tail / END_FADE;
-          r *= tail / END_FADE;
-        }
-      }
-      bufL[j] = l;
-      bufR[j] = r;
-      pos += dir * speed;
-      if (looping) {
-        if (pingPong) {
-          if (dir > 0 && pos >= lb) {
-            pos = Math.max(la, 2 * lb - pos);
-            dir = -1;
-          } else if (dir < 0 && pos <= la) {
-            pos = Math.min(lb, 2 * la - pos);
-            dir = 1;
-          }
-        } else if (pos >= lb) pos = Math.max(la, pos - span);
-      }
+      this.readAt(L, R, this.pos);
+      this.bufL[j] = this.frame[0];
+      this.bufR[j] = this.frame[1];
+      this.pos += this.dir * this.speed;
+      if (plan.looping) this.wrapLoop();
     }
-    this.pos = pos;
-    this.dir = dir;
     return len;
+  }
+
+  /** Where this piece reads, from `n` samples: the region (or the slice) and, in Classic, the loop
+   *  inside it, at least MIN_LOOP long. */
+  private planRead(n: number): void {
+    const { s, zone, plan } = this;
+    if (this.sliceA >= 0) {
+      plan.a = this.sliceA;
+      plan.b = this.sliceB;
+    } else {
+      plan.a = Math.floor(zone.start * n);
+      plan.b = Math.max(plan.a + 2, Math.min(n, Math.round(zone.end * n)));
+    }
+    plan.la = plan.lb = plan.xf = 0;
+    plan.looping = s.mode === MODE.classic && zone.loop !== LOOP.off && !(this.released && zone.loopExit);
+    if (!plan.looping) return;
+    const { a, b } = plan;
+    plan.la = Math.max(a, Math.min(b - MIN_LOOP, Math.floor(zone.loopStart * n)));
+    plan.lb = Math.max(plan.la + MIN_LOOP, Math.min(b, Math.round(zone.loopEnd * n)));
+    // past the end of the loop (the knob moved it) it goes to the end of the region
+    plan.looping = plan.lb - plan.la >= MIN_LOOP && this.pos <= plan.lb;
+    if (plan.looping && zone.loop === LOOP.forward) plan.xf = Math.min(zone.xfade * (plan.lb - plan.la), plan.la - a);
+  }
+
+  /** The sample at position `pos` (reversed if the zone says so) into `frame`, with the loop's
+   *  crossfade and, without a loop, the fade before the region's end. */
+  private readAt(L: Float32Array, R: Float32Array, pos: number): void {
+    const plan = this.plan, last = L.length - 1, stereo = R !== L;
+    const q = clampToSample(this.zone.reverse ? last - pos : pos, last);
+    const k = Math.floor(q), f = q - k;
+    this.frame[0] = hermite(L, k, f);
+    this.frame[1] = stereo ? hermite(R, k, f) : this.frame[0];
+    if (plan.xf > 0 && pos > plan.lb - plan.xf) this.crossfadeLoop(L, R, pos);
+    if (plan.looping) return;
+    const tail = plan.b - pos;
+    if (tail < END_FADE) {
+      this.frame[0] *= tail / END_FADE;
+      this.frame[1] *= tail / END_FADE;
+    }
+  }
+
+  /** The end of the loop fades into the piece before its start: at the wrap it arrives there. */
+  private crossfadeLoop(L: Float32Array, R: Float32Array, pos: number): void {
+    const { plan, frame } = this, last = L.length - 1, stereo = R !== L;
+    const t = (pos - (plan.lb - plan.xf)) / plan.xf, p2 = pos - (plan.lb - plan.la);
+    const q = this.zone.reverse ? last - p2 : p2;
+    const k = Math.floor(q), f = q - k;
+    const gOut = Math.sqrt(1 - t), gIn = Math.sqrt(t);
+    frame[0] = frame[0] * gOut + hermite(L, k, f) * gIn;
+    frame[1] = stereo ? frame[1] * gOut + hermite(R, k, f) * gIn : frame[0];
+  }
+
+  /** At the loop's end: forward it goes back by the loop's length, ping-pong it turns round. */
+  private wrapLoop(): void {
+    const { plan } = this, la = plan.la, lb = plan.lb;
+    if (this.zone.loop !== LOOP.pingPong) {
+      if (this.pos >= lb) this.pos = Math.max(la, this.pos - (lb - la));
+    } else if (this.dir > 0 && this.pos >= lb) {
+      this.pos = Math.max(la, 2 * lb - this.pos);
+      this.dir = -1;
+    } else if (this.dir < 0 && this.pos <= la) {
+      this.pos = Math.min(lb, 2 * la - this.pos);
+      this.dir = 1;
+    }
   }
 
   /** Every CONTROL_RATE samples: glide, filter and pitch envelopes, LFO, reading speed,
@@ -565,7 +603,7 @@ export class SamplerCore implements InstrumentCore, SamplePlayer {
   setSample(slot: string, sample: SampleData | null): void {
     const i = zoneOfSlot(slot);
     if (i < 0) return;
-    this.settings.zones[i].sample = sample && sample.channels.length && sample.channels[0].length > 1 ? sample : null;
+    this.settings.zones[i].sample = sample?.channels.length && sample.channels[0].length > 1 ? sample : null;
   }
 
   noteOn(id: number, pitch: number, velocity: number): void {

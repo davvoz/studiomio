@@ -31,7 +31,7 @@ export function htmlToText(html: string): string {
     .replace(/<li[^>]*>/gi, '\n• ')
     .replace(/<br\s*\/?>|<\/(p|h\d|li|ul|ol|div)>/gi, '\n')
     .replace(/<[^>]*>/g, '')
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(Number(dec)))
     .replace(/&(lt|gt|quot|apos|nbsp|amp);/g, (_, name: string) => ENTITIES[name])
     .split('\n')

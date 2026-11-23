@@ -40,6 +40,21 @@ export interface WaveHost {
 
 const round = (pct: number) => Math.round(pct * 1000) / 1000;
 
+/** What a paint draws with: the context, the size, the knobs, the waveform's band (`top` …
+ *  `bottom`, around `mid`, `amp` tall) and the region (`a` … `b`, fractions of the sample). */
+interface WaveFrame {
+  readonly g: CanvasRenderingContext2D;
+  readonly w: number;
+  readonly h: number;
+  readonly v: Readonly<Record<string, number>>;
+  readonly top: number;
+  readonly bottom: number;
+  readonly mid: number;
+  readonly amp: number;
+  readonly a: number;
+  readonly b: number;
+}
+
 export class WaveView {
   readonly canvas = document.createElement('canvas');
   private v0 = 0;
@@ -255,11 +270,33 @@ export class WaveView {
     const data = this.host.audio();
     if (!data) return this.empty(g, w, h);
     const v = this.host.values();
-    const top = TOP, bottom = h - BOTTOM, mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 1;
-    const a = v.start / 100, b = v.end / 100;
+    const top = TOP, bottom = h - BOTTOM;
+    const f: WaveFrame = { g, w, h, v, top, bottom, mid: (top + bottom) / 2, amp: (bottom - top) / 2 - 1, a: v.start / 100, b: v.end / 100 };
     g.globalAlpha = this.enabled ? 1 : 0.5;
+    this.paintStrips(f);
+    const looping = this.looping(v);
+    if (looping) this.paintLoop(f);
+    this.paintWave(f, data);
+    // outside the region, a veil
+    g.fillStyle = 'rgba(0,0,0,0.25)';
+    const xa = this.xOf(f.a), xb = this.xOf(f.b);
+    if (xa > 0) g.fillRect(0, top, xa, bottom - top);
+    if (xb < w) g.fillRect(xb, top, w - xb, bottom - top);
+    if (v.mode === MODE.slice) this.paintSlices(f);
+    // Start and End, then the loop markers
+    this.flag(f, 'start', xa, START_COLOR, 'S', 'top');
+    this.flag(f, 'end', xb, START_COLOR, 'E', 'top');
+    if (looping) {
+      this.flag(f, 'loopStart', this.xOf(v.loopStart / 100), LOOP_COLOR, 'L', 'bottom');
+      this.flag(f, 'loopEnd', this.xOf(v.loopEnd / 100), LOOP_COLOR, 'L', 'bottom');
+    }
+    this.paintHeads(f);
+    g.globalAlpha = 1;
+    this.paintFooter(f);
+  }
 
-    // the marker strips and the zero line
+  /** The marker strips and the zero line. */
+  private paintStrips({ g, w, top, bottom, mid }: WaveFrame): void {
     g.fillStyle = 'rgba(255,255,255,0.03)';
     g.fillRect(0, 0, w, top);
     g.fillRect(0, bottom, w, BOTTOM);
@@ -268,36 +305,34 @@ export class WaveView {
     g.moveTo(0, Math.round(mid) + 0.5);
     g.lineTo(w, Math.round(mid) + 0.5);
     g.stroke();
+  }
 
-    // the loop under the waveform
-    const looping = this.looping(v);
-    if (looping) {
-      const la = Math.max(a, v.loopStart / 100), lb = Math.min(b, v.loopEnd / 100);
-      const x0 = this.xOf(la), x1 = this.xOf(lb);
-      if (x1 > x0) {
-        g.fillStyle = 'rgba(242,209,75,0.08)';
-        g.fillRect(x0, top, x1 - x0, bottom - top);
-        g.fillStyle = this.hot === 'loop' ? 'rgba(242,209,75,0.55)' : 'rgba(242,209,75,0.32)';
-        g.fillRect(x0, bottom + 2, x1 - x0, BOTTOM - 4);
-        if (v.loop === LOOP.forward && v.xfade > 0) {
-          // the crossfade: the end of the loop falls while the piece before the start rises
-          const span = lb - la, xf = Math.min((v.xfade / 100) * span, la - a);
-          if (xf > 0) {
-            g.strokeStyle = 'rgba(242,209,75,0.6)';
-            g.setLineDash([3, 3]);
-            g.beginPath();
-            g.moveTo(this.xOf(lb - xf), top);
-            g.lineTo(x1, bottom);
-            g.moveTo(this.xOf(la - xf), bottom);
-            g.lineTo(x0, top);
-            g.stroke();
-            g.setLineDash([]);
-          }
-        }
-      }
-    }
+  /** The loop under the waveform, with its crossfade (the end of the loop falls while the piece
+   *  before the start rises). */
+  private paintLoop({ g, v, top, bottom, a, b }: WaveFrame): void {
+    const la = Math.max(a, v.loopStart / 100), lb = Math.min(b, v.loopEnd / 100);
+    const x0 = this.xOf(la), x1 = this.xOf(lb);
+    if (x1 <= x0) return;
+    g.fillStyle = 'rgba(242,209,75,0.08)';
+    g.fillRect(x0, top, x1 - x0, bottom - top);
+    g.fillStyle = this.hot === 'loop' ? 'rgba(242,209,75,0.55)' : 'rgba(242,209,75,0.32)';
+    g.fillRect(x0, bottom + 2, x1 - x0, BOTTOM - 4);
+    if (v.loop !== LOOP.forward || v.xfade <= 0) return;
+    const span = lb - la, xf = Math.min((v.xfade / 100) * span, la - a);
+    if (xf <= 0) return;
+    g.strokeStyle = 'rgba(242,209,75,0.6)';
+    g.setLineDash([3, 3]);
+    g.beginPath();
+    g.moveTo(this.xOf(lb - xf), top);
+    g.lineTo(x1, bottom);
+    g.moveTo(this.xOf(la - xf), bottom);
+    g.lineTo(x0, top);
+    g.stroke();
+    g.setLineDash([]);
+  }
 
-    // the waveform: lit in the playing region
+  /** The waveform: lit in the playing region. */
+  private paintWave({ g, w, v, mid, amp, a, b }: WaveFrame, data: SampleData): void {
     const peaks = this.peaksOf(data, v.reverse === 1), seconds = data.channels[0].length / data.sampleRate;
     const spanX = (this.v1 - this.v0) / Math.max(1, w);
     for (let x = 0; x < w; x++) {
@@ -307,44 +342,32 @@ export class WaveView {
       g.fillStyle = f1 > a && f0 < b ? WAVE_ON : WAVE_OFF;
       g.fillRect(x, y0, 1, Math.max(1, y1 - y0));
     }
-    // outside the region, a veil
-    g.fillStyle = 'rgba(0,0,0,0.25)';
-    const xa = this.xOf(a), xb = this.xOf(b);
-    if (xa > 0) g.fillRect(0, top, xa, bottom - top);
-    if (xb < w) g.fillRect(xb, top, w - xb, bottom - top);
+  }
 
-    // the slices
-    if (v.mode === MODE.slice) {
-      const starts = sliceStarts(v);
-      g.font = '9px system-ui, sans-serif';
-      starts.forEach((s, i) => {
-        const x = Math.round(this.xOf(s)) + 0.5;
-        if (x < -40 || x > w + 1) return;
-        const hot = this.hot && this.hot !== 'loop' && this.hot.kind === 'slice' && Math.abs(v[sliceParam(this.hot.param)] - s) < 1e-9;
-        if (hot) g.strokeStyle = '#fff';
-        else g.strokeStyle = i === 0 ? 'rgba(79,209,224,0.35)' : 'rgba(79,209,224,0.7)';
-        g.beginPath();
-        g.moveTo(x, top);
-        g.lineTo(x, bottom);
-        g.stroke();
-        if (i > 0) {
-          g.fillStyle = hot ? '#fff' : SLICE_COLOR;
-          g.fillRect(x - 0.5, 1, 1, top - 2);
-        }
-        g.fillStyle = 'rgba(79,209,224,0.9)';
-        g.fillText(String(i + 1), x + 3, top + 10);
-      });
-    }
+  /** The slices: a line each, numbered, with its handle at the top (not the first). */
+  private paintSlices({ g, w, v, top, bottom }: WaveFrame): void {
+    g.font = '9px system-ui, sans-serif';
+    sliceStarts(v).forEach((s, i) => {
+      const x = Math.round(this.xOf(s)) + 0.5;
+      if (x < -40 || x > w + 1) return;
+      const hot = this.hot && this.hot !== 'loop' && this.hot.kind === 'slice' && Math.abs(v[sliceParam(this.hot.param)] - s) < 1e-9;
+      if (hot) g.strokeStyle = '#fff';
+      else g.strokeStyle = i === 0 ? 'rgba(79,209,224,0.35)' : 'rgba(79,209,224,0.7)';
+      g.beginPath();
+      g.moveTo(x, top);
+      g.lineTo(x, bottom);
+      g.stroke();
+      if (i > 0) {
+        g.fillStyle = hot ? '#fff' : SLICE_COLOR;
+        g.fillRect(x - 0.5, 1, 1, top - 2);
+      }
+      g.fillStyle = 'rgba(79,209,224,0.9)';
+      g.fillText(String(i + 1), x + 3, top + 10);
+    });
+  }
 
-    // Start and End, then the loop markers
-    this.flag(g, 'start', xa, top, bottom, START_COLOR, 'S', 'top');
-    this.flag(g, 'end', xb, top, bottom, START_COLOR, 'E', 'top');
-    if (looping) {
-      this.flag(g, 'loopStart', this.xOf(v.loopStart / 100), top, bottom, LOOP_COLOR, 'L', 'bottom');
-      this.flag(g, 'loopEnd', this.xOf(v.loopEnd / 100), top, bottom, LOOP_COLOR, 'L', 'bottom');
-    }
-
-    // the playing voices
+  /** The playing voices. */
+  private paintHeads({ g, w, top, bottom }: WaveFrame): void {
     g.strokeStyle = 'rgba(255,255,255,0.9)';
     for (const p of this.heads) {
       const x = Math.round(this.xOf(p)) + 0.5;
@@ -354,9 +377,10 @@ export class WaveView {
       g.lineTo(x, bottom);
       g.stroke();
     }
+  }
 
-    g.globalAlpha = 1;
-    // the zoom: where you are in the sample
+  /** The zoom (where you are in the sample) and, slicing by transients with none found, how to get some. */
+  private paintFooter({ g, w, h, v, top }: WaveFrame): void {
     if (this.v1 - this.v0 < 0.999) {
       g.fillStyle = 'rgba(255,255,255,0.25)';
       g.fillRect(this.v0 * w, h - 2, Math.max(2, (this.v1 - this.v0) * w), 2);
@@ -370,7 +394,7 @@ export class WaveView {
     }
   }
 
-  private flag(g: CanvasRenderingContext2D, kind: Marker['kind'], x: number, top: number, bottom: number, color: string, text: string, at: 'top' | 'bottom'): void {
+  private flag({ g, top, bottom }: WaveFrame, kind: Marker['kind'], x: number, color: string, text: string, at: 'top' | 'bottom'): void {
     const w = this.width;
     if (x < -10 || x > w + 10) return;
     const hot = this.hot && this.hot !== 'loop' && this.hot.kind === kind;

@@ -11,7 +11,7 @@ export const LFO_SHAPE = { sine: 0, triangle: 1, sawDown: 2, sawUp: 3, square: 4
 
 /** A random value in −1..1 for cycle `cycle` (always the same for the same cycle and seed). */
 export function cycleRandom(cycle: number, seed = 0): number {
-  let h = (Math.floor(cycle) ^ Math.imul(seed, 0x9e3779b1)) | 0;
+  let h = Math.floor(cycle) ^ Math.imul(seed, 0x9e3779b1);
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   h ^= h >>> 16;

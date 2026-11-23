@@ -22,6 +22,60 @@ function reversed(points: readonly LfoPoint[]): LfoPoint[] {
   return points.map((_, i) => ({ x: 1 - points[n - 1 - i].x, y: points[n - 1 - i].y, curve: i < n - 1 ? -points[n - 2 - i].curve : 0 }));
 }
 
+/** The drawing area: its size and where a value (0…1 across, 0…1 up) falls. */
+interface Box {
+  readonly w: number;
+  readonly h: number;
+  x(u: number): number;
+  y(v: number): number;
+}
+
+/** The grid: the drawing grid's columns (4 without it) and the bottom, middle and top lines. */
+function paintGrid(g: CanvasRenderingContext2D, b: Box): void {
+  g.lineWidth = 1;
+  g.strokeStyle = GRID;
+  const columns = grid || 4;
+  for (let i = 0; i <= columns; i++) {
+    const x = Math.round(b.x(i / columns)) + 0.5;
+    g.beginPath();
+    g.moveTo(x, b.y(1));
+    g.lineTo(x, b.y(0));
+    g.stroke();
+  }
+  for (const v of [0, 0.5, 1]) {
+    const y = Math.round(b.y(v)) + 0.5;
+    g.beginPath();
+    g.moveTo(b.x(0), y);
+    g.lineTo(b.x(1), y);
+    g.stroke();
+  }
+}
+
+/** The LFO's value along its cycle: the drawn points, a random shape (a fixed example), or the shape. */
+function curveOf(shape: number, points: readonly LfoPoint[] | null): (p: number) => number {
+  if (points) return p => drawnValue(points, p);
+  if (isRandomShape(shape)) return p => randomValue(shape, Math.floor(p * 8) + 11, (p * 8) % 1);
+  return p => shapeValue(shape, p);
+}
+
+/** The curve, filled below; the steps (two points at the same x) are drawn vertical. */
+function paintCurve(g: CanvasRenderingContext2D, b: Box, value: (p: number) => number): void {
+  const line = new Path2D(), steps = Math.max(64, Math.round(b.w));
+  for (let i = 0; i <= steps; i++) {
+    const p = Math.min(0.99999, i / steps), x = b.x(p), y = b.y(value(p));
+    if (i) line.lineTo(x, y);
+    else line.moveTo(x, y);
+  }
+  const fill = new Path2D(line);
+  fill.lineTo(b.x(1), b.y(0));
+  fill.lineTo(b.x(0), b.y(0));
+  g.fillStyle = 'rgba(76,184,255,0.12)';
+  g.fill(fill);
+  g.strokeStyle = '#4cb8ff';
+  g.lineWidth = 2;
+  g.stroke(line);
+}
+
 export class LfoEditor {
   readonly canvas = el<HTMLCanvasElement>('canvas', {
     className: 'prisma-lfo', title: 'Click: add a point · drag points and dots (curves) · double click: remove the point or straighten the segment · Shift: without grid',
@@ -78,7 +132,7 @@ export class LfoEditor {
     this.set({ [`l${this.lfo}Shape`]: LFO_SHAPE.drawn, ...pointValues(this.lfo, points) }, final);
   }
 
-  private box() {
+  private box(): Box {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     return { w, h, x: (u: number) => PAD + u * (w - 2 * PAD), y: (v: number) => h - PAD - v * (h - 2 * PAD - 10) };
   }
@@ -185,65 +239,34 @@ export class LfoEditor {
     const b = this.box(), shape = this.shape, points = this.points();
     g.fillStyle = BACKGROUND;
     g.fillRect(0, 0, b.w, b.h);
-    g.lineWidth = 1;
-    g.strokeStyle = GRID;
-    const columns = grid || 4;
-    for (let i = 0; i <= columns; i++) {
-      const x = Math.round(b.x(i / columns)) + 0.5;
-      g.beginPath();
-      g.moveTo(x, b.y(1));
-      g.lineTo(x, b.y(0));
-      g.stroke();
-    }
-    for (const v of [0, 0.5, 1]) {
-      const y = Math.round(b.y(v)) + 0.5;
-      g.beginPath();
-      g.moveTo(b.x(0), y);
-      g.lineTo(b.x(1), y);
-      g.stroke();
-    }
+    paintGrid(g, b);
     g.globalAlpha = enabled ? 1 : 0.5;
-    let value = (p: number) => shapeValue(shape, p);
-    if (points) value = p => drawnValue(points, p);
-    else if (isRandomShape(shape)) value = p => randomValue(shape, Math.floor(p * 8) + 11, (p * 8) % 1);
-    const line = new Path2D(), steps = Math.max(64, Math.round(b.w));
-    for (let i = 0; i <= steps; i++) {
-      // the steps (two points at the same x) are drawn vertical
-      const p = Math.min(0.99999, i / steps), x = b.x(p), y = b.y(value(p));
-      if (i) line.lineTo(x, y);
-      else line.moveTo(x, y);
-    }
-    const fill = new Path2D(line);
-    fill.lineTo(b.x(1), b.y(0));
-    fill.lineTo(b.x(0), b.y(0));
-    g.fillStyle = 'rgba(76,184,255,0.12)';
-    g.fill(fill);
-    g.strokeStyle = '#4cb8ff';
-    g.lineWidth = 2;
-    g.stroke(line);
+    paintCurve(g, b, curveOf(shape, points));
     const shown = points ?? (isRandomShape(shape) ? null : pointsForShape(shape));
-    if (shown) {
-      shown.forEach((p, i) => {
-        const hot = this.hot?.kind === 'point' && this.hot.index === i;
-        g.beginPath();
-        g.arc(b.x(p.x), b.y(p.y), POINT, 0, 2 * Math.PI);
-        if (hot) g.fillStyle = '#fff';
-        else g.fillStyle = points ? ACCENT : 'rgba(255,157,46,0.4)';
-        g.fill();
-      });
-      if (points) {
-        for (let i = 0; i < points.length - 1; i++) {
-          const [cx, cy] = this.curveHandle(points, i), hot = this.hot?.kind === 'curve' && this.hot.index === i;
-          g.beginPath();
-          g.arc(b.x(cx), b.y(cy), POINT - 1.5, 0, 2 * Math.PI);
-          g.fillStyle = hot ? '#fff' : 'rgba(255,255,255,0.4)';
-          g.fill();
-        }
-      }
-    }
+    if (shown) this.paintPoints(g, b, shown, points);
     g.globalAlpha = 1;
     g.font = '10px system-ui, sans-serif';
     g.fillStyle = LABEL;
     g.fillText(`LFO ${this.lfo} · ${LFO_SHAPES[shape] ?? ''}${points ? ` · ${points.length} points` : ''}`, 6, 12);
+  }
+
+  /** The points (the shape's, faded, when it isn't drawn) and the curve handles between drawn points. */
+  private paintPoints(g: CanvasRenderingContext2D, b: Box, shown: readonly LfoPoint[], points: readonly LfoPoint[] | null): void {
+    shown.forEach((p, i) => {
+      const hot = this.hot?.kind === 'point' && this.hot.index === i;
+      g.beginPath();
+      g.arc(b.x(p.x), b.y(p.y), POINT, 0, 2 * Math.PI);
+      if (hot) g.fillStyle = '#fff';
+      else g.fillStyle = points ? ACCENT : 'rgba(255,157,46,0.4)';
+      g.fill();
+    });
+    if (!points) return;
+    for (let i = 0; i < points.length - 1; i++) {
+      const [cx, cy] = this.curveHandle(points, i), hot = this.hot?.kind === 'curve' && this.hot.index === i;
+      g.beginPath();
+      g.arc(b.x(cx), b.y(cy), POINT - 1.5, 0, 2 * Math.PI);
+      g.fillStyle = hot ? '#fff' : 'rgba(255,255,255,0.4)';
+      g.fill();
+    }
   }
 }

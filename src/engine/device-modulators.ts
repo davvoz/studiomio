@@ -81,7 +81,10 @@ class Modulator {
       const key = channel ? `${param}|${channel}` : param;
       const line = () => {
         let entry = this.lines.get(key);
-        if (!entry) this.lines.set(key, (entry = { param, line: new ModTimeline(0) }));
+        if (!entry) {
+          entry = { param, line: new ModTimeline(0) };
+          this.lines.set(key, entry);
+        }
         return entry.line;
       };
       return {
@@ -205,7 +208,7 @@ export class ChainModulators implements ScheduledSource {
       if (!type?.modulator) continue;
       order.push(e.id);
       const m = this.mods.get(e.id);
-      if (m && m.type === type) {
+      if (m?.type === type) {
         if (m.settings !== e) {
           m.update(e);
           changed = true;
@@ -253,7 +256,10 @@ export class ChainModulators implements ScheduledSource {
       if (!m.settings.enabled || !m.settings.targets?.some(t => t)) continue;
       const trig = m.values.trig;
       const byNotes = m.isEnvelope ? trig === ENV_TRIG.note : trig !== LFO_TRIG.free;
-      if (byNotes) m.addTriggers((hits ??= this.notes(w)));
+      if (byNotes) {
+        hits ??= this.notes(w);
+        m.addTriggers(hits);
+      }
       else if (m.isEnvelope) m.addTriggers(tempoHits(m, w));
       this.play(m, grid);
     }
@@ -329,7 +335,10 @@ export class ChainModulators implements ScheduledSource {
 
   private segmentsOf(p: Placement<MidiClip>): Segment[] {
     let s = this.segments.get(p);
-    if (!s) this.segments.set(p, (s = placementSegments(p)));
+    if (!s) {
+      s = placementSegments(p);
+      this.segments.set(p, s);
+    }
     return s;
   }
 }

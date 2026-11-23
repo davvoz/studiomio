@@ -71,13 +71,16 @@ interface Table {
 const builtIn = new Map<number, Table>();
 const builtInTable = (i: number): Table => {
   let t = builtIn.get(i);
-  if (!t) builtIn.set(i, (t = { data: wavetable(i), frames: FRAMES }));
+  if (!t) {
+    t = { data: wavetable(i), frames: FRAMES };
+    builtIn.set(i, t);
+  }
   return t;
 };
 
 /** The table's sample (shape `base` and the next one, at `next`; `fx` between the two) at `p`. */
 function lookup(data: Float32Array, base: number, next: number, fx: number, p: number): number {
-  const idx = p * TABLE_SIZE, i = idx | 0, t = idx - i;
+  const idx = p * TABLE_SIZE, i = Math.trunc(idx), t = idx - i;
   const a = base + i, b = a + next;
   const a0 = data[a], b0 = data[b];
   const av = a0 + (data[a + 1] - a0) * t, bv = b0 + (data[b + 1] - b0) * t;
@@ -323,6 +326,191 @@ interface MutableShape {
   attackCurve: number; decayCurve: number; releaseCurve: number;
 }
 
+/** The warp's constant for `amount` `a` (the sync ratio, the bend's fold…) into `o.warpK`; returns
+ *  how much faster the warp reads the table (to choose the version without aliasing). */
+function setWarpConstant(o: OscState, warp: number, a: number): number {
+  switch (warp) {
+    case WARP.sync: case WARP.softSync:
+      o.warpK = 1 + 15 * a;
+      return o.warpK;
+    case WARP.bendUp:
+      o.warpK = Math.pow(2, -4 * a);
+      return 1 / o.warpK;
+    case WARP.bendDown:
+      o.warpK = Math.pow(2, 4 * a);
+      return o.warpK;
+    case WARP.bendBoth:
+      o.warpK = Math.pow(2, -4 * a);
+      return 2 / o.warpK;
+    case WARP.pwm:
+      o.warpK = 1 - 0.95 * a;
+      return 1 / o.warpK;
+    case WARP.asymUp: case WARP.asymDown:
+      o.warpK = warp === WARP.asymUp ? 0.5 + 0.48 * a : 0.5 - 0.48 * a;
+      return 0.5 / Math.min(o.warpK, 1 - o.warpK);
+    case WARP.quantize:
+      o.warpK = Math.pow(2, 10 - 9 * a);
+      return 1;
+    case WARP.fm: case WARP.subFm:
+      return 1 + 6 * a;
+    case WARP.mirror: case WARP.am: case WARP.rm:
+      return a > 0 ? 2 : 1;
+    default:
+      return 1;
+  }
+}
+
+/** How an oscillator's copies read its table in a piece: filled before the copies, one object per
+ *  voice reused (no allocations in the audio thread). */
+class TableRead {
+  data: Float32Array = new Float32Array(0);
+  next = 0;
+  maxFrame = 0;
+  levelOffset = 0;
+  single = true;
+  warp = 0;
+  a = 0;
+  k1 = 1;
+  /** The middle copy of the other oscillator (or the sub): the crossed warps' modulator. */
+  cross: Float64Array | null = null;
+}
+
+/** How far into the shape after `f` position `x` is (0 with a single shape; at most 1). */
+const frameFraction = (x: number, f: number, single: boolean) => (single ? 0 : Math.min(1, x - f));
+
+/** Copy `k` of an oscillator without warp: only the reading, panned. */
+function readPlain(o: OscState, k: number, r: TableRead, len: number, outL: Float64Array, outR: Float64Array, raw: Float64Array): void {
+  const dt = o.dts[k], st = o.steps[k], pl = o.panL[k], pr = o.panR[k], center = k === o.center;
+  const gs = o.gainStep, ps = o.phaseStep;
+  let ph = o.phases[k], x = o.frames[k], g = o.gain, po = o.phaseOff;
+  for (let j = 0; j < len; j++) {
+    x += st;
+    g += gs;
+    po += ps;
+    const f = Math.min(Math.trunc(x), r.maxFrame);
+    let p = ph + po;
+    if (p >= 1) p -= 1;
+    const v = lookup(r.data, f * FRAME_STRIDE + r.levelOffset, r.next, frameFraction(x, f, r.single), p);
+    if (center) raw[j] = v;
+    outL[j] += v * g * pl;
+    outR[j] += v * g * pr;
+    ph += dt;
+    if (ph >= 1) ph -= 1;
+  }
+  o.phases[k] = ph;
+  o.frames[k] = x;
+}
+
+/** Copy `k` of an oscillator with the warp. */
+function readWarped(o: OscState, k: number, r: TableRead, len: number, outL: Float64Array, outR: Float64Array, raw: Float64Array): void {
+  const dt = o.dts[k], st = o.steps[k], pl = o.panL[k], pr = o.panR[k], center = k === o.center;
+  const gs = o.gainStep, ps = o.phaseStep, cross = r.cross;
+  let ph = o.phases[k], x = o.frames[k], g = o.gain, po = o.phaseOff;
+  for (let j = 0; j < len; j++) {
+    x += st;
+    g += gs;
+    po += ps;
+    const f = Math.min(Math.trunc(x), r.maxFrame);
+    let p = ph + po;
+    if (p >= 1) p -= 1;
+    let v = warped(r, f * FRAME_STRIDE + r.levelOffset, frameFraction(x, f, r.single), p, dt, cross ? cross[j] : 0);
+    if (center) raw[j] = v;
+    v *= g;
+    outL[j] += v * pl;
+    outR[j] += v * pr;
+    ph += dt;
+    if (ph >= 1) ph -= 1;
+  }
+  o.phases[k] = ph;
+  o.frames[k] = x;
+}
+
+/** The table read at phase `p` through the warp (`base`: the shape, `fx` towards the next one; `dt`
+ *  the copy's step, for the sync's PolyBLEP; `m` the modulator's sample, for the crossed warps).
+ *  The warps that bend the phase here, the others in `reshaped`: small enough to stay fast. */
+function warped(r: TableRead, base: number, fx: number, p: number, dt: number, m: number): number {
+  const { data, next, k1 } = r;
+  switch (r.warp) {
+    case WARP.sync: return syncRead(r, base, fx, p, dt);
+    case WARP.softSync: {
+      let q = p * k1;
+      q -= Math.floor(q);
+      // the window goes to zero at the restart: no step
+      return lookup(data, base, next, fx, q) * 4 * p * (1 - p);
+    }
+    case WARP.bendUp: case WARP.bendDown:
+      return lookup(data, base, next, fx, p / (p + (1 - p) * k1));
+    case WARP.bendBoth:
+      return lookup(data, base, next, fx, bendBothPhase(p, k1));
+    case WARP.asymUp: case WARP.asymDown:
+      return lookup(data, base, next, fx, asymPhase(p, k1));
+    default:
+      return reshaped(r, base, fx, p, m);
+  }
+}
+
+/** The warps that change the shape's level or read it twice: pulse width, mirror, flip,
+ *  quantize and the crossed ones (FM, AM, ring). */
+function reshaped(r: TableRead, base: number, fx: number, p: number, m: number): number {
+  const { data, next, a, k1 } = r;
+  switch (r.warp) {
+    case WARP.pwm:
+      return p < k1 ? lookup(data, base, next, fx, p / k1) : 0;
+    case WARP.mirror:
+      return lookup(data, base, next, fx, p) * (1 - a) + lookup(data, base, next, fx, mirrorPhase(p)) * a;
+    case WARP.flip: {
+      const v = lookup(data, base, next, fx, p);
+      return p >= 1 - a ? -v : v;
+    }
+    case WARP.quantize:
+      return Math.round(lookup(data, base, next, fx, p) * k1) / k1;
+    case WARP.fm: case WARP.subFm: {
+      let q = p + 2 * a * m;
+      q -= Math.floor(q);
+      return lookup(data, base, next, fx, q);
+    }
+    case WARP.am:
+      return lookup(data, base, next, fx, p) * (1 - a + a * (0.5 + 0.5 * m));
+    case WARP.rm:
+      return lookup(data, base, next, fx, p) * (1 - a + a * m);
+    default:
+      return lookup(data, base, next, fx, p);
+  }
+}
+
+/** Hard sync: the table restarts `k1` times a cycle. The restart is a step (from where the reading
+ *  had got to back to the start): PolyBLEP rounds it off in the samples around, as in the sync of
+ *  virtual analogue synths. */
+function syncRead(r: TableRead, base: number, fx: number, p: number, dt: number): number {
+  const { data, next, k1 } = r;
+  let q = p * k1;
+  q -= Math.floor(q);
+  let v = lookup(data, base, next, fx, q);
+  if (p < dt || p > 1 - dt) {
+    const end = Math.min(0.99999, k1 - Math.floor(k1));
+    v += 0.5 * (lookup(data, base, next, fx, 0) - lookup(data, base, next, fx, end)) * polyBlep(p, dt);
+  }
+  return v;
+}
+
+/** Bend both: each half of the cycle bent the opposite way. */
+function bendBothPhase(p: number, k1: number): number {
+  const first = p < 0.5, h = first ? 2 * p : 2 * p - 1, e = first ? k1 : 1 / k1;
+  return Math.min(0.99999, (first ? 0 : 0.5) + 0.5 * (h / (h + (1 - h) * e)));
+}
+
+/** Asymmetry: the first half of the shape in `k1` of the cycle, the second in the rest. */
+const asymPhase = (p: number, k1: number) => (p < k1 ? (0.5 * p) / k1 : 0.5 + (0.5 * (p - k1)) / (1 - k1));
+
+/** Mirror: the shape there and back in one cycle. */
+const mirrorPhase = (p: number) => Math.min(0.99999, p < 0.5 ? 2 * p : 2 - 2 * p);
+
+/** How open an LFO is at `age`: from its delay it opens in "rise" seconds. */
+function lfoFade(l: LfoSettings, age: number): number {
+  if (l.rise <= 0.0011) return 1;
+  return clamp01((age - (l.delay <= 0.0011 ? 0 : l.delay)) / l.rise);
+}
+
 class PrismaVoice implements PolyVoice, MonoVoice {
   /** Env 1 is the volume, at full rate; the others run at the control rate. */
   private readonly envs: CurvedEnv[];
@@ -345,6 +533,8 @@ class PrismaVoice implements PolyVoice, MonoVoice {
   private readonly oscL = [buffer(), buffer()];
   private readonly oscR = [buffer(), buffer()];
   private readonly raw = [buffer(), buffer()];
+  /** How the oscillator being rendered reads its table (reused). */
+  private readonly reading = new TableRead();
   private readonly subBuf = buffer();
   private readonly noiseBufL = buffer();
   private readonly noiseBufR = buffer();
@@ -425,7 +615,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
         this.lfoCycle[i] = note * 17 + i * 1000;
       }
       this.lfoDone[i] = false;
-      this.lfoSmooth[i] = NaN;
+      this.lfoSmooth[i] = Number.NaN;
     }
     this.target = pitch;
     this.pitch = from ?? pitch;
@@ -459,62 +649,84 @@ class PrismaVoice implements PolyVoice, MonoVoice {
   /** In pieces between one modulation computation and the next: the sources into their buffers, then into the
    *  filters according to the routings, then the volume envelope sample by sample. */
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
-    const { s, sumL, sumR } = this;
-    const amp = this.envs[0];
-    const parallel = s.filterMode === FILTER_MODE.parallel;
     for (let i = from; i < to;) {
       if (this.countdown <= 0) this.control();
       const len = Math.min(this.countdown, to - i);
       this.countdown -= len;
-      for (let b = 0; b < 3; b++) {
-        sumL[b].fill(0, 0, len);
-        sumR[b].fill(0, 0, len);
-      }
-      const sub = s.subOn ? this.renderSub(len) : null;
-      // the modulator first: if A reads B, B plays first (and then B can't read A)
-      const aReadsB = CROSS_WARPS.includes(this.osc[0].warp);
-      for (let step = 0; step < 2; step++) {
-        const o = aReadsB ? 1 - step : step, other = 1 - o;
-        let cross: Float64Array | null = null;
-        if (this.osc[o].warp === WARP.subFm) cross = sub;
-        else if (CROSS_WARPS.includes(this.osc[o].warp) && s.osc[other].on && (o === 0 || !aReadsB)) cross = this.raw[other];
-        this.renderOsc(o, len, cross);
-        if (s.osc[o].on) this.mix(this.oscL[o], this.oscR[o], len, routeGains(s.osc[o].route, parallel));
-      }
-      if (sub) this.mixSub(len, routeGains(s.subRoute, parallel));
-      if (s.noiseOn) {
-        this.renderNoise(len);
-        this.mix(this.noiseBufL, this.noiseBufR, len, routeGains(s.noiseRoute, parallel));
-      }
-      // the filters: in series the first goes into the second, in parallel they're summed; off lets it through
-      const [f1, f2] = this.filters;
-      if (s.filterOn[0]) f1.process(sumL[0], sumR[0], len);
-      if (parallel) {
-        if (s.filterOn[1]) f2.process(sumL[1], sumR[1], len);
-        for (let j = 0; j < len; j++) {
-          sumL[2][j] += sumL[0][j] + sumL[1][j];
-          sumR[2][j] += sumR[0][j] + sumR[1][j];
-        }
-      } else {
-        for (let j = 0; j < len; j++) {
-          sumL[1][j] += sumL[0][j];
-          sumR[1][j] += sumR[0][j];
-        }
-        if (s.filterOn[1]) f2.process(sumL[1], sumR[1], len);
-        for (let j = 0; j < len; j++) {
-          sumL[2][j] += sumL[1][j];
-          sumR[2][j] += sumR[1][j];
-        }
-      }
-      const outL = sumL[2], outR = sumR[2];
-      for (let j = 0; j < len; j++, i++) {
-        this.gain += this.gainStep;
-        const g = amp.next() * this.gain;
-        left[i] += outL[j] * g;
-        right[i] += outR[j] * g;
-        if (!amp.active) return;
-      }
+      this.renderSources(len);
+      this.renderFilters(len);
+      i = this.applyVolume(left, right, i, len);
+      if (i < 0) return;
     }
+  }
+
+  /** The oscillators, the sub and the noise, each summed into the places of its routing. */
+  private renderSources(len: number): void {
+    const { s, sumL, sumR } = this, parallel = s.filterMode === FILTER_MODE.parallel;
+    for (let b = 0; b < 3; b++) {
+      sumL[b].fill(0, 0, len);
+      sumR[b].fill(0, 0, len);
+    }
+    const sub = s.subOn ? this.renderSub(len) : null;
+    // the modulator first: if A reads B, B plays first (and then B can't read A)
+    const aReadsB = CROSS_WARPS.includes(this.osc[0].warp);
+    for (let step = 0; step < 2; step++) {
+      const o = aReadsB ? 1 - step : step;
+      this.renderOsc(o, len, this.modulatorOf(o, aReadsB, sub));
+      if (s.osc[o].on) this.mix(this.oscL[o], this.oscR[o], len, routeGains(s.osc[o].route, parallel));
+    }
+    if (sub) this.mixSub(len, routeGains(s.subRoute, parallel));
+    if (s.noiseOn) {
+      this.renderNoise(len);
+      this.mix(this.noiseBufL, this.noiseBufR, len, routeGains(s.noiseRoute, parallel));
+    }
+  }
+
+  /** What oscillator `o`'s warp reads: the sub (FM from Sub), the other oscillator (the crossed
+   *  warps, if it plays and has already played), or nothing. */
+  private modulatorOf(o: number, aReadsB: boolean, sub: Float64Array | null): Float64Array | null {
+    const warp = this.osc[o].warp;
+    if (warp === WARP.subFm) return sub;
+    const other = 1 - o;
+    return CROSS_WARPS.includes(warp) && this.s.osc[other].on && (o === 0 || !aReadsB) ? this.raw[other] : null;
+  }
+
+  /** The filters: in series the first goes into the second, in parallel they're summed; off lets it
+   *  through. Everything ends in the third sum, the output. */
+  private renderFilters(len: number): void {
+    const { s, sumL, sumR } = this, [f1, f2] = this.filters;
+    if (s.filterOn[0]) f1.process(sumL[0], sumR[0], len);
+    if (s.filterMode === FILTER_MODE.parallel) {
+      if (s.filterOn[1]) f2.process(sumL[1], sumR[1], len);
+      for (let j = 0; j < len; j++) {
+        sumL[2][j] += sumL[0][j] + sumL[1][j];
+        sumR[2][j] += sumR[0][j] + sumR[1][j];
+      }
+      return;
+    }
+    for (let j = 0; j < len; j++) {
+      sumL[1][j] += sumL[0][j];
+      sumR[1][j] += sumR[0][j];
+    }
+    if (s.filterOn[1]) f2.process(sumL[1], sumR[1], len);
+    for (let j = 0; j < len; j++) {
+      sumL[2][j] += sumL[1][j];
+      sumR[2][j] += sumR[1][j];
+    }
+  }
+
+  /** The output through the volume envelope into [i, i + len); the next sample, or -1 if the
+   *  envelope has ended (the voice is free). */
+  private applyVolume(left: Float32Array, right: Float32Array, i: number, len: number): number {
+    const amp = this.envs[0], outL = this.sumL[2], outR = this.sumR[2];
+    for (let j = 0; j < len; j++, i++) {
+      this.gain += this.gainStep;
+      const g = amp.next() * this.gain;
+      left[i] += outL[j] * g;
+      right[i] += outR[j] * g;
+      if (!amp.active) return -1;
+    }
+    return i;
   }
 
   private mix(l: Float64Array, r: Float64Array, len: number, gains: RouteGains): void {
@@ -568,49 +780,16 @@ class PrismaVoice implements PolyVoice, MonoVoice {
   private renderNoise(len: number): void {
     const { noiseBufL: l, noiseBufR: r, s } = this;
     const gens = [this.noiseL, this.noiseR], bufs = [l, r];
-    const type = s.noiseType;
+    const type = s.noiseType, toned = type <= NOISE.brown && this.toneK < 1;
     for (let c = 0; c < 2; c++) {
       const gen = gens[c], buf = bufs[c];
       for (let j = 0; j < len; j++) {
-        const w = gen.next();
-        let v: number;
-        switch (type) {
-          case NOISE.pink: {
-            // Paul Kellet's "economy" filter: −3 dB per octave
-            const b = this.pink, o = c * 3;
-            b[o] = 0.99765 * b[o] + w * 0.099046;
-            b[o + 1] = 0.963 * b[o + 1] + w * 0.2965164;
-            b[o + 2] = 0.57 * b[o + 2] + w * 1.0526913;
-            v = (b[o] + b[o + 1] + b[o + 2] + w * 0.1848) * 0.3;
-            break;
-          }
-          case NOISE.brown:
-            this.brown[c] = (this.brown[c] + 0.02 * w) / 1.02;
-            v = this.brown[c] * 3.5;
-            break;
-          case NOISE.digital:
-            // holds a random value for a period: a noise tuned to the note
-            if (c === 0) {
-              this.digitalPhase += this.digitalDt;
-              if (this.digitalPhase >= 1) {
-                this.digitalPhase -= Math.floor(this.digitalPhase);
-                this.digitalHeld[0] = w;
-                this.digitalHeld[1] = this.noiseR.next();
-              }
-            }
-            v = this.digitalHeld[c];
-            break;
-          case NOISE.crackle:
-            const pop = w > 0 ? 1 : -1;
-      this.crackle[c] = this.crackle[c] * 0.6 + (Math.abs(w) < this.crackleChance ? pop : 0);
-            v = this.crackle[c];
-            break;
-          default:
-            v = w;
-        }
+        const v = this.noiseValue(type, c, gen.next());
         // the tone: a one-pole low-pass (the digital one and the crackle don't have it)
-        if (type <= NOISE.brown && this.toneK < 1) v = this.tone[c] += (v - this.tone[c]) * this.toneK;
-        buf[j] = v;
+        if (toned) {
+          this.tone[c] += (v - this.tone[c]) * this.toneK;
+          buf[j] = this.tone[c];
+        } else buf[j] = v;
       }
     }
     let g = this.noiseGain;
@@ -620,6 +799,43 @@ class PrismaVoice implements PolyVoice, MonoVoice {
       r[j] *= g * this.noisePanR;
     }
     this.noiseGain = g;
+  }
+
+  /** One sample of the noise of type `type` on channel `c`, from the white sample `w`. */
+  private noiseValue(type: number, c: number, w: number): number {
+    switch (type) {
+      case NOISE.pink: {
+        // Paul Kellet's "economy" filter: -3 dB per octave
+        const b = this.pink, o = c * 3;
+        b[o] = 0.99765 * b[o] + w * 0.099046;
+        b[o + 1] = 0.963 * b[o + 1] + w * 0.2965164;
+        b[o + 2] = 0.57 * b[o + 2] + w * 1.0526913;
+        return (b[o] + b[o + 1] + b[o + 2] + w * 0.1848) * 0.3;
+      }
+      case NOISE.brown:
+        this.brown[c] = (this.brown[c] + 0.02 * w) / 1.02;
+        return this.brown[c] * 3.5;
+      case NOISE.digital:
+        // holds a random value for a period: a noise tuned to the note
+        if (c === 0) this.digitalStep(w);
+        return this.digitalHeld[c];
+      case NOISE.crackle: {
+        const pop = w > 0 ? 1 : -1;
+        this.crackle[c] = this.crackle[c] * 0.6 + (Math.abs(w) < this.crackleChance ? pop : 0);
+        return this.crackle[c];
+      }
+      default:
+        return w;
+    }
+  }
+
+  /** The digital noise's period: at its end both channels hold a new random value. */
+  private digitalStep(w: number): void {
+    this.digitalPhase += this.digitalDt;
+    if (this.digitalPhase < 1) return;
+    this.digitalPhase -= Math.floor(this.digitalPhase);
+    this.digitalHeld[0] = w;
+    this.digitalHeld[1] = this.noiseR.next();
   }
 
   /** The copies of oscillator `o` in its buffers, with the warp; the middle copy, without
@@ -638,119 +854,21 @@ class PrismaVoice implements PolyVoice, MonoVoice {
       for (let k = 0; k < n; k++) o.phases[k] = (o.phases[k] + o.dts[k] * len) % 1;
       return;
     }
-    const { data, frames } = os.table;
-    const next = frames > 1 ? FRAME_STRIDE : 0, maxFrame = Math.max(0, frames - 2), levelOffset = o.level * STRIDE;
+    const r = this.reading, { data, frames } = os.table;
+    r.data = data;
+    r.next = frames > 1 ? FRAME_STRIDE : 0;
+    r.maxFrame = Math.max(0, frames - 2);
+    r.levelOffset = o.level * STRIDE;
+    r.single = frames < 2;
     // the crossed warps without a modulator do nothing
-    const warp = (CROSS_WARPS.includes(o.warp) || o.warp === WARP.subFm) && !cross ? WARP.none : o.warp;
-    const a = o.warpAmt, k1 = o.warpK, gs = o.gainStep, ps = o.phaseStep, single = frames < 2;
+    r.warp = (CROSS_WARPS.includes(o.warp) || o.warp === WARP.subFm) && !cross ? WARP.none : o.warp;
+    r.a = o.warpAmt;
+    r.k1 = o.warpK;
+    r.cross = cross;
     for (let k = 0; k < n; k++) {
-      const dt = o.dts[k], st = o.steps[k], pl = o.panL[k], pr = o.panR[k], center = k === o.center;
-      let ph = o.phases[k], x = o.frames[k], g = o.gain, po = o.phaseOff;
-      if (warp === WARP.none) {
-        // the most common case, with nothing per sample besides the reading
-        for (let j = 0; j < len; j++) {
-          x += st;
-          g += gs;
-          po += ps;
-          let f = x | 0;
-          if (f > maxFrame) f = maxFrame;
-          let fx = single ? 0 : x - f;
-          if (fx > 1) fx = 1;
-          let p = ph + po;
-          if (p >= 1) p -= 1;
-          const v = lookup(data, f * FRAME_STRIDE + levelOffset, next, fx, p);
-          if (center) raw[j] = v;
-          outL[j] += v * g * pl;
-          outR[j] += v * g * pr;
-          ph += dt;
-          if (ph >= 1) ph -= 1;
-        }
-        o.phases[k] = ph;
-        o.frames[k] = x;
-        continue;
-      }
-      for (let j = 0; j < len; j++) {
-        x += st;
-        g += gs;
-        po += ps;
-        let f = x | 0;
-        if (f > maxFrame) f = maxFrame;
-        let fx = single ? 0 : x - f;
-        if (fx > 1) fx = 1;
-        const base = f * FRAME_STRIDE + levelOffset;
-        let p = ph + po;
-        if (p >= 1) p -= 1;
-        let v: number;
-        switch (warp) {
-          case WARP.sync: {
-            let q = p * k1;
-            q -= Math.floor(q);
-            v = lookup(data, base, next, fx, q);
-            // the restart is a step (from where the reading had got to back to the start): PolyBLEP
-            // rounds it off in the samples around, as in the sync of virtual analogue synths
-            if (p < dt || p > 1 - dt) {
-              const end = Math.min(0.99999, k1 - Math.floor(k1));
-              v += 0.5 * (lookup(data, base, next, fx, 0) - lookup(data, base, next, fx, end)) * polyBlep(p, dt);
-            }
-            break;
-          }
-          case WARP.softSync: {
-            let q = p * k1;
-            q -= Math.floor(q);
-            // the window goes to zero at the restart: no step
-            v = lookup(data, base, next, fx, q) * 4 * p * (1 - p);
-            break;
-          }
-          case WARP.bendUp: case WARP.bendDown:
-            v = lookup(data, base, next, fx, p / (p + (1 - p) * k1));
-            break;
-          case WARP.bendBoth: {
-            const h = p < 0.5 ? 2 * p : 2 * p - 1, e = p < 0.5 ? k1 : 1 / k1;
-            v = lookup(data, base, next, fx, Math.min(0.99999, (p < 0.5 ? 0 : 0.5) + 0.5 * (h / (h + (1 - h) * e))));
-            break;
-          }
-          case WARP.pwm:
-            v = p < k1 ? lookup(data, base, next, fx, p / k1) : 0;
-            break;
-          case WARP.asymUp: case WARP.asymDown:
-            v = lookup(data, base, next, fx, p < k1 ? (0.5 * p) / k1 : 0.5 + (0.5 * (p - k1)) / (1 - k1));
-            break;
-          case WARP.mirror: {
-            const q = Math.min(0.99999, p < 0.5 ? 2 * p : 2 - 2 * p);
-            v = lookup(data, base, next, fx, p) * (1 - a) + lookup(data, base, next, fx, q) * a;
-            break;
-          }
-          case WARP.flip:
-            v = lookup(data, base, next, fx, p);
-            if (p >= 1 - a) v = -v;
-            break;
-          case WARP.quantize:
-            v = Math.round(lookup(data, base, next, fx, p) * k1) / k1;
-            break;
-          case WARP.fm: case WARP.subFm: {
-            let q = p + 2 * a * cross![j];
-            q -= Math.floor(q);
-            v = lookup(data, base, next, fx, q);
-            break;
-          }
-          case WARP.am:
-            v = lookup(data, base, next, fx, p) * (1 - a + a * (0.5 + 0.5 * cross![j]));
-            break;
-          case WARP.rm:
-            v = lookup(data, base, next, fx, p) * (1 - a + a * cross![j]);
-            break;
-          default:
-            v = lookup(data, base, next, fx, p);
-        }
-        if (center) raw[j] = v;
-        v *= g;
-        outL[j] += v * pl;
-        outR[j] += v * pr;
-        ph += dt;
-        if (ph >= 1) ph -= 1;
-      }
-      o.phases[k] = ph;
-      o.frames[k] = x;
+      // the most common case, with nothing per sample besides the reading
+      if (r.warp === WARP.none) readPlain(o, k, r, len, outL, outR, raw);
+      else readWarped(o, k, r, len, outL, outR, raw);
     }
     o.gain += o.gainStep * len;
     o.phaseOff += o.phaseStep * len;
@@ -832,43 +950,51 @@ class PrismaVoice implements PolyVoice, MonoVoice {
 
   /** The sources at the start of this piece. */
   private sources(tick: number): void {
-    const { s, src, fade, val } = this, used = s.used;
+    const { s, src } = this, used = s.used;
     src[SRC.env1] = this.envs[0].value;
     for (let n = 1; n < ENVS; n++) if (used[SRC.env1 + n]) src[SRC.env1 + n] = this.envs[n].next();
     src[SRC.note] = clamp01(this.pitch / 127);
     for (let m = 0; m < MACROS; m++) src[SRC.macro1 + m] = s.macros[m];
-    for (let i = 0; i < LFOS; i++) {
-      const l = s.lfos[i], at = SRC.lfo1 + i;
-      if (!used[at]) continue;
-      // during the delay the LFO is still and doesn't modulate; then it opens in "rise" seconds
-      const running = this.age >= l.delay - 1e-9 || l.delay <= 0.0011;
-      if (!running) fade[at] = 0;
-      else if (l.rise <= 0.0011) fade[at] = 1;
-      else fade[at] = clamp01((this.age - (l.delay <= 0.0011 ? 0 : l.delay)) / l.rise);
-      const phase = (this.lfoPhase[i] + l.phase) % 1;
-      let value: number;
-      if (isRandomShape(l.shape)) value = randomValue(l.shape, this.lfoCycle[i] + Math.floor(this.lfoPhase[i] + l.phase), phase);
-      else {
-        const x = (this.lfoDone[i] ? 0.99999 : phase) * LFO_TABLE_SIZE, j = x | 0, t = x - j;
-        const a = l.table[j], b = l.table[(j + 1) % LFO_TABLE_SIZE];
-        value = this.lfoDone[i] ? a : a + (b - a) * t;
-      }
-      if (l.smooth > 0) {
-        const sm = this.lfoSmooth[i];
-        // up to half a second to arrive (at maximum)
-        const k = 1 - Math.exp(-tick / (l.smooth * l.smooth * 0.5 + 1e-4));
-        value = this.lfoSmooth[i] = Number.isNaN(sm) ? value : sm + (value - sm) * k;
-      }
-      src[at] = value;
-      if (!running || this.lfoDone[i]) continue;
-      const p = this.lfoPhase[i] + s.lfoHz(i, val[LFO_RATE_DEST[i]]) * tick;
-      if (l.trig === LFO_TRIG.once && p >= 1) {
-        this.lfoDone[i] = true;
-        this.lfoPhase[i] = 1;
-      } else {
-        this.lfoCycle[i] += Math.floor(p);
-        this.lfoPhase[i] = p % 1;
-      }
+    for (let i = 0; i < LFOS; i++) if (used[SRC.lfo1 + i]) this.lfoSource(i, tick);
+  }
+
+  /** LFO `i`: its value now (from the table or random, smoothed), how open it is, and its phase
+   *  moving on. During the delay the LFO is still and doesn't modulate; then it opens in "rise" seconds. */
+  private lfoSource(i: number, tick: number): void {
+    const l = this.s.lfos[i], at = SRC.lfo1 + i;
+    const running = this.age >= l.delay - 1e-9 || l.delay <= 0.0011;
+    this.fade[at] = running ? lfoFade(l, this.age) : 0;
+    this.src[at] = this.smoothLfo(i, l, this.lfoValue(i, l), tick);
+    if (running && !this.lfoDone[i]) this.advanceLfo(i, l, tick);
+  }
+
+  private lfoValue(i: number, l: LfoSettings): number {
+    const phase = (this.lfoPhase[i] + l.phase) % 1;
+    if (isRandomShape(l.shape)) return randomValue(l.shape, this.lfoCycle[i] + Math.floor(this.lfoPhase[i] + l.phase), phase);
+    const x = (this.lfoDone[i] ? 0.99999 : phase) * LFO_TABLE_SIZE, j = Math.trunc(x), t = x - j;
+    const a = l.table[j], b = l.table[(j + 1) % LFO_TABLE_SIZE];
+    return this.lfoDone[i] ? a : a + (b - a) * t;
+  }
+
+  /** With Smooth the value glides there: up to half a second to arrive (at maximum). */
+  private smoothLfo(i: number, l: LfoSettings, value: number, tick: number): number {
+    if (l.smooth <= 0) return value;
+    const sm = this.lfoSmooth[i];
+    const k = 1 - Math.exp(-tick / (l.smooth * l.smooth * 0.5 + 1e-4));
+    const smoothed = Number.isNaN(sm) ? value : sm + (value - sm) * k;
+    this.lfoSmooth[i] = smoothed;
+    return smoothed;
+  }
+
+  /** The phase moves on at the rate (modulated); "once" stops at the end of the first cycle. */
+  private advanceLfo(i: number, l: LfoSettings, tick: number): void {
+    const p = this.lfoPhase[i] + this.s.lfoHz(i, this.val[LFO_RATE_DEST[i]]) * tick;
+    if (l.trig === LFO_TRIG.once && p >= 1) {
+      this.lfoDone[i] = true;
+      this.lfoPhase[i] = 1;
+    } else {
+      this.lfoCycle[i] += Math.floor(p);
+      this.lfoPhase[i] = p % 1;
     }
   }
 
@@ -904,22 +1030,7 @@ class PrismaVoice implements PolyVoice, MonoVoice {
     const a = val[d.warp] / 100;
     o.warp = os.warp;
     o.warpAmt = a;
-    let speed = 1;
-    switch (os.warp) {
-      case WARP.sync: case WARP.softSync: o.warpK = speed = 1 + 15 * a; break;
-      case WARP.bendUp: o.warpK = Math.pow(2, -4 * a); speed = 1 / o.warpK; break;
-      case WARP.bendDown: o.warpK = Math.pow(2, 4 * a); speed = o.warpK; break;
-      case WARP.bendBoth: o.warpK = Math.pow(2, -4 * a); speed = 2 / o.warpK; break;
-      case WARP.pwm: o.warpK = 1 - 0.95 * a; speed = 1 / o.warpK; break;
-      case WARP.asymUp: case WARP.asymDown:
-        o.warpK = os.warp === WARP.asymUp ? 0.5 + 0.48 * a : 0.5 - 0.48 * a;
-        speed = 0.5 / Math.min(o.warpK, 1 - o.warpK);
-        break;
-      case WARP.mirror: speed = a > 0 ? 2 : 1; break;
-      case WARP.quantize: o.warpK = Math.pow(2, 10 - 9 * a); break;
-      case WARP.fm: case WARP.subFm: speed = 1 + 6 * a; break;
-      case WARP.am: case WARP.rm: speed = a > 0 ? 2 : 1; break;
-    }
+    const speed = setWarpConstant(o, os.warp, a);
     o.level = levelFor(Math.min(0.49, dt * Math.pow(2, detune / 1200) * speed));
     // the middle copies at full level, the others as much as Blend says; all together as one
     let power = 0;

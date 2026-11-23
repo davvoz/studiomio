@@ -2,7 +2,10 @@
 
 function lcg(seed: number): () => number {
   let s = seed;
-  return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  return () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
 }
 
 /** Stereo drum loop with a chord underneath: kick, snare and hi-hat at `bpm`. */

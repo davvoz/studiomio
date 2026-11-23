@@ -68,7 +68,7 @@ class WorkletInstrument implements Instrument {
 
   constructor(
     private readonly ctx: BaseAudioContext, settings: InstrumentSettings, bpm: number, transport: TransportAnchor | null,
-    ready: Promise<void> | null, private readonly source: SampleSource, private readonly onDispose: () => void,
+    private readonly source: SampleSource, private readonly onDispose: () => void,
     private readonly onFault: (error: string | null) => void,
   ) {
     this.type = settings.type;
@@ -76,6 +76,10 @@ class WorkletInstrument implements Instrument {
     this.bpm = bpm;
     this.anchor = transport;
     this.output = ctx.createGain();
+  }
+
+  /** The processor, now or when the module is loaded (`ready`); right after the constructor. */
+  start(ready: Promise<void> | null): void {
     if (ready) ready.then(() => this.build(), e => console.error('instrument not available', e));
     else this.build();
   }
@@ -246,9 +250,10 @@ export class WorkletInstruments implements InstrumentHost {
   create(graph: AudioGraph, settings: InstrumentSettings, bpm: number): Instrument {
     const c = this.context(graph);
     const instrument: WorkletInstrument = new WorkletInstrument(
-      contextOf(graph), settings, bpm, c.transport, this.worklet.pending(graph), this.samples, () => c.instruments.delete(instrument),
+      contextOf(graph), settings, bpm, c.transport, this.samples, () => c.instruments.delete(instrument),
       error => this.worklet.fault(settings.type, error),
     );
+    instrument.start(this.worklet.pending(graph));
     c.instruments.add(instrument);
     return instrument;
   }
@@ -266,7 +271,10 @@ export class WorkletInstruments implements InstrumentHost {
   private context(graph: AudioGraph): InstrumentContext {
     const ctx = contextOf(graph);
     let c = this.contexts.get(ctx);
-    if (!c) this.contexts.set(ctx, (c = { instruments: new Set(), transport: null }));
+    if (!c) {
+      c = { instruments: new Set(), transport: null };
+      this.contexts.set(ctx, c);
+    }
     return c;
   }
 }
@@ -302,7 +310,7 @@ class WorkletEffect implements Effect {
 
   constructor(
     private readonly ctx: BaseAudioContext, settings: EffectSettings, bpm: number, transport: TransportAnchor | null,
-    ready: Promise<void> | null, private readonly onDispose: () => void, private readonly onFault: (error: string | null) => void,
+    private readonly onDispose: () => void, private readonly onFault: (error: string | null) => void,
   ) {
     this.type = settings.type;
     this.settings = settings;
@@ -322,6 +330,10 @@ class WorkletEffect implements Effect {
     };
     // direct sound until the processor is there
     this.input.connect(this.post);
+  }
+
+  /** The processor, now or when the module is loaded (`ready`); right after the constructor. */
+  start(ready: Promise<void> | null): void {
     if (!ready) this.build();
     else ready.then(() => this.build(), e => console.error('effect not available', e));
   }
@@ -410,9 +422,10 @@ export class WorkletEffects implements EffectHost {
   create(graph: AudioGraph, settings: EffectSettings, bpm: number): Effect {
     const c = this.context(graph);
     const effect: WorkletEffect = new WorkletEffect(
-      contextOf(graph), settings, bpm, c.transport, this.worklet.pending(graph), () => c.effects.delete(effect),
+      contextOf(graph), settings, bpm, c.transport, () => c.effects.delete(effect),
       error => this.worklet.fault(settings.type, error),
     );
+    effect.start(this.worklet.pending(graph));
     c.effects.add(effect);
     return effect;
   }
@@ -430,7 +443,10 @@ export class WorkletEffects implements EffectHost {
   private context(graph: AudioGraph): EffectContext {
     const ctx = contextOf(graph);
     let c = this.contexts.get(ctx);
-    if (!c) this.contexts.set(ctx, (c = { effects: new Set(), transport: null }));
+    if (!c) {
+      c = { effects: new Set(), transport: null };
+      this.contexts.set(ctx, c);
+    }
     return c;
   }
 }
@@ -472,16 +488,19 @@ class WorkletMeter implements Meter {
   private readonly values: Float32Array;
   private disposed = false;
 
-  constructor(private readonly ctx: BaseAudioContext, private readonly bank: MeterBank, ready: Promise<void> | null) {
+  constructor(private readonly ctx: BaseAudioContext, private readonly bank: MeterBank) {
     this.input = ctx.createGain();
     this.output = ctx.createGain();
     this.slot = bank.take();
     this.values = this.slot?.values ?? new Float32Array(METER_VALUES);
-    if (!ready) this.build();
-    else {
-      this.input.connect(this.output);
-      ready.then(() => this.build(), e => console.error('meter not available', e));
-    }
+  }
+
+  /** The processor, now or when the module is loaded (`ready`): until then the sound passes
+   *  straight through. Right after the constructor. */
+  start(ready: Promise<void> | null): void {
+    if (!ready) return this.build();
+    this.input.connect(this.output);
+    ready.then(() => this.build(), e => console.error('meter not available', e));
   }
 
   read(): MeterReading {
@@ -531,7 +550,12 @@ export class WorkletMeters implements MeterHost {
   create(graph: AudioGraph): Meter {
     const ctx = contextOf(graph);
     let bank = this.banks.get(ctx);
-    if (!bank) this.banks.set(ctx, (bank = new MeterBank()));
-    return new WorkletMeter(ctx, bank, this.worklet.pending(graph));
+    if (!bank) {
+      bank = new MeterBank();
+      this.banks.set(ctx, bank);
+    }
+    const meter = new WorkletMeter(ctx, bank);
+    meter.start(this.worklet.pending(graph));
+    return meter;
   }
 }

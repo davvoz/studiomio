@@ -10,6 +10,7 @@ await Promise.all([
 ]);
 
 const app = new App(document.getElementById('app')!);
+app.start();
 
 // in development the app is reachable from the console (and from the automated checks); in the
 // installed app only the controllers, for diagnosis from F12: copy(studiomio.surfaces.report())

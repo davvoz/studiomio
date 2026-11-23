@@ -689,7 +689,7 @@ function WarpDSP() {
     const float = bits === 32, bps = bits / 8;
     const dataLen = n * C * bps;
     const buf = new ArrayBuffer(44 + dataLen), v = new DataView(buf);
-    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.codePointAt(i) ?? 0); };
     str(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true); str(8, 'WAVE');
     str(12, 'fmt '); v.setUint32(16, 16, true);
     v.setUint16(20, float ? 3 : 1, true); v.setUint16(22, C, true);

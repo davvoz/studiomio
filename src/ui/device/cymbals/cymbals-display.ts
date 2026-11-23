@@ -154,7 +154,7 @@ export class CymbalsDisplay implements DeviceDisplay {
   private flash(i: number): void {
     const b = this.pads[i];
     b.classList.remove('hit');
-    void b.offsetWidth; // restarts the animation
+    b.getBoundingClientRect(); // a layout in between restarts the animation
     b.classList.add('hit');
   }
 

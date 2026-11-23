@@ -92,7 +92,7 @@ export class BrowserLoader {
   }
 
   private async audio(payload: Extract<BrowserPayload, { kind: 'sample' | 'file' }>, target: LoadTarget): Promise<void> {
-    const { store, ui } = this.deps;
+    const { store } = this.deps;
     // on a MIDI track's chain: a Sampler plays it
     const midi = target.kind === 'chain' && target.owner !== MASTER ? store.project.track(target.owner) : undefined;
     if (midi instanceof MidiTrack) {
@@ -109,12 +109,18 @@ export class BrowserLoader {
       if (at.kind === 'slot') return this.deps.importFilesToSlots([file], at.track, at.slot);
       return this.deps.importFiles([file], at.track, at.kind === 'lane' ? at.beat : 0);
     }
+    this.placeSample(payload.sample, at);
+  }
+
+  /** A sample of the project into a session slot, or on a timeline lane (then it's selected). */
+  private placeSample(sample: SampleRef, at: LoadTarget): void {
+    const { store, ui } = this.deps;
     const before = store.project;
     if (at.kind === 'slot') {
       if (at.slot >= before.scenes.length) return this.deps.say('No scene there: add one to put the sample in it.');
-      store.apply(importSampleToSlot(payload.sample, at.track, at.slot));
+      store.apply(importSampleToSlot(sample, at.track, at.slot));
     } else if (at.kind === 'lane') {
-      store.apply(importSample(payload.sample, at.track, at.beat));
+      store.apply(importSample(sample, at.track, at.beat));
       ui.select(addedPlacements(before, store.project).map(r => r.id));
     }
   }

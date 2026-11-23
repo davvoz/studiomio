@@ -167,7 +167,7 @@ export class LayerDisplay implements DeviceDisplay {
    *  to hear it (a sample lasts longer than a click). */
   private set(id: string, v: number, final: boolean): void {
     const layer = this.layout.samples.find(x => x.source === id);
-    const times = layer && v === layer.sample ? layer.times?.(this.values) ?? {} : {};
+    const times = v === layer?.sample ? layer.times?.(this.values) ?? {} : {};
     this.ctx.setParams({ [id]: v, ...times }, final);
     if (final && this.layout.audition.has(id)) this.audition();
   }
@@ -269,11 +269,29 @@ export class LayerDisplay implements DeviceDisplay {
   private paint(): void {
     const g = fit(this.wave);
     if (!g) return;
-    const { lowHz, highHz } = this.layout;
-    const w = this.wave.clientWidth, h = this.wave.clientHeight, v = this.values, mid = h * 0.58, amp = h * 0.4;
+    const w = this.wave.clientWidth, h = this.wave.clientHeight, v = this.values, mid = h * 0.58;
     g.fillStyle = '#15181c';
     g.fillRect(0, 0, w, h);
-    // the time: a line every 50, 100 or 250 ms
+    this.paintTime(g, w, h, mid);
+    this.paintWave(g, w, mid, h * 0.4);
+    this.paintPitch(g, w, h);
+    g.globalAlpha = 1;
+    // the note, at the top
+    const note = paramSpec(this.ctx.type, 'note');
+    const name = note?.kind === 'choice' ? note.options[v.note] : '';
+    g.fillStyle = 'rgba(255,255,255,0.75)';
+    g.font = '600 12px system-ui, sans-serif';
+    const fine = v.fine ? ` ${signGlyph(v.fine)}${Math.abs(v.fine)} ct` : '';
+    g.fillText(`${name}${fine}`, 8, 16);
+    g.font = '10px system-ui, sans-serif';
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.textAlign = 'right';
+    g.fillText(this.layout.hint(v), w - 6, 14);
+    g.textAlign = 'left';
+  }
+
+  /** The time: a line every 50, 100 or 250 ms, and the zero line. */
+  private paintTime(g: CanvasRenderingContext2D, w: number, h: number, mid: number): void {
     const step = pickAbove(this.seconds, [[1.2, 0.25], [0.5, 0.1]], 0.05);
     g.font = '10px system-ui, sans-serif';
     for (let t = step; t < this.seconds; t += step) {
@@ -285,7 +303,10 @@ export class LayerDisplay implements DeviceDisplay {
     }
     g.strokeStyle = 'rgba(255,255,255,0.12)';
     g.beginPath(); g.moveTo(0, mid + 0.5); g.lineTo(w, mid + 0.5); g.stroke();
-    // the waveform: minimum and maximum per column
+  }
+
+  /** The waveform: minimum and maximum per column, scaled to the loudest sample (dimmed when off). */
+  private paintWave(g: CanvasRenderingContext2D, w: number, mid: number, amp: number): void {
     const x = this.rendered, per = x.length / w;
     let top = 1e-9;
     for (const s of x) top = Math.max(top, Math.abs(s));
@@ -300,39 +321,29 @@ export class LayerDisplay implements DeviceDisplay {
       }
       g.fillRect(c, mid - hi * scale, 1, Math.max(1, (hi - lo) * scale));
     }
-    // the body's pitch: from the top down to the note, on an octave scale
+  }
+
+  /** The body's pitch: from the top down to the note, on an octave scale, with the note dashed. */
+  private paintPitch(g: CanvasRenderingContext2D, w: number, h: number): void {
+    const { lowHz, highHz } = this.layout;
     const yOf = (hz: number) => h - 14 - ((Math.log2(hz / lowHz) / Math.log2(highHz / lowHz)) * (h - 26));
-    const pitch = this.layout.pitch(v);
-    if (pitch) {
-      g.strokeStyle = CURVE;
-      g.lineWidth = 1.5;
-      g.beginPath();
-      for (let c = 0; c <= w; c += 2) {
-        const y = yOf(Math.min(highHz, pitch.at((c / w) * this.seconds)));
-        if (c) g.lineTo(c, y);
-        else g.moveTo(c, y);
-      }
-      g.stroke();
-      g.lineWidth = 1;
-      g.globalAlpha = 1;
-      g.setLineDash([3, 3]);
-      g.strokeStyle = 'rgba(127,182,255,0.45)';
-      const yb = Math.round(yOf(pitch.base)) + 0.5;
-      g.beginPath(); g.moveTo(0, yb); g.lineTo(w, yb); g.stroke();
-      g.setLineDash([]);
+    const pitch = this.layout.pitch(this.values);
+    if (!pitch) return;
+    g.strokeStyle = CURVE;
+    g.lineWidth = 1.5;
+    g.beginPath();
+    for (let c = 0; c <= w; c += 2) {
+      const y = yOf(Math.min(highHz, pitch.at((c / w) * this.seconds)));
+      if (c) g.lineTo(c, y);
+      else g.moveTo(c, y);
     }
+    g.stroke();
+    g.lineWidth = 1;
     g.globalAlpha = 1;
-    // the note, at the top
-    const note = paramSpec(this.ctx.type, 'note');
-    const name = note?.kind === 'choice' ? note.options[v.note] : '';
-    g.fillStyle = 'rgba(255,255,255,0.75)';
-    g.font = '600 12px system-ui, sans-serif';
-    const fine = v.fine ? ` ${signGlyph(v.fine)}${Math.abs(v.fine)} ct` : '';
-    g.fillText(`${name}${fine}`, 8, 16);
-    g.font = '10px system-ui, sans-serif';
-    g.fillStyle = 'rgba(255,255,255,0.35)';
-    g.textAlign = 'right';
-    g.fillText(this.layout.hint(v), w - 6, 14);
-    g.textAlign = 'left';
+    g.setLineDash([3, 3]);
+    g.strokeStyle = 'rgba(127,182,255,0.45)';
+    const yb = Math.round(yOf(pitch.base)) + 0.5;
+    g.beginPath(); g.moveTo(0, yb); g.lineTo(w, yb); g.stroke();
+    g.setLineDash([]);
   }
 }

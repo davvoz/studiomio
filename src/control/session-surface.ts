@@ -409,7 +409,7 @@ export abstract class SessionSurface {
     const id = `param-${c.owner}-${c.device.key}-${spec.id}`;
     // a spring returns by itself: pulling it isn't an undo step (the knob doesn't say
     // when it's let go: the spring waits for it to be still)
-    if (rack && rack.macros[index] && springOf(rack.macros[index])) this.later(id, () => this.host.store.apply(edit, { transient: true }));
+    if (rack?.macros[index] && springOf(rack.macros[index])) this.later(id, () => this.host.store.apply(edit, { transient: true }));
     else this.later(id, () => this.move(edit, `${this.mergePrefix}-${id}`));
   }
 

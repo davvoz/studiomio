@@ -48,38 +48,44 @@ class PhaseVocoder {
     for (let k = 0; k < nb; k++) this.omegaH[k] = (2 * Math.PI * k * this.H) / N;
   }
 
+  /** The next transient to pass, while running. */
+  private nextTransient = 0;
+
   run({ channels, map, outLength }: StretchInput, transients: readonly number[] | null): Float32Array[] {
     const { N, H, win } = this;
     const h = N >> 1;
     const mono = mixMono(channels);
     const outs = channels.map(() => new Float32Array(outLength));
     const wsum = new Float32Array(outLength);
-    const trans = transients && transients.length ? transients : null;
-    let ti = 0, first = true;
-
+    const trans = transients?.length ? transients : null;
+    this.nextTransient = 0;
     for (let f = 0; ; f++) {
       const oc = f * H, os = oc - h;
       if (os >= outLength) break;
       const ic = map.inputAt(oc), a = Math.round(ic) - h;
       const maxMag = this.analyzeMid(mono, a);
-
-      let reset = first;
-      if (trans) {
-        while (ti < trans.length && trans[ti] <= ic) { if (!first) reset = true; ti++; }
-      }
-      if (reset) this.syn.set(this.ph);
+      if (this.passedTransient(trans, ic, f === 0)) this.syn.set(this.ph);
       else this.advancePhase(maxMag);
       this.updateRotation();
-
       for (let c = 0; c < channels.length; c += 2) {
         this.synthesizePair(channels, c, a, outs, os, outLength);
       }
       const i0 = Math.max(0, -os), i1 = Math.min(N, outLength - os);
       for (let i = i0; i < i1; i++) wsum[os + i] += win[i] * win[i];
-      first = false;
     }
     normalizeOverlap(outs, wsum);
     return outs;
+  }
+
+  /** True if the phases restart here: at the first frame, or when the input passed a transient
+   *  since the previous frame (the transients up to `ic` are consumed). */
+  private passedTransient(trans: readonly number[] | null, ic: number, first: boolean): boolean {
+    let reset = first;
+    while (trans && this.nextTransient < trans.length && trans[this.nextTransient] <= ic) {
+      if (!first) reset = true;
+      this.nextTransient++;
+    }
+    return reset;
   }
 
   /** Spectrum of the mid in the current frame and in the previous one, with a single FFT. */
@@ -101,22 +107,38 @@ class PhaseVocoder {
   /** Advances the synthesis phase with Laroche-Dolson phase locking: the peaks follow
    *  their own instantaneous frequency, the nearby bins stay locked to their peak. */
   private advancePhase(maxMag: number): void {
-    const { mag, ph, syn, peaks, omegaH, pr, pi, nb } = this;
-    const dev = (k: number) => princarg(ph[k] - Math.atan2(pi[k], pr[k]) - omegaH[k]);
-    let np = 0;
-    const thr = maxMag * 1e-6;
-    for (let k = 2; k < nb - 2; k++) {
-      const m = mag[k];
-      if (m > thr && m > mag[k - 1] && m >= mag[k + 1] && m > mag[k - 2] && m >= mag[k + 2]) peaks[np++] = k;
-    }
+    const { syn, peaks, omegaH, nb } = this;
+    const np = this.findPeaks(maxMag * 1e-6);
     if (np === 0) {
-      for (let k = 0; k < nb; k++) syn[k] += omegaH[k] + dev(k);
+      for (let k = 0; k < nb; k++) syn[k] += omegaH[k] + this.deviation(k);
       return;
     }
     for (let j = 0; j < np; j++) {
       const p = peaks[j];
-      syn[p] = princarg(syn[p] + omegaH[p] + dev(p));
+      syn[p] = princarg(syn[p] + omegaH[p] + this.deviation(p));
     }
+    this.lockToPeaks(np);
+  }
+
+  /** How far bin `k`'s phase moved from what its centre frequency predicts. */
+  private deviation(k: number): number {
+    return princarg(this.ph[k] - Math.atan2(this.pi[k], this.pr[k]) - this.omegaH[k]);
+  }
+
+  /** The local maxima over `thr` (two bins on each side) into `peaks`; how many. */
+  private findPeaks(thr: number): number {
+    const { mag, peaks, nb } = this;
+    let np = 0;
+    for (let k = 2; k < nb - 2; k++) {
+      const m = mag[k];
+      if (m > thr && m > mag[k - 1] && m >= mag[k + 1] && m > mag[k - 2] && m >= mag[k + 2]) peaks[np++] = k;
+    }
+    return np;
+  }
+
+  /** Each bin follows its peak (the region ends at the lowest bin before the next peak). */
+  private lockToPeaks(np: number): void {
+    const { mag, ph, syn, peaks, nb } = this;
     let start = 0;
     for (let j = 0; j < np; j++) {
       const p = peaks[j];

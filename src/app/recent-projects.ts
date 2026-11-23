@@ -24,14 +24,19 @@ async function same(a: RecentProject, b: RecentProject): Promise<boolean> {
 
 export class RecentProjects {
   private entries: RecentProject[] = [];
-  private readonly loaded: Promise<void>;
+  private loaded: Promise<void> | null = null;
 
   /** `changed`: the list changed (to redraw the menu). */
-  constructor(private readonly changed: () => void = () => {}) {
-    this.loaded = loadHandles<RecentProject>(KEY).then(h => {
+  constructor(private readonly changed: () => void = () => {}) {}
+
+  /** Reads the list from IndexedDB, once: the later calls wait for the same reading (the changes
+   *  wait for it too). The app calls it at startup. */
+  load(): Promise<void> {
+    this.loaded ??= loadHandles<RecentProject>(KEY).then(h => {
       this.entries = h;
       this.changed();
     });
+    return this.loaded;
   }
 
   /** Until IndexedDB has answered the list is empty. */
@@ -41,19 +46,19 @@ export class RecentProjects {
 
   /** The folder goes to the top (if it was already there, it moves). */
   async add(entry: RecentProject): Promise<void> {
-    await this.loaded;
+    await this.load();
     const others = await this.without(entry);
     await this.store([entry, ...others].slice(0, MAX_RECENT));
   }
 
   /** Removes a folder that no longer opens (moved, deleted). */
   async remove(entry: RecentProject): Promise<void> {
-    await this.loaded;
+    await this.load();
     await this.store(await this.without(entry));
   }
 
   async clear(): Promise<void> {
-    await this.loaded;
+    await this.load();
     await this.store([]);
   }
 

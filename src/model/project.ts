@@ -70,6 +70,15 @@ const NO_AUTOMATION: readonly ClipEnvelope[] = [];
  *  shares with the old one all the untouched parts (useful for undo/redo and to
  *  understand what changed by comparing references). It guarantees the rules that
  *  involve several parts: each track has one slot per scene, the used samples exist. */
+/** A bus among the buses: a bus, not twice, not in a group, sending nowhere. */
+function validateBus(b: BusTrack, ids: ReadonlySet<string>): void {
+  if (!((b as Track) instanceof BusTrack)) throw new Error(`the track "${(b as Track).name}" is among the buses but isn't a bus`);
+  if (ids.has(b.id)) throw new Error(`track ${b.id} duplicated`);
+  if (b.group) throw new Error(`the bus "${b.name}" can't be in a group`);
+  if (Object.keys(b.sends).length) throw new Error(`the bus "${b.name}" can't send to other buses`);
+  checkRacks(b.chainKeys, b.racks);
+}
+
 export class Project {
   private readonly props: ProjectProps;
   /** The visible tracks, computed at the first request (the project doesn't change). */
@@ -117,7 +126,8 @@ export class Project {
   get buses(): readonly BusTrack[] { return this.props.buses ?? NO_BUSES; }
   /** The mixer channels that have a chain: the tracks and then the buses. */
   get channels(): readonly Track[] {
-    return (this.allChannels ??= this.buses.length ? [...this.tracks, ...this.buses] : this.tracks);
+    this.allChannels ??= this.buses.length ? [...this.tracks, ...this.buses] : this.tracks;
+    return this.allChannels;
   }
   get scenes(): readonly Scene[] { return this.props.scenes; }
   get samples(): readonly SampleRef[] { return this.props.samples; }
@@ -138,7 +148,8 @@ export class Project {
     const all = this.props.keyMap ?? NO_KEYS;
     if (this.liveKeys) return this.liveKeys;
     const live = all.filter(m => this.hasKeyTarget(m.target));
-    return (this.liveKeys = live.length === all.length ? all : live);
+    this.liveKeys = live.length === all.length ? all : live;
+    return this.liveKeys;
   }
 
   hasKeyTarget(t: KeyTarget): boolean {
@@ -161,7 +172,8 @@ export class Project {
     const all = this.props.midiMap ?? NO_MIDI;
     if (this.liveMidi) return this.liveMidi;
     const live = all.filter(m => this.hasMidiTarget(m.target));
-    return (this.liveMidi = live.length === all.length ? all : live);
+    this.liveMidi = live.length === all.length ? all : live;
+    return this.liveMidi;
   }
 
   hasMidiTarget(t: MidiTarget): boolean {
@@ -361,7 +373,8 @@ export class Project {
 
   /** The visible tracks (timeline, session, controllers): not those inside a closed group. */
   get visibleTracks(): readonly Track[] {
-    return (this.visible ??= this.tracks.filter(t => !this.groupsOf(t.id).some(g => g.folded)));
+    this.visible ??= this.tracks.filter(t => !this.groupsOf(t.id).some(g => g.folded));
+    return this.visible;
   }
 
   /** The groups containing the track, from the nearest to the outermost. */
@@ -519,29 +532,13 @@ export class Project {
     const ids = new Set<string>();
     let previous: Track | null = null;
     for (const t of this.tracks) {
-      if (ids.has(t.id)) throw new Error(`track ${t.id} duplicated`);
-      if (t instanceof BusTrack) throw new Error(`the bus "${t.name}" is among the tracks`);
-      if (t.group) {
-        // the group comes first and its tracks follow it: before there's the group or another of its tracks
-        if (!ids.has(t.group) || !(this.track(t.group) instanceof GroupTrack)) throw new Error(`the track "${t.name}" is in a group that doesn't exist`);
-        if (previous!.id !== t.group && !this.isInGroup(previous!.id, t.group)) {
-          throw new Error(`the track "${t.name}" doesn't follow the others of its group`);
-        }
-      }
+      this.validateTrack(t, ids, previous);
       ids.add(t.id);
       previous = t;
-      if (t.slots.length !== this.scenes.length) {
-        throw new Error(`the track "${t.name}" has ${t.slots.length} slots but there are ${this.scenes.length} scenes`);
-      }
-      checkRacks(t.chainKeys, t.racks);
     }
     for (const b of this.buses) {
-      if (!((b as Track) instanceof BusTrack)) throw new Error(`the track "${(b as Track).name}" is among the buses but isn't a bus`);
-      if (ids.has(b.id)) throw new Error(`track ${b.id} duplicated`);
-      if (b.group) throw new Error(`the bus "${b.name}" can't be in a group`);
-      if (Object.keys(b.sends).length) throw new Error(`the bus "${b.name}" can't send to other buses`);
+      validateBus(b, ids);
       ids.add(b.id);
-      checkRacks(b.chainKeys, b.racks);
     }
     const buses = new Set(this.buses.map(b => b.id));
     for (const t of this.tracks) {
@@ -552,5 +549,22 @@ export class Project {
     for (const id of this.usedSampleIds()) {
       if (!known.has(id)) throw new Error(`a clip or a device uses sample ${id}, which isn't in the project`);
     }
+  }
+
+  /** A track among the tracks: not a bus, not twice, after the group it's in (the group comes first
+   *  and its tracks follow it: before there's the group or another of its tracks), one slot per scene. */
+  private validateTrack(t: Track, ids: ReadonlySet<string>, previous: Track | null): void {
+    if (ids.has(t.id)) throw new Error(`track ${t.id} duplicated`);
+    if (t instanceof BusTrack) throw new Error(`the bus "${t.name}" is among the tracks`);
+    if (t.group) {
+      if (!ids.has(t.group) || !(this.track(t.group) instanceof GroupTrack)) throw new Error(`the track "${t.name}" is in a group that doesn't exist`);
+      if (previous!.id !== t.group && !this.isInGroup(previous!.id, t.group)) {
+        throw new Error(`the track "${t.name}" doesn't follow the others of its group`);
+      }
+    }
+    if (t.slots.length !== this.scenes.length) {
+      throw new Error(`the track "${t.name}" has ${t.slots.length} slots but there are ${this.scenes.length} scenes`);
+    }
+    checkRacks(t.chainKeys, t.racks);
   }
 }

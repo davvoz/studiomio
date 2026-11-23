@@ -29,7 +29,7 @@ export function encodeWav(channels: Channels, sampleRate: number, bits: WavBitDe
   const C = channels.length, n = channels[0].length, bps = w.bytes;
   const dataLen = n * C * bps;
   const buf = new ArrayBuffer(44 + dataLen), v = new DataView(buf);
-  const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.codePointAt(i) ?? 0); };
   str(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true); str(8, 'WAVE');
   str(12, 'fmt '); v.setUint32(16, 16, true);
   v.setUint16(20, w.formatTag, true); v.setUint16(22, C, true);

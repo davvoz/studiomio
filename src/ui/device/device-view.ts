@@ -270,7 +270,7 @@ export class DeviceView {
 
   private revealControlled(): void {
     const c = this.controlled;
-    if (!c || c.owner !== this.owner) return;
+    if (c?.owner !== this.owner) return;
     const panel = this.panels.get(c.device) ?? this.rackPanels.get(c.device as DeviceId);
     if (panel) this.reveal(panel.element);
   }
@@ -465,16 +465,22 @@ export class DeviceView {
       const param = (e.target as HTMLElement | null)?.closest<HTMLElement>('.macro[data-param]')?.dataset.param;
       if (!param || this.deps.ui?.keyMapping) return;
       const racks = this.deps.store.project.racksOf(owner);
-      const map = this.mapMode;
-      const mapping = map && map.macro !== null && this.mapsInto(racks, map.rack, rack.id);
+      const mapping = this.mappingInto(racks, rack.id);
       if (!mapping && !macroOf(racks, rack.id, param)) return;
       e.stopPropagation();
       e.preventDefault();
-      if (mapping && e.type === 'pointerdown') this.guard(mapMacro(owner, map.rack, map.macro!, rack.id, param));
+      if (mapping && e.type === 'pointerdown') this.guard(mapMacro(owner, mapping.rack, mapping.macro, rack.id, param));
     };
     for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick', 'wheel', 'keydown']) {
       panel.element.addEventListener(type, intercept, { capture: true, passive: false });
     }
+  }
+
+  /** With "Map" on on a macro of a rack around `key` (whose macros can be mapped into it): that macro. */
+  private mappingInto(racks: RackList, key: DeviceKey): { readonly rack: DeviceId; readonly macro: number } | null {
+    const map = this.mapMode;
+    if (typeof map?.macro !== 'number' || !this.mapsInto(racks, map.rack, key)) return null;
+    return { rack: map.rack, macro: map.macro };
   }
 
   /** Rack `outer` has device or rack `key` inside (its macros can move it). */
@@ -539,12 +545,11 @@ export class DeviceView {
         if (e.type === 'pointerdown') this.chooseKeyParam(owner, key, param);
         return;
       }
-      const map = this.mapMode;
-      const mapping = map && map.macro !== null && this.mapsInto(racks, map.rack, key);
+      const mapping = this.mappingInto(racks, key);
       if (!mapping && !macroOf(racks, key, param)) return;
       e.stopPropagation();
       e.preventDefault();
-      if (mapping && e.type === 'pointerdown') this.guard(mapMacro(owner, map.rack, map.macro!, key, param));
+      if (mapping && e.type === 'pointerdown') this.guard(mapMacro(owner, mapping.rack, mapping.macro, key, param));
     };
     for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick', 'wheel', 'keydown']) {
       panel.element.addEventListener(type, intercept, { capture: true, passive: false });
@@ -755,13 +760,12 @@ export class DeviceView {
   /** The macros of a rack mapped to a macro of a surrounding rack; with "Map" on on one of
    *  those, you see that they can be mapped. */
   private markRackMapped(rack: Rack, panel: RackPanel, racks: RackList): void {
-    const map = this.mapMode;
-    const outer = map && map.macro !== null && this.mapsInto(racks, map.rack, rack.id);
+    const outer = this.mappingInto(racks, rack.id);
     panel.element.classList.toggle('mappable', !!outer);
     for (const e of panel.element.querySelectorAll<HTMLElement>('.macro[data-param]')) {
       const found = macroOf(racks, rack.id, e.dataset.param!);
       e.classList.toggle('mapped', !!found);
-      if (outer) e.classList.toggle('chosen', !!found && found.rack.id === map.rack && found.index === map.macro);
+      if (outer) e.classList.toggle('chosen', !!found && found.rack.id === outer.rack && found.index === outer.macro);
       if (found) {
         e.dataset.macro = String(found.index + 1);
         e.title += `\nMoved by macro ${found.index + 1} of ${rackName(found.rack)} (right click to remove it).`;
@@ -842,7 +846,7 @@ export class DeviceView {
   /** The rack chosen with a click on its name, if the selection is still its devices. */
   private chosenRack(): Rack | undefined {
     const rack = this.owner && this.selectedRack ? findRack(this.deps.store.project.racksOf(this.owner), this.selectedRack) : undefined;
-    return rack && rack.devices.length === this.selection.length && rack.devices.every(k => this.selection.includes(k)) ? rack : undefined;
+    return rack?.devices.length === this.selection.length && rack.devices.every(k => this.selection.includes(k)) ? rack : undefined;
   }
 
   /** Click on the name of a device (or of a rack, `rack`: its devices); with Shift the

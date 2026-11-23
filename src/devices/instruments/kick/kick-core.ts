@@ -35,7 +35,7 @@ interface MonoSample {
 }
 
 function mono(d: SampleData | null): MonoSample | null {
-  if (!d || !d.channels.length || d.channels[0].length < 4) return null;
+  if (!d?.channels.length || d.channels[0].length < 4) return null;
   const [l, r] = d.channels;
   if (!r || r === l) return { data: l, rate: d.sampleRate };
   const data = new Float32Array(l.length);
@@ -206,13 +206,7 @@ class KickVoice {
 
   step(): void {
     const sr = this.sampleRate, t = this.t++;
-    // the envelope: rises in `attack`, stays for `hold`, then body and tail decay each with its own time
-    let rise = 1;
-    if (t < this.attackN) rise = t / this.attackN;
-    else {
-      this.tailAmp *= this.tailK;
-      if (t >= this.holdEnd) this.bodyAmp *= this.bodyK;
-    }
+    const rise = this.envelopes(t);
     const bodyEnv = rise * this.bodyAmp, tailEnv = rise * this.tailAmp;
     // the pitch drop, in semitones: the more curve, the sooner it drops
     this.pitchEnv *= this.pitchK;
@@ -222,33 +216,11 @@ class KickVoice {
     this.phase += hz / sr;
     if (this.phase >= 1) this.phase -= 1;
     const sine = Math.sin(TWO_PI * this.phase);
-    let body = 0;
-    if (this.synth) body = soft(sine, this.shape) * bodyEnv;
-    else if (this.bodySample) {
-      const s = this.bodySample, k = Math.floor(this.bodyPos);
-      if (k < s.data.length - 1) {
-        body = hermite(s.data, k, this.bodyPos - k) * bodyEnv;
-        this.bodyPos += this.bodyStep;
-      } else this.bodySample = null;
-    }
+    const body = this.synth ? soft(sine, this.shape) * bodyEnv : this.bodyFromSample(bodyEnv);
     const tail = soft(sine, this.tailDrive) * tailEnv;
-    // lo snap
     let snap = 0;
     if (this.snapAmp >= FLOOR) {
-      if (this.snapSource === SNAP_SOURCE.click) {
-        // a high sine falling an octave while dying out: the "tick"
-        this.clickPhase += (this.clickHz * (1 + this.snapAmp)) / sr;
-        if (this.clickPhase >= 1) this.clickPhase -= 1;
-        snap = Math.sin(TWO_PI * this.clickPhase) * this.snapAmp;
-      } else if (this.snapSource === SNAP_SOURCE.noise) {
-        snap = this.snapFilter.process(this.noise.next()) * this.snapAmp * 4;
-      } else if (this.snapSample) {
-        const s = this.snapSample, k = Math.floor(this.snapPos);
-        if (k < s.data.length - 1) {
-          snap = hermite(s.data, k, this.snapPos - k) * this.snapAmp;
-          this.snapPos += this.snapStep;
-        } else this.snapSample = null;
-      }
+      snap = this.snapNow(sr);
       this.snapAmp *= this.snapK;
     }
     if (this.choking) this.fade *= this.chokeK;
@@ -256,10 +228,57 @@ class KickVoice {
     this.kick = (body * this.bodyGain + tail * this.tailGain) * g;
     this.snap = snap * this.snapGain * g;
     this.body = bodyEnv * this.fade;
-    if (t > this.holdEnd && this.fade < FLOOR) this.active = false;
-    else if (t > this.holdEnd && this.bodyAmp * this.bodyGain < FLOOR && this.tailAmp * this.tailGain < FLOOR && this.snapAmp < FLOOR) {
-      this.active = false;
+    if (t > this.holdEnd && this.isSilent()) this.active = false;
+  }
+
+  /** The envelope at sample `t`: it rises in `attack` (returned), stays for `hold`, then body and
+   *  tail decay each with its own time. */
+  private envelopes(t: number): number {
+    if (t < this.attackN) return t / this.attackN;
+    this.tailAmp *= this.tailK;
+    if (t >= this.holdEnd) this.bodyAmp *= this.bodyK;
+    return 1;
+  }
+
+  /** The body from its sample, at the body's envelope (0 when the sample has ended). */
+  private bodyFromSample(env: number): number {
+    const s = this.bodySample;
+    if (!s) return 0;
+    const k = Math.floor(this.bodyPos);
+    if (k >= s.data.length - 1) {
+      this.bodySample = null;
+      return 0;
     }
+    const v = hermite(s.data, k, this.bodyPos - k) * env;
+    this.bodyPos += this.bodyStep;
+    return v;
+  }
+
+  /** The snap from its source: the click, the filtered noise or a sample. */
+  private snapNow(sr: number): number {
+    if (this.snapSource === SNAP_SOURCE.click) {
+      // a high sine falling an octave while dying out: the "tick"
+      this.clickPhase += (this.clickHz * (1 + this.snapAmp)) / sr;
+      if (this.clickPhase >= 1) this.clickPhase -= 1;
+      return Math.sin(TWO_PI * this.clickPhase) * this.snapAmp;
+    }
+    if (this.snapSource === SNAP_SOURCE.noise) return this.snapFilter.process(this.noise.next()) * this.snapAmp * 4;
+    const s = this.snapSample;
+    if (!s) return 0;
+    const k = Math.floor(this.snapPos);
+    if (k >= s.data.length - 1) {
+      this.snapSample = null;
+      return 0;
+    }
+    const v = hermite(s.data, k, this.snapPos - k) * this.snapAmp;
+    this.snapPos += this.snapStep;
+    return v;
+  }
+
+  /** After the hold: faded out, or body, tail and snap all under the floor. */
+  private isSilent(): boolean {
+    if (this.fade < FLOOR) return true;
+    return this.bodyAmp * this.bodyGain < FLOOR && this.tailAmp * this.tailGain < FLOOR && this.snapAmp < FLOOR;
   }
 }
 

@@ -298,6 +298,34 @@ function instrumentOf<S extends string, K extends string>(spec: TrackSpec<S, K>,
   return { type: ANALOG.type, params: { ...spec.analog } };
 }
 
+/** A MIDI track of the live: name, mixer, instrument (or its rack), effect racks, samples, effects. */
+function buildTrack<S extends string, K extends string>(store: ProjectStore, spec: TrackSpec<S, K>, sounds: Readonly<Record<S, SampleRef>>): TrackId {
+  store.apply(addTrack('midi'));
+  const track = store.project.tracks.at(-1)!.id;
+  store.apply(renameTrack(track, spec.name));
+  store.apply(setMixer(track, { volumeDb: spec.volumeDb, ...(spec.pan ? { pan: spec.pan } : {}) }));
+  const instrument = instrumentOf(spec, sounds);
+  if (spec.rack) store.apply(loadRack(track, rackPreset(spec.rack, { ...instrument, preset: null })));
+  else store.apply(setInstrument(track, { ...instrument, preset: null }));
+  for (const r of spec.fxRacks ?? []) store.apply(loadRack(track, rackPreset(r, null)));
+  if (spec.kit) {
+    const kit = spec.kit;
+    store.apply(setInstrumentSamples(track, Object.fromEntries(kit.flatMap((p, i) => (p.sound === undefined ? [] : [[padSlot(i), sounds[p.sound]]])))));
+  }
+  if (spec.samples) store.apply(setInstrumentSamples(track, Object.fromEntries(Object.entries<S>(spec.samples).map(([slot, s]) => [slot, sounds[s]]))));
+  addEffects(store, track, spec.effects);
+  return track;
+}
+
+/** The track's sidechains, from tracks of the live by key. */
+function wireSidechains<S extends string, K extends string>(store: ProjectStore, spec: TrackSpec<S, K>, ids: ReadonlyMap<K, TrackId>): void {
+  for (const [index, source] of spec.sidechain ?? []) {
+    const track = ids.get(spec.key)!, fx = store.project.track(track)!.effects[index], from = ids.get(source);
+    if (!fx || !from) throw new Error(`${spec.name}: sidechain on effect ${index + 1} from «${source}» impossible`);
+    store.apply(setEffectSidechain(track, fx.id, from));
+  }
+}
+
 /** Assembles the live in the store's (empty) project, with the samples already ready by name. */
 export function buildLive<S extends string, K extends string>(store: ProjectStore, live: LiveSpec<S, K>, sounds: Readonly<Record<S, SampleRef>>): void {
   store.apply(renameProject(live.name));
@@ -310,31 +338,9 @@ export function buildLive<S extends string, K extends string>(store: ProjectStor
   live.scenes.forEach((s, i) => store.apply(renameScene(store.project.scenes[i].id, s.name)));
 
   const ids = new Map<K, TrackId>();
-  for (const spec of live.tracks) {
-    store.apply(addTrack('midi'));
-    const track = store.project.tracks.at(-1)!.id;
-    ids.set(spec.key, track);
-    store.apply(renameTrack(track, spec.name));
-    store.apply(setMixer(track, { volumeDb: spec.volumeDb, ...(spec.pan ? { pan: spec.pan } : {}) }));
-    const instrument = instrumentOf(spec, sounds);
-    if (spec.rack) store.apply(loadRack(track, rackPreset(spec.rack, { ...instrument, preset: null })));
-    else store.apply(setInstrument(track, { ...instrument, preset: null }));
-    for (const r of spec.fxRacks ?? []) store.apply(loadRack(track, rackPreset(r, null)));
-    if (spec.kit) {
-      const kit = spec.kit;
-      store.apply(setInstrumentSamples(track, Object.fromEntries(kit.flatMap((p, i) => (p.sound === undefined ? [] : [[padSlot(i), sounds[p.sound]]])))));
-    }
-    if (spec.samples) store.apply(setInstrumentSamples(track, Object.fromEntries(Object.entries<S>(spec.samples).map(([slot, s]) => [slot, sounds[s]]))));
-    addEffects(store, track, spec.effects);
-  }
+  for (const spec of live.tracks) ids.set(spec.key, buildTrack(store, spec, sounds));
   // the sidechain when all the tracks are there (also towards a track that comes after)
-  for (const spec of live.tracks) {
-    for (const [index, source] of spec.sidechain ?? []) {
-      const track = ids.get(spec.key)!, fx = store.project.track(track)!.effects[index], from = ids.get(source);
-      if (!fx || !from) throw new Error(`${spec.name}: sidechain on effect ${index + 1} from «${source}» impossible`);
-      store.apply(setEffectSidechain(track, fx.id, from));
-    }
-  }
+  for (const spec of live.tracks) wireSidechains(store, spec, ids);
   for (const k of live.keys ?? []) {
     const owner: ChainOwner = k.owner === 'master' ? MASTER : ids.get(k.owner)!;
     const rack = store.project.racksOf(owner)[k.rack];

@@ -19,8 +19,10 @@ runs:
       with:
         tool: wasm-pack
 
+    # no dependency's install scripts run (supply-chain safety): none is needed, electron-builder
+    # downloads Electron itself and the Windows installer is NSIS, not Squirrel (electron-winstaller)
     - shell: bash
-      run: npm ci
+      run: npm ci --ignore-scripts
     - shell: bash
       run: npm run wasm
     # needed even without tests: the typecheck in npm run build checks the tests, which import it

@@ -39,7 +39,7 @@ export class PitchShifterCore implements EffectCore {
   private mix = 1;
   private targetMix = 1;
   /** The step the ratios were computed for (NaN: to be recomputed). */
-  private ratioFor = NaN;
+  private ratioFor = Number.NaN;
 
   constructor(private readonly sampleRate: number) {
     this.ms = sampleRate / 1000;
@@ -58,7 +58,7 @@ export class PitchShifterCore implements EffectCore {
     this.targetWindow = v('window', 60) * this.ms;
     this.feedback = v('feedback', 0) / 100;
     this.targetMix = v('mix', 100) / 100;
-    this.ratioFor = NaN;
+    this.ratioFor = Number.NaN;
     if (this.fresh) {
       this.semitones = this.targetSemitones;
       this.window = this.targetWindow;

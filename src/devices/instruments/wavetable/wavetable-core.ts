@@ -165,6 +165,13 @@ class Osc {
   level = 0;
 }
 
+/** The shape a table position falls in (the last one has no next to crossfade to). */
+function frameOf(x: number): number {
+  const f = Math.trunc(x);
+  if (f >= LAST_FRAME) return LAST_FRAME - 1;
+  return f < 0 ? 0 : f;
+}
+
 class WavetableVoice implements PolyVoice, MonoVoice {
   private readonly amp: Adsr;
   /** The modulation envelope runs at the control rate. */
@@ -270,7 +277,7 @@ class WavetableVoice implements PolyVoice, MonoVoice {
   /** In pieces between one modulation computation and the next: first the oscillators, copy by
    *  copy, into the voice's buffers; then sub, filters and envelope sample by sample. */
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
-    const { s, amp, filterL, filterR, bufL, bufR } = this;
+    const { s, bufL, bufR } = this;
     const [a, b] = this.osc, [tableA, tableB] = s.tables;
     for (let i = from; i < to;) {
       if (this.countdown <= 0) this.control();
@@ -281,58 +288,104 @@ class WavetableVoice implements PolyVoice, MonoVoice {
       this.oscillate(tableA, a, len, s.level[0], 0);
       this.oscillate(tableB, b, len, this.levelB, this.levelBStep);
       this.levelB += this.levelBStep * len;
-      if (s.sub > 0) {
-        let ph = this.subPhase;
-        for (let j = 0; j < len; j++) {
-          const v = Math.sin(2 * Math.PI * ph) * s.sub;
-          bufL[j] += v;
-          bufR[j] += v;
-          ph += this.subDt;
-          if (ph >= 1) ph -= 1;
-        }
-        this.subPhase = ph;
-      }
-      for (let j = 0; j < len; j++, i++) {
-        this.modGain += this.modGainStep;
-        const g = amp.next() * this.level * this.modGain;
-        left[i] += filterL.process(bufL[j]) * g;
-        right[i] += filterR.process(bufR[j]) * g;
-        if (!amp.active) return;
-      }
+      if (s.sub > 0) this.addSub(len);
+      i = this.filterAndEnvelope(left, right, i, len);
+      if (i < 0) return;
     }
+  }
+
+  /** The sub: a sine, in both channels. */
+  private addSub(len: number): void {
+    const { bufL, bufR } = this, level = this.s.sub;
+    let ph = this.subPhase;
+    for (let j = 0; j < len; j++) {
+      const v = Math.sin(2 * Math.PI * ph) * level;
+      bufL[j] += v;
+      bufR[j] += v;
+      ph += this.subDt;
+      if (ph >= 1) ph -= 1;
+    }
+    this.subPhase = ph;
+  }
+
+  /** The buffers through the filter and the volume envelope into [i, i + len); the next sample,
+   *  or -1 when the envelope has ended. */
+  private filterAndEnvelope(left: Float32Array, right: Float32Array, i: number, len: number): number {
+    const { amp, filterL, filterR, bufL, bufR } = this;
+    for (let j = 0; j < len; j++, i++) {
+      this.modGain += this.modGainStep;
+      const g = amp.next() * this.level * this.modGain;
+      left[i] += filterL.process(bufL[j]) * g;
+      right[i] += filterR.process(bufR[j]) * g;
+      if (!amp.active) return -1;
+    }
+    return i;
   }
 
   /** Adds `len` samples of the oscillator into the buffers, all the copies, with the level starting
    *  from `level` and moving by `step` per sample. Each sample crossfades between two neighbouring shapes and between
    *  two neighbouring samples; positions and phases advance even when it isn't heard. */
   private oscillate(table: Wavetable, o: Osc, len: number, level: number, step: number): void {
-    const { bufL, bufR } = this, n = this.s.unison;
+    const n = this.s.unison;
     if (level <= 0 && step <= 0) {
       for (let k = 0; k < n; k++) o.frames[k] += o.steps[k] * len;
       return;
     }
-    const levelOffset = o.level * STRIDE;
+    for (let k = 0; k < n; k++) this.oscillateCopy(table, o, k, len, level, step);
+  }
+
+  /** Copy `k` of the oscillator, panned, into the buffers. */
+  private oscillateCopy(table: Wavetable, o: Osc, k: number, len: number, level: number, step: number): void {
+    const { bufL, bufR } = this, levelOffset = o.level * STRIDE;
+    const dt = o.dts[k], st = o.steps[k], pl = this.panL[k], pr = this.panR[k];
+    let ph = o.phases[k], x = o.frames[k], g = level;
+    for (let j = 0; j < len; j++) {
+      x += st;
+      g += step;
+      const f = frameOf(x);
+      const idx = ph * TABLE_SIZE, i = Math.trunc(idx), t = idx - i;
+      const p = f * FRAME_STRIDE + levelOffset + i, q = p + FRAME_STRIDE;
+      const a0 = table[p], b0 = table[q];
+      const av = a0 + (table[p + 1] - a0) * t, bv = b0 + (table[q + 1] - b0) * t;
+      const v = (av + (bv - av) * (x - f)) * g;
+      bufL[j] += v * pl;
+      bufR[j] += v * pr;
+      ph += dt;
+      if (ph >= 1) ph -= 1;
+    }
+    o.phases[k] = ph;
+    o.frames[k] = x;
+  }
+
+  /** The modulation envelope and the LFOs summed into `mods`; the LFOs move on. */
+  private modulations(): void {
+    const { s, mods, sampleRate } = this;
+    mods.fill(0);
+    const env = this.menv.next();
+    for (const r of s.envRoutes) mods[r.dest] += env * r.amount;
+    for (let i = 0; i < LFOS; i++) {
+      const l = s.lfos[i];
+      const value = l.shape === LFO_SHAPE.sampleHold ? hash(this.lfoCycle[i]) : lfoWave(l.shape, this.lfoPhase[i]);
+      mods[l.route.dest] += value * l.route.amount;
+      const p = this.lfoPhase[i] + (s.lfoHz(i) * CONTROL_RATE) / sampleRate;
+      if (p >= 1) this.lfoCycle[i] += Math.floor(p);
+      this.lfoPhase[i] = p % 1;
+    }
+  }
+
+  /** Oscillator `o`'s copies: detuned along the fan, reading the table fanned around position `pos`
+   *  ("Positions" spread), gliding there over the piece (at once on the first one). */
+  private tuneOsc(o: number, hz: number, detuneTop: number, pos: number): void {
+    const s = this.s, n = s.unison, osc = this.osc[o], dt = Math.min(0.49, (hz * s.ratio[o]) / this.sampleRate);
+    osc.level = levelFor(Math.min(0.49, dt * detuneTop));
     for (let k = 0; k < n; k++) {
-      const dt = o.dts[k], st = o.steps[k], pl = this.panL[k], pr = this.panR[k];
-      let ph = o.phases[k], x = o.frames[k], g = level;
-      for (let j = 0; j < len; j++) {
-        x += st;
-        g += step;
-        let f = x | 0;
-        if (f >= LAST_FRAME) f = LAST_FRAME - 1;
-        else if (f < 0) f = 0;
-        const idx = ph * TABLE_SIZE, i = idx | 0, t = idx - i;
-        const p = f * FRAME_STRIDE + levelOffset + i, q = p + FRAME_STRIDE;
-        const a0 = table[p], b0 = table[q];
-        const av = a0 + (table[p + 1] - a0) * t, bv = b0 + (table[q + 1] - b0) * t;
-        const v = (av + (bv - av) * (x - f)) * g;
-        bufL[j] += v * pl;
-        bufR[j] += v * pr;
-        ph += dt;
-        if (ph >= 1) ph -= 1;
-      }
-      o.phases[k] = ph;
-      o.frames[k] = x;
+      const f = fan(k, n);
+      osc.dts[k] = Math.min(0.49, dt * Math.pow(2, (f * s.detune) / 1200));
+      const target = clamp01(pos + f * s.posSpread * 0.5) * LAST_FRAME;
+      if (this.fresh) {
+        osc.frames[k] = target;
+        osc.steps[k] = 0;
+      } else osc.steps[k] = (target - osc.frames[k]) / CONTROL_RATE;
     }
   }
 
@@ -346,37 +399,14 @@ class WavetableVoice implements PolyVoice, MonoVoice {
       this.pitch += (this.target - this.pitch) * k;
       if (Math.abs(this.target - this.pitch) < 1e-3) this.pitch = this.target;
     }
-    mods.fill(0);
-    const env = this.menv.next();
-    for (const r of s.envRoutes) mods[r.dest] += env * r.amount;
-    for (let i = 0; i < LFOS; i++) {
-      const l = s.lfos[i];
-      const value = l.shape === LFO_SHAPE.sampleHold ? hash(this.lfoCycle[i]) : lfoWave(l.shape, this.lfoPhase[i]);
-      mods[l.route.dest] += value * l.route.amount;
-      const p = this.lfoPhase[i] + (s.lfoHz(i) * CONTROL_RATE) / sampleRate;
-      if (p >= 1) this.lfoCycle[i] += Math.floor(p);
-      this.lfoPhase[i] = p % 1;
-    }
+    this.modulations();
 
     const pitch = this.pitch + mods[MOD_DEST.pitch];
     const hz = midiToHz(pitch), n = s.unison;
     this.subDt = Math.min(0.49, (hz * s.subRatio) / sampleRate);
     const moved = [mods[MOD_DEST.posA] + mods[MOD_DEST.pos], mods[MOD_DEST.posB] + mods[MOD_DEST.pos]];
     const norm = 1 / Math.sqrt(n), detuneTop = Math.pow(2, (n > 1 ? s.detune : 0) / 1200);
-    for (let o = 0; o < 2; o++) {
-      const osc = this.osc[o], dt = Math.min(0.49, (hz * s.ratio[o]) / sampleRate);
-      osc.level = levelFor(Math.min(0.49, dt * detuneTop));
-      for (let k = 0; k < n; k++) {
-        const f = fan(k, n);
-        osc.dts[k] = Math.min(0.49, dt * Math.pow(2, (f * s.detune) / 1200));
-        // with "Positions" the copies read the table fanned around the position
-        const target = clamp01(s.pos[o] + moved[o] + f * s.posSpread * 0.5) * LAST_FRAME;
-        if (this.fresh) {
-          osc.frames[k] = target;
-          osc.steps[k] = 0;
-        } else osc.steps[k] = (target - osc.frames[k]) / CONTROL_RATE;
-      }
-    }
+    for (let o = 0; o < 2; o++) this.tuneOsc(o, hz, detuneTop, s.pos[o] + moved[o]);
     for (let k = 0; k < n; k++) {
       // constant-power pan along the fan; the level drops as the square root of the copies
       const p = fan(k, n) * s.spread;

@@ -43,44 +43,7 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
   current?.close();
   const menu = Object.assign(document.createElement('div'), { className: 'context-menu', role: 'menu', tabIndex: -1 });
   const buttons: HTMLButtonElement[] = [];
-  for (const item of items) {
-    if (item === SEPARATOR) {
-      menu.append(Object.assign(document.createElement('div'), { className: 'separator' }));
-      continue;
-    }
-    if ('colors' in item) {
-      const row = Object.assign(document.createElement('div'), { className: 'swatches' });
-      for (const color of item.required ? item.colors : [...item.colors, undefined]) {
-        const s = Object.assign(document.createElement('button'), {
-          className: color ? 'swatch' : 'swatch none', role: 'menuitem', title: color ? color : item.noneTitle ?? 'No colour',
-        });
-        if (color) s.style.setProperty('--swatch', color);
-        s.classList.toggle('current', color?.toLowerCase() === item.current?.toLowerCase());
-        s.onclick = () => {
-          close();
-          item.pick(color);
-        };
-        s.onpointerenter = () => s.focus();
-        buttons.push(s);
-        row.append(s);
-      }
-      menu.append(row);
-      continue;
-    }
-    const b = Object.assign(document.createElement('button'), { className: 'item', disabled: !!item.disabled, role: 'menuitem' });
-    b.append(
-      Object.assign(document.createElement('span'), { className: 'check', textContent: item.checked ? '✓' : '' }),
-      Object.assign(document.createElement('span'), { className: 'label', textContent: item.label }),
-      Object.assign(document.createElement('span'), { className: 'shortcut', textContent: item.shortcut ?? '' }),
-    );
-    b.onclick = () => {
-      close();
-      item.run();
-    };
-    b.onpointerenter = () => b.focus();
-    buttons.push(b);
-    menu.append(b);
-  }
+  for (const item of items) menu.append(menuEntry(item, buttons, () => close()));
   document.body.append(menu);
   // inside the window even near the edges
   const r = menu.getBoundingClientRect();
@@ -124,6 +87,46 @@ export function showContextMenu(x: number, y: number, items: readonly MenuItem[]
   addEventListener('wheel', outside, true);
   addEventListener('blur', close);
   addEventListener('resize', close);
+}
+
+/** An entry of the menu: a separator, a row of colours or a command (its buttons go into `buttons`,
+ *  for the arrows). Choosing closes the menu first. */
+function menuEntry(item: MenuItem, buttons: HTMLButtonElement[], close: () => void): HTMLElement {
+  if (item === SEPARATOR) return Object.assign(document.createElement('div'), { className: 'separator' });
+  if ('colors' in item) return swatchRow(item, buttons, close);
+  const b = Object.assign(document.createElement('button'), { className: 'item', disabled: !!item.disabled, role: 'menuitem' });
+  b.append(
+    Object.assign(document.createElement('span'), { className: 'check', textContent: item.checked ? '✓' : '' }),
+    Object.assign(document.createElement('span'), { className: 'label', textContent: item.label }),
+    Object.assign(document.createElement('span'), { className: 'shortcut', textContent: item.shortcut ?? '' }),
+  );
+  b.onclick = () => {
+    close();
+    item.run();
+  };
+  b.onpointerenter = () => b.focus();
+  buttons.push(b);
+  return b;
+}
+
+/** The colours to choose from (and "none", unless a colour is required). */
+function swatchRow(item: MenuColors, buttons: HTMLButtonElement[], close: () => void): HTMLElement {
+  const row = Object.assign(document.createElement('div'), { className: 'swatches' });
+  for (const color of item.required ? item.colors : [...item.colors, undefined]) {
+    const s = Object.assign(document.createElement('button'), {
+      className: color ? 'swatch' : 'swatch none', role: 'menuitem', title: color ?? item.noneTitle ?? 'No colour',
+    });
+    if (color) s.style.setProperty('--swatch', color);
+    s.classList.toggle('current', color?.toLowerCase() === item.current?.toLowerCase());
+    s.onclick = () => {
+      close();
+      item.pick(color);
+    };
+    s.onpointerenter = () => s.focus();
+    buttons.push(s);
+    row.append(s);
+  }
+  return row;
 }
 
 /** The shortcuts as they're written in the menus. */

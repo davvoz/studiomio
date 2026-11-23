@@ -9,12 +9,14 @@ on:
   push:
     tags: ['v*']
 
-permissions:
-  contents: write   # to create the release and upload the installers
+# nothing by default: each job asks only for what it needs
+permissions: {}
 
 jobs:
   windows:
     runs-on: windows-latest
+    permissions:
+      contents: write   # to create the release and upload the installer
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -50,6 +52,8 @@ jobs:
   linux:
     needs: windows
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to upload the Linux packages to the release
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup

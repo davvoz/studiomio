@@ -19,6 +19,7 @@ export class EnvelopeFollower {
   process(x: number): number {
     const a = Math.abs(x), v = this.value;
     const next = v + (a > v ? this.attack : this.release) * (a - v);
-    return (this.value = next < 1e-12 ? 0 : next);
+    this.value = next < 1e-12 ? 0 : next;
+    return this.value;
   }
 }

@@ -29,7 +29,7 @@ export function planMove(project: Project, refs: readonly PlacementRef[], deltaB
   const items = refs.map(r => ({ r, pl: findPlacement(project, r)! })).filter(x => x.pl && index.has(x.r.track));
   const fits = (dt: number) => items.every(({ r, pl }) => {
     const target = rows[index.get(r.track)! + dt];
-    return target !== undefined && target.accepts(pl.clip);
+    return target?.accepts(pl.clip) === true;
   });
   const dt = deltaTracks !== 0 && fits(deltaTracks) ? deltaTracks : 0;
   return items.map(({ r, pl }) => ({

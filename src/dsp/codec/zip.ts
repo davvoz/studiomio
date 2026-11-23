@@ -70,38 +70,70 @@ export function makeZip(files: readonly ZipEntry[], date = new Date()): Uint8Arr
  *  compressed with deflate (the ZIPs made by File Explorer, the Finder, 7-Zip). */
 export async function readZip(zip: Uint8Array): Promise<ZipEntry[]> {
   const v = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
-  const bad = (why: string) => new Error(`invalid ZIP archive: ${why}`);
-  // the end of the central directory: at the end, before any comment (at most 64 KB)
-  let end = -1;
-  for (let i = zip.length - 22; i >= Math.max(0, zip.length - 22 - 0xffff); i--) {
-    if (v.getUint32(i, true) === 0x06054b50) { end = i; break; }
-  }
-  if (end < 0) throw bad('not a ZIP');
+  const end = centralEnd(zip, v);
   const count = v.getUint16(end + 10, true);
   let p = v.getUint32(end + 16, true);
   if (count === 0xffff || p === 0xffffffff) throw new Error('ZIP64 archive (over 4 GB): not supported');
-  const utf8 = new TextDecoder();
   const out: ZipEntry[] = [];
   for (let n = 0; n < count; n++) {
-    if (p + 46 > zip.length || v.getUint32(p, true) !== 0x02014b50) throw bad('damaged central directory');
-    const flags = v.getUint16(p + 8, true), method = v.getUint16(p + 10, true), crc = v.getUint32(p + 16, true);
-    const packed = v.getUint32(p + 20, true), size = v.getUint32(p + 24, true);
-    const nameLen = v.getUint16(p + 28, true), extraLen = v.getUint16(p + 30, true), commentLen = v.getUint16(p + 32, true);
-    const local = v.getUint32(p + 42, true);
-    const name = utf8.decode(zip.subarray(p + 46, p + 46 + nameLen)).replace(/\\/g, '/');
-    p += 46 + nameLen + extraLen + commentLen;
-    if (name.endsWith('/')) continue;
-    if (flags & 1) throw new Error(`"${name}" is encrypted: it can't be read`);
-    if (local + 30 > zip.length || v.getUint32(local, true) !== 0x04034b50) throw bad(`"${name}" can't be found`);
-    const start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
-    const raw = zip.subarray(start, start + packed);
-    if (raw.length !== packed) throw bad(`"${name}" is truncated`);
-    if (method !== 0 && method !== 8) throw new Error(`"${name}" uses an unsupported compression (${method})`);
-    const data = method === 0 ? raw.slice() : await inflate(raw);
-    if (data.length !== size || crc32(data) !== crc) throw bad(`"${name}" is damaged`);
-    out.push({ name, data });
+    const entry = centralEntry(zip, v, p);
+    p = entry.next;
+    if (!entry.name.endsWith('/')) out.push({ name: entry.name, data: await entryData(zip, v, entry) });
   }
   return out;
+}
+
+const invalid = (why: string) => new Error(`invalid ZIP archive: ${why}`);
+
+/** Where the end of the central directory is: at the end, before any comment (at most 64 KB). */
+function centralEnd(zip: Uint8Array, v: DataView): number {
+  for (let i = zip.length - 22; i >= Math.max(0, zip.length - 22 - 0xffff); i--) {
+    if (v.getUint32(i, true) === 0x06054b50) return i;
+  }
+  throw invalid('not a ZIP');
+}
+
+/** A file as the central directory describes it, and where the next record starts. */
+interface CentralEntry {
+  readonly name: string;
+  readonly flags: number;
+  readonly method: number;
+  readonly crc: number;
+  readonly packed: number;
+  readonly size: number;
+  readonly local: number;
+  readonly next: number;
+}
+
+const utf8 = new TextDecoder();
+
+function centralEntry(zip: Uint8Array, v: DataView, p: number): CentralEntry {
+  if (p + 46 > zip.length || v.getUint32(p, true) !== 0x02014b50) throw invalid('damaged central directory');
+  const nameLen = v.getUint16(p + 28, true), extraLen = v.getUint16(p + 30, true), commentLen = v.getUint16(p + 32, true);
+  return {
+    name: utf8.decode(zip.subarray(p + 46, p + 46 + nameLen)).replaceAll('\\', '/'),
+    flags: v.getUint16(p + 8, true),
+    method: v.getUint16(p + 10, true),
+    crc: v.getUint32(p + 16, true),
+    packed: v.getUint32(p + 20, true),
+    size: v.getUint32(p + 24, true),
+    local: v.getUint32(p + 42, true),
+    next: p + 46 + nameLen + extraLen + commentLen,
+  };
+}
+
+/** A file's contents, from its local record: as it is or inflated, checked against its CRC. */
+async function entryData(zip: Uint8Array, v: DataView, e: CentralEntry): Promise<Uint8Array> {
+  const { name, local, packed, method } = e;
+  if (e.flags & 1) throw new Error(`"${name}" is encrypted: it can't be read`);
+  if (local + 30 > zip.length || v.getUint32(local, true) !== 0x04034b50) throw invalid(`"${name}" can't be found`);
+  const start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+  const raw = zip.subarray(start, start + packed);
+  if (raw.length !== packed) throw invalid(`"${name}" is truncated`);
+  if (method !== 0 && method !== 8) throw new Error(`"${name}" uses an unsupported compression (${method})`);
+  const data = method === 0 ? raw.slice() : await inflate(raw);
+  if (data.length !== e.size || crc32(data) !== e.crc) throw invalid(`"${name}" is damaged`);
+  return data;
 }
 
 async function inflate(data: Uint8Array): Promise<Uint8Array> {

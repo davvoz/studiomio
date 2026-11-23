@@ -113,7 +113,7 @@ async function slide(editor: HTMLElement, from: number, to: number, ms: number):
 }
 
 function current(setting: HeightSetting): number {
-  return parseFloat(document.documentElement.style.getPropertyValue(setting.variable)) || setting.initial;
+  return Number.parseFloat(document.documentElement.style.getPropertyValue(setting.variable)) || setting.initial;
 }
 
 function clamp(setting: HeightSetting, height: number, extra: number): number {

@@ -207,13 +207,7 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
   render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const s = this.settings;
     const perFrame = this.bpm / 60 / this.sampleRate;
-    if (this.blockBeat === null) {
-      if (s.on && this.held.size) {
-        this.freeBeat ??= -from * perFrame;
-      } else if (this.freeBeat !== null) {
-        this.freeBeat = this.nextStepBeat = this.missedStepBeat = null;
-      }
-    }
+    if (this.blockBeat === null) this.followFreeClock(from, perFrame);
     const start = this.blockBeat ?? this.freeBeat;
     if (!s.on || start === null) {
       this.inner.render(left, right, from, to);
@@ -222,45 +216,62 @@ export class StepSequencer implements InstrumentCore, TransportFollower {
     }
     const beatAt = (frame: number) => start + frame * perFrame;
     const frameAt = (beat: number) => Math.min(to, Math.max(from, from + Math.ceil((beat - beatAt(from)) / perFrame - EPS)));
-    const step = s.stepBeats;
-    if (this.nextStepBeat === null) {
-      // restart (on, jump, transport started): the step just begun is recovered
-      const prev = Math.floor(beatAt(from) / step + 1e-6) * step;
-      if (prev < beatAt(from) - EPS) this.missedStepBeat = prev;
-    }
-    let nextStep = this.nextStepBeat ?? Math.ceil(beatAt(from) / step - 1e-6) * step;
-    // the held note arrived shortly after a boundary: that step is played now
-    if (this.missedStepBeat !== null) {
-      if (beatAt(from) - this.missedStepBeat >= step * CATCH_UP) this.missedStepBeat = null;
-      else if (this.held.size && !this.playing) {
-        this.fireStep(this.missedStepBeat);
-        this.missedStepBeat = null;
-      }
-    }
+    this.nextStepBeat = this.restart(beatAt(from));
     let pos = from;
     for (;;) {
       const off = this.playing && Number.isFinite(this.playing.offBeat) ? this.playing.offBeat : Infinity;
-      const nextBeat = Math.min(off, nextStep);
+      const nextBeat = Math.min(off, this.nextStepBeat);
       const at = frameAt(nextBeat);
       if (nextBeat >= beatAt(to) - EPS || at >= to) break;
       if (at > pos) {
         this.inner.render(left, right, pos, at);
         pos = at;
       }
-      if (off <= nextStep) {
-        this.inner.noteOff(this.playing!.id);
-        this.playing = null;
-      } else {
-        const boundary = nextStep;
-        nextStep = boundary + step;
-        if (this.held.size) this.fireStep(boundary);
-        else this.missedStepBeat = boundary;
-      }
+      this.event(off);
     }
     if (pos < to) this.inner.render(left, right, pos, to);
-    this.nextStepBeat = nextStep;
     if (this.blockBeat !== null) this.endBeat = beatAt(to);
     else this.freeEnd = beatAt(to);
+  }
+
+  /** Transport stopped: with a held key and the sequencer on, it runs on its own clock (from
+   *  here); otherwise that clock stops. */
+  private followFreeClock(from: number, perFrame: number): void {
+    if (this.settings.on && this.held.size) this.freeBeat ??= -from * perFrame;
+    else if (this.freeBeat !== null) this.freeBeat = this.nextStepBeat = this.missedStepBeat = null;
+  }
+
+  /** The next step's beat, from beat `now`. On a restart (on, jump, transport started) the step
+   *  just begun is recovered; a held note that arrived shortly after a boundary plays that step now. */
+  private restart(now: number): number {
+    const step = this.settings.stepBeats;
+    if (this.nextStepBeat === null) {
+      const prev = Math.floor(now / step + 1e-6) * step;
+      if (prev < now - EPS) this.missedStepBeat = prev;
+    }
+    const nextStep = this.nextStepBeat ?? Math.ceil(now / step - 1e-6) * step;
+    if (this.missedStepBeat !== null) {
+      if (now - this.missedStepBeat >= step * CATCH_UP) this.missedStepBeat = null;
+      else if (this.held.size && !this.playing) {
+        this.fireStep(this.missedStepBeat);
+        this.missedStepBeat = null;
+      }
+    }
+    return nextStep;
+  }
+
+  /** The next event: the playing note ends (at equal times first), or the step starts (missed if
+   *  no key is held). */
+  private event(off: number): void {
+    const boundary = this.nextStepBeat!;
+    if (off <= boundary) {
+      this.inner.noteOff(this.playing!.id);
+      this.playing = null;
+      return;
+    }
+    this.nextStepBeat = boundary + this.settings.stepBeats;
+    if (this.held.size) this.fireStep(boundary);
+    else this.missedStepBeat = boundary;
   }
 
   /** The step starting at beat `boundary`. */

@@ -84,10 +84,20 @@ export class TapeStopCore implements EffectCore, TransportFollower {
   }
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
-    const { tape, reader, out } = this, pos = this.transport;
+    const pos = this.transport;
     const bps = pos ? pos.bpm / 60 / this.sampleRate : 0;
     // live the head is on the last sample (also after a bypass, when the tape is still)
-    if (this.state === STATE.live && !reader.fading) reader.pos = tape.written;
+    if (this.state === STATE.live && !this.reader.fading) this.reader.pos = this.tape.written;
+    this.followStopButton(pos, bps);
+    for (let i = 0; i < n; i++) {
+      if (this.state === STATE.waiting) this.waitForLine(pos ? Math.floor((pos.beat + i * bps) / this.startBeats + EPS) : Infinity);
+      this.tape.write(inL[i], inR[i]);
+      this.playSample(outL, outR, i);
+    }
+  }
+
+  /** Stop pressed: it brakes now, or at the next Start line; released: back to the sound of now. */
+  private followStopButton(pos: TransportPosition | null, bps: number): void {
     if (this.stop && (this.state === STATE.live || this.state === STATE.spin)) {
       if (this.startBeats > 0 && pos) {
         this.state = STATE.waiting;
@@ -97,52 +107,60 @@ export class TapeStopCore implements EffectCore, TransportFollower {
       if (this.state === STATE.waiting) this.state = STATE.live;
       else if (this.state === STATE.brake || this.state === STATE.stopped) this.release();
     }
-    for (let i = 0; i < n; i++) {
-      if (this.state === STATE.waiting) {
-        const line = pos ? Math.floor((pos.beat + i * bps) / this.startBeats + EPS) : Infinity;
-        if (line > this.lastLine) this.brake();
-        else this.lastLine = line;
-      }
-      tape.write(inL[i], inR[i]);
-      let gain = 1;
-      switch (this.state) {
-        case STATE.brake: {
-          this.speed = (CURVES[this.curve] ?? CURVES[0])(this.from, this.t / this.length);
-          if (++this.t >= this.length) this.state = STATE.stopped;
-          gain = Math.min(1, this.speed / SILENT_SPEED);
-          break;
-        }
-        case STATE.spin: {
-          this.speed = this.from + ((1 - this.from) * this.t) / this.length;
-          gain = Math.min(1, this.speed / SILENT_SPEED);
-          if (++this.t >= this.length) {
-            // it fell behind: back to live with a fade (from the next sample)
-            reader.read(tape, this.speed, out);
-            reader.jump(tape.written, 1, this.backToLive);
-            this.state = STATE.live;
-            this.speed = 1;
-            outL[i] = out[0] * gain;
-            outR[i] = out[1] * gain;
-            continue;
-          }
-          break;
-        }
-        case STATE.stopped:
-          this.speed = 0;
-          gain = 0;
-          break;
-        default:
-          this.speed = 1;
-      }
-      if (this.rise < 1) gain *= (this.rise = Math.min(1, this.rise + this.riseStep));
-      if (gain === 0) {
-        outL[i] = outR[i] = 0;
-        continue;
-      }
-      reader.read(tape, this.speed, out);
-      outL[i] = out[0] * gain;
-      outR[i] = out[1] * gain;
+  }
+
+  /** Waiting for the Start line: it brakes when the line `line` is new. */
+  private waitForLine(line: number): void {
+    if (line > this.lastLine) this.brake();
+    else this.lastLine = line;
+  }
+
+  /** One sample from the tape, at the head's speed and gain. */
+  private playSample(outL: Float32Array, outR: Float32Array, i: number): void {
+    let gain = this.moveHead(outL, outR, i);
+    if (gain === null) return;
+    if (this.rise < 1) gain *= (this.rise = Math.min(1, this.rise + this.riseStep));
+    if (gain === 0) {
+      outL[i] = outR[i] = 0;
+      return;
     }
+    this.reader.read(this.tape, this.speed, this.out);
+    outL[i] = this.out[0] * gain;
+    outR[i] = this.out[1] * gain;
+  }
+
+  /** The head's speed for this sample, by state, and the gain; null when the restart has just
+   *  ended (the sample is already written). */
+  private moveHead(outL: Float32Array, outR: Float32Array, i: number): number | null {
+    switch (this.state) {
+      case STATE.brake:
+        this.speed = (CURVES[this.curve] ?? CURVES[0])(this.from, this.t / this.length);
+        if (++this.t >= this.length) this.state = STATE.stopped;
+        return Math.min(1, this.speed / SILENT_SPEED);
+      case STATE.spin:
+        return this.spinUp(outL, outR, i);
+      case STATE.stopped:
+        this.speed = 0;
+        return 0;
+      default:
+        this.speed = 1;
+        return 1;
+    }
+  }
+
+  /** The restart: speeding up towards live; at the end it fell behind, so back to live with a fade
+   *  (from the next sample). */
+  private spinUp(outL: Float32Array, outR: Float32Array, i: number): number | null {
+    this.speed = this.from + ((1 - this.from) * this.t) / this.length;
+    const gain = Math.min(1, this.speed / SILENT_SPEED);
+    if (++this.t < this.length) return gain;
+    this.reader.read(this.tape, this.speed, this.out);
+    this.reader.jump(this.tape.written, 1, this.backToLive);
+    this.state = STATE.live;
+    this.speed = 1;
+    outL[i] = this.out[0] * gain;
+    outR[i] = this.out[1] * gain;
+    return null;
   }
 
   /** Starts braking from this sample, from the speed it has. */

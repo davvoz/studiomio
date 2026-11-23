@@ -1,6 +1,7 @@
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { ClipId, SampleId } from '../core/id';
 import type { Beats, TempoMap } from '../core/music-time';
+import type { AudioData } from '../dsp/types';
 import { SupersededError } from '../workers/worker-pool';
 import { AudioClip } from '../model/audio-clip';
 import { CLIP_TRANSPOSE, steppedValues } from '../model/envelope';
@@ -90,20 +91,33 @@ export class ClipAudio implements PlayableProvider {
     await Promise.all(waits);
   }
 
+  /** The sample as an AudioBuffer (reversed if the clip is), made once. */
+  private rawBuffer(clip: AudioClip, audio: AudioData): AudioBufferLike {
+    const key = clip.reversed ? `${clip.sample}|reverse` : clip.sample;
+    let buffer = this.raw.get(key);
+    if (!buffer) {
+      const channels = clip.reversed ? audio.channels.map(c => c.slice().reverse()) : audio.channels;
+      buffer = toAudioBuffer(this.graph, channels, audio.sampleRate);
+      this.raw.set(key, buffer);
+    }
+    return buffer;
+  }
+
+  /** A warped render as an AudioBuffer, made once per render. */
+  private renderedBuffer(channels: readonly Float32Array[], sampleRate: number): AudioBufferLike {
+    let buffer = this.buffers.get(channels);
+    if (!buffer) {
+      buffer = toAudioBuffer(this.graph, channels, sampleRate);
+      this.buffers.set(channels, buffer);
+    }
+    return buffer;
+  }
+
   playable(clip: AudioClip, shift = 0): Playable | null {
     const audio = this.library.get(clip.sample);
     if (!audio) return null;
-    if (!clip.warp.enabled) {
-      // without warp: the sample as it is, at its own speed (the transpose changes the speed)
-      const key = clip.reversed ? `${clip.sample}|reverse` : clip.sample;
-      let buffer = this.raw.get(key);
-      if (!buffer) {
-        const channels = clip.reversed ? audio.channels.map(c => c.slice().reverse()) : audio.channels;
-        buffer = toAudioBuffer(this.graph, channels, audio.sampleRate);
-        this.raw.set(key, buffer);
-      }
-      return { buffer, startBeat: 0, rate: Math.pow(2, shiftedPitch(clip, shift) / 12) };
-    }
+    // without warp: the sample as it is, at its own speed (the transpose changes the speed)
+    if (!clip.warp.enabled) return { buffer: this.rawBuffer(clip, audio), startBeat: 0, rate: Math.pow(2, shiftedPitch(clip, shift) / 12) };
     const j = this.job(clip, shift);
     if (!j) return null;
     const channels = this.renders.get(j.key);
@@ -115,12 +129,7 @@ export class ClipAudio implements PlayableProvider {
       // the curve's semitones have no substitute: they arrive quickly and get rescheduled
       return shift ? null : this.standIn(clip, j.tempo);
     }
-    let buffer = this.buffers.get(channels);
-    if (!buffer) {
-      buffer = toAudioBuffer(this.graph, channels, audio.sampleRate);
-      this.buffers.set(channels, buffer);
-    }
-    const playable = { buffer, startBeat: j.render.startBeat, rate: 1 };
+    const playable = { buffer: this.renderedBuffer(channels, audio.sampleRate), startBeat: j.render.startBeat, rate: 1 };
     if (!shift) this.last.set(clip.id, { playable, tempo: j.tempo, sample: clip.sample });
     return playable;
   }
@@ -130,7 +139,7 @@ export class ClipAudio implements PlayableProvider {
    *  clip doesn't have one of the same sample. */
   private standIn(clip: AudioClip, tempo: TempoMap): Playable | null {
     const last = this.last.get(clip.id);
-    if (!last || last.sample !== clip.sample) return null;
+    if (last?.sample !== clip.sample) return null;
     // at constant tempo beat b is at secondsAt(b): the ratio between the durations of a beat is enough
     const speed = last.tempo.secondsAt(1) / tempo.secondsAt(1);
     return { ...last.playable, rate: last.playable.rate * speed, provisional: true };
@@ -141,9 +150,12 @@ export class ClipAudio implements PlayableProvider {
     const tempo = this.tempo, sample = this.samples.get(clip.sample);
     if (!tempo || !sample) return null;
     let byShift = this.jobs.get(clip);
-    if (!byShift) this.jobs.set(clip, (byShift = new Map()));
+    if (!byShift) {
+      byShift = new Map();
+      this.jobs.set(clip, byShift);
+    }
     const cached = byShift.get(shift);
-    if (cached && cached.tempo === tempo && cached.sample === sample) return cached;
+    if (cached?.tempo === tempo && cached.sample === sample) return cached;
     const render = clipRender(clip, sample, tempo, shift);
     const entry = { tempo, sample, render, key: renderKey(sample.id, render.job) };
     byShift.set(shift, entry);

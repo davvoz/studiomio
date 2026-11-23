@@ -138,7 +138,7 @@ export function simplify(points: readonly EnvelopePoint[]): EnvelopePoint[] {
   const out: EnvelopePoint[] = [];
   for (const p of points) {
     const a = out[out.length - 1], b = out[out.length - 2];
-    if (a && a.beat === p.beat && a.value === p.value) continue;
+    if (a?.beat === p.beat && a.value === p.value) continue;
     if (a && b && a.value === p.value && b.value === p.value) out.pop();
     out.push(p);
   }
@@ -263,7 +263,7 @@ export class EnvelopeLane {
     if (!this.target || this.element.hidden) return;
     const state = { axis: this.host.axis, curves: this.host.curves(), playhead: this.host.playhead(), grid: this.host.grid() };
     const l = this.last;
-    if (!this.dirty && l && l.axis === state.axis && l.curves === state.curves && l.playhead === state.playhead && l.grid === state.grid) return;
+    if (!this.dirty && l?.axis === state.axis && l.curves === state.curves && l.playhead === state.playhead && l.grid === state.grid) return;
     this.dirty = false;
     this.last = state;
     this.paint(state.curves, state.playhead);
@@ -423,7 +423,7 @@ export class EnvelopeLane {
   /** Cycle, amplitude or direction changed: if the shape is still there it's redone, in the same range. */
   private tweakShape(choice: ShapeChoice): void {
     const { shaped } = this;
-    if (shaped && shaped.selection === this.range) this.applyShape(choice, shaped.range);
+    if (shaped?.selection === this.range) this.applyShape(choice, shaped.range);
     else this.surface.canvas.focus({ preventScroll: true });
   }
 

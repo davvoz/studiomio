@@ -434,10 +434,12 @@ class SampleVoice extends DrumVoice {
   private stop = 0;
   private readonly filterL = new Svf(this.sampleRate);
   private readonly filterR = new Svf(this.sampleRate);
+  /** The sample being played, left and right, after filter and drive. */
+  private readonly frame = new Float64Array(2);
 
   protected start(hit: Hit): void {
     const d = hit.sample;
-    this.data = d && d.channels.length && d.channels[0].length > 1 ? d : null;
+    this.data = d?.channels.length && d.channels[0].length > 1 ? d : null;
     this.amp = this.data ? 1 : 0;
     if (!this.data) return;
     const length = this.data.channels[0].length, from = Math.min(length - 2, Math.floor(hit.start * length));
@@ -475,37 +477,48 @@ class SampleVoice extends DrumVoice {
   override render(left: Float32Array, right: Float32Array, from: number, to: number): void {
     const d = this.data;
     if (!d) return;
-    const L = d.channels[0], R = d.channels[1] ?? L, stereo = R !== L;
-    const { gainL, gainR, drive, filtered, reverse, stop } = this;
+    const { gainL, gainR, reverse, stop, frame } = this;
     for (let i = from; i < to; i++) {
       const k = Math.floor(this.pos);
       if ((reverse ? k < stop : k >= stop) || this.t >= 1) {
         this.amp = 0;
         break;
       }
-      const f = this.pos - k;
-      let l = hermite(L, k, f), r = stereo ? hermite(R, k, f) : l;
-      if (filtered) {
-        l = this.filterL.process(l);
-        r = stereo ? this.filterR.process(r) : l;
-      }
-      if (drive > 0.01) {
-        l = saturate(l, drive);
-        r = stereo ? saturate(r, drive) : l;
-      }
-      // full at the start, then it falls towards the end of the decay (reversed: rises early and stays
-      // full to the end); the last samples before the edge fade
-      const u = reverse ? 1 - this.t : this.t, u2 = u * u, tail = reverse ? k - stop : stop - k;
-      const env = 1 - u2 * u2;
-      const g = env * this.chokeGain() * (tail < END_FADE ? tail / END_FADE : 1);
-      // the envelope's level says whether the voice is alive (not the fade of the file's edges)
-      this.amp = Math.max(FLOOR, env);
-      left[i] += l * g * gainL;
-      right[i] += r * g * gainR;
+      this.read(d, k, this.pos - k);
+      const g = this.gainAt(k);
+      left[i] += frame[0] * g * gainL;
+      right[i] += frame[1] * g * gainR;
       this.pos += this.step;
       this.t += this.tStep;
       if (!this.active) break;
     }
+  }
+
+  /** The sample at `k` + `f` (between two samples), filtered and driven, into `frame`. */
+  private read(d: SampleData, k: number, f: number): void {
+    const L = d.channels[0], R = d.channels[1] ?? L, stereo = R !== L, drive = this.drive;
+    let l = hermite(L, k, f), r = stereo ? hermite(R, k, f) : l;
+    if (this.filtered) {
+      l = this.filterL.process(l);
+      r = stereo ? this.filterR.process(r) : l;
+    }
+    if (drive > 0.01) {
+      l = saturate(l, drive);
+      r = stereo ? saturate(r, drive) : l;
+    }
+    this.frame[0] = l;
+    this.frame[1] = r;
+  }
+
+  /** Full at the start, then it falls towards the end of the decay (reversed: rises early and stays
+   *  full to the end); the last samples before the edge fade. The envelope's level says whether the
+   *  voice is alive (not the fade of the file's edges). */
+  private gainAt(k: number): number {
+    const reverse = this.reverse, stop = this.stop;
+    const u = reverse ? 1 - this.t : this.t, u2 = u * u, tail = reverse ? k - stop : stop - k;
+    const env = 1 - u2 * u2;
+    this.amp = Math.max(FLOOR, env);
+    return env * this.chokeGain() * (tail < END_FADE ? tail / END_FADE : 1);
   }
 }
 
@@ -603,13 +616,7 @@ class Pad {
     const model = this.settings?.model ?? -1;
     const instrument = padInstrument(model);
     if (instrument) {
-      const type = instrument.type.type;
-      let inner = this.inners.get(type);
-      if (!inner) {
-        const prefix = innerPrefix(this.index, type);
-        this.inners.set(type, (inner = new InnerInstrument(instrument.type, prefix, this.sampleRate)));
-        for (const [slot, data] of this.innerSamples) if (slot.startsWith(prefix)) inner.core.setSample(slot.slice(prefix.length), data);
-      }
+      const inner = this.innerOf(instrument.type);
       if (this.inner && this.inner !== inner) this.inner.silence();
       this.inner = inner;
       inner.setParams(params);
@@ -619,6 +626,16 @@ class Pad {
     this.inner = null;
     const make = VOICES[DRUM_MODELS[model]?.id];
     if (make && !this.voices.has(model)) this.voices.set(model, [make(this.sampleRate), make(this.sampleRate)]);
+  }
+
+  /** The pad's instrument of this type, created the first time with the samples it already has. */
+  private innerOf(type: DeviceType): InnerInstrument {
+    const existing = this.inners.get(type.type);
+    if (existing) return existing;
+    const prefix = innerPrefix(this.index, type.type), inner = new InnerInstrument(type, prefix, this.sampleRate);
+    this.inners.set(type.type, inner);
+    for (const [slot, data] of this.innerSamples) if (slot.startsWith(prefix)) inner.core.setSample(slot.slice(prefix.length), data);
+    return inner;
   }
 
   /** The sample of one of the pad's instruments (slot with the prefix). */

@@ -33,7 +33,7 @@ interface MonoSample {
 }
 
 function mono(d: SampleData | null): MonoSample | null {
-  if (!d || !d.channels.length || d.channels[0].length < 4) return null;
+  if (!d?.channels.length || d.channels[0].length < 4) return null;
   const [l, r] = d.channels;
   if (!r || r === l) return { data: l, rate: d.sampleRate };
   const data = new Float32Array(l.length);
@@ -193,59 +193,77 @@ class SnareVoice {
   step(): void {
     const sr = this.sampleRate, t = this.t++;
     const rise = t < this.attackN ? t / this.attackN : 1;
-    // the skin
-    let body = 0;
-    if (this.synth) {
-      this.pitchEnv *= this.pitchK;
-      const hz = this.base * Math.pow(2, (this.semis * this.pitchEnv) / 12);
-      this.phase1 += hz / sr;
-      if (this.phase1 >= 1) this.phase1 -= 1;
-      this.phase2 += (hz * OVERTONE) / sr;
-      if (this.phase2 >= 1) this.phase2 -= 1;
-      const v = Math.sin(TWO_PI * this.phase1) * this.amp1 + Math.sin(TWO_PI * this.phase2) * this.amp2 * this.overtone;
-      body = softClip(v / (1 + this.overtone * 0.5), this.shape) * rise;
-    } else if (this.bodySample) {
-      const s = this.bodySample, k = Math.floor(this.bodyPos);
-      if (k < s.data.length - 1) {
-        body = hermite(s.data, k, this.bodyPos - k) * this.amp1 * rise;
-        this.bodyPos += this.bodyStep;
-      } else this.bodySample = null;
-    }
+    const body = this.synth ? this.skin(sr, rise) : this.skinFromSample(rise);
     this.amp1 *= this.k1;
     this.amp2 *= this.k2;
-    // the hit
     let snap = 0;
     if (this.snapAmp >= FLOOR) {
-      if (this.snapSource === SNAP_SOURCE.click) {
-        this.clickPhase += (this.clickHz * (1 + this.snapAmp)) / sr;
-        if (this.clickPhase >= 1) this.clickPhase -= 1;
-        snap = Math.sin(TWO_PI * this.clickPhase) * this.snapAmp;
-      } else if (this.snapSource === SNAP_SOURCE.noise) {
-        snap = this.snapFilter.process(this.noise.next()) * this.snapAmp * 4;
-      } else if (this.snapSample) {
-        const s = this.snapSample, k = Math.floor(this.snapPos);
-        if (k < s.data.length - 1) {
-          snap = hermite(s.data, k, this.snapPos - k) * this.snapAmp;
-          this.snapPos += this.snapStep;
-        } else this.snapSample = null;
-      }
+      snap = this.hit(sr);
       this.snapAmp *= this.snapK;
     }
-    // the wires, after the delay; with the grain the noise stays still for a few samples
-    let wires = 0;
-    if (t >= this.wiresStart) {
-      if (this.heldFor-- <= 0) {
-        this.held = this.wiresNoise.next();
-        this.heldFor = this.holdEvery - 1;
-      }
-      const w = t - this.wiresStart, wRise = w < this.attackN ? w / this.attackN : 1;
-      wires = this.wiresLp.process(this.wiresHp.process(this.held)) * this.wiresAmp * wRise * 1.6;
-      this.wiresAmp *= this.wiresK;
-    }
+    const wires = t >= this.wiresStart ? this.wires(t) : 0;
     if (this.choking) this.fade *= this.chokeK;
     this.out = (body * this.bodyGain + snap * this.snapGain + wires * this.wiresGain) * this.gain * this.fade;
     const silent = this.amp1 * this.bodyGain < FLOOR && this.snapAmp < FLOOR && (t < this.wiresStart || this.wiresAmp * this.wiresGain < FLOOR);
     if (this.fade < FLOOR || (silent && t > this.wiresStart)) this.active = false;
+  }
+
+  /** The skin: two sines (the overtone above) falling in pitch, softly clipped. */
+  private skin(sr: number, rise: number): number {
+    this.pitchEnv *= this.pitchK;
+    const hz = this.base * Math.pow(2, (this.semis * this.pitchEnv) / 12);
+    this.phase1 += hz / sr;
+    if (this.phase1 >= 1) this.phase1 -= 1;
+    this.phase2 += (hz * OVERTONE) / sr;
+    if (this.phase2 >= 1) this.phase2 -= 1;
+    const v = Math.sin(TWO_PI * this.phase1) * this.amp1 + Math.sin(TWO_PI * this.phase2) * this.amp2 * this.overtone;
+    return softClip(v / (1 + this.overtone * 0.5), this.shape) * rise;
+  }
+
+  /** The skin from its sample (0 when it has ended). */
+  private skinFromSample(rise: number): number {
+    const s = this.bodySample;
+    if (!s) return 0;
+    const k = Math.floor(this.bodyPos);
+    if (k >= s.data.length - 1) {
+      this.bodySample = null;
+      return 0;
+    }
+    const v = hermite(s.data, k, this.bodyPos - k) * this.amp1 * rise;
+    this.bodyPos += this.bodyStep;
+    return v;
+  }
+
+  /** The hit, from its source: the click, the filtered noise or a sample. */
+  private hit(sr: number): number {
+    if (this.snapSource === SNAP_SOURCE.click) {
+      this.clickPhase += (this.clickHz * (1 + this.snapAmp)) / sr;
+      if (this.clickPhase >= 1) this.clickPhase -= 1;
+      return Math.sin(TWO_PI * this.clickPhase) * this.snapAmp;
+    }
+    if (this.snapSource === SNAP_SOURCE.noise) return this.snapFilter.process(this.noise.next()) * this.snapAmp * 4;
+    const s = this.snapSample;
+    if (!s) return 0;
+    const k = Math.floor(this.snapPos);
+    if (k >= s.data.length - 1) {
+      this.snapSample = null;
+      return 0;
+    }
+    const v = hermite(s.data, k, this.snapPos - k) * this.snapAmp;
+    this.snapPos += this.snapStep;
+    return v;
+  }
+
+  /** The wires, after their delay; with the grain the noise stays still for a few samples. */
+  private wires(t: number): number {
+    if (this.heldFor-- <= 0) {
+      this.held = this.wiresNoise.next();
+      this.heldFor = this.holdEvery - 1;
+    }
+    const w = t - this.wiresStart, wRise = w < this.attackN ? w / this.attackN : 1;
+    const v = this.wiresLp.process(this.wiresHp.process(this.held)) * this.wiresAmp * wRise * 1.6;
+    this.wiresAmp *= this.wiresK;
+    return v;
   }
 }
 

@@ -21,11 +21,17 @@ export class ModTraces {
     const trace = channel ? `${key}|${channel}` : key;
     if (channel) {
       let set = this.channels.get(key);
-      if (!set) this.channels.set(key, (set = new Set()));
+      if (!set) {
+        set = new Set();
+        this.channels.set(key, set);
+      }
       set.add(trace);
     }
     let line = this.lines.get(trace);
-    if (!line) this.lines.set(trace, (line = new ModTimeline(neutral)));
+    if (!line) {
+      line = new ModTimeline(neutral);
+      this.lines.set(trace, line);
+    }
     const l = line;
     // even if nobody reads it, the trace throws away what's past
     const add = (kind: 'set' | 'ramp', value: number, time: number) => {

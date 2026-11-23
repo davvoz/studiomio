@@ -86,46 +86,43 @@ export class NoiseGateCore implements EffectCore, KeyedEffect, DynamicsMeter {
   }
 
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array, n: number): void {
-    const { openAt, closeAt, up, down, holdFrames, hpK, lpK, fallK, flip } = this;
-    let { hpL, hpR, prevL, prevR, lpL, lpR, level, open, holding, position, maxLevel, maxReduction } = this;
     const keyL = this.keyL ?? inL, keyR = this.keyR ?? inR;
     const depth = -this.floorDb;
     for (let i = 0; i < n; i++) {
-      const kl = keyL[i], kr = keyR[i];
-      hpL = hpK * (hpL + kl - prevL);
-      hpR = hpK * (hpR + kr - prevR);
-      prevL = kl;
-      prevR = kr;
-      lpL += (hpL - lpL) * lpK;
-      lpR += (hpR - lpR) * lpK;
-      level = Math.max(Math.abs(lpL), Math.abs(lpR), level * fallK);
-      if (level > maxLevel) maxLevel = level;
-      if (level >= openAt) {
-        open = true;
-        holding = holdFrames;
-      } else if (open && level < closeAt) {
-        if (holding > 0) holding--;
-        else open = false;
-      }
-      const target = open !== flip ? 1 : 0;
-      position = target > position ? Math.min(target, position + up) : Math.max(target, position - down);
-      const reduction = (1 - position) * depth;
-      if (reduction > maxReduction) maxReduction = reduction;
-      const g = gateGain(position, depth, reduction);
+      this.detect(keyL[i], keyR[i]);
+      this.openOrClose();
+      const target = this.open !== this.flip ? 1 : 0, position = this.position;
+      this.position = target > position ? Math.min(target, position + this.up) : Math.max(target, position - this.down);
+      const reduction = (1 - this.position) * depth;
+      if (reduction > this.maxReduction) this.maxReduction = reduction;
+      const g = gateGain(this.position, depth, reduction);
       outL[i] = inL[i] * g;
       outR[i] = inR[i] * g;
     }
-    this.hpL = hpL;
-    this.hpR = hpR;
-    this.prevL = prevL;
-    this.prevR = prevR;
-    this.lpL = lpL;
-    this.lpR = lpR;
-    this.level = level < 1e-12 ? 0 : level;
-    this.open = open;
-    this.holding = holding;
-    this.position = position;
-    this.maxLevel = maxLevel;
-    this.maxReduction = maxReduction;
+    if (this.level < 1e-12) this.level = 0;
+  }
+
+  /** The detector: the key through the band filter, its level held and falling slowly. */
+  private detect(kl: number, kr: number): void {
+    const hpK = this.hpK, lpK = this.lpK;
+    this.hpL = hpK * (this.hpL + kl - this.prevL);
+    this.hpR = hpK * (this.hpR + kr - this.prevR);
+    this.prevL = kl;
+    this.prevR = kr;
+    this.lpL += (this.hpL - this.lpL) * lpK;
+    this.lpR += (this.hpR - this.lpR) * lpK;
+    this.level = Math.max(Math.abs(this.lpL), Math.abs(this.lpR), this.level * this.fallK);
+    if (this.level > this.maxLevel) this.maxLevel = this.level;
+  }
+
+  /** Opens over the threshold; under the lower one it closes after the Hold. */
+  private openOrClose(): void {
+    if (this.level >= this.openAt) {
+      this.open = true;
+      this.holding = this.holdFrames;
+    } else if (this.open && this.level < this.closeAt) {
+      if (this.holding > 0) this.holding--;
+      else this.open = false;
+    }
   }
 }

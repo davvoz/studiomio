@@ -82,7 +82,7 @@ export class IntegralTable {
     const pos = (x + range) / step;
     if (pos <= 0) return F[0] + f[0] * (x + range);
     if (pos >= last) return F[last] + f[last] * (x - range);
-    const i = pos | 0, t = pos - i, t2 = t * t, t3 = t2 * t;
+    const i = Math.trunc(pos), t = pos - i, t2 = t * t, t3 = t2 * t;
     return (2 * t3 - 3 * t2 + 1) * F[i] + (t3 - 2 * t2 + t) * step * f[i] + (-2 * t3 + 3 * t2) * F[i + 1] + (t3 - t2) * step * f[i + 1];
   }
 }

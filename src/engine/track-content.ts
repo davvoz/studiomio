@@ -7,7 +7,10 @@ import type { Clip } from '../model/clip';
 import type { Track } from '../model/track';
 import type { ScheduleWindow } from './scheduler';
 import { clipSegmentsBetween, type Segment } from './segments';
-import { slotClip, type Program } from './session';
+import { slotClip, type Program, type ProgramSource } from './session';
+
+/** A session clip launched at `origin`. */
+type SessionSource = Extract<ProgramSource, { kind: 'clip' }>;
 
 /** A continuous stretch of a clip on the clock: from `start` to `end` it plays the clip's
  *  content starting from beat `contentStart`. */
@@ -46,31 +49,43 @@ export function piecesInWindow<C extends Clip>(
 ): Piece<C>[] {
   const from = w.from + w.shift, to = w.to + w.shift;
   const out: Piece<C>[] = [];
-  const push = (clip: C, seg: Segment, start: number, end: number, segStart: number, fades?: PieceFades) => {
-    if (end - start > EPS) out.push({ clip, start, end, contentStart: seg.contentStart + (start - segStart), ...(fades && { fades }) });
-  };
   for (const prog of programs) {
     if (prog.until <= from || prog.from >= to) continue;
-    const src = prog.source;
-    if (src.kind === 'arrangement') {
-      const lo = Math.max(w.from, w.runStart);
-      for (const p of track.arrangement) {
-        if (p.start >= w.to || placementEnd(p) <= lo) continue;
-        const fades = p.fadeIn || p.fadeOut
-          ? { start: p.start + w.shift, end: placementEnd(p) + w.shift, fadeIn: p.fadeIn ?? 0, fadeOut: p.fadeOut ?? 0 }
-          : undefined;
-        for (const seg of arrangement(p)) {
-          const start = Math.max(seg.start, w.runStart) + w.shift, end = Math.min(seg.end, w.runEnd) + w.shift;
-          push(p.clip, seg, Math.max(start, prog.from), Math.min(end, prog.until), seg.start + w.shift, fades);
-        }
-      }
-    } else {
-      const clip = slotClip(track, src.clip) as C | null;
-      if (!clip) continue;
-      for (const seg of clipSegmentsBetween(clip, src.origin, Math.max(from, prog.from), to)) {
-        push(clip, seg, Math.max(seg.start, prog.from, w.fresh), Math.min(seg.end, prog.until), seg.start);
-      }
-    }
+    if (prog.source.kind === 'arrangement') arrangementPieces(track, prog, w, arrangement, out);
+    else sessionPieces(track, prog, prog.source, Math.max(from, prog.from), to, w, out);
   }
   return out;
+}
+
+/** A piece of `seg` from `start` to `end` (if it isn't empty). */
+function pushPiece<C extends Clip>(out: Piece<C>[], clip: C, seg: Segment, start: number, end: number, segStart: number, fades?: PieceFades): void {
+  if (end - start > EPS) out.push({ clip, start, end, contentStart: seg.contentStart + (start - segStart), ...(fades && { fades }) });
+}
+
+/** The timeline's clips playing in the window, with their fades. */
+function arrangementPieces<C extends Clip>(
+  track: Track<C>, prog: Program, w: ScheduleWindow, arrangement: (p: Placement<C>) => readonly Segment[], out: Piece<C>[],
+): void {
+  const lo = Math.max(w.from, w.runStart);
+  for (const p of track.arrangement) {
+    if (p.start >= w.to || placementEnd(p) <= lo) continue;
+    const fades = p.fadeIn || p.fadeOut
+      ? { start: p.start + w.shift, end: placementEnd(p) + w.shift, fadeIn: p.fadeIn ?? 0, fadeOut: p.fadeOut ?? 0 }
+      : undefined;
+    for (const seg of arrangement(p)) {
+      const start = Math.max(seg.start, w.runStart) + w.shift, end = Math.min(seg.end, w.runEnd) + w.shift;
+      pushPiece(out, p.clip, seg, Math.max(start, prog.from), Math.min(end, prog.until), seg.start + w.shift, fades);
+    }
+  }
+}
+
+/** The session clip launched by `src` playing in the window [from, to). */
+function sessionPieces<C extends Clip>(
+  track: Track<C>, prog: Program, src: SessionSource, from: number, to: number, w: ScheduleWindow, out: Piece<C>[],
+): void {
+  const clip = slotClip(track, src.clip) as C | null;
+  if (!clip) return;
+  for (const seg of clipSegmentsBetween(clip, src.origin, from, to)) {
+    pushPiece(out, clip, seg, Math.max(seg.start, prog.from, w.fresh), Math.min(seg.end, prog.until), seg.start);
+  }
 }

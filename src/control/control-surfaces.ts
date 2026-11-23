@@ -74,6 +74,14 @@ interface Connection {
 /** A MIDI message in hexadecimal, for the monitor. */
 const hex = (data: ArrayLike<number>) => Array.from(data, b => b.toString(16).padStart(2, '0')).join(' ');
 
+/** A known controller found among the ports. */
+interface Found {
+  readonly driver: Driver;
+  readonly output: MIDIOutput;
+  readonly inputs: MIDIInput[];
+  readonly others: MIDIInput[];
+}
+
 export class ControlSurfaces {
   private access: MIDIAccess | null = null;
   private conn: Connection | null = null;
@@ -192,22 +200,24 @@ export class ControlSurfaces {
       c ? `Connected: ${c.driver.name}` : 'Connected: no controller',
       `Inputs for MIDI mappings: ${this.mapping ? this.mappingInputs.join(', ') || 'none' : 'closed (no mappings)'}`,
     ];
-    if (c) {
-      lines.push(`  output: ${c.output.name} [${c.output.id}]`);
-      lines.push(`  inputs listened to: ${c.inputs.map(p => `${p.name} [${p.id}]`).join(', ')}`);
-      if (c.others.length) lines.push(`  other inputs (log only): ${c.others.map(p => `${p.name} [${p.id}]`).join(', ')}`);
-      lines.push(`  startup finished: ${c.controller.ready ? 'yes' : 'no'}`);
-      if (c.controller instanceof Launchpad) {
-        const lp = c.controller;
-        lines.push(`  identity reply: ${lp.identified ? hex(lp.identified) : 'none'} (expected: ${hex(lp.model.family)})`);
-        lines.push(`  mode: ${lp.state}`);
-        if (this.preferred !== undefined) lines.push(`  interface chosen by hand: ${this.preferred}`);
-      }
-    }
+    if (c) lines.push(...this.connectionReport(c));
     const ring = this.host.ui.sessionRing;
     lines.push(`Box: ${ring ? `tracks ${ring.track + 1}–${ring.track + ring.width}, scenes ${ring.scene + 1}–${ring.scene + ring.height}` : 'none'}`);
     lines.push(`Latest MIDI messages (${this.history.length}, oldest first):`, ...this.history);
     return lines.join('\n');
+  }
+
+  /** The connected controller's ports and state (for a Launchpad its identity and mode too). */
+  private connectionReport(c: Connection): string[] {
+    const names = (ports: readonly MIDIInput[]) => ports.map(p => `${p.name} [${p.id}]`).join(', ');
+    const lines = [`  output: ${c.output.name} [${c.output.id}]`, `  inputs listened to: ${names(c.inputs)}`];
+    if (c.others.length) lines.push(`  other inputs (log only): ${names(c.others)}`);
+    lines.push(`  startup finished: ${c.controller.ready ? 'yes' : 'no'}`);
+    if (!(c.controller instanceof Launchpad)) return lines;
+    const lp = c.controller;
+    lines.push(`  identity reply: ${lp.identified ? hex(lp.identified) : 'none'} (expected: ${hex(lp.model.family)})`, `  mode: ${lp.state}`);
+    if (this.preferred !== undefined) lines.push(`  interface chosen by hand: ${this.preferred}`);
+    return lines;
   }
 
   onChange(fn: () => void): Unsubscribe {
@@ -251,26 +261,38 @@ export class ControlSurfaces {
     }
     const connected = <P extends MIDIPort>(ports: Iterable<P>) => [...ports].filter(p => p.state === 'connected');
     const allInputs = connected(access.inputs.values()), allOutputs = connected(access.outputs.values());
-    let found: { driver: Driver; output: MIDIOutput; inputs: MIDIInput[]; others: MIDIInput[] } | null = null;
-    for (const driver of this.drivers) {
-      const named = <P extends MIDIPort>(ports: P[]) => ports.filter(p => driver.port.test(p.name ?? ''));
-      const ins = named(allInputs);
-      const { output, inputs } = driver.pick(ins, named(allOutputs));
-      if (output && inputs.length) {
-        found = { driver, output, inputs, others: ins.filter(p => !inputs.includes(p)) };
-        break;
-      }
-    }
+    const found = this.findController(allInputs, allOutputs);
     if (!found) this.unknownLaunchpad([...allInputs, ...allOutputs]);
     const ports = found ? [found.output.id, ...found.inputs.map(p => p.id)].join('|') : '';
     const claimed = new Set(found ? [...found.inputs, ...found.others].map(p => p.id) : []);
     const free = allInputs.filter(p => !claimed.has(p.id));
-    if (this.conn && this.conn.ports === ports) return this.listenFree(free);
+    if (this.conn?.ports === ports) return this.listenFree(free);
     // first the controller is disconnected (it stops listening to its ports), then the free ports
     // go to the mappings, then a new controller takes its own
     if (this.conn) this.disconnect();
     this.listenFree(free);
     if (!found) return;
+    await this.connect(found, ports);
+    if (this.rescan) {
+      this.rescan = false;
+      await this.scan();
+    }
+  }
+
+  /** The first known controller among the ports: its output and inputs (the others of its
+   *  inputs are only logged). */
+  private findController(allInputs: MIDIInput[], allOutputs: MIDIOutput[]): Found | null {
+    for (const driver of this.drivers) {
+      const named = <P extends MIDIPort>(ports: P[]) => ports.filter(p => driver.port.test(p.name ?? ''));
+      const ins = named(allInputs);
+      const { output, inputs } = driver.pick(ins, named(allOutputs));
+      if (output && inputs.length) return { driver, output, inputs, others: ins.filter(p => !inputs.includes(p)) };
+    }
+    return null;
+  }
+
+  /** Opens the controller's ports, creates its driver and starts it. */
+  private async connect(found: Found, ports: string): Promise<void> {
     const { driver, output } = found;
     this.connecting = true;
     try {
@@ -282,29 +304,9 @@ export class ControlSurfaces {
       });
       // the controller's inputs are listened to; one taken by another program doesn't block the others
       const liveness = new Liveness(performance.now(), this.answersIdentity);
-      const listen = async (input: MIDIInput, forward: boolean) => {
-        try {
-          await input.open();
-          input.onmidimessage = e => {
-            if (!e.data) return;
-            this.record(forward ? '←' : '← (not listened)', input.name, e.data);
-            if (this.log) console.log(`MIDI ← ${input.name} [${input.id}]: ${hex(e.data)}`);
-            if (!forward) return;
-            liveness.heard(performance.now(), e.data);
-            this.recovered();
-            controller.receive(e.data);
-          };
-          return true;
-        } catch (e) {
-          console.warn(`Controller: can't open input ${input.name} [${input.id}]`, e);
-          return false;
-        }
-      };
-      const opened: MIDIInput[] = [];
-      for (const input of found.inputs) if (await listen(input, true)) opened.push(input);
+      const opened = await this.openInputs(found.inputs, true, controller, liveness);
       if (!opened.length) throw new Error("no input port opens");
-      const others: MIDIInput[] = [];
-      for (const input of found.others) if (await listen(input, false)) others.push(input);
+      const others = await this.openInputs(found.others, false, controller, liveness);
       if (controller instanceof Apc40) controller.knobFeedback = this.feedback;
       const tick = setInterval(() => controller.tick(), TICK_MS);
       const watch = setInterval(() => this.watch(connection), WATCH_MS);
@@ -322,9 +324,31 @@ export class ControlSurfaces {
       this.connecting = false;
       this.events.emit('change');
     }
-    if (this.rescan) {
-      this.rescan = false;
-      await this.scan();
+  }
+
+  /** The inputs that open, listened to: `forward` ones go to the controller, the others are only logged. */
+  private async openInputs(inputs: readonly MIDIInput[], forward: boolean, controller: SessionSurface, liveness: Liveness): Promise<MIDIInput[]> {
+    const opened: MIDIInput[] = [];
+    for (const input of inputs) if (await this.listenTo(input, forward, controller, liveness)) opened.push(input);
+    return opened;
+  }
+
+  private async listenTo(input: MIDIInput, forward: boolean, controller: SessionSurface, liveness: Liveness): Promise<boolean> {
+    try {
+      await input.open();
+      input.onmidimessage = e => {
+        if (!e.data) return;
+        this.record(forward ? '←' : '← (not listened)', input.name, e.data);
+        if (this.log) console.log(`MIDI ← ${input.name} [${input.id}]: ${hex(e.data)}`);
+        if (!forward) return;
+        liveness.heard(performance.now(), e.data);
+        this.recovered();
+        controller.receive(e.data);
+      };
+      return true;
+    } catch (e) {
+      console.warn(`Controller: can't open input ${input.name} [${input.id}]`, e);
+      return false;
     }
   }
 

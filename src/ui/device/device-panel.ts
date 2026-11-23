@@ -132,7 +132,7 @@ export class DevicePanel {
     if (!sizes.length || sizes.some(r => !r.width)) return;
     const tallest = Math.max(...sizes.map(r => r.height));
     const room = this.element.getBoundingClientRect().bottom - box.getBoundingClientRect().top
-      - parseFloat(getComputedStyle(this.element).paddingBottom);
+      - Number.parseFloat(getComputedStyle(this.element).paddingBottom);
     const rows = Math.max(1, Math.floor((room + SECTION_GAP) / (tallest + SECTION_GAP)));
     if (rows > 1) box.style.maxWidth = `${narrowestWidth(sizes.map(r => r.width), SECTION_GAP, rows)}px`;
   }

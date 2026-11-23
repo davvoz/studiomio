@@ -107,7 +107,7 @@ export class MacroSprings {
 
   /** One step of each released spring: in a straight line towards rest, in time to get there. */
   private step(): void {
-    const p = this.store.project, now = this.clock.now();
+    const now = this.clock.now();
     const moves: { pull: Pull; value: number }[] = [];
     for (const [k, pull] of this.pulls) {
       if (this.holders.has(k)) {
@@ -115,22 +115,30 @@ export class MacroSprings {
         pull.from = null;
         continue;
       }
-      const m = findRack(p.racksOf(pull.owner), pull.rack)?.macros[pull.index];
-      const s = m && springOf(m);
-      if (!m || !s) continue;
-      if (!pull.from) {
-        if (now - pull.touched < SPRING_IDLE_MS) continue;
-        pull.from = { value: m.value, at: now };
-      }
-      const ms = s.sync ? p.tempo.secondsAt(s.time) * 1000 : s.time;
-      const t = Math.min(1, (now - pull.from.at) / ms);
-      const value = t >= 1 ? s.rest : pull.from.value + (s.rest - pull.from.value) * t;
+      const value = this.springValue(pull, now);
+      if (value === null) continue;
       this.written.set(k, value);
       moves.push({ pull, value });
     }
     if (!moves.length) return;
     this.store.apply(edit('Spring', (next, ctx) => moves.reduce(
       (q, { pull, value }) => setMacro(pull.owner, pull.rack, pull.index, value).apply(q, ctx), next)), { transient: true });
+  }
+
+  /** Where a released spring's macro is now: on the way back to rest (it starts after a moment of
+   *  stillness); null if it isn't moving (or the macro has no spring any more). */
+  private springValue(pull: Pull, now: number): number | null {
+    const p = this.store.project;
+    const m = findRack(p.racksOf(pull.owner), pull.rack)?.macros[pull.index];
+    const s = m && springOf(m);
+    if (!m || !s) return null;
+    if (!pull.from) {
+      if (now - pull.touched < SPRING_IDLE_MS) return null;
+      pull.from = { value: m.value, at: now };
+    }
+    const ms = s.sync ? p.tempo.secondsAt(s.time) * 1000 : s.time;
+    const t = Math.min(1, (now - pull.from.at) / ms);
+    return t >= 1 ? s.rest : pull.from.value + (s.rest - pull.from.value) * t;
   }
 
   private stop(): void {

@@ -60,7 +60,7 @@ describe('ProjectSession', () => {
     expect(await disk.exists(PROJECT_FILE)).toBe(true);
 
     const saved = store.project;
-    await session.newProject();
+    session.newProject();
     // it starts with a MIDI track, an audio one and two buses
     expect(store.project.tracks.map(t => t.kind)).toEqual(['midi', 'audio']);
     expect(store.project.buses.map(b => b.name)).toEqual(['A Bus', 'B Bus']);
@@ -73,7 +73,7 @@ describe('ProjectSession', () => {
     expect(session.saved).toBe(true);
     expect(store.canUndo).toBe(false);
 
-    await session.newProject();
+    session.newProject();
     store.apply(addTrack('audio'));
     expect(session.changed).toBe(true);
     session.forgetChanges(); // like the demo just loaded
@@ -134,7 +134,7 @@ describe('ProjectSession', () => {
     const session = new ProjectSession(store, fakeAudio().audio, async () => new MemoryDirectory('Never chosen'));
     const stored: string[] = [];
     session.on('stored', dir => stored.push(dir.name));
-    await session.newProject();
+    session.newProject();
     await expect(session.open(new MemoryDirectory('Empty'))).rejects.toThrow(/doesn't contain/);
     const other = new ProjectSession(store, fakeAudio().audio, async () => disk);
     await other.saveAs();

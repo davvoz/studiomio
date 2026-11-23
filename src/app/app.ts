@@ -168,7 +168,6 @@ export class App implements Commands, TimelineActions {
       preview: new SamplePreview(this.audio.context, id => this.audio.library.get(id)),
       say: t => this.say(t),
     });
-    void this.catalog.restore();
     this.arrangement = new ArrangementView({
       store: this.store, ui: this.ui, engine: this.audio.engine, peaks: this.peaks,
       openClip: (track, id) => this.openClip(placementRef(track, id)),
@@ -309,6 +308,14 @@ export class App implements Commands, TimelineActions {
     this.say('Drag audio files onto the timeline or open File › Load the demo project. Drag up/down on the bar numbers to zoom, sideways to scroll; Alt drags without the grid.');
   }
 
+  /** What loads in the background once the app is built (main.ts calls it right after the
+   *  constructor): the devices' AudioWorklet, the browser's folders and the recent projects. */
+  start(): void {
+    this.audio.loadDevices();
+    void this.catalog.restore();
+    this.recent.load().catch(e => console.warn('recent projects: couldn\'t read them', e));
+  }
+
   // ---------------------------------------------------------------- commands
 
   togglePlay(): void {
@@ -329,7 +336,10 @@ export class App implements Commands, TimelineActions {
   deleteSelection(): void {
     const refs = this.selection(), range = this.ui.range;
     if (!refs.length) return;
-    if (!range) return void this.store.apply(deleteMany(refs));
+    if (!range) {
+      this.store.apply(deleteMany(refs));
+      return;
+    }
     const cut = cutOutRange(this.store.project, this.store.ids, refs, range);
     this.store.apply(edit('Delete clip', (_p, ctx) => deleteMany(cut.pieces).apply(cut.project, ctx)));
   }
@@ -699,7 +709,7 @@ export class App implements Commands, TimelineActions {
 
   // ---------------------------------------------------------------- file
 
-  newProject(): void { this.run(async () => { if (await this.closeProject()) await this.session.newProject(); }); }
+  newProject(): void { this.run(async () => { if (await this.closeProject()) this.session.newProject(); }); }
   open(): void { this.run(async () => { if (await this.closeProject()) await this.openFolder(); }); }
   save(): void { this.run(() => this.session.save()); }
 
@@ -854,7 +864,7 @@ export class App implements Commands, TimelineActions {
   loadDemo(): void {
     this.run(async () => {
       if (!(await this.closeProject())) return;
-      await this.session.newProject(true);
+      this.session.newProject(true);
       await buildDemoProject(this.store, this.session);
       this.store.load(this.store.project); // the demo project can't be undone
       this.session.forgetChanges();
@@ -866,7 +876,7 @@ export class App implements Commands, TimelineActions {
 
   /** The MIDI controllers: they connect by themselves if permission is already there; Options › Enable MIDI controllers asks for it. */
   private controlSurfaces(): ControlSurfaces {
-    const app = this;
+    const openDetail = () => this.bottom.open, devices = () => this.device;
     const surfaces = new ControlSurfaces({
       store: this.store, ui: this.ui, engine: this.audio.engine,
       togglePlay: () => this.togglePlay(),
@@ -875,8 +885,8 @@ export class App implements Commands, TimelineActions {
       openDevices: owner => this.openDevices(owner),
       openClip: ref => this.openClip(ref),
       get detail() {
-        const open = app.bottom.open;
-        if (open === app.device) return 'devices';
+        const open = openDetail();
+        if (open === devices()) return 'devices';
         return open ? 'clip' : null;
       },
       closeDetail: () => this.bottom.closeAll(),

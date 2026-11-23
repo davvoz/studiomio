@@ -284,11 +284,7 @@ export class MixerGraph {
       strip.route(t.group ? this.strip(t.group).input : this.bus);
       strip.apply(t.mixer, audible.has(t.id), sending.has(t.id));
       strip.chain.sync(audioEffects(t.effects), project.tempo.bpm);
-      const sends = new Map<TrackId, { db: number; to: AudioNodeLike }>();
-      for (const [bus, db] of Object.entries(t.sends) as [TrackId, number][]) {
-        if (db > SEND_OFF_DB && present.has(bus)) sends.set(bus, { db, to: this.strip(bus).input });
-      }
-      strip.syncSends(sends);
+      strip.syncSends(this.sendsOf(t, present));
     }
     for (const b of project.buses) {
       const strip = this.strip(b.id);
@@ -304,6 +300,15 @@ export class MixerGraph {
       this.masterSettings = m;
     }
     this.syncSidechains(project);
+  }
+
+  /** The track's open sends to buses that exist, with the bus's input. */
+  private sendsOf(t: Track, present: ReadonlySet<TrackId>): Map<TrackId, { db: number; to: AudioNodeLike }> {
+    const sends = new Map<TrackId, { db: number; to: AudioNodeLike }>();
+    for (const [bus, db] of Object.entries(t.sends) as [TrackId, number][]) {
+      if (db > SEND_OFF_DB && present.has(bus)) sends.set(bus, { db, to: this.strip(bus).input });
+    }
+    return sends;
   }
 
   /** Connects and disconnects only the changed sidechains (also when an effect was recreated). */

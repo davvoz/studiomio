@@ -96,7 +96,7 @@ const clamp = (v: number, s: ModScale) => Math.max(s.min, Math.min(s.max, v));
  *  the last, in between the straight line between the two neighbours. On a step it's already the next point. */
 export function envelopeValueAt(points: readonly EnvelopePoint[], beat: Beats): number {
   const n = points.length;
-  if (n === 0) return NaN;
+  if (n === 0) return Number.NaN;
   if (beat < points[0].beat) return points[0].value;
   // the last point with beat <= beat (binary search)
   let lo = 0, hi = n - 1;
@@ -117,7 +117,7 @@ export function steppedRuns(points: readonly EnvelopePoint[], from: Beats, to: B
   const add = (a: Beats, b: Beats, value: number) => {
     if (b - a <= 1e-9) return;
     const last = out[out.length - 1];
-    if (last && last.value === value) last.to = b;
+    if (last?.value === value) last.to = b;
     else out.push({ from: a, to: b, value });
   };
   const round = (v: number) => Math.round(v) + 0; // niente −0

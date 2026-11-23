@@ -12,7 +12,7 @@ import { NodeDirectory } from './node-directory';
 /** Format and length of a WAV from its header (PCM or float, also "extensible"). */
 export function wavInfo(bytes: Uint8Array, name: string): { sampleRate: number; channels: number; frames: number } {
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const tag = (at: number) => String.fromCharCode(...bytes.subarray(at, at + 4));
+  const tag = (at: number) => String.fromCodePoint(...bytes.subarray(at, at + 4));
   if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error(`${name}: not a WAV`);
   let channels = 0, sampleRate = 0, bits = 0;
   for (let at = 12; at + 8 <= bytes.length;) {

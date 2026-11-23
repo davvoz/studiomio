@@ -36,7 +36,10 @@ export class MeterBoard {
   /** Shows `owner`'s levels in `view`; returns how to detach it. */
   attach(owner: ChainOwner, view: MeterView): () => void {
     let e = this.entries.get(owner);
-    if (!e) this.entries.set(owner, (e = { ballistics: new Ballistics(), views: new Set(), drawnIdle: false }));
+    if (!e) {
+      e = { ballistics: new Ballistics(), views: new Set(), drawnIdle: false };
+      this.entries.set(owner, e);
+    }
     e.views.add(view);
     e.drawnIdle = false;
     const entry = e;
