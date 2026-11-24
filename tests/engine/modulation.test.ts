@@ -17,7 +17,7 @@ import { addEffect, addMidiClip, addTrack, resizePlacement, setEffectParam, setL
 import { ProjectStore } from '../../src/store/project-store';
 import { groupDevices, mapMacro, setMacroMode, setMappingRange } from '../../src/store/rack-edits';
 import { macroParam } from '../../src/model/rack';
-import { paintStep, simplify } from '../../src/ui/envelopes/envelope-lane';
+import { paintStep, simplify } from '../../src/ui/envelopes/envelope-points';
 import { choiceTarget, formatModValue, masterChain, masterTargetDevices, targetDevices, trackChain } from '../../src/ui/envelopes/mod-targets';
 import { BRAKE_CURVES, TAPE_STOP } from '../../src/devices/effects/tape-stop/tape-stop';
 import { FakeEffects, FakeGraph, FakeInstruments, type FakeParam } from '../helpers/fake-audio';

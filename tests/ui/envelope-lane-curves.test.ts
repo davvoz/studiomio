@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MOD_SCALES } from '../../src/model/envelope';
 import { BeatAxis } from '../../src/ui/clip-editor/clip-geometry';
-import { clearRange, paintStep, rescalePoints, simplify, valueBefore, wheelTime } from '../../src/ui/envelopes/envelope-lane';
+import { wheelTime } from '../../src/ui/envelopes/envelope-lane';
+import { clearRange, paintStep, rescalePoints, simplify, valueBefore } from '../../src/ui/envelopes/envelope-points';
 
 const pts = (...p: [number, number][]) => p.map(([beat, value]) => ({ beat, value }));
 

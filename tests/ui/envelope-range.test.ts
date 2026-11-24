@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MOD_SCALES } from '../../src/model/envelope';
-import { clearRange, paintStep, placeShape, replaceRange, rescalePoints, sliceRange } from '../../src/ui/envelopes/envelope-lane';
+import { clearRange, paintStep, placeShape, replaceRange, rescalePoints, sliceRange } from '../../src/ui/envelopes/envelope-points';
 import { shapePoints, type ShapeChoice } from '../../src/ui/envelopes/envelope-shapes';
 
 const pts = (...p: [number, number][]) => p.map(([beat, value]) => ({ beat, value }));
