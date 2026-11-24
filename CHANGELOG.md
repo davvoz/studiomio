@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.69] - 2026-11-24
+
 ### Added
 - Recording from the APC40 mkII: its Record Arm buttons arm the MIDI tracks (like ⌨, lit while armed),
   and on an armed track an empty slot's pad starts recording, as ● in the session; the same pad
