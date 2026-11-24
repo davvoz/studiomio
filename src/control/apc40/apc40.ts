@@ -1,6 +1,7 @@
 /* The APC40 mkII on the session, as in Live: the 8×5 grid launches the clips of the red box
  * (the arrows move it), the scene buttons launch the rows, below are stop, select,
- * mute (activator) and solo of each track, the faders and the master; the top knobs do pan,
+ * mute (activator), solo and record arm of each track, the faders and the master; on an armed MIDI
+ * track the empty slots record (as ● in the session); the top knobs do pan,
  * the 8 "Device Control" knobs move the parameters of the chosen device (the "blue hand"),
  * in banks of 8. The LEDs are decided by the program, every round: clip colour, green for the one
  * playing, blinking for the queued one (the controller does it); only what changes is sent.
@@ -8,9 +9,10 @@
 import { type ParamSpec } from '../../devices/params';
 import type { DeviceId, TrackId } from '../../core/id';
 import { MASTER } from '../../model/project';
-import type { Track } from '../../model/track';
+import { MidiTrack, type Track } from '../../model/track';
 import { slotRef, type ClipRef } from '../../store/clip-ref';
 import { setEffectEnabled, setMasterMixer, setMixer } from '../../store/edits';
+import { isArmed } from '../../ui/session/slot-face';
 import {
   bipolar, ccKey, noteKey, PARAMS_PER_BANK, SessionSurface, SETTLE_MS, type BlockLight, type SceneLight, type SlotLight,
 } from '../session-surface';
@@ -39,10 +41,10 @@ type Phase = 'identity' | 'challenge' | 'ready';
 type SetNote = (n: number, v: number | boolean, channel?: number) => void;
 
 /** The buttons of the tracks' columns (the channel says which track). */
-const TRACK_BUTTONS: ReadonlySet<number> = new Set([NOTE.clipStop, NOTE.trackSelect, NOTE.activator, NOTE.solo]);
+const TRACK_BUTTONS: ReadonlySet<number> = new Set([NOTE.clipStop, NOTE.trackSelect, NOTE.activator, NOTE.solo, NOTE.recordArm]);
 
 const NOT_YET: Readonly<Record<number, string>> = {
-  [NOTE.recordArm]: 'Record arm', [NOTE.record]: 'Recording', [NOTE.session]: 'Session recording',
+  [NOTE.record]: 'Recording', [NOTE.session]: 'Session recording',
   [NOTE.crossfadeAssign]: 'Il crossfader', [NOTE.sends]: 'The sends', [NOTE.user]: 'The User mode',
   [NOTE.nudgeMinus]: 'The nudge', [NOTE.nudgePlus]: 'The nudge',
 };
@@ -143,14 +145,22 @@ export class Apc40 extends SessionSurface {
     if (missing) this.host.say(`APC40: ${missing} isn't in studiomio yet.`);
   }
 
-  /** A button of a track's column: stop, select, activator (mute), solo. */
+  /** A button of a track's column: stop, select, activator (mute), solo, record arm. */
   private pressTrackButton(note: number, track: Track): void {
     switch (note) {
       case NOTE.clipStop: return this.host.engine.stopTrack(track.id);
       case NOTE.trackSelect: return this.selectOwner(track.id);
       case NOTE.activator: return this.apply(setMixer(track.id, { mute: !track.mixer.mute }));
+      case NOTE.recordArm: return this.arm(track);
       default: return this.apply(setMixer(track.id, { solo: !track.mixer.solo }));
     }
+  }
+
+  /** Record arm: like ⌨ on the track, the computer keyboard and MIDI keyboards play it and its empty
+   *  slots record. Only MIDI tracks record. */
+  private arm(track: Track): void {
+    if (track instanceof MidiTrack) this.host.ui.toggleKeyboardTrack(track.id);
+    else this.host.say(`APC40: only MIDI tracks record (${track.name} isn't one).`);
   }
 
   /** The other buttons; false if it isn't one studiomio uses. */
@@ -345,7 +355,7 @@ export class Apc40 extends SessionSurface {
     note(NOTE.trackSelect, !!t && !this.masterSelected && t.id === this.host.ui.track, c);
     note(NOTE.activator, !!t && !t.mixer.mute, c);
     note(NOTE.solo, !!t?.mixer.solo, c);
-    note(NOTE.recordArm, false, c);
+    note(NOTE.recordArm, !!t && isArmed(t, this.host.ui.keyboardTracks), c);
     note(NOTE.crossfadeAssign, 0, c);
   }
 
@@ -384,11 +394,17 @@ export class Apc40 extends SessionSurface {
 }
 
 /** A slot's pad, as in Live: the playing one is steady green, the queued one blinks
- *  green, the other clips have their colour, empty slots are off. */
+ *  green, the one recording blinks red, the other clips have their colour, the empty slots of
+ *  an armed track are dark red, the other empty slots off. */
 function padColor(light: SlotLight): number {
-  if (light === 'queued') return TRIGGERED(COLOR.green);
-  if (light === 'playing') return COLOR.green;
-  return light === 'off' ? COLOR.off : paletteIndex(light.clip);
+  switch (light) {
+    case 'queued': return TRIGGERED(COLOR.green);
+    case 'playing': return COLOR.green;
+    case 'recording': return TRIGGERED(COLOR.red);
+    case 'armed': return COLOR.redHalf;
+    case 'off': return COLOR.off;
+    default: return paletteIndex(light.clip);
+  }
 }
 
 /** Shift held: the block map. White where the box is, green if something plays,

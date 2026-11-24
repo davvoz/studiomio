@@ -22,6 +22,8 @@ import type { ClipRef } from '../store/clip-ref';
 import { setEffectParam, setInstrumentParam, setTempo } from '../store/edits';
 import type { Edit, ProjectStore } from '../store/project-store';
 import { setMacro } from '../store/rack-edits';
+import type { SlotRef } from '../store/session-edits';
+import { isArmed, slotFace } from '../ui/session/slot-face';
 import type { ControlledDevice, SessionRing, UiState } from '../ui/ui-state';
 
 /** What the controller uses of the engine (PlaybackEngine already is one). */
@@ -39,6 +41,14 @@ export interface SurfaceEngine {
   modulationAt?(owner: ChainOwner, target: ModTarget): number | null;
 }
 
+/** What the controller uses of the recording into the slots (app/session-recorder). */
+export interface SurfaceRecorder {
+  /** The slot the track is recording into, null if none. */
+  recordingSlot(track: TrackId): number | null;
+  /** Starts recording into the slot, or ends the track's take. */
+  toggle(ref: SlotRef): void;
+}
+
 /** What the app's bottom area shows. */
 export type DetailView = 'devices' | 'clip' | null;
 
@@ -47,6 +57,7 @@ export interface SurfaceHost {
   readonly store: ProjectStore;
   readonly ui: UiState;
   readonly engine: SurfaceEngine;
+  readonly recorder: SurfaceRecorder;
   togglePlay(): void;
   stopAndRewind(): void;
   toggleMetronome(): void;
@@ -80,8 +91,9 @@ export interface Controlled {
   readonly params: readonly ParamSpec[];
 }
 
-/** How a slot's pad lights up: off, the clip's colour, playing, queued. */
-export type SlotLight = 'off' | 'playing' | 'queued' | { readonly clip: string };
+/** How a slot's pad lights up: off, the clip's colour, playing, queued, recording into it, or empty
+ *  on an armed track (a press records there). */
+export type SlotLight = 'off' | 'playing' | 'queued' | 'recording' | 'armed' | { readonly clip: string };
 /** A scene's button: off (empty row), playing, queued, or the scene's colour (null: it has none). */
 export type SceneLight = 'off' | 'playing' | 'queued' | { readonly color: string | null };
 /** A block map pad: outside the project, the box, something playing, there are clips, empty. */
@@ -241,10 +253,22 @@ export abstract class SessionSurface {
     }
   }
 
-  /** The pad of a box slot: launches the clip (an empty slot stops the track, like a click). */
+  /** The pad of a box slot does what a click on the slot's button does: it launches the clip (an empty
+   *  slot stops the track); where the session shows ● (an empty slot of an armed MIDI track, the slot
+   *  it's recording into) it starts recording, or ends the take. */
   protected launchPad(col: number, row: number): void {
     const track = this.trackAt(col), scene = this.ring.scene + row;
-    if (track && scene < this.project.scenes.length) this.host.engine.launchSlot(track.id, scene);
+    if (!track || scene >= this.project.scenes.length) return;
+    if (this.records(track, scene)) this.host.recorder.toggle({ track: track.id, slot: scene });
+    else this.host.engine.launchSlot(track.id, scene);
+  }
+
+  /** The slot's button is ● in the session (see slotFace). */
+  private records(track: Track, scene: number): boolean {
+    if (track instanceof GroupTrack) return false;
+    const recording = this.host.recorder.recordingSlot(track.id) === scene;
+    const { button } = slotFace(track, track.slots[scene] ?? null, recording, isArmed(track, this.host.ui.keyboardTracks));
+    return button === 'record' || button === 'recording';
   }
 
   protected launchScene(row: number): void {
@@ -259,7 +283,8 @@ export abstract class SessionSurface {
     this.setRing(col * this.width, row * this.height);
   }
 
-  /** A track's slot: the playing one, the queued one, the clip's colour, off. */
+  /** A track's slot: recording into it, the queued one, the playing one, the clip's colour, empty on an armed
+   *  track, off. */
   protected slotLight(track: Track | undefined, scene: number): SlotLight {
     if (!track || scene >= track.slots.length) return 'off';
     const { engine } = this.host;
@@ -271,11 +296,13 @@ export abstract class SessionSurface {
       if (g.playing) return 'playing';
       return g.clips ? { clip: track.color } : 'off';
     }
+    if (this.host.recorder.recordingSlot(track.id) === scene) return 'recording';
     const st = engine.sessionState(track);
     const clip = track.slots[scene];
     if (st.queued && typeof st.queued === 'object' && st.queued.slot === scene) return 'queued';
     if (st.playing?.slot === scene) return 'playing';
-    return clip ? { clip: clip.color } : 'off';
+    if (clip) return { clip: clip.color };
+    return isArmed(track, this.host.ui.keyboardTracks) ? 'armed' : 'off';
   }
 
   /** The button of the box's row `row`: queued if something in the row is, playing if

@@ -6,6 +6,12 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Recording from the APC40 mkII: its Record Arm buttons arm the MIDI tracks (like ⌨, lit while armed),
+  and on an armed track an empty slot's pad starts recording, as ● in the session; the same pad
+  ends the take. The empty slots of an armed track are dark red, the one recording blinks red. The
+  Launchpads' pads record the same way.
+
 ## [0.3.68] - 2026-11-24
 
 ### Fixed

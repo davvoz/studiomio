@@ -638,11 +638,17 @@ const STOP_COLOR: Readonly<Record<'off' | 'playing' | 'queued', number>> = {
 const isTrackMode = (m: Mode): m is 'stop' | 'mute' | 'solo' => m === 'stop' || m === 'mute' || m === 'solo';
 
 /** A slot's pad, as in Live on the Launchpads: the playing clip pulses green, the queued one
- *  blinks green, the others have their colour, empty slots are off. */
+ *  blinks green, the one recording blinks red, the others have their colour, the empty slots of an
+ *  armed track are dark red, the other empty slots off. */
 function padColor(light: SlotLight): number {
-  if (light === 'queued') return blink(COLOR.green);
-  if (light === 'playing') return pulse(COLOR.green);
-  return light === 'off' ? COLOR.off : paletteIndex(light.clip);
+  switch (light) {
+    case 'queued': return blink(COLOR.green);
+    case 'playing': return pulse(COLOR.green);
+    case 'recording': return blink(COLOR.red);
+    case 'armed': return COLOR.redHalf;
+    case 'off': return COLOR.off;
+    default: return paletteIndex(light.clip);
+  }
 }
 
 /** The block map, as in Live: the box white, pulsing green if something plays,

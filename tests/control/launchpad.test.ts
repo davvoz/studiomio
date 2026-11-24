@@ -18,6 +18,7 @@ import type { MidiTrack, Track } from '../../src/model/track';
 import { addTrack, setSlot } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 import { UiState } from '../../src/ui/ui-state';
+import { FakeRecorder } from '../helpers/surface';
 
 const model = (id: ModelId) => MODELS.find(m => m.id === id)!;
 
@@ -48,12 +49,13 @@ function rig(id: ModelId, opts: { tracks?: number; scenes?: number; clips?: read
   for (const [ti, s] of opts.clips ?? []) store.apply(setSlot(t(ti), s, MidiClip.empty(ids.next('clip'), 'c', '#ff0000', 4)));
   const ui = new UiState();
   const engine = new FakeEngine();
+  const recorder = new FakeRecorder();
   const said: string[] = [];
   let detail: DetailView = null;
   let clock = 0;
   const out: number[][] = [];
   const host = {
-    store, ui, engine,
+    store, ui, engine, recorder,
     togglePlay: () => { engine.playing = !engine.playing; },
     stopAndRewind: () => { engine.playing = false; engine.position = 0; },
     toggleMetronome: () => { engine.metronomeOn = !engine.metronomeOn; },
@@ -104,7 +106,7 @@ function rig(id: ModelId, opts: { tracks?: number; scenes?: number; clips?: read
   /** The SysEx that change layout. */
   const layouts = () => sysex().filter(x => x[6] === (id === 'mk2' ? 0x22 : 0x00));
   return {
-    store, ui, engine, lp, out, said, start, pressPad, pressScene, button, cc, led, settle, sysex, layouts, t, m,
+    store, ui, engine, recorder, lp, out, said, start, pressPad, pressScene, button, cc, led, settle, sysex, layouts, t, m,
     advance: (ms: number) => { clock += ms; },
   };
 }
@@ -212,6 +214,23 @@ describe('Launchpad X on the session', () => {
     expect(r.led('note', padNote(0, 0))).toEqual({ color: COLOR.green, anim: 'pulse', base: 0 });
     expect(r.led('note', padNote(1, 2))).toEqual({ color: COLOR.green, anim: 'blink', base: 0 });
     expect(r.led('cc', sceneButton(2))).toMatchObject({ color: COLOR.green, anim: 'blink' });
+  });
+
+  it('on an armed track the empty pads record (dark red, blinking red while recording); the others launch', () => {
+    const r = rig('x', { clips: [[0, 1]] });
+    r.start();
+    r.ui.toggleKeyboardTrack(r.t(0));
+    expect(r.led('note', padNote(0, 0))).toEqual({ color: COLOR.redHalf, anim: 'fixed' });
+    expect(r.led('note', padNote(1, 0))).toEqual({ color: COLOR.off, anim: 'fixed' });
+    r.pressPad(0, 0);
+    r.pressPad(0, 1);
+    r.pressPad(1, 0);
+    expect(r.recorder.calls).toEqual([`record ${r.t(0)} 0`]);
+    expect(r.engine.calls).toEqual([`slot ${r.t(0)} 1`, `slot ${r.t(1)} 0`]);
+    expect(r.led('note', padNote(0, 0))).toEqual({ color: COLOR.red, anim: 'blink', base: 0 });
+    r.pressPad(0, 0);
+    expect(r.recorder.calls).toHaveLength(2);
+    expect(r.led('note', padNote(0, 0))).toEqual({ color: COLOR.redHalf, anim: 'fixed' });
   });
 
   it('arrows: the box moves by one and stays inside the project', () => {

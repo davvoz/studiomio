@@ -139,6 +139,8 @@ export const COLOR = {
   dim: 1,
   white: 3,
   red: 5,
+  /** Dark red: the empty slots of an armed track (Live's "record button" colour). */
+  redHalf: 7,
   amber: 9,
   green: 21,
 } as const;

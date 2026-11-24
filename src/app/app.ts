@@ -625,7 +625,7 @@ export class App implements Commands, TimelineActions {
   private controlSurfaces(): ControlSurfaces {
     const openDetail = () => this.bottom.open, devices = () => this.device;
     const surfaces = new ControlSurfaces({
-      store: this.store, ui: this.ui, engine: this.audio.engine,
+      store: this.store, ui: this.ui, engine: this.audio.engine, recorder: this.recorder,
       togglePlay: () => this.togglePlay(),
       stopAndRewind: () => this.stopAndRewind(),
       toggleMetronome: () => this.toggleMetronome(),

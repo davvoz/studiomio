@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FIXED } from '../../src/control/palette';
 import { PALETTE } from '../../src/model/colors';
 import { sequentialIds, type TrackId } from '../../src/core/id';
 import { Apc40, INSTRUMENT_KEY, type DetailView, type SurfaceEngine } from '../../src/control/apc40/apc40';
+import type { SurfaceRecorder } from '../../src/control/session-surface';
+import { SessionRecorder } from '../../src/app/session-recorder';
 import {
-  CC, COLOR, dbToFader, dongleChallenge, faderToDb, IDENTITY_REQUEST, introduction, ON, TRIGGERED, knobToPan, MODE, NOTE, padAt, padNote, paletteIndex, panToKnob,
+  CC, COLOR, dbToFader, dongleChallenge, faderToDb, IDENTITY_REQUEST, introduction, ON, knobToPan, MODE, NOTE, padAt, padNote, paletteIndex, panToKnob,
 } from '../../src/control/apc40/protocol';
 import { paramFromUnit, paramToUnit } from '../../src/devices/params';
 import { paramsOf, resolveParams } from '../../src/devices/device-type';
@@ -13,12 +15,13 @@ import type { TrackSessionState } from '../../src/engine/session';
 import { MidiClip } from '../../src/model/midi-clip';
 import { MASTER, Project, type ChainOwner } from '../../src/model/project';
 import type { MidiTrack, Track } from '../../src/model/track';
-import { addEffect, addTrack, setSlot } from '../../src/store/edits';
+import { addEffect, addTrack, groupTracks, setSlot } from '../../src/store/edits';
 import { groupDevices, mapMacro } from '../../src/store/rack-edits';
 import { INSTRUMENT_DEVICE, targetKey, type ModTarget } from '../../src/model/envelope';
 import { ProjectStore } from '../../src/store/project-store';
 import { setSceneColor } from '../../src/store/session-edits';
 import { UiState } from '../../src/ui/ui-state';
+import { FakeRecorder } from '../helpers/surface';
 
 /** The replies of a real APC40 mkII (from the MIDI monitor). */
 const IDENTITY_REPLY = [0xf0, 0x7e, 0x00, 0x06, 0x02, 0x47, 0x29, 0x00, 0x19, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7f, 0x7f, 0x7f, 0x7f, 0x41, 0xf7];
@@ -45,7 +48,7 @@ class FakeEngine implements SurfaceEngine {
 }
 
 /** `tracks` MIDI tracks and `scenes` scenes; a red clip in each slot (t, s) of `clips`. */
-function rig(opts: { tracks?: number; scenes?: number; clips?: readonly (readonly [number, number])[] } = {}) {
+function rig(opts: { tracks?: number; scenes?: number; clips?: readonly (readonly [number, number])[]; recorder?: (store: ProjectStore) => SurfaceRecorder } = {}) {
   const ids = sequentialIds();
   const store = new ProjectStore(Project.empty('t', ids, opts.scenes ?? 8), ids);
   for (let i = 0; i < (opts.tracks ?? 3); i++) store.apply(addTrack('midi'));
@@ -53,13 +56,15 @@ function rig(opts: { tracks?: number; scenes?: number; clips?: readonly (readonl
   for (const [ti, s] of opts.clips ?? []) store.apply(setSlot(t(ti), s, MidiClip.empty(ids.next('clip'), 'c', '#ff0000', 4)));
   const ui = new UiState();
   const engine = new FakeEngine();
+  const fake = new FakeRecorder();
+  const recorder = opts.recorder?.(store) ?? fake;
   const said: string[] = [];
   const opened: string[] = [];
   let detail: DetailView = null;
   let clock = 0;
   const out: number[][] = [];
   const host = {
-    store, ui, engine,
+    store, ui, engine, recorder,
     togglePlay: () => { engine.playing = !engine.playing; },
     stopAndRewind: () => { engine.playing = false; engine.position = 0; },
     toggleMetronome: () => { engine.metronomeOn = !engine.metronomeOn; },
@@ -104,7 +109,7 @@ function rig(opts: { tracks?: number; scenes?: number; clips?: readonly (readonl
     return out.findLast(m => m[0] === 0xb0 && m[1] === n)?.[2];
   };
   return {
-    store, ui, engine, apc, out, said, start, opened, t, press, release, cc, led, pad, ring, settle,
+    store, ui, engine, recorder: fake, apc, out, said, start, opened, t, press, release, cc, led, pad, ring, settle,
     advance: (ms: number) => { clock += ms; },
     setDetail: (d: DetailView) => { detail = d; },
   };
@@ -309,7 +314,6 @@ describe('APC40 on the session', () => {
     expect(r.out.filter(m => (m[0] & 0xf0) === 0x90 && m[1] === padNote(0, 1)).slice(-2)).toEqual([[0x90, padNote(0, 1), COLOR.green], [0x9e, padNote(0, 1), 0]]);
     // also the scene (RGB button) blinks the same way
     expect(r.out.filter(m => m[1] === NOTE.sceneLaunch + 1).slice(-2)).toEqual([[0x90, NOTE.sceneLaunch + 1, COLOR.green], [0x9e, NOTE.sceneLaunch + 1, 0]]);
-    void TRIGGERED;
     // it starts: now it pulses, the other goes back to its colour
     r.engine.states.set(r.t(0), { playing: { slot: 1, elapsed: 0 }, queued: null, followsArrangement: false });
     expect(r.pad(padNote(0, 1))).toEqual({ mode: 0, color: COLOR.green });
@@ -649,9 +653,9 @@ describe('APC40 on the session', () => {
   it('what studiomio doesn\'t have yet it says in the status bar', () => {
     const r = rig();
     r.start();
-    r.press(NOTE.recordArm, 0);
-    expect(r.said.at(-1)).toContain('Record arm');
-    expect(r.led(NOTE.recordArm, 0)).toBe(0);
+    r.press(NOTE.record);
+    expect(r.said.at(-1)).toContain('Recording');
+    expect(r.led(NOTE.record)).toBe(0);
   });
 
   it('the box comes back in if tracks are removed', () => {
@@ -680,5 +684,127 @@ describe('APC40 on the session', () => {
     expect(r.out.at(-1)).toEqual(introduction(MODE.generic));
     expect(r.ui.sessionRing).toBeNull();
     expect(r.ui.controlledDevice).toBeNull();
+  });
+});
+
+describe('APC40 mkII: recording into the slots', () => {
+  it("Record Arm arms a MIDI track (like ⌨) and lights up; an audio track or an empty column don't", () => {
+    const r = rig({ tracks: 2 });
+    r.store.apply(addTrack('audio'));
+    r.start();
+    r.press(NOTE.recordArm, 1);
+    expect([...r.ui.keyboardTracks]).toEqual([r.t(1)]);
+    expect(r.led(NOTE.recordArm, 1)).toBe(ON);
+    expect(r.led(NOTE.recordArm, 0)).toBe(0);
+    r.press(NOTE.recordArm, 1);
+    expect(r.ui.keyboardTracks.size).toBe(0);
+    expect(r.led(NOTE.recordArm, 1)).toBe(0);
+    r.press(NOTE.recordArm, 2);
+    expect(r.ui.keyboardTracks.size).toBe(0);
+    expect(r.said.at(-1)).toContain('only MIDI tracks record');
+    const said = r.said.length;
+    r.press(NOTE.recordArm, 5);
+    expect(r.said).toHaveLength(said);
+  });
+
+  it('a pad does what a click on the slot does: on an armed track the empty slots record, the clips launch', () => {
+    const r = rig({ tracks: 2, clips: [[0, 1]] });
+    r.start();
+    r.ui.toggleKeyboardTrack(r.t(0));
+    r.press(padNote(0, 0));
+    expect(r.recorder.calls).toEqual([`record ${r.t(0)} 0`]);
+    // the pad of the slot it's recording into ends the take
+    r.press(padNote(0, 0));
+    expect(r.recorder.calls).toHaveLength(2);
+    expect(r.recorder.recordingSlot(r.t(0))).toBeNull();
+    // a clip launches; a track that isn't armed stops
+    r.press(padNote(0, 1));
+    r.press(padNote(1, 0));
+    expect(r.engine.calls).toEqual([`slot ${r.t(0)} 1`, `slot ${r.t(1)} 0`]);
+    expect(r.recorder.calls).toHaveLength(2);
+  });
+
+  it('while a track records, its ● slots end the take, as in the session; the recording slot with a clip too', () => {
+    const r = rig({ tracks: 1, clips: [[0, 2]] });
+    r.start();
+    // recording "Record here" over the clip of slot 2 (the session arms the track to record)
+    r.ui.toggleKeyboardTrack(r.t(0));
+    r.recorder.slots.set(r.t(0), 2);
+    r.press(padNote(0, 2));
+    expect(r.recorder.calls).toEqual([`record ${r.t(0)} 2`]);
+    r.recorder.slots.set(r.t(0), 2);
+    r.press(padNote(0, 0));
+    expect(r.recorder.calls.at(-1)).toBe(`record ${r.t(0)} 0`);
+    expect(r.engine.calls).toEqual([]);
+  });
+
+  it('the pads of an armed audio track and of a group launch as before', () => {
+    const r = rig({ tracks: 2 });
+    r.store.apply(addTrack('audio'));
+    r.store.apply(groupTracks([r.t(0), r.t(1)]));
+    r.start();
+    const group = r.store.project.tracks.find(t => t.kind === 'group')!;
+    const audio = r.store.project.tracks.find(t => t.kind === 'audio')!;
+    r.ui.toggleKeyboardTrack(group.id);
+    r.ui.toggleKeyboardTrack(audio.id);
+    const col = (id: TrackId) => r.store.project.visibleTracks.findIndex(t => t.id === id);
+    r.press(padNote(col(group.id), 0));
+    r.press(padNote(col(audio.id), 0));
+    expect(r.recorder.calls).toEqual([]);
+    expect(r.engine.calls).toEqual([`slot ${group.id} 0`, `slot ${audio.id} 0`]);
+  });
+
+  it('the empty slots of an armed track are dark red, the one recording blinks red, then the clip plays green', () => {
+    const r = rig({ tracks: 2, clips: [[0, 1]] });
+    r.start();
+    r.ui.toggleKeyboardTrack(r.t(0));
+    expect(r.pad(padNote(0, 0))).toEqual({ mode: 0, color: COLOR.redHalf });
+    expect(r.pad(padNote(0, 1))).toEqual({ mode: 0, color: COLOR.red });
+    expect(r.pad(padNote(1, 0))).toEqual({ mode: 0, color: COLOR.off });
+    r.press(padNote(0, 0));
+    r.settle();
+    expect(r.out.filter(m => (m[0] & 0xf0) === 0x90 && m[1] === padNote(0, 0)).slice(-2)).toEqual([[0x90, padNote(0, 0), COLOR.red], [0x9e, padNote(0, 0), 0]]);
+    // the take ended at the boundary: the new clip plays
+    r.recorder.slots.clear();
+    r.store.apply(setSlot(r.t(0), 0, MidiClip.empty(r.store.ids.next('clip'), 'take', '#00ff00', 4)));
+    r.engine.states.set(r.t(0), { playing: { slot: 0, elapsed: 0 }, queued: null, followsArrangement: false });
+    expect(r.pad(padNote(0, 0))).toEqual({ mode: 0, color: COLOR.green });
+    // disarmed: the empty slots go dark
+    r.ui.toggleKeyboardTrack(r.t(0));
+    expect(r.pad(padNote(0, 2))).toEqual({ mode: 0, color: COLOR.off });
+  });
+
+  it("with the app's recorder: the pad starts the take, the notes go in, the pad again makes the clip", () => {
+    vi.useFakeTimers();
+    try {
+      const clock = { playing: false, sessionClock: 0, launched: [] as string[] };
+      const engine = {
+        get playing() { return clock.playing; },
+        get sessionClock() { return clock.sessionClock; },
+        get nextBoundary() { return Math.ceil(clock.sessionClock / 4 - 1e-9) * 4; },
+        startRecording: () => { clock.playing = true; return clock.sessionClock; },
+        launchSlot: (track: TrackId, slot: number) => { clock.launched.push(`${track} ${slot}`); },
+        onStateChange: () => () => undefined,
+      };
+      let app: SessionRecorder | null = null;
+      const r = rig({ tracks: 1, recorder: store => (app = new SessionRecorder(engine, store, () => 4, () => undefined)) });
+      r.start();
+      r.ui.toggleKeyboardTrack(r.t(0));
+      r.press(padNote(0, 0));
+      expect(app!.recordingSlot(r.t(0))).toBe(0);
+      app!.press(r.t(0), 60, 100);
+      clock.sessionClock = 1;
+      app!.release(r.t(0), 60);
+      clock.sessionClock = 2.5;
+      r.press(padNote(0, 0));
+      expect(clock.launched).toEqual([`${r.t(0)} 0`]);
+      clock.sessionClock = 4;
+      vi.advanceTimersByTime(100);
+      expect(app!.recordingSlot(r.t(0))).toBeNull();
+      const clip = r.store.project.track(r.t(0))!.slots[0] as MidiClip;
+      expect(clip.notes.map(n => [n.pitch, n.start, n.duration])).toEqual([[60, 0, 1]]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
