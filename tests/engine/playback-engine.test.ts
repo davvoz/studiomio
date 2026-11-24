@@ -192,7 +192,7 @@ describe('PlaybackEngine: clip audio', () => {
     const s = r.graph.sources[0];
     expect(s.playbackRate.value).toBe(2);
     expect(s.started).toMatchObject({ when: 0.05, offset: 1 }); // 0.5 s of timeline at double speed
-    expect(s.buffer!.length).toBe(r.sample.frames); // the original sample, not a render
+    expect(s.buffer!).toHaveLength(r.sample.frames); // the original sample, not a render
   });
 
   it('stop stops everything and notifies', async () => {

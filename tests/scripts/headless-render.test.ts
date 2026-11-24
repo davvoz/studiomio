@@ -113,8 +113,8 @@ describe('renderProject', () => {
   it('renders a note into sound, in whole blocks, with the requested tail', () => {
     const out = render(project(withNote), { tail: 0.5 });
     // 2 beats at 120 BPM = 1 s, plus the tail, in blocks of 128 frames
-    expect(out.left.length).toBe(Math.ceil(1.5 * RATE / 128) * 128);
-    expect(out.right.length).toBe(out.left.length);
+    expect(out.left).toHaveLength(Math.ceil(1.5 * RATE / 128) * 128);
+    expect(out.right).toHaveLength(out.left.length);
     expect(out.sampleRate).toBe(RATE);
     expect(peak(out.left)).toBeGreaterThan(0.001);
     expect(out.stems.size).toBe(0);

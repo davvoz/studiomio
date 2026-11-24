@@ -87,7 +87,7 @@ export class UserRacks {
   }
 
   has(name: string): boolean {
-    return this.find(name) !== undefined;
+    return this.racks.some(r => r.name === name);
   }
 
   find(name: string): RackPreset | undefined {

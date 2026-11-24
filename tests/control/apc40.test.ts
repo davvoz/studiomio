@@ -222,7 +222,7 @@ describe('APC40 on the session', () => {
     r.settle();
     const n = r.out.length;
     r.apc.tick();
-    expect(r.out.length).toBe(n);
+    expect(r.out).toHaveLength(n);
   });
 
   it('the pads launch the box\'s clips, the scenes the rows, the stops stop', () => {
@@ -301,7 +301,7 @@ describe('APC40 on the session', () => {
       r.engine.position = beat;
       r.apc.tick();
     }
-    expect(r.out.length).toBe(n);
+    expect(r.out).toHaveLength(n);
     // a launch: the queued clip blinks
     r.engine.states.set(r.t(0), { playing: { slot: 0, elapsed: 0 }, queued: { slot: 1 }, followsArrangement: false });
     // like Live's Blink(GREEN, BLACK, 24): green on channel 0, off on channel 14
@@ -495,7 +495,7 @@ describe('APC40 on the session', () => {
     r.start();
     r.press(NOTE.trackSelect, 0);
     expect(r.ui.controlledDevice).toEqual({ owner: r.t(0), device: rack.id });
-    expect(r.said.length).toBe(0);
+    expect(r.said).toHaveLength(0);
     expect(r.ring(CC.deviceKnob + 1)).toBe(Math.round(0.3 * 127)); // the delay's mix is at 30%
     r.advance(1000);
     r.cc(CC.deviceKnob + 1, 127);

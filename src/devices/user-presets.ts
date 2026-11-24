@@ -141,7 +141,7 @@ export class UserPresets {
   }
 
   has(type: string, name: string): boolean {
-    return this.find(type, name) !== undefined;
+    return this.presets.get(type)?.some(p => p.name === name) ?? false;
   }
 
   find(type: string, name: string): Preset | undefined {

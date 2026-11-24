@@ -157,7 +157,7 @@ describe('instrument processor', () => {
     const heads = p.port.posted.filter(m => m.type === 'playheads');
     expect(heads.length).toBeGreaterThanOrEqual(2);
     expect(heads[0].positions.length).toBeGreaterThan(0);
-    expect(heads.at(-1).positions.length).toBe(0);
+    expect(heads.at(-1).positions).toHaveLength(0);
   });
 
   it('a broken engine is zeroed, restarted and reported once, then rate-limited', () => {

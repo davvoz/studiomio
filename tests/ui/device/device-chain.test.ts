@@ -330,7 +330,7 @@ describe('device menus', () => {
     c.store.apply(groupDevices(c.owner, [c.fx[0], c.fx[1], c.fx[2]]));
     const racks = c.racks();
     const items = mapMenu(c.menus, c.owner, [...racks].reverse(), c.fx[0], 'mix');
-    expect(actions(items).filter(i => i.disabled).length).toBe(3);
+    expect(actions(items).filter(i => i.disabled)).toHaveLength(3);
     expect(mapMenu(c.menus, c.owner, [], c.fx[0], 'mix')).toEqual([]);
     expect(actions(outerMacroMenu(c.menus, c.owner, c.rack, 0)).length).toBeGreaterThan(1);
     expect(outerMacroMenu(c.menus, c.owner, 'gone' as DeviceId, 0)).toEqual([]);

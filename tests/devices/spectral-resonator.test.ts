@@ -78,7 +78,7 @@ describe('Spectral Resonator: the partials', () => {
   it('Damping: the high ones quieter and shorter; nothing above the limit', () => {
     const s = resonatorSettings(resolveParams(SPECTRAL_RESONATOR, { damping: 100, partials: 64 }));
     const ps = partialsOf(s, 5000);
-    expect(ps.length).toBe(45); // 110 … 4950 Hz
+    expect(ps).toHaveLength(45); // 110 … 4950 Hz
     expect(ps.every(p => p.hz <= 5000)).toBe(true);
     expect(ps[10].left).toBeLessThan(ps[0].left);
     expect(ps[10].decay).toBeLessThan(ps[0].decay);

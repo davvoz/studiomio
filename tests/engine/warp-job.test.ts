@@ -53,7 +53,7 @@ describe('from the clip to the warp job', () => {
     const c = AudioClip.fromSample(clip.id, s, '#fff');
     const { job } = clipRender(c, s, new Tempo(96));
     const out = new WarpRenderer().render(audio, job);
-    expect(out[0].length).toBe(Math.round(audio.channels[0].length * 120 / 96));
+    expect(out[0]).toHaveLength(Math.round(audio.channels[0].length * 120 / 96));
   });
 
   it('reverse: the job reads the sample backwards, with the transients mirrored', () => {

@@ -240,7 +240,7 @@ describe('MIDI :2 e ×2', () => {
 
     store.undo();
     store.undo();
-    expect(store.project.tracks[0].arrangement[0].length).toBe(4);
+    expect(store.project.tracks[0].arrangement[0]).toHaveLength(4);
   });
 });
 

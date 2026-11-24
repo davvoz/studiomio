@@ -70,7 +70,7 @@ describe('ProjectFolder', () => {
     expect(await folder.importAudio('Kick.WAV', bytes(6))).toBe('audio/Kick 2.WAV');
     expect(await folder.importAudio('kick.wav', bytes(7))).toBe('audio/kick 3.wav');
     expect(await folder.importAudio('a/b:c?.wav', bytes(1))).toBe('audio/a_b_c_.wav');
-    expect((await dir.readBytes('audio/kick 3.wav')).length).toBe(7);
+    expect(await dir.readBytes('audio/kick 3.wav')).toHaveLength(7);
   });
 
   it('finds the audio files no longer used', async () => {

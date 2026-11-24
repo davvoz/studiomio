@@ -200,7 +200,7 @@ describe('session: launching clips', () => {
     const b = r.store.project.tracks[0].slots[1] as MidiClip;
     r.store.apply(setSlot(r.t(0), 1, b.addingNotes(note(74, 3))));
     r.runUntil(3.2);
-    expect(r.played(0, 74).length).toBe(1);
+    expect(r.played(0, 74)).toHaveLength(1);
     expect(r.played(0, 74)[0][1]).toBeCloseTo(1.55, 1); // beat 3 of the clip, 1.5 s after the launch
     expect(r.played(0, 72).length).toBeGreaterThanOrEqual(3);
   });

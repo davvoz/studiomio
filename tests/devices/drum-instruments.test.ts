@@ -145,7 +145,7 @@ describe('Drum Machine: the parameters of the pads\' instruments', () => {
     expect(Object.keys(plain).some(k => k.includes('.'))).toBe(false);
     const withKick = resolveActiveParams(DRUMS, { [padParam(2, 'model')]: MODEL.kickInst });
     const inner = Object.keys(withKick).filter(k => k.includes('.'));
-    expect(inner.length).toBe(Object.keys(resolveParams(KICK, {})).length);
+    expect(inner).toHaveLength(Object.keys(resolveParams(KICK, {})).length);
     expect(inner.every(k => k.startsWith('p3.kick.'))).toBe(true);
     expect(activeSections(DRUMS, { [padParam(2, 'model')]: MODEL.kickInst }).filter(s => s.when).every(s => s.label.startsWith('Pad 3 · Kick'))).toBe(true);
     expect(visibleParamsOf(DRUMS, {}).some(p => p.id.includes('.'))).toBe(false);
@@ -154,7 +154,7 @@ describe('Drum Machine: the parameters of the pads\' instruments', () => {
   it('a preset of the instrument on the pad also resets the parameters the preset doesn\'t name', () => {
     const rumble = KICK.presets.find(p => p.name === 'Rumble')!;
     const values = innerPresetParams(4, KICK, rumble);
-    expect(Object.keys(values).length).toBe(Object.keys(resolveParams(KICK, {})).length);
+    expect(Object.keys(values)).toHaveLength(Object.keys(resolveParams(KICK, {})).length);
     for (const [k, v] of Object.entries(resolveParams(KICK, rumble.params))) expect(values[`p5.kick.${k}`]).toBe(v);
   });
 });

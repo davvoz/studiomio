@@ -84,7 +84,7 @@ describe('Wavetable: tables', () => {
   it('each shape reaches ±1 and closes the period', () => {
     for (let t = 0; t < TABLES.length; t++) {
       const w = wavetable(t);
-      expect(w.length).toBe(FRAMES * LEVELS * STRIDE);
+      expect(w).toHaveLength(FRAMES * LEVELS * STRIDE);
       for (let f = 0; f < FRAMES; f++) {
         const at = f * LEVELS * STRIDE;
         let peak = 0;

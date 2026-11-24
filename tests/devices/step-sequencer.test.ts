@@ -128,7 +128,7 @@ describe('step sequencer', () => {
 
   it('"Leave to the kick": no step on the beat', () => {
     const events = play({ seqDensity: 100, seqKick: 1 }, [{ pitch: 36, on: 0, off: 16 * STEP }], 16 * STEP);
-    expect(ons(events).length).toBe(12);
+    expect(ons(events)).toHaveLength(12);
     for (const e of ons(events)) expect(e.frame % BEAT).not.toBe(0);
   });
 

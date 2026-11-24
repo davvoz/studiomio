@@ -37,7 +37,7 @@ describe('warp tools', () => {
     // the first hit (0.21 s) is 1.1.1; before and after it extrapolates at 120 BPM
     const expected = [-0.42, 0, 4, 8, 9.58];
     m.markers.forEach((x, i) => expect(x.b).toBeCloseTo(expected[i], 9));
-    expect(m.length).toBe(5);
+    expect(m).toHaveLength(5);
     expect(m.markers[1].t).toBeCloseTo(0.21, 12);
     expect(m.markers[3].t).toBeCloseTo(4.21, 12);
     expect(followTempo([0, 0.5], [], 120, 2, 4)).toBeNull();

@@ -117,7 +117,7 @@ describe('resizing clips', () => {
     g.move(at(240, 90));
     g.paint(fakeContext(), h.host.geo);
     g.end();
-    expect(h.clips(1)[0].length).toBe(12);
+    expect(h.clips(1)[0]).toHaveLength(12);
   });
 
   it('unchanged or cancelled, nothing happens; the selected clips resize together', () => {
@@ -126,7 +126,7 @@ describe('resizing clips', () => {
     unchanged.move(at(160, 90));
     unchanged.end();
     unchanged.cancel();
-    expect(h.clips(1)[0].length).toBe(8);
+    expect(h.clips(1)[0]).toHaveLength(8);
     h.ui.select([h.clips(0)[0].id, h.clips(1)[0].id]);
     const both = new ResizeClipGesture(h.host, h.hit(158, 90));
     both.move(at(100, 90));

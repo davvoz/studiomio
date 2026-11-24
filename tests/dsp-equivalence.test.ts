@@ -55,8 +55,8 @@ describe('warp: TypeScript equal to the original WarpMio', () => {
       const job: WarpJob = { points, outLength: Math.round(points.at(-1)![0]), transpose, settings };
       const ours = new WarpRenderer().render({ channels: src, sampleRate: SR }, job);
       const ref = legacy.render(src, SR, legacyJob(job));
-      expect(ours.length).toBe(ref.length);
-      expect(ours[0].length).toBe(ref[0].length);
+      expect(ours).toHaveLength(ref.length);
+      expect(ours[0]).toHaveLength(ref[0].length);
       // Complex uses an equivalent but faster formula (rotation with the phasor instead of
       // atan2/sin/cos): it differs only by rounding errors. The others are identical.
       if (settings.mode === 'complex') expect(maxAbsDiff(ours, ref)).toBeLessThan(1e-5);

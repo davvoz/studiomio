@@ -175,7 +175,7 @@ describe('clip rendering', () => {
     await done();
     expect(render).not.toHaveBeenCalled();
     expect(h.clips(1)).toHaveLength(1);
-    expect(h.clips(1)[0].length).toBe(12);
+    expect(h.clips(1)[0]).toHaveLength(12);
     expect(h.said.at(-1)).toBe('2 clips consolidated, one per track.');
     expect(h.ui.selection.size).toBe(2);
   });

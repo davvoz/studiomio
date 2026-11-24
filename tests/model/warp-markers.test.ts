@@ -45,7 +45,7 @@ describe('WarpMarkers', () => {
 
   it('adding a marker doesn\'t change the map', () => {
     const { markers, index } = irregular.withMarkerAt(1.5);
-    expect(markers.length).toBe(irregular.length + 1);
+    expect(markers).toHaveLength(irregular.length + 1);
     expect(markers.markers[index].t).toBe(1.5);
     for (let t = 0; t <= 4; t += 0.1) expect(markers.beatOf(t)).toBeCloseTo(irregular.beatOf(t), 9);
     // near an existing marker: no duplicate
@@ -56,7 +56,7 @@ describe('WarpMarkers', () => {
     const two = WarpMarkers.straight(120, 4);
     expect(two.canRemove(0)).toBe(false);
     expect(() => two.without(0)).toThrow();
-    expect(irregular.without(2).length).toBe(4);
+    expect(irregular.without(2)).toHaveLength(4);
   });
 
   it('dragging a marker stays between the neighbours', () => {
@@ -83,7 +83,7 @@ describe('WarpMarkers', () => {
     const q = WarpMarkers.of([{ t: 0, b: 0.1 }, { t: 1, b: 1.9 }, { t: 1.05, b: 2.05 }, { t: 2, b: 4.2 }], 120).quantized(1);
     expect(q.markers.map(m => m.b)).toEqual([0, 2, 4]);
     const c = irregular.cleared(4);
-    expect(c.length).toBe(2);
+    expect(c).toHaveLength(2);
     expect(c.beatOf(0)).toBeCloseTo(irregular.beatOf(0), 12);
     expect(c.globalBpm).toBeCloseTo(irregular.globalBpm, 9);
   });

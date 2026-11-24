@@ -110,7 +110,8 @@ async function check(page, alive) {
   if (!alive()) throw new StartupError('the app closed by itself after starting');
   // the same message may come twice: Runtime.enable also replays those of the first load
   const errors = [...new Set(page.errors)];
-  if (errors.length) throw new StartupError(`errors while starting:\n${errors.map(e => `  ${e}`).join('\n')}`);
+  const list = errors.map(e => `  ${e}`).join('\n');
+  if (errors.length) throw new StartupError(`errors while starting:\n${list}`);
 }
 
 async function main() {
@@ -137,7 +138,9 @@ async function main() {
   }
 }
 
-main().catch(e => {
+try {
+  await main();
+} catch (e) {
   console.error(`startup: FAILED: ${e instanceof StartupError ? e.message : e.stack}`);
   process.exit(1);
-});
+}

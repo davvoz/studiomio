@@ -167,7 +167,7 @@ describe('WorkletInstruments', () => {
     const { worklet, ctx, host } = make(id => (id === ('s1' as SampleId) ? data : undefined));
     await worklet.prepare(asGraph(ctx));
     const s = { ...settings('sampler'), samples: { a: 's1' as SampleId, b: 's2' as SampleId } };
-    expect(FakeWorkletNode.created.length).toBe(0);
+    expect(FakeWorkletNode.created).toHaveLength(0);
     const inst = host.create(asGraph(ctx), s, 120);
     const node = FakeWorkletNode.created[0];
     expect(Object.keys(node.options.processorOptions.samples)).toEqual(['a']);
@@ -225,11 +225,11 @@ describe('WorkletInstruments', () => {
   it('settle resolves at once before the processor exists and on dispose', async () => {
     const { ctx, host } = make();
     const inst = host.create(asGraph(ctx), settings('kick'), 120);
-    await settling(inst).settle();
+    await expect(settling(inst).settle()).resolves.toBeUndefined();
     await flush();
     const pending = settling(inst).settle();
     inst.dispose();
-    await pending;
+    await expect(pending).resolves.toBeUndefined();
   });
 
   it('transport anchors reach existing instruments and seed new ones', async () => {

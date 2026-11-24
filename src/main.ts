@@ -21,5 +21,6 @@ Object.assign(window, { studiomio: import.meta.env.DEV ? app : { surfaces: app.s
 const folders = desktopFolders();
 if (folders) {
   folders.onOpen(path => app.openPath(path));
-  void folders.launched().then(path => { if (path) app.openPath(path); });
+  const launched = await folders.launched();
+  if (launched) app.openPath(launched);
 }
