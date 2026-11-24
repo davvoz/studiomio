@@ -11,6 +11,10 @@ const isolation = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
 };
 
+/** The files with a speed measure (itTimed): they run after the others, when the processors are free. */
+const TIMED = ['drive', 'dynamics', 'neuro', 'spectral-resonator', 'wavetable'].map(name => `tests/devices/${name}.test.ts`);
+const ALL = 'tests/**/*.test.ts';
+
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version) },
   server: { headers: isolation },
@@ -22,7 +26,12 @@ export default defineConfig({
   },
   test: {
     // the (slow) benchmarks run only with `npm run bench`
-    include: process.env.BENCH ? ['tests/**/*.perf.ts'] : ['tests/**/*.test.ts'],
+    ...(process.env.BENCH ? { include: ['tests/**/*.perf.ts'] } : {
+      projects: [
+        { extends: true, test: { name: 'tests', include: [ALL], exclude: TIMED, sequence: { groupOrder: 0 } } },
+        { extends: true, test: { name: 'timed', include: TIMED, sequence: { groupOrder: 1 } } },
+      ],
+    }),
     testTimeout: 60_000,
     // `npm run coverage` (SonarCloud reads coverage/lcov.info): which code the tests run
     coverage: {

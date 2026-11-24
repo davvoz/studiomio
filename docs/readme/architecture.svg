@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img" aria-label="Architecture: the interface and the controllers send commands to the project store, whose immutable versions feed the playback engine, the project folder and the views">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9aa0aa"/></marker>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ff9d2e"/></marker>
+  </defs>
+  <style>
+    text { font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif; fill: #e8eaee; }
+    .t { font-size: 19px; font-weight: 600; }
+    .s { font-size: 14.500px; fill: #9aa0aa; }
+    .l { font-size: 14px; fill: #c3c8d0; }
+    .box { fill: #1b1e23; stroke: #2c3138; }
+    .e { fill: none; stroke: #9aa0aa; stroke-width: 1.600; }
+  </style>
+  <rect x=".5" y=".5" width="1199" height="559" rx="20" fill="#121417" stroke="#2c3138"/>
+
+  <rect class="box" x="40" y="48" width="270" height="128" rx="12"/><rect x="40" y="48" width="6" height="128" rx="3" fill="#00b4e6"/>
+  <text class="t" x="66" y="84">Interface</text>
+  <text class="s" x="66" y="110">timeline · session · piano roll</text><text class="s" x="66" y="132">clip editor · device chain</text><text class="s" x="66" y="154">DOM and canvas, no framework</text>
+
+  <rect class="box" x="40" y="216" width="270" height="106" rx="12"/><rect x="40" y="216" width="6" height="106" rx="3" fill="#a8e01e"/>
+  <text class="t" x="66" y="252">Controllers</text>
+  <text class="s" x="66" y="278">APC40 mkII · Launchpad · MIDI map</text><text class="s" x="66" y="300">computer keyboard · MIDI keyboards</text>
+
+  <rect x="450" y="104" width="290" height="162" rx="14" fill="#221d15" stroke="#ff9d2e" stroke-width="1.600"/>
+  <text class="t" x="476" y="144" style="font-size:22px">ProjectStore</text>
+  <text class="s" x="476" y="174">one pure edit per user action</text><text class="s" x="476" y="198">Project → new immutable Project</text><text class="s" x="476" y="222">undo and redo: a stack of versions</text><text class="s" x="476" y="246">time in beats, never in pixels</text>
+
+  <rect class="box" x="890" y="48" width="270" height="128" rx="12"/><rect x="890" y="48" width="6" height="128" rx="3" fill="#f03c46"/>
+  <text class="t" x="916" y="84">PlaybackEngine</text>
+  <text class="s" x="916" y="110">lookahead scheduler · session clock</text><text class="s" x="916" y="132">updates chains by difference</text><text class="s" x="916" y="154">realtime and offline, same code</text>
+
+  <rect class="box" x="890" y="216" width="270" height="106" rx="12"/><rect x="890" y="216" width="6" height="106" rx="3" fill="#9a5cff"/>
+  <text class="t" x="916" y="252">Project folder</text>
+  <text class="s" x="916" y="278">readable JSON with migrations</text><text class="s" x="916" y="300">audio/ · backup · crash recovery</text>
+
+  <path class="e" d="M310 112C380 112 390 150 448 160" marker-end="url(#a)"/><text class="l" x="336" y="100">commands</text>
+  <path class="e" d="M310 270C380 270 390 224 448 212" marker-end="url(#a)"/><text class="l" x="332" y="292">commands</text>
+  <path class="e" d="M740 160C800 150 820 112 888 112" stroke="#ff9d2e" style="stroke:#ff9d2e" marker-end="url(#o)"/><text class="l" x="772" y="100">versions</text>
+  <path class="e" d="M740 212C800 224 820 270 888 270" marker-end="url(#a)"/><text class="l" x="786" y="292">save</text>
+
+  <rect x="40" y="376" width="1120" height="148" rx="14" fill="#16191d" stroke="#2c3138"/>
+  <text class="s" x="64" y="404">the sound</text>
+  <path class="e" d="M1160 112H1180V446H1162" style="stroke:#ff9d2e" marker-end="url(#o)"/>
+  <g>
+    <rect class="box" x="64" y="420" width="250" height="84" rx="10"/><text class="t" x="84" y="452" style="font-size:17px">AudioWorklet</text><text class="s" x="84" y="476">instruments, effects and meters,</text><text class="s" x="84" y="496">128-sample blocks</text>
+    <rect class="box" x="338" y="420" width="250" height="84" rx="10"/><text class="t" x="358" y="452" style="font-size:17px">Worker pool</text><text class="s" x="358" y="476">warp renders in parallel,</text><text class="s" x="358" y="496">LRU cache by content</text>
+    <rect class="box" x="612" y="420" width="250" height="84" rx="10"/><text class="t" x="632" y="452" style="font-size:17px">Web Audio</text><text class="s" x="632" y="476">mixer, sends, nested groups,</text><text class="s" x="632" y="496">sample-accurate volume and pan</text>
+    <rect class="box" x="886" y="420" width="250" height="84" rx="10"/><text class="t" x="906" y="452" style="font-size:17px">Headless render</text><text class="s" x="906" y="476">same DSP in Node: mix, stems,</text><text class="s" x="906" y="496">BS.1770 loudness</text>
+  </g>
+</svg>

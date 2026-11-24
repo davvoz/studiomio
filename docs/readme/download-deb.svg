@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 84" width="320" height="84" role="img" aria-label="Download for Debian / Ubuntu: .deb package, 64-bit">
+  <rect x="1" y="1" width="318" height="82" rx="14" fill="#1b1e23" stroke="#3a414b"/>
+  <g fill="none" stroke="#ff9d2e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 32L42 22L60 32V54L42 64L24 54ZM24 32L42 42L60 32M42 42V64"/></g>
+  <text x="84" y="38" font-family="'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#e8eaee">Debian / Ubuntu</text>
+  <text x="84" y="61" font-family="'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" fill="#9aa0aa">.deb package, 64-bit</text>
+</svg>
