@@ -41,6 +41,26 @@ describe('SessionRecorder', () => {
     expect(h.engine.launched).toEqual([[h.midi, 0]]);
   });
 
+  it('says when a take starts and when its clip is made, wherever it was started from', () => {
+    const h = harness(), ref = { track: h.midi, slot: 1 };
+    const events: unknown[] = [];
+    h.recorder.onTake(e => events.push(e));
+    h.recorder.toggle(ref);
+    expect(events).toEqual([{ ref, clip: null }]);
+    h.engine.sessionClock = 2;
+    h.recorder.toggle(ref);
+    expect(events).toEqual([{ ref, clip: null }, { ref, clip: h.clipAt(1)!.id }]);
+    // closing it at the boundary doesn't say it again
+    h.engine.sessionClock = 4;
+    vi.advanceTimersByTime(100);
+    expect(events).toHaveLength(2);
+    // stopping the transport makes the clip of a take with notes
+    h.recorder.toggle({ track: h.midi, slot: 2 });
+    h.recorder.press(h.midi, 60, 100);
+    h.engine.stop();
+    expect(events.at(-1)).toEqual({ ref: { track: h.midi, slot: 2 }, clip: h.clipAt(2)!.id });
+  });
+
   it('the notes played until the boundary go into the clip, in a single undo step', () => {
     const h = harness(), ref = { track: h.midi, slot: 0 };
     h.recorder.toggle(ref);
@@ -321,6 +341,19 @@ describe('SessionRecorder: quantization and latency', () => {
     expect(notes[0]).toEqual({ pitch: 60, velocity: 100, start: 1, duration: 0.5 });
     expect(notes[1].pitch).toBe(64);
     expect(notes[1].start).toBeCloseTo(3.95, 9);
+  });
+
+  it('the first note, on the very first step, keeps its length with the compensation', () => {
+    const h = harness(0.12), ref = { track: h.midi, slot: 0 };
+    h.store.apply(setRecordQuantize(sixteenths));
+    h.recorder.toggle(ref);
+    // pressed with the take: heard 0.12 earlier, before the clip's start
+    h.recorder.press(h.midi, 60, 100);
+    h.engine.sessionClock = 0.25;
+    h.recorder.release(h.midi, 60);
+    h.engine.sessionClock = 2;
+    h.recorder.toggle(ref);
+    expect(h.clipAt(0)!.notes).toEqual([{ pitch: 60, velocity: 100, start: 0, duration: expect.closeTo(0.25, 9) }]);
   });
 
   it("overdub: quantized in the clip's loop, earlier by the compensation", () => {

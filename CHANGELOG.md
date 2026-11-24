@@ -6,6 +6,14 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- A recording started from a controller (APC40, Launchpad) or from the screen chooses its slot and brings
+  it into view; when the clip is made it opens in the editor, unless you chose another slot meanwhile.
+
+### Fixed
+- The first note of a take, played right on the start (or moved before it by the latency compensation),
+  was recorded shorter: it now lasts as long as it was held.
+
 ## [0.3.71] - 2026-11-24
 
 ### Added

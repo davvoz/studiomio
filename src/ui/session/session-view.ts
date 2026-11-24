@@ -221,6 +221,11 @@ export class SessionView {
     return this.chosen.cursor;
   }
 
+  /** Chooses the slot and brings it into view (a recording started from a controller, say). */
+  selectSlot(ref: SlotRef): void {
+    this.chosen.select(ref);
+  }
+
   private focus(): void {
     this.element.focus({ preventScroll: true });
   }

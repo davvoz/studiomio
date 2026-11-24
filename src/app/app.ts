@@ -29,7 +29,7 @@ import { foldTail } from '../engine/offline-mix';
 import { addBus, addTrack, followClipSound, setLoopRegion, setRecordQuantize, starterProject, type TrackKind } from '../store/edits';
 import { Clipboard } from '../store/clipboard';
 import { soloAudioProject } from '../store/consolidate';
-import { findClip, placementRef, type ClipRef } from '../store/clip-ref';
+import { findClip, placementRef, slotRef, type ClipRef } from '../store/clip-ref';
 import { showContextMenu, type MenuItem } from '../ui/context-menu';
 import { showRecordingSettings } from '../ui/recording-dialog';
 import { choose } from '../ui/dialog';
@@ -64,7 +64,7 @@ import { keyboardBase, NoteKeyboard, NoteKeys } from './note-keyboard';
 import { MidiMapper } from './midi-mapper';
 import { MidiNoteInput } from './midi-note-input';
 import { RecordingPrefs } from './recording-prefs';
-import { SessionRecorder } from './session-recorder';
+import { SessionRecorder, type TakeEvent } from './session-recorder';
 import { mainMenu } from './main-menu';
 import { RecentProjects, type RecentProject } from './recent-projects';
 import { ProjectSession } from './project-session';
@@ -230,6 +230,7 @@ export class App implements Commands, TimelineActions {
       say: t => this.say(t),
       dropItem,
     });
+    this.recorder.onTake(e => this.followTake(e));
     const headers = new TrackHeaders(this.store, this.ui, headerActions, meters);
     this.arrangement.bindWheel(headers.element);
     const automation = this.automation = new MasterAutomation(this.store, this.ui, this.audio.engine, this.clipboard, this.drawMode);
@@ -680,6 +681,17 @@ export class App implements Commands, TimelineActions {
     this.ui.onChange(() => this.device.markControlled(this.ui.controlledDevice));
     void surfaces.autoStart();
     return surfaces;
+  }
+
+  /** A take (started here or from a controller) is shown: its slot is chosen, and when its clip is made
+   *  it opens in the editor, unless another slot was chosen meanwhile. */
+  private followTake({ ref, clip }: TakeEvent): void {
+    if (!clip) return this.sessionView.selectSlot(ref);
+    const chosen = this.sessionView.selection;
+    if (chosen?.track !== ref.track || chosen.slot !== ref.slot) return;
+    this.openClip(slotRef(ref.track, clip));
+    // the editor took room from the session: the slot back into view
+    this.sessionView.selectSlot(ref);
   }
 
   /** Opens the clip (on the timeline or in a slot) in its editor. */

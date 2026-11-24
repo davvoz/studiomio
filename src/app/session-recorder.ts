@@ -67,6 +67,12 @@ export interface RecorderOptions {
 
 const NO_TRACKS: ReadonlySet<TrackId> = new Set();
 
+/** A take started in a slot (`clip` null), or its clip was written there (`clip` its id). */
+export interface TakeEvent {
+  readonly ref: SlotRef;
+  readonly clip: ClipId | null;
+}
+
 /** Where an overdub on a track goes now: its playing MIDI clip, at the beat of its content. */
 interface OverdubSpot {
   readonly ref: SlotRef;
@@ -87,7 +93,7 @@ interface Overdubbing {
 
 export class SessionRecorder {
   private readonly recordings = new Map<TrackId, Recording>();
-  private readonly events = new Emitter<{ change: [] }>();
+  private readonly events = new Emitter<{ change: []; take: [TakeEvent] }>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private count = 0;
   private overdubbing = false;
@@ -130,6 +136,11 @@ export class SessionRecorder {
 
   onChange(fn: () => void): Unsubscribe {
     return this.events.on('change', fn);
+  }
+
+  /** A take starts, or its clip is made (from the screen or from a controller alike). */
+  onTake(fn: (e: TakeEvent) => void): Unsubscribe {
+    return this.events.on('take', fn);
   }
 
   /** The slot `track` is recording into (also while its take is ending), null if none. */
@@ -228,6 +239,7 @@ export class SessionRecorder {
     this.recordings.set(ref.track, { ref, take, key: `record ${++this.count}`, ending: null });
     this.say('Recording: play the armed track (⌨ or a MIDI keyboard); ● again ends the clip at the next boundary.');
     this.events.emit('change');
+    this.events.emit('take', { ref, clip: null });
   }
 
   /** Ends the take at the next boundary: the clip is made now and starts looping there, the notes
@@ -247,6 +259,7 @@ export class SessionRecorder {
     this.engine.launchSlot(r.ref.track, r.ref.slot);
     this.timer ??= setInterval(() => this.check(), CHECK_MS);
     this.events.emit('change');
+    this.made(r.ref, r.ending.id);
   }
 
   /** The takes whose end has passed get their last notes. */
@@ -272,12 +285,19 @@ export class SessionRecorder {
       this.recordings.delete(r.ref.track);
       if (last !== null) {
         const length = takeLength(last - r.take.start, this.quantum());
-        this.write(r, { id: this.store.ids.next('clip'), end: r.take.start + length, length });
+        const id = this.store.ids.next('clip');
+        this.write(r, { id, end: r.take.start + length, length });
+        this.made(r.ref, id);
       }
       this.moves.endTake(r.ref.track, r.key);
     }
     this.stopTimer();
     this.events.emit('change');
+  }
+
+  /** The take's clip `id` is in its slot now (if the track is still there). */
+  private made(ref: SlotRef, id: ClipId): void {
+    if (this.store.project.track(ref.track)?.slots[ref.slot]?.id === id) this.events.emit('take', { ref, clip: id });
   }
 
   private close(r: Recording, ending: Ending): void {

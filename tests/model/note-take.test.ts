@@ -14,13 +14,20 @@ describe('NoteTake', () => {
     ]);
   });
 
-  it('a note pressed a little early counts from the start; much earlier it\'s left out', () => {
+  it("a note pressed a little early goes at the start, as long as it was held; much earlier it's left out", () => {
     const take = new NoteTake(8);
     take.press(60, 100, 7.9);
     take.release(60, 9);
     take.press(62, 100, 7);
     take.release(62, 8.5);
-    expect(take.notes(4)).toEqual([{ pitch: 60, start: 0, duration: 1, velocity: 100 }]);
+    expect(take.notes(4)).toEqual([{ pitch: 60, start: 0, duration: expect.closeTo(1.1, 9), velocity: 100 }]);
+  });
+
+  it('the first sixteenth, moved early by the latency compensation, stays a sixteenth', () => {
+    const take = new NoteTake(0);
+    take.press(60, 100, -0.12);
+    take.release(60, 0.13);
+    expect(take.notes(4)[0].duration).toBeCloseTo(0.25, 9);
   });
 
   it('the notes still held end with the clip, those after its end are left out', () => {

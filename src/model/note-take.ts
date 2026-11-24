@@ -10,7 +10,10 @@ const EARLY: Beats = 0.25;
 const MIN_DURATION: Beats = 1 / 64;
 
 interface Held {
+  /** Where it falls in the clip. */
   readonly start: Beats;
+  /** The clock when it was pressed: a note pressed early goes at the clip's start, but lasts as long as it was held. */
+  readonly at: Beats;
   readonly velocity: number;
 }
 
@@ -31,7 +34,7 @@ export class NoteTake {
     if (at < this.start - EARLY) return;
     // the same key again before its release: the first note ends here
     this.release(pitch, at);
-    this.held.set(pitch, { start: Math.max(0, at - this.start), velocity });
+    this.held.set(pitch, { start: Math.max(0, at - this.start), at, velocity });
     this.last = at;
   }
 
@@ -39,7 +42,7 @@ export class NoteTake {
     const h = this.held.get(pitch);
     if (!h) return;
     this.held.delete(pitch);
-    this.played.push({ pitch, start: h.start, velocity: h.velocity, duration: at - this.start - h.start });
+    this.played.push({ pitch, start: h.start, velocity: h.velocity, duration: at - h.at });
     this.last = at;
   }
 
