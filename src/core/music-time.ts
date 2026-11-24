@@ -1,7 +1,9 @@
+import type { Tagged } from './tagged';
+
 /** Musical positions and durations in quarters (1 = a quarter note). It's the unit of the whole
  *  model: seconds are derived from the project's tempo only when it's time to play. */
-export type Beats = number;
-export type Seconds = number;
+export type Beats = Tagged<number, 'beats'>;
+export type Seconds = Tagged<number, 'seconds'>;
 
 export const MIN_BPM = 20;
 export const MAX_BPM = 999;

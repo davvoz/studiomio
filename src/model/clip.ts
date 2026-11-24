@@ -1,9 +1,10 @@
 import type { ClipId } from '../core/id';
 import type { Beats } from '../core/music-time';
+import type { Tagged } from '../core/tagged';
 import { sameTarget, withEnvelope, type ClipEnvelope, type EnvelopePoint, type ModTarget } from './envelope';
 
 /** Colour in hexadecimal, "#rrggbb". */
-export type Color = string;
+export type Color = Tagged<string, 'color'>;
 
 /** Part of the clip that plays, in clip beats. */
 export interface ClipRegion {
