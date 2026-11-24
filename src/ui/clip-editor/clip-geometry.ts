@@ -125,3 +125,12 @@ export function playheadIn(found: FoundClip, transport: TransportView): Beats | 
  *  placed clips: a session clip has no place on the timeline). */
 export const seekBeatOf = (found: FoundClip, content: Beats): Beats | null =>
   found.placement ? timelineBeatOf(found.placement, content) : null;
+
+/** What the audio editor frames, in the clip's beats: the region and the whole sample (with warp
+ *  by its markers, without by the project's tempo). */
+export function clipSpan(clip: AudioClip, duration: Seconds, tempo: TempoMap): [Beats, Beats] {
+  const m = clip.warp.markers;
+  const b0 = Math.min(clip.region.start, clip.warp.enabled ? m.beatOf(0) : 0);
+  const b1 = Math.max(clip.region.end, clip.warp.enabled ? m.beatOf(duration) : tempo.beatAt(duration));
+  return [b0, b1];
+}

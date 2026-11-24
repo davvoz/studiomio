@@ -1,25 +1,26 @@
-import type { Seconds } from '../../core/music-time';
+import type { Beats, Seconds } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
-import { AudioClip, clipTimes } from '../../model/audio-clip';
+import { AudioClip } from '../../model/audio-clip';
 import { sampleDuration, type SampleRef } from '../../model/sample';
-import { autoWarp, followTempo } from '../../model/warp-tools';
-import { cropClipAt, findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
+import type { Clipboard } from '../../store/clipboard';
+import { findClip, updateClipAt, type ClipRef } from '../../store/clip-ref';
 import type { ProjectStore } from '../../store/project-store';
-import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
+import { showContextMenu } from '../context-menu';
 import type { DrawMode } from '../draw-mode';
 import { addHeightHandle } from '../editor-height';
+import { targetDevices, trackChain } from '../envelopes/mod-targets';
+import { ModulationEditor } from '../envelopes/modulation-editor';
 import { Surface } from '../kit/canvas';
 import { pointerIn, type Pointer } from '../kit/pointer';
+import { takeWheel, wheelBeats } from '../kit/wheel';
 import type { UiState } from '../ui-state';
 import type { PeakStore } from '../waveform';
-import { BeatAxis, playheadIn, seekBeatOf } from './clip-geometry';
+import { BeatAxis, clipSpan, playheadIn, seekBeatOf } from './clip-geometry';
 import { ClipPanel } from './clip-panel';
 import { editorCursor, editorGestureFor, editorHit, type EditorGesture, type EditorHit, type EditorHost } from './editor-gestures';
+import { editorMenu } from './editor-menu';
 import { LAYOUT, paintEditor } from './editor-painter';
-import { takeWheel, wheelBeats } from '../kit/wheel';
-import { ModulationEditor } from '../envelopes/modulation-editor';
-import { targetDevices, trackChain } from '../envelopes/mod-targets';
-import type { Clipboard } from '../../store/clipboard';
+import { clipTransients, WarpCommands, type WarpTarget } from './warp-commands';
 
 export interface ClipEditorDeps {
   readonly store: ProjectStore;
@@ -38,20 +39,16 @@ export interface ClipEditorDeps {
   readonly ui: UiState;
 }
 
-interface Target {
-  readonly clip: AudioClip;
-  readonly found: FoundClip;
-  readonly sample: SampleRef;
-}
-
 /** Editor of an audio clip (studiomio's WarpMio): waveform on the clip's beat axis,
  *  warp markers, region, loop and options panel. It changes the placed clip
- *  through the store, so every change can be undone and is heard in the timeline. */
+ *  through the store, so every change can be undone and is heard in the timeline.
+ *  This is the DOM: the commands are in `WarpCommands`, the menu in editor-menu, the gestures in editor-gestures. */
 export class ClipEditor implements EditorHost {
   readonly element = Object.assign(document.createElement('section'), { className: 'clip-editor', hidden: true, tabIndex: -1 });
   private readonly surface = new Surface('editor-canvas');
   private readonly panel: ClipPanel;
   private readonly mods: ModulationEditor;
+  private readonly commands: WarpCommands;
   private ref: ClipRef | null = null;
   private _axis = new BeatAxis();
   private selected = -1;
@@ -66,13 +63,23 @@ export class ClipEditor implements EditorHost {
   }
 
   constructor(private readonly deps: ClipEditorDeps) {
+    const commands = this.commands = new WarpCommands(deps, {
+      target: () => this.target(),
+      ref: () => this.ref,
+      selected: () => this.selected,
+      selectMarker: index => this.selectMarker(index),
+      forgetMarker: () => { this.selected = -1; },
+      commit: (label, fn) => this.commit(label, fn),
+      grid: () => this.grid,
+      refit: () => this.fit(),
+    });
     this.panel = new ClipPanel({
       commit: (label, fn, mergeKey) => this.commit(label, fn, mergeKey),
       endMerge: () => deps.store.endMerge(),
-      autoWarp: () => this.autoWarp(),
-      followTempo: () => void this.followTempo(),
-      quantize: () => this.quantize(),
-      crop: () => void this.crop(),
+      autoWarp: () => commands.autoWarp(),
+      followTempo: () => void commands.followTempo(),
+      quantize: () => commands.quantize(),
+      crop: () => void commands.crop(),
       close: () => this.close(),
     });
     // the lane's axis is a property: read it through a function (no alias of this)
@@ -82,7 +89,7 @@ export class ClipEditor implements EditorHost {
       get axis() { return axis(); },
       curves: () => this.clip(),
       span: () => { const c = this.clip(); return c && { start: c.region.start, end: c.loop.enabled ? c.loop.end : c.region.end }; },
-      grid: () => deps.ui.gridStep(this._axis.pxPerBeat, deps.store.project.signature, 10),
+      grid: () => this.grid,
       signature: () => deps.store.project.signature,
       playhead: () => { const t = this.target(); return t ? playheadIn(t.found, deps.engine) : null; },
       drawMode: deps.drawMode,
@@ -154,11 +161,11 @@ export class ClipEditor implements EditorHost {
   /** The analysis's transients in the clip's seconds (mirrored if it's reversed). */
   transients(): readonly Seconds[] {
     const t = this.target();
-    return t ? clipTimes(t.clip, t.sample.analysis?.transients ?? [], sampleDuration(t.sample)) : [];
+    return t ? clipTransients(t) : [];
   }
 
   snapStep(p: Pointer): number | null {
-    return p.alt ? null : this.deps.ui.gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10);
+    return p.alt ? null : this.grid;
   }
 
   commit(label: string, fn: (c: AudioClip) => AudioClip, mergeKey?: string): void {
@@ -191,55 +198,13 @@ export class ClipEditor implements EditorHost {
     this.dirty = true;
   }
 
-  // ---------------------------------------------------------------- commands
-
-  private autoWarp(): void {
-    const t = this.target();
-    const a = t?.sample.analysis;
-    if (!t || !a) return this.deps.say('The sample hasn\'t been analysed.');
-    this.commit('Auto-Warp', c => c.withMarkers(autoWarp(a.tempo, this.transients(), sampleDuration(t.sample))).withWarp({ enabled: true }));
-    this.deps.say(`Auto-Warp: ${a.tempo.toFixed(2)} BPM.`);
-  }
-
-  private async followTempo(): Promise<void> {
-    const t = this.target();
-    const a = t?.sample.analysis;
-    if (!t || !a) return this.deps.say('The sample hasn\'t been analysed.');
-    const sr = t.sample.sampleRate, duration = sampleDuration(t.sample);
-    const beats = clipTimes(t.clip, (await this.deps.trackBeats(t.sample, a.tempo)).map(i => i / sr), duration);
-    const markers = followTempo(beats, clipTimes(t.clip, a.transients, duration), a.tempo, duration, this.deps.store.project.signature.beatsPerBar);
-    if (!markers) return this.deps.say('Couldn\'t find enough beats: try Auto-Warp.');
-    this.commit('Follow tempo', c => c.withMarkers(markers).withWarp({ enabled: true }));
-    this.deps.say(`Follow tempo: ${markers.length} markers.`);
-  }
-
-  private quantize(): void {
-    const step = Math.min(1, this.deps.ui.gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10));
-    this.commit('Quantize warp markers', c => c.withMarkers(c.warp.markers.quantized(step)));
-  }
-
-  /** Crop: the loop (or the region) becomes a file of its own and the clip plays only that. */
-  private async crop(): Promise<void> {
-    const t = this.target(), ref = this.ref;
-    if (!t || !ref) return;
-    const crop = t.clip.cropped(sampleDuration(t.sample), this.deps.store.project.tempo);
-    if (!crop) return this.deps.say('Crop: the part to keep is outside the sample.');
-    try {
-      const sample = await this.deps.cropSample(t.sample, crop.fileStart, crop.fileEnd);
-      // the new file is ready meanwhile, but the clip may have changed (or disappeared) in the meantime
-      if (findClip(this.deps.store.project, ref)?.clip !== t.clip) return this.deps.say('Crop cancelled: the clip changed in the meantime.');
-      this.deps.store.apply(cropClipAt(ref, sample, crop.clip(sample.id)));
-      this.selected = -1;
-      if (this.ref === ref) this.fit();
-      this.deps.say(`Crop: ${(crop.fileEnd - crop.fileStart).toFixed(2)} s in "${sample.name}".`);
-    } catch (e) {
-      this.deps.say(`Crop: ${e instanceof Error ? e.message : e}`);
-    }
-  }
-
   // ---------------------------------------------------------------- state
 
-  private target(): Target | null {
+  private get grid(): Beats {
+    return this.deps.ui.gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 10);
+  }
+
+  private target(): WarpTarget | null {
     const p = this.deps.store.project;
     const found = this.ref && findClip(p, this.ref);
     if (!found || !(found.clip instanceof AudioClip)) return null;
@@ -262,9 +227,7 @@ export class ClipEditor implements EditorHost {
   private fit(): void {
     const t = this.target();
     if (!t || this.surface.width < 10) return;
-    const c = t.clip, m = c.warp.markers, d = sampleDuration(t.sample);
-    const b0 = Math.min(c.region.start, c.warp.enabled ? m.beatOf(0) : 0);
-    const b1 = Math.max(c.region.end, c.warp.enabled ? m.beatOf(d) : this.deps.store.project.tempo.beatAt(d));
+    const [b0, b1] = clipSpan(t.clip, sampleDuration(t.sample), this.deps.store.project.tempo);
     this._axis = BeatAxis.fit(b0, b1, this.surface.width);
     this.fitPending = false;
   }
@@ -283,7 +246,7 @@ export class ClipEditor implements EditorHost {
           g: this.surface.g, width: this.surface.width, height: this.surface.height, axis: this._axis,
           clip, duration: sampleDuration(t.sample), transients: this.transients(),
           peaks: this.deps.peaks.get(t.sample.id, clip.reversed), tempo: project.tempo, signature: project.signature,
-          grid: this.deps.ui.gridStep(this._axis.pxPerBeat, project.signature, 10), selectedMarker: this.selected, hoverTransient: this.hover,
+          grid: this.grid, selectedMarker: this.selected, hoverTransient: this.hover,
           playhead: playheadIn(t.found, engine),
         });
       }
@@ -332,7 +295,7 @@ export class ClipEditor implements EditorHost {
     // double click in the strip or on the waveform: a warp marker at that point
     el.addEventListener('dblclick', e => {
       const p = pointerIn(e, el);
-      if (p.y >= LAYOUT.ruler) this.addMarkerAt(p.x);
+      if (p.y >= LAYOUT.ruler) this.commands.addMarkerAt(this._axis.xToBeat(p.x));
     });
     el.addEventListener('contextmenu', e => {
       e.preventDefault();
@@ -342,7 +305,7 @@ export class ClipEditor implements EditorHost {
       if (!h) return;
       this.element.focus();
       if (h.hit.kind === 'marker') this.selectMarker(h.hit.index);
-      showContextMenu(e.clientX, e.clientY, this.menu(h.clip, h.hit, p));
+      showContextMenu(e.clientX, e.clientY, editorMenu(h.clip, h.hit, { y: p.y, beat: () => this._axis.xToBeat(p.x) }, this.commands));
     });
     // as on its modulation lane: Ctrl zooms, otherwise it scrolls the time (Shift+wheel on Windows comes as deltaX)
     el.addEventListener('wheel', e => this.setAxis(wheelBeats(this._axis, takeWheel(e), pointerIn(e, el).x)), { passive: false });
@@ -353,53 +316,8 @@ export class ClipEditor implements EditorHost {
       if ((e.key === 'Delete' || e.key === 'Backspace') && this.selected >= 0) {
         e.stopPropagation();
         e.preventDefault();
-        this.deleteSelectedMarker();
+        this.commands.deleteMarker();
       }
     });
-  }
-
-  private deleteSelectedMarker(): void {
-    const i = this.selected;
-    const clip = this.clip();
-    if (clip && i >= 0 && clip.warp.markers.canRemove(i)) {
-      this.selected = -1;
-      this.commit('Delete warp marker', c => c.withMarkers(c.warp.markers.without(i)));
-    } else this.deps.say('At least two warp markers are needed: use "Reset" to restart from a constant tempo.');
-  }
-
-  /** A warp marker at point x (if warp is active and x falls in the sample). */
-  private addMarkerAt(x: number): void {
-    const clip = this.clip();
-    if (!clip?.warp.enabled) return;
-    const t = clip.warp.markers.timeOf(this._axis.xToBeat(x));
-    if (t < 0 || t > this.duration()) return;
-    const { markers, index } = clip.warp.markers.withMarkerAt(t);
-    if (markers !== clip.warp.markers) this.commit('Add warp marker', c => c.withMarkers(markers));
-    this.selectMarker(index);
-  }
-
-  private menu(clip: AudioClip, hit: EditorHit, p: Pointer): MenuItem[] {
-    const warp = clip.warp.enabled;
-    const tools: MenuItem[] = [
-      { label: 'Auto-Warp', disabled: !this.target()?.sample.analysis, run: () => this.autoWarp() },
-      { label: 'Follow tempo', disabled: !this.target()?.sample.analysis, run: () => void this.followTempo() },
-      { label: 'Quantize the warp markers', disabled: !warp, run: () => this.quantize() },
-      { label: 'Reset the warp markers', disabled: !warp, run: () => this.commit('Reset warp markers', c => c.withMarkers(c.warp.markers.cleared(this.duration()))) },
-      SEPARATOR,
-      { label: warp ? 'Turn warp off' : 'Turn warp on', run: () => this.commit(warp ? 'Warp off' : 'Warp on', c => c.withWarp({ enabled: !warp })) },
-      { label: clip.reversed ? 'Remove reverse' : 'Reverse', run: () => this.commit(clip.reversed ? 'Reverse off' : 'Reverse', c => c.withReversed(!clip.reversed, this.duration())) },
-      { label: clip.loop.enabled ? 'Crop to loop' : 'Crop to region', run: () => void this.crop() },
-    ];
-    if (hit.kind === 'marker') {
-      const i = hit.index;
-      return [
-        { label: '1.1.1 here', run: () => this.commit('Set 1.1.1', c => c.withMarkers(c.warp.markers.withOrigin(c.warp.markers.markers[i].t))) },
-        { label: 'Delete warp marker', shortcut: KEY.delete, disabled: !clip.warp.markers.canRemove(i), run: () => this.deleteSelectedMarker() },
-        SEPARATOR,
-        ...tools,
-      ];
-    }
-    const here: MenuItem[] = p.y >= LAYOUT.ruler && warp ? [{ label: 'Add warp marker here', shortcut: 'double click', run: () => this.addMarkerAt(p.x) }, SEPARATOR] : [];
-    return [...here, ...tools];
   }
 }
