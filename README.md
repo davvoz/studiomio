@@ -4,6 +4,16 @@ A DAW in the browser (and in Electron) modelled on Ableton Live: arrangement and
 clips with warp, MIDI clips, clip modulations, instruments and effects in AudioWorklet, racks with
 macros, MIDI controllers. TypeScript; the warp engine comes from [WarpMio](../warpmio).
 
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=davvoz_studiomio&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=davvoz_studiomio)
+[![Reliability](https://sonarcloud.io/api/project_badges/measure?project=davvoz_studiomio&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=davvoz_studiomio)
+[![Security](https://sonarcloud.io/api/project_badges/measure?project=davvoz_studiomio&metric=security_rating)](https://sonarcloud.io/summary/overall?id=davvoz_studiomio)
+[![Maintainability](https://sonarcloud.io/api/project_badges/measure?project=davvoz_studiomio&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=davvoz_studiomio)
+
+Analysed by [SonarCloud](https://sonarcloud.io/summary/overall?id=davvoz_studiomio) at every push: the
+quality gate asks for 80 % test coverage on new code. The audio engine, the DSP, the instruments and
+effects, the project model, the editing and the controller scripts are 98 % covered by tests; the
+interface (about a third of the code) is mostly verified in the running app.
+
 ## Download
 
 [![Download for Windows](https://img.shields.io/github/v/release/davvoz/studiomio?label=Download%20for%20Windows&style=for-the-badge&color=ff9d2e)](https://github.com/davvoz/studiomio/releases/latest/download/studiomio-setup.exe)
