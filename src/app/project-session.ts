@@ -1,4 +1,4 @@
-import { oneAtATime } from '../core/async';
+import { atMost, oneAtATime } from '../core/async';
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { SampleId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
@@ -17,6 +17,10 @@ import { importSample } from '../store/selection-edits';
 import { importSampleToSlot } from '../store/session-edits';
 import { springsAtRest } from '../store/rack-edits';
 import type { AudioAnalysis } from '../dsp/analysis/analyze';
+
+/** How many samples are read and decoded together on opening: it takes half the time of one at a time; with
+ *  more it isn't faster and only takes more memory. */
+const LOADING_TOGETHER = 4;
 
 /** What the session uses of the audio (AudioSystem satisfies it; tests use a fake). */
 export interface SessionAudio {
@@ -259,7 +263,7 @@ export class ProjectSession {
 
   /** Loads the project's audio files in the engine, except those in `skip`. */
   private async loadSamples(folder: ProjectFolder, project: Project, skip: readonly SampleRef[]): Promise<void> {
-    await oneAtATime(project.samples.filter(s => !skip.includes(s)), async s => {
+    await atMost(LOADING_TOGETHER, project.samples.filter(s => !skip.includes(s)), async s => {
       const bytes = await folder.readAudio(s);
       await this.audio.addSample(s.id, await this.decode(bytes));
     });

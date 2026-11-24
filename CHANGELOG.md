@@ -6,6 +6,9 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Changed
+- Opening a project loads up to four of its samples together, instead of one at a time.
+
 ## [0.3.74] - 2026-11-24
 
 ### Changed

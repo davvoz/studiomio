@@ -80,6 +80,36 @@ describe('ProjectSession', () => {
     expect([session.changed, session.saved]).toEqual([false, false]); // it loses nothing, but it isn't on disk
   });
 
+  it('opening loads four samples at a time; a damaged one stops it with its error', async () => {
+    const disk = new MemoryDirectory('Song');
+    const first = fakeAudio();
+    const author = new ProjectSession(new ProjectStore(Project.empty('p', randomIds), randomIds), first.audio, async () => disk);
+    await author.importFiles(Array.from({ length: 9 }, (_, i) => fileOf(`s${i}.wav`)), null, 0);
+    await author.save();
+
+    const { audio, loaded } = fakeAudio();
+    const decode = audio.context.decodeAudioData;
+    let running = 0, most = 0, left = Infinity;
+    audio.context.decodeAudioData = async b => {
+      if (left-- <= 0) throw new Error('damaged');
+      most = Math.max(most, ++running);
+      await new Promise(resolve => { setTimeout(resolve, 1); });
+      running--;
+      return decode(b);
+    };
+    const store = new ProjectStore(Project.empty('mine', randomIds), randomIds);
+    const reader = new ProjectSession(store, audio, async () => disk);
+    await reader.open();
+    expect(most).toBe(4);
+    expect([...loaded.keys()].toSorted()).toEqual(store.project.samples.map(s => s.id).toSorted());
+
+    const before = store.project;
+    left = 2;
+    await expect(reader.open()).rejects.toThrow('damaged');
+    expect(store.project).toBe(before);
+    expect(running).toBe(0);
+  });
+
   it('collect and save to ZIP: another user opens it and saves it in their folder', async () => {
     const disk = new MemoryDirectory('Song');
     const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
