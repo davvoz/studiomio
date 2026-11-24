@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.71] - 2026-11-24
+
 ### Added
 - Input quantization, as Live's Record Quantization (Options › Recording, or the right click on ● in the
   top bar): grid (1/4 … 1/32, triplets), strength (100 %: right on the grid, less: part of the way) and the
