@@ -19,6 +19,8 @@ export interface Commands {
   toggleMetronome(): void;
   /** Overdub, as Live's Session Record: the armed tracks record into their playing clips. */
   toggleOverdub(): void;
+  /** Options › Recording: input quantization and latency compensation. */
+  recordingSettings(): void;
   toggleSnap(): void;
   /** Ctrl+1 / Ctrl+2, as in Live: a narrower or wider grid. */
   narrowGrid(): void;

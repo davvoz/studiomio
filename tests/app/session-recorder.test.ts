@@ -1,60 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SessionRecorder, type RecorderEngine } from '../../src/app/session-recorder';
+import { SessionRecorder } from '../../src/app/session-recorder';
+import { FakeRecorderEngine } from '../helpers/recorder-engine';
 import type { TrackId } from '../../src/core/id';
-import type { TrackSessionState } from '../../src/engine/session';
-import type { Track } from '../../src/model/track';
 import { MidiClip } from '../../src/model/midi-clip';
 import { newSlotMidiClip, recordedClip } from '../../src/store/session-edits';
+import { setRecordQuantize } from '../../src/store/edits';
 import { setup } from '../helpers/fixtures';
 
-/** An engine whose clock the test moves; boundaries every `quantum` beats. */
-class FakeEngine implements RecorderEngine {
-  playing = false;
-  sessionClock = 0;
-  quantum = 4;
-  readonly launched: [TrackId, number][] = [];
-  readonly started: TrackId[] = [];
-  /** What each track plays in the session (none: nothing). */
-  readonly states = new Map<TrackId, TrackSessionState>();
-  private stateListener: ((playing: boolean) => void) | null = null;
-
-  get nextBoundary(): number {
-    return Math.ceil(this.sessionClock / this.quantum - 1e-9) * this.quantum;
-  }
-
-  startRecording(track: TrackId): number {
-    this.started.push(track);
-    if (this.playing) return this.nextBoundary;
-    this.playing = true;
-    return this.sessionClock;
-  }
-
-  launchSlot(track: TrackId, slot: number): void {
-    this.launched.push([track, slot]);
-  }
-
-  sessionState(track: Track): TrackSessionState {
-    return this.states.get(track.id) ?? { playing: null, queued: null, followsArrangement: true };
-  }
-
-  onStateChange(fn: (playing: boolean) => void) {
-    this.stateListener = fn;
-    return () => { this.stateListener = null; };
-  }
-
-  stop(): void {
-    this.playing = false;
-    this.stateListener?.(false);
-  }
-}
-
-function harness() {
+function harness(delay = 0, armed: ReadonlySet<TrackId> = new Set()) {
   const { store, track } = setup({ midi: 1, audio: 1 });
   // setup adds the audio tracks first
   const audio = track(0), midi = track(1);
-  const engine = new FakeEngine();
+  const engine = new FakeRecorderEngine();
   const said: string[] = [];
-  const recorder = new SessionRecorder(engine, store, () => engine.quantum, t => said.push(t));
+  const recorder = new SessionRecorder(engine, store, () => engine.quantum, t => said.push(t), { delay: () => delay, armed: () => armed });
   const clipAt = (slot: number) => store.project.track(midi)!.slots[slot] as MidiClip | null;
   return { store, midi, audio, engine, recorder, clipAt, said };
 }
@@ -180,22 +139,22 @@ describe('SessionRecorder', () => {
   });
 });
 
-describe('SessionRecorder: overdub', () => {
-  /** A 4-beat looping clip in slot 0 with a note at beat 0, playing since `since` on the clock. */
-  function overdubbing(since = 0) {
-    const h = harness(), ref = { track: h.midi, slot: 0 };
-    const id = h.store.ids.next('clip');
-    h.store.apply(recordedClip(ref, id, [{ pitch: 48, start: 0, duration: 1, velocity: 90 }], 4));
-    h.engine.playing = true;
-    const play = (clock: number) => {
-      h.engine.sessionClock = clock;
-      h.engine.states.set(h.midi, { playing: { slot: 0, elapsed: clock - since }, queued: null, followsArrangement: false });
-    };
-    play(since);
-    const notes = () => h.clipAt(0)!.notes.filter(n => n.pitch !== 48);
-    return { ...h, ref, id, play, notes };
-  }
+/** A 4-beat looping clip in slot 0 with a note at beat 0, playing since `since` on the clock. */
+function overdubbing(since = 0, delay = 0) {
+  const h = harness(delay), ref = { track: h.midi, slot: 0 };
+  const id = h.store.ids.next('clip');
+  h.store.apply(recordedClip(ref, id, [{ pitch: 48, start: 0, duration: 1, velocity: 90 }], 4));
+  h.engine.playing = true;
+  const play = (clock: number) => {
+    h.engine.sessionClock = clock;
+    h.engine.states.set(h.midi, { playing: { slot: 0, elapsed: clock - since }, queued: null, followsArrangement: false });
+  };
+  play(since);
+  const notes = () => h.clipAt(0)!.notes.filter(n => n.pitch !== 48);
+  return { ...h, ref, id, play, notes };
+}
 
+describe('SessionRecorder: overdub', () => {
   it('turns on and off, saying it', () => {
     const h = harness();
     const changed = vi.fn();
@@ -320,5 +279,64 @@ describe('SessionRecorder: overdub', () => {
     h.recorder.release(h.midi, 62);
     expect(h.notes()).toEqual([]);
     expect(h.recorder.recordingSlot(h.midi)).toBe(1);
+  });
+});
+
+describe('SessionRecorder: quantization and latency', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  const sixteenths = { grid: '1/16', triplet: false, strength: 1, ends: false };
+
+  it("a take's notes are quantized as the project says", () => {
+    const h = harness(), ref = { track: h.midi, slot: 0 };
+    h.store.apply(setRecordQuantize(sixteenths));
+    h.recorder.toggle(ref);
+    h.engine.sessionClock = 1.07;
+    h.recorder.press(h.midi, 60, 100);
+    h.engine.sessionClock = 1.5;
+    h.recorder.release(h.midi, 60);
+    h.engine.sessionClock = 2;
+    h.recorder.toggle(ref);
+    expect(h.clipAt(0)!.notes).toEqual([{ pitch: 60, velocity: 100, start: 1, duration: 0.5 }]);
+  });
+
+  it('the notes fall earlier by the latency compensation, also the end of the take', () => {
+    const h = harness(0.1), ref = { track: h.midi, slot: 0 };
+    h.recorder.toggle(ref);
+    h.engine.sessionClock = 1.1;
+    h.recorder.press(h.midi, 60, 100);
+    h.engine.sessionClock = 1.6;
+    h.recorder.release(h.midi, 60);
+    h.engine.sessionClock = 2;
+    h.recorder.toggle(ref);
+    // heard just before the end (4), arrived just after it: it's in the take
+    h.engine.sessionClock = 4.05;
+    h.recorder.press(h.midi, 64, 90);
+    vi.advanceTimersByTime(100);
+    expect(h.recorder.recordingSlot(h.midi)).toBe(0);
+    h.engine.sessionClock = 4.15;
+    vi.advanceTimersByTime(100);
+    expect(h.recorder.recordingSlot(h.midi)).toBeNull();
+    const notes = h.clipAt(0)!.notes;
+    expect(notes[0]).toEqual({ pitch: 60, velocity: 100, start: 1, duration: 0.5 });
+    expect(notes[1].pitch).toBe(64);
+    expect(notes[1].start).toBeCloseTo(3.95, 9);
+  });
+
+  it("overdub: quantized in the clip's loop, earlier by the compensation", () => {
+    const h = overdubbing(0, 0.1);
+    h.store.apply(setRecordQuantize(sixteenths));
+    h.recorder.toggleOverdub();
+    h.play(5.6); // heard at 5.5: beat 1.5 of the clip
+    h.recorder.press(h.midi, 60, 100);
+    h.play(5.85);
+    h.recorder.release(h.midi, 60);
+    expect(h.notes()).toEqual([{ pitch: 60, velocity: 100, start: 1.5, duration: 0.25 }]);
+    // right at the loop's end it's the loop's start
+    h.play(4.07);
+    h.recorder.press(h.midi, 62, 100);
+    h.play(4.2);
+    h.recorder.release(h.midi, 62);
+    expect(h.notes().find(n => n.pitch === 62)!.start).toBe(0);
   });
 });

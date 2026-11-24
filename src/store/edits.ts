@@ -14,6 +14,7 @@ import * as chain from '../model/effect-list';
 import { INSTRUMENT_DEVICE, type EnvelopePoint, type ModTarget } from '../model/envelope';
 import { MidiClip } from '../model/midi-clip';
 import { Project, type ChainOwner, type LoopRegion } from '../model/project';
+import { sameRecordQuantize, type RecordQuantize } from '../model/record-settings';
 import type { SampleRef } from '../model/sample';
 import { withoutParamKeysOf } from '../model/key-map';
 import { withoutParamControlsOf } from '../model/midi-map';
@@ -41,6 +42,10 @@ export const setMasterAutomationOn = (on: boolean): Edit =>
 
 export const setLaunchQuantization = (id: string): Edit =>
   edit('Launch quantization', p => (p.launchQuantization === id ? p : p.withLaunchQuantization(id)));
+
+/** The quantization of what's recorded (Options › Recording). */
+export const setRecordQuantize = (q: RecordQuantize): Edit =>
+  edit('Record quantization', p => (sameRecordQuantize(p.recordQuantize, q) ? p : p.withRecordQuantize(q)));
 
 /** The project you start with, as in Live: a MIDI track, an audio one and two buses. */
 export function starterProject(name: string, ids: IdFactory): Project {

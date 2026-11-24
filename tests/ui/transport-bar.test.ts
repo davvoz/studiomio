@@ -30,7 +30,7 @@ function bar() {
   const changed: (() => void)[] = [];
   const recording = { overdub: false, onChange: (f: () => void) => { changed.push(f); return () => undefined; } };
   const commands = {
-    togglePlay: vi.fn(), toggleLoop: vi.fn(), toggleMetronome: vi.fn(), toggleOverdub: vi.fn(), toggleFollow: vi.fn(), toggleKeyMap: vi.fn(),
+    togglePlay: vi.fn(), toggleLoop: vi.fn(), toggleMetronome: vi.fn(), toggleOverdub: vi.fn(), recordingSettings: vi.fn(), toggleFollow: vi.fn(), toggleKeyMap: vi.fn(),
     toggleMidiMap: vi.fn(), toggleTriplet: vi.fn(), stopAndRewind: vi.fn(),
   };
   const t = new TransportBar(store, ui, engine as unknown as PlaybackEngine, commands as unknown as Commands, recording);
@@ -88,6 +88,14 @@ describe('transport bar', () => {
     recording.overdub = true;
     recordingChanged();
     expect(overdub.classList.contains('on')).toBe(true);
+  });
+
+  it('the right click on ● opens the recording settings', () => {
+    const { button, commands } = bar();
+    const right = new MouseEvent('contextmenu', { cancelable: true });
+    button('Overdub').dispatchEvent(right);
+    expect(right.defaultPrevented).toBe(true);
+    expect(commands.recordingSettings).toHaveBeenCalledOnce();
   });
 
   it('the tempo: a valid value is applied (two decimals), a wrong one restored; Enter leaves the field', () => {

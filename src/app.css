@@ -272,6 +272,12 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 
 /* the computer keyboard (KEY): a control's key at the top left; with KEY on you
  * see the controls that can be mapped and the one waiting for the key */
+/* Options › Recording */
+.recording-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.recording-label { min-width: 110px; color: var(--muted); }
+.recording-value { min-width: 44px; font-variant-numeric: tabular-nums; }
+.recording-row input[type=number] { width: 72px; }
+
 /* overdub on: red, like the slots recording */
 .transport .overdub.on { background: #d43d33; border-color: #d43d33; color: #fff; }
 

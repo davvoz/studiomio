@@ -47,8 +47,13 @@ export class TransportBar {
     this.bpm.onkeydown = e => { if (e.key === 'Enter') this.bpm.blur(); };
     this.loop = button('⟲ Loop', 'Loop (Ctrl+L)', () => commands.toggleLoop());
     this.metro = button('♩ Metro', 'Metronome (Ctrl+Shift+M)', () => commands.toggleMetronome());
-    this.overdub = button('●', "Overdub, as Live's Session Record: what you play on the armed MIDI tracks (⌨) goes into their playing clips",
+    this.overdub = button('●', "Overdub, as Live's Session Record: what you play on the armed MIDI tracks (⌨) goes into their playing clips. Right click: how it's recorded (quantization, latency)",
       () => commands.toggleOverdub(), 'overdub');
+    // the right click: how what's played is recorded
+    this.overdub.oncontextmenu = e => {
+      e.preventDefault();
+      commands.recordingSettings();
+    };
     this.follow = button('↦ Follow', '', () => commands.toggleFollow(), 'follow');
     this.keys = button('KEY', 'Map the computer keyboard to the racks\' macros and the devices\' parameters (Ctrl+K)',
       () => commands.toggleKeyMap(), 'key-map');

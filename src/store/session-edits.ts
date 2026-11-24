@@ -5,6 +5,8 @@ import type { Beats } from '../core/music-time';
 import { AudioClip } from '../model/audio-clip';
 import { fullRange, type Clip, type Color } from '../model/clip';
 import { paletteColor } from '../model/colors';
+import { scaleOf, type ClipEnvelope, type EnvelopePoint, type ModTarget } from '../model/envelope';
+import { touched } from '../model/move-take';
 import { MidiClip, type Note } from '../model/midi-clip';
 import type { Project } from '../model/project';
 import type { SampleRef } from '../model/sample';
@@ -35,11 +37,13 @@ export const newSlotMidiClip = ({ track, slot }: SlotRef): Edit =>
 /** A recorded take in the slot: a looping clip `length` beats long with `notes`, named after the
  *  track. Whatever was in the slot is replaced. Applied again with the same `id` (the notes played up to
  *  the end of the take), the clip stays the same one: the engine keeps playing it. */
-export const recordedClip = ({ track, slot }: SlotRef, id: ClipId, notes: readonly Note[], length: Beats): Edit =>
+export const recordedClip = ({ track, slot }: SlotRef, id: ClipId, notes: readonly Note[], length: Beats, envelopes: readonly ClipEnvelope[] = []): Edit =>
   edit('Record clip', p => {
     const t = requireTrack(p, track);
     if (!(t instanceof MidiTrack)) throw new TypeError(`the track ${t.name} isn't a MIDI track`);
-    const clip = MidiClip.create({ id, name: t.name, color: t.color, ...fullRange(0, length, true), notes });
+    const clip = MidiClip.create({
+      id, name: t.name, color: t.color, ...fullRange(0, length, true), notes, ...(envelopes.length ? { envelopes } : {}),
+    });
     return p.updatingTrack(track, x => x.withSlot(slot, clip));
   });
 
@@ -50,6 +54,18 @@ export const overdubNotes = ({ track, slot }: SlotRef, id: ClipId, notes: readon
     const clip = requireTrack(p, track).slots[slot];
     if (!(clip instanceof MidiClip) || clip.id !== id) return p;
     return p.updatingTrack(track, x => x.withSlot(slot, clip.addingNotes(...notes)));
+  });
+
+/** A recorded movement written over the curve of the clip `id` in the slot (see model/move-take): the
+ *  old curve's values (and the value without a curve) are multiplied by `factor` (the volume, whose fader
+ *  moved). If the slot no longer holds that clip, nothing changes. */
+export const touchCurve = ({ track, slot }: SlotRef, id: ClipId, target: ModTarget, points: readonly EnvelopePoint[], factor = 1): Edit =>
+  edit('Record movement', p => {
+    const clip = requireTrack(p, track).slots[slot];
+    if (!(clip instanceof MidiClip) || clip.id !== id || !points.length) return p;
+    const old = (clip.envelope(target)?.points ?? []).map(q => ({ beat: q.beat, value: q.value * factor }));
+    const curve = touched(old, points, scaleOf(target).neutral * factor);
+    return p.updatingTrack(track, x => x.withSlot(slot, clip.withEnvelope(target, curve)));
   });
 
 /** Empties several slots in a single step. */

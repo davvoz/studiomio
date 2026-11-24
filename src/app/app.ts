@@ -26,11 +26,12 @@ import { MASTER, type ChainOwner, type Project } from '../model/project';
 import type { TimeRange } from '../model/note-edits';
 import { sceneArrangement } from '../model/scene-export';
 import { foldTail } from '../engine/offline-mix';
-import { addBus, addTrack, followClipSound, setLoopRegion, starterProject, type TrackKind } from '../store/edits';
+import { addBus, addTrack, followClipSound, setLoopRegion, setRecordQuantize, starterProject, type TrackKind } from '../store/edits';
 import { Clipboard } from '../store/clipboard';
 import { soloAudioProject } from '../store/consolidate';
 import { findClip, placementRef, type ClipRef } from '../store/clip-ref';
 import { showContextMenu, type MenuItem } from '../ui/context-menu';
+import { showRecordingSettings } from '../ui/recording-dialog';
 import { choose } from '../ui/dialog';
 import { chooseImport } from '../ui/import-dialog';
 import { rulerMenu, timelineMenu, type TimelineActions } from './menus';
@@ -62,6 +63,7 @@ import { KeyMapper } from './key-mapper';
 import { keyboardBase, NoteKeyboard, NoteKeys } from './note-keyboard';
 import { MidiMapper } from './midi-mapper';
 import { MidiNoteInput } from './midi-note-input';
+import { RecordingPrefs } from './recording-prefs';
 import { SessionRecorder } from './session-recorder';
 import { mainMenu } from './main-menu';
 import { RecentProjects, type RecentProject } from './recent-projects';
@@ -73,6 +75,8 @@ import { SamplePreview } from './sample-preview';
 export class App implements Commands, TimelineActions {
   readonly store = new ProjectStore(starterProject('New project', randomIds), randomIds);
   readonly audio = new AudioSystem(this.store);
+  /** How this computer records: the latency compensation, the movements. */
+  private readonly recording = new RecordingPrefs(this.audio.context);
   readonly session = new ProjectSession(this.store, this.audio, projectPicker());
   /** The project folders opened or saved recently, for the File menu. */
   readonly recent = new RecentProjects();
@@ -207,7 +211,11 @@ export class App implements Commands, TimelineActions {
     this.recorder = new SessionRecorder(this.audio.engine, this.store, () => {
       const p = this.store.project;
       return launchQuantumBeats(p.launchQuantization, p.signature);
-    }, t => this.say(t));
+    }, t => this.say(t), {
+      delay: () => this.recording.beats(this.store.project.tempo.bpm),
+      armed: () => this.ui.keyboardTracks,
+    });
+    this.recorder.recordMoves = this.recording.moves;
     this.sessionView = new SessionView({
       recorder: this.recorder,
       store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard, showAutomation,
@@ -402,6 +410,22 @@ export class App implements Commands, TimelineActions {
 
   toggleOverdub(): void {
     this.recorder.toggleOverdub();
+  }
+
+  recordingSettings(): void {
+    const { store, recording, recorder } = this;
+    void showRecordingSettings({
+      get quantize() { return store.project.recordQuantize; },
+      setQuantize: q => store.apply(setRecordQuantize(q)),
+      audioMs: recording.audioMs,
+      get offsetMs() { return recording.offsetMs; },
+      set offsetMs(ms: number) { recording.offsetMs = ms; },
+      get moves() { return recording.moves; },
+      set moves(on: boolean) {
+        recording.moves = on;
+        recorder.recordMoves = on;
+      },
+    });
   }
 
   toggleView(): void {

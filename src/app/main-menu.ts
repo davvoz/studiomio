@@ -32,6 +32,14 @@ function recentItems(app: App): MenuItem[] {
   ];
 }
 
+/** Options' last item: the connected controller, or how to connect one. */
+function controllerItem(app: App): MenuItem {
+  const surfaces = app.surfaces, name = surfaces.connected;
+  if (name) return { label: `Controller MIDI: ${name}`, checked: true, disabled: true, run: () => {} };
+  if (surfaces.enabled) return { label: 'MIDI controllers: connect an APC40 mkII or a Launchpad', disabled: true, run: () => {} };
+  return { label: 'Enable the MIDI controllers…', run: () => app.run(() => surfaces.enable()) };
+}
+
 export function mainMenu(app: App): Menu[] {
   const store = app.store, engine = app.audio.engine;
   const menus: Menu[] = [
@@ -105,12 +113,6 @@ export function mainMenu(app: App): Menu[] {
     {
       label: 'Options',
       items: () => {
-        const surfaces = app.surfaces, name = surfaces.connected;
-        const controller = () => {
-          if (name) return { label: `Controller MIDI: ${name}`, checked: true, disabled: true, run: () => {} };
-          if (surfaces.enabled) return { label: 'MIDI controllers: connect an APC40 mkII or a Launchpad', disabled: true, run: () => {} };
-          return { label: 'Enable the MIDI controllers…', run: () => app.run(() => surfaces.enable()) };
-        };
         return [
           { label: 'Snap to grid', shortcut: 'Ctrl+4', checked: app.ui.snap, run: () => app.toggleSnap() },
           { label: `Narrower grid (${gridLabel(app.ui.grid)})`, shortcut: 'Ctrl+1', run: () => app.narrowGrid() },
@@ -119,11 +121,12 @@ export function mainMenu(app: App): Menu[] {
           { label: 'Draw mode', shortcut: 'B', checked: app.drawMode.on, run: () => app.toggleDraw() },
           { label: 'Loop', shortcut: 'Ctrl+L', checked: store.project.loop.enabled, run: () => app.toggleLoop() },
           { label: 'Metronome', shortcut: 'Ctrl+Shift+M', checked: engine.metronomeOn, run: () => app.toggleMetronome() },
+          { label: 'Recording…', run: () => app.recordingSettings() },
           { label: 'Follow the playhead', shortcut: 'Ctrl+Shift+F', checked: app.ui.follow, run: () => app.toggleFollow() },
           { label: 'Map the computer keyboard', shortcut: 'Ctrl+K', checked: app.ui.keyMapping, run: () => app.toggleKeyMap() },
           { label: 'Map MIDI', shortcut: 'Ctrl+M', checked: app.ui.midiMapping, run: () => app.toggleMidiMap() },
           SEPARATOR,
-          controller(),
+          controllerItem(app),
         ];
       },
     },

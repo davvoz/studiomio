@@ -9,6 +9,7 @@ import { DEFAULT_LAUNCH_QUANTUM } from '../model/launch';
 import { checkMidiMap, MIXER_CONTROLS, type MidiMap, type MidiMapping, type MidiTarget, type MixerControl } from '../model/midi-map';
 import { Project, type ChainOwner } from '../model/project';
 import { MACRO_MODES, springFor, type DeviceKey, type Macro, type MacroMode, type MacroSpring, type Rack, type RackList } from '../model/rack';
+import { NO_RECORD_QUANTIZE, sameRecordQuantize, type RecordQuantize } from '../model/record-settings';
 import type { SampleRef } from '../model/sample';
 import { DEFAULT_INSTRUMENT, type EffectSettings } from '../model/device';
 import { AudioTrack, BusTrack, GroupTrack, MidiTrack, type MixerSettings, type Sends, type Track, type TrackProps } from '../model/track';
@@ -17,7 +18,7 @@ import { decodeInstrument, encodeInstrument } from './device-codec';
 import { JsonReader, type Json, type JsonObject } from './json-reader';
 
 export const PROJECT_FORMAT = 'studiomio-project';
-export const PROJECT_VERSION = 14;
+export const PROJECT_VERSION = 15;
 
 /** How to write and rebuild a track kind. */
 export interface TrackType {
@@ -99,7 +100,16 @@ const migrations: Record<number, Migration> = {
   12: json => json,
   // 13 → 14: a MIDI clip can have the sound the instrument takes when it starts (optional field)
   13: json => json,
+  // 14 → 15: the quantization of what's recorded (optional field)
+  14: json => json,
 };
+
+/** The record quantization: written only when there is one. */
+const encodeRecordQuantize = (q: RecordQuantize): JsonObject =>
+  (sameRecordQuantize(q, NO_RECORD_QUANTIZE) ? {} : { recordQuantize: { grid: q.grid, triplet: q.triplet, strength: q.strength, ends: q.ends } });
+
+const decodeRecordQuantize = (r: JsonReader): RecordQuantize =>
+  ({ grid: r.str('grid'), triplet: r.bool('triplet'), strength: r.num('strength'), ends: r.bool('ends') });
 
 /** Project ⇄ JSON. Clip and track kinds are extensible registries: a new kind
  *  brings its own codec without changing this class. */
@@ -135,6 +145,7 @@ export class ProjectCodec {
       ...(p.masterAutomation.length ? { masterAutomation: encodeEnvelopes(p.masterAutomation) } : {}),
       ...(p.masterAutomationOn ? {} : { masterAutomationOff: true }),
       launchQuantization: p.launchQuantization,
+      ...encodeRecordQuantize(p.recordQuantize),
       scenes: p.scenes.map(s => ({ id: s.id, name: s.name, ...(s.color ? { color: s.color } : {}) })),
       samples: p.samples.map(encodeSample),
       tracks: p.tracks.map(t => this.encodeTrack(t)),
@@ -181,6 +192,7 @@ export class ProjectCodec {
         masterAutomation: r.has('masterAutomation') ? decodeEnvelopes(r.get('masterAutomation')) : undefined,
         masterAutomationOff: r.has('masterAutomationOff') && r.bool('masterAutomationOff') ? true : undefined,
         launchQuantization: r.str('launchQuantization'),
+        recordQuantize: r.has('recordQuantize') ? decodeRecordQuantize(r.get('recordQuantize')) : undefined,
         scenes: r.array('scenes').map(s => ({ id: asId(s.str('id')), name: s.str('name'), ...(s.has('color') ? { color: s.str('color') } : {}) })),
         samples: r.array('samples').map(decodeSample),
         tracks: r.array('tracks').map(t => this.decodeTrack(t)),

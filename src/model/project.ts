@@ -8,6 +8,7 @@ import type { EffectList } from './effect-list';
 import { checkKeyMap, NO_KEYS, type KeyMap, type KeyTarget } from './key-map';
 import { DEFAULT_LAUNCH_QUANTUM } from './launch';
 import { MidiClip } from './midi-clip';
+import { checkRecordQuantize, NO_RECORD_QUANTIZE, sameRecordQuantize, type RecordQuantize } from './record-settings';
 import { checkMidiMap, NO_MIDI, type MidiMap, type MidiTarget } from './midi-map';
 import { checkRacks, findRack, NO_RACKS, pruneRacks, type DeviceKey, type RackList } from './rack';
 import type { SampleRef } from './sample';
@@ -57,6 +58,8 @@ export interface ProjectProps {
   readonly masterAutomationOff?: boolean;
   /** Launch quantization of the session clips (an id of LAUNCH_QUANTA). */
   readonly launchQuantization: string;
+  /** The quantization of what's recorded (absent: none). */
+  readonly recordQuantize?: RecordQuantize;
   /** The computer keys on macros and parameters (absent: none). */
   readonly keyMap?: KeyMap;
   /** The MIDI controls on macros, parameters and mixer (absent: none). */
@@ -141,6 +144,7 @@ export class Project {
   /** The master's curves that play: none when they're switched off. */
   get playingMasterAutomation(): readonly ClipEnvelope[] { return this.masterAutomationOn ? this.masterAutomation : NO_AUTOMATION; }
   get launchQuantization(): string { return this.props.launchQuantization; }
+  get recordQuantize(): RecordQuantize { return this.props.recordQuantize ?? NO_RECORD_QUANTIZE; }
 
   /** The keyboard mappings whose racks and devices exist (the others wait for an
    *  "Undo" bringing them back). */
@@ -233,6 +237,10 @@ export class Project {
   withSignature(signature: TimeSignature): Project { return this.with({ signature }); }
   withMaster(patch: Partial<MixerSettings>): Project { return this.with({ master: { ...this.master, ...patch } }); }
   withLaunchQuantization(id: string): Project { return this.with({ launchQuantization: id }); }
+  /** None is kept as absent: the file stays as before. */
+  withRecordQuantize(q: RecordQuantize): Project {
+    return this.with({ recordQuantize: sameRecordQuantize(q, NO_RECORD_QUANTIZE) ? undefined : q }).validated();
+  }
 
   /** The master's curve on `target` (timeline beats); without points it removes it. A
    *  target that's gone stays in the file, and doesn't play, until an "Undo" brings it back. */
@@ -546,6 +554,7 @@ export class Project {
       for (const bus of Object.keys(t.sends)) if (!buses.has(bus as TrackId)) throw new Error(`the track "${t.name}" sends to a bus that doesn't exist`);
     }
     checkRacks(this.masterEffects.map(e => e.id), this.masterRacks);
+    if (this.props.recordQuantize) checkRecordQuantize(this.props.recordQuantize);
     const known = new Set(this.samples.map(s => s.id));
     for (const id of this.usedSampleIds()) {
       if (!known.has(id)) throw new Error(`a clip or a device uses sample ${id}, which isn't in the project`);

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { sequentialIds } from '../../src/core/id';
 import { MidiClip } from '../../src/model/midi-clip';
 import { clipEnd, overdubbedNote } from '../../src/model/overdub';
-import { overdubNotes, recordedClip } from '../../src/store/session-edits';
+import { overdubNotes, recordedClip, touchCurve } from '../../src/store/session-edits';
+import type { ModTarget } from '../../src/model/envelope';
 import { setup } from '../helpers/fixtures';
 
 const clip = (loop: boolean) => {
@@ -40,5 +41,21 @@ describe('overdub', () => {
     const after = store.project.track(ref.track)!.slots[0] as MidiClip;
     expect(after.id).toBe(id);
     expect(after.notes).toEqual([note]);
+  });
+
+  it("a recorded movement over the clip's curve: the volume's old curve scaled with the fader; another clip, nothing", () => {
+    const { store, track } = setup({ midi: 1 });
+    const ref = { track: track(0), slot: 0 }, id = store.ids.next('clip');
+    const volume: ModTarget = { kind: 'mixer', param: 'volume' };
+    store.apply(recordedClip(ref, id, [], 4, [{ target: volume, points: [{ beat: 0, value: 1 }, { beat: 4, value: 0.5 }] }]));
+    const clip = () => store.project.track(ref.track)!.slots[0] as MidiClip;
+    store.apply(touchCurve(ref, id, volume, [{ beat: 3, value: 1 }], 0.5));
+    expect(clip().envelope(volume)!.points).toEqual([
+      { beat: 0, value: 0.5 }, { beat: 3, value: 0.3125 }, { beat: 3, value: 1 }, { beat: 3, value: 0.3125 }, { beat: 4, value: 0.25 },
+    ]);
+    const before = store.project;
+    store.apply(touchCurve(ref, store.ids.next('clip'), volume, [{ beat: 1, value: 1 }]));
+    store.apply(touchCurve(ref, id, volume, []));
+    expect(store.project).toBe(before);
   });
 });

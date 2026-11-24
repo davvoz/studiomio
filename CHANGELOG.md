@@ -6,6 +6,19 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Input quantization, as Live's Record Quantization (Options › Recording, or the right click on ● in the
+  top bar): grid (1/4 … 1/32, triplets), strength (100 %: right on the grid, less: part of the way) and the
+  note ends too. For new clips and overdub; saved in the project.
+- Latency compensation (same window): what you play is recorded where you heard it, not where the engine's
+  clock was. The audio device's delay is read by itself, plus a hand correction in ms (remembered on this
+  computer).
+- Recording the movements, as Live's Automation Arm (same window): while recording (● or overdub), what you
+  move on the track (instrument and effect parameters, effects on/off, rack macros, volume, pan; on screen,
+  from a controller or a mapped key) becomes the clip's curve, and the control goes back where it was. In
+  overdub a movement replaces the curve only where you moved. A curve can only lower the volume: the fader
+  goes to the highest point you reached and the curve brings it down.
+
 ## [0.3.70] - 2026-11-24
 
 ### Added
