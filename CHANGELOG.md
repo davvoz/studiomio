@@ -6,6 +6,14 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- Shift+wheel scrolls the audio clip editor again (on Windows it did nothing).
+
+### Changed
+- Internal rework of the piano roll, the browser, the audio clip editor, the rack panel and the
+  Sampler's waveform and zone editors: their rules now live in separate tested modules. Nothing
+  changes in use.
+
 ## [0.3.67] - 2026-11-24
 
 ### Changed
