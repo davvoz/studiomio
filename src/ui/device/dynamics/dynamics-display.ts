@@ -8,7 +8,8 @@ import type { DeviceSettings, ParamValues } from '../../../model/device';
 import { el } from '../../dom';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext, DynamicsTap } from '../displays';
-import { ACCENT, BACKGROUND, drag, fit, GRID, LABEL } from '../prisma/canvas';
+import { ACCENT, BACKGROUND, fit, GRID, LABEL } from '../../kit/canvas';
+import { drag } from '../../kit/pointer';
 
 /** What changes from one effect to another. */
 export interface DynamicsGraph {

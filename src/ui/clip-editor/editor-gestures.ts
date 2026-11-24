@@ -1,9 +1,9 @@
 import type { Seconds } from '../../core/music-time';
 import type { AudioClip } from '../../model/audio-clip';
 import type { WarpMarkers } from '../../model/warp-markers';
-import type { Pointer } from '../timeline/gestures';
+import { moved, type Pointer } from '../kit/pointer';
 import {
-  frameCursor, frameGestureFor, frameHit, IdleGesture, moved, PanGesture, snappedBeat,
+  frameCursor, frameGestureFor, frameHit, IdleGesture, PanGesture, snappedBeat,
   type ClipGesture, type ClipHost, type FrameHit,
 } from './clip-frame';
 import { shiftAudioUnderMarker } from './clip-geometry';

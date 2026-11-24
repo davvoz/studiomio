@@ -7,7 +7,7 @@ import {
   FRAME, FlagGesture, IdleGesture, LoopBandGesture, PanGesture, frameCursor, frameGestureFor, frameHit, paintBeatGrid, paintClipRuler,
   type ClipHost,
 } from '../../src/ui/clip-editor/clip-frame';
-import type { Pointer } from '../../src/ui/timeline/gestures';
+import type { Pointer } from '../../src/ui/kit/pointer';
 import { fakeContext } from '../helpers/canvas';
 
 const at = (x: number, y: number, mods: Partial<Pointer> = {}): Pointer => ({ x, y, shift: false, alt: false, ctrl: false, ...mods });

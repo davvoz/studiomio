@@ -15,9 +15,9 @@ import { BeatAxis, playheadIn, seekBeatOf } from '../clip-editor/clip-geometry';
 import { addHeightHandle } from '../editor-height';
 import { bindKeys, type Binding } from '../keymap';
 import { showContextMenu } from '../context-menu';
-import { Surface } from '../surface';
+import { Surface } from '../kit/canvas';
 import { rollMenu } from './roll-menu';
-import type { Pointer } from '../timeline/gestures';
+import { pointerIn, type Pointer } from '../kit/pointer';
 import type { UiState } from '../ui-state';
 import { RollKeyboard } from './keyboard';
 import { foldRows, PitchAxis, sameRows } from './pitch-axis';
@@ -520,11 +520,6 @@ export class PianoRoll implements RollHost {
     requestAnimationFrame(this.frame);
   };
 
-  private pointer(e: MouseEvent, el: HTMLElement): Pointer {
-    const r = el.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey };
-  }
-
   private hit(p: Pointer): { clip: MidiClip; hit: RollHit } | null {
     const clip = this.clip();
     return clip ? { clip, hit: rollHit(this, clip, p.x, p.y) } : null;
@@ -533,7 +528,7 @@ export class PianoRoll implements RollHost {
   private bind(el: HTMLCanvasElement): void {
     el.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
-      const p = this.pointer(e, el);
+      const p = pointerIn(e, el);
       const h = this.hit(p);
       if (!h) return;
       e.preventDefault();
@@ -545,7 +540,7 @@ export class PianoRoll implements RollHost {
       this.invalidate();
     });
     el.addEventListener('pointermove', e => {
-      const p = this.pointer(e, el);
+      const p = pointerIn(e, el);
       if (this.gesture) return this.gesture.move(p);
       const h = this.hit(p);
       el.style.cursor = h ? (rollCursor[h.hit.kind] as (hit: RollHit, draw: boolean) => string)(h.hit, this.drawMode) : 'default';
@@ -553,7 +548,7 @@ export class PianoRoll implements RollHost {
     el.addEventListener('pointerup', e => {
       const g = this.gesture;
       this.gesture = null;
-      g?.end(this.pointer(e, el));
+      g?.end(pointerIn(e, el));
       el.style.cursor = '';
       this.invalidate();
     });
@@ -561,7 +556,7 @@ export class PianoRoll implements RollHost {
     // double click: new note on empty space, deletion on a note
     el.addEventListener('dblclick', e => {
       if (this.drawMode) return;
-      const h = this.hit(this.pointer(e, el));
+      const h = this.hit(pointerIn(e, el));
       if (h?.hit.kind === 'empty') {
         const b = this.cellStart(h.hit.beat);
         this.commitNotes('Add note', addNote(h.clip.notes, { pitch: h.hit.pitch, start: b, duration: this.noteLength, velocity: 100 }));
@@ -571,11 +566,11 @@ export class PianoRoll implements RollHost {
         this.commitNotes('Delete note', deleteNotes(h.clip.notes, new Set([note])));
       }
     });
-    el.addEventListener('wheel', e => this.wheel(e, this.pointer(e, el).x), { passive: false });
+    el.addEventListener('wheel', e => this.wheel(e, pointerIn(e, el).x), { passive: false });
     el.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (this.gesture) return;
-      const h = this.hit(this.pointer(e, el));
+      const h = this.hit(pointerIn(e, el));
       if (!h) return;
       this.element.focus();
       const note = h.hit.kind === 'note' || h.hit.kind === 'velocity' ? h.hit.note : null;

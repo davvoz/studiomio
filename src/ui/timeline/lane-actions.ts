@@ -6,8 +6,9 @@ import type { Project } from '../../model/project';
 import { LOOP_CURSOR, loopPartAt, type BeatRange } from '../loop-drag';
 import { snapTo, type ClipZone, type Hit, type TimelineGeometry } from './geometry';
 import {
-  FadeGesture, MarqueeGesture, MoveClipsGesture, ResizeClipGesture, type Gesture, type GestureHost, type Pointer,
+  FadeGesture, MarqueeGesture, MoveClipsGesture, ResizeClipGesture, type Gesture, type GestureHost,
 } from './gestures';
+import type { Pointer } from '../kit/pointer';
 import type { RulerZone } from './painters';
 
 type HitKey = `clip:${ClipZone}` | 'lane' | 'empty';

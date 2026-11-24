@@ -12,6 +12,7 @@ import type { ParamSpec } from '../../../devices/params';
 import { sampleAt, type DeviceSettings, type ParamValues } from '../../../model/device';
 import { acceptBrowserDrops } from '../../browser/browser-drag';
 import { el } from '../../dom';
+import { fit } from '../../kit/canvas';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext } from '../displays';
 
@@ -71,16 +72,6 @@ export interface LayerLayout {
 const AUDITION_VELOCITY = 120;
 const ACCENT = '#ff9d2e';
 const CURVE = '#7fb6ff';
-
-/** A sharp canvas, resized to its place. */
-function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
-  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-  if (!w || !h) return null;
-  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) Object.assign(c, { width: Math.round(w * dpr), height: Math.round(h * dpr) });
-  const g = c.getContext('2d')!;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return g;
-}
 
 export class LayerDisplay implements DeviceDisplay {
   readonly element = el('div', { className: 'lay' });

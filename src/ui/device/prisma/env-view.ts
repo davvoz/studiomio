@@ -6,7 +6,9 @@
 import { bend } from '../../../devices/instruments/prisma/shapes';
 import type { ParamValues } from '../../../model/device';
 import { el } from '../../dom';
-import { ACCENT, BACKGROUND, drag, fit, GRID, LABEL } from './canvas';
+import { ACCENT, BACKGROUND, fit, GRID, LABEL } from '../../kit/canvas';
+import { nearest } from '../../kit/hit';
+import { drag, localPoint } from '../../kit/pointer';
 
 const MAX_TIME = 10, MIN_TIME = 0.001;
 const PAD = 8, HANDLE = 4, HIT = 9;
@@ -93,16 +95,8 @@ export class EnvView {
   }
 
   private hit(e: MouseEvent): Handle | null {
-    const r = this.canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-    let best: Handle | null = null, dist = HIT;
-    for (const [h, hx, hy] of this.handles(this.values())) {
-      const d = Math.hypot(hx - x, hy - y);
-      if (d < dist) {
-        dist = d;
-        best = h;
-      }
-    }
-    return best;
+    const { x, y } = localPoint(e, this.canvas);
+    return nearest(this.handles(this.values()), ([, hx, hy]) => Math.hypot(hx - x, hy - y), HIT)?.[0] ?? null;
   }
 
   private press(e: PointerEvent): void {

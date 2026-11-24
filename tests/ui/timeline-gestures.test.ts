@@ -7,8 +7,9 @@ import { edit } from '../../src/store/project-store';
 import { TimelineGeometry, hitTest, type Hit } from '../../src/ui/timeline/geometry';
 import {
   FadeGesture, LoopRegionGesture, MarqueeGesture, MoveClipsGesture, PanGesture, ResizeClipGesture, ScrubGesture,
-  type GestureHost, type Pointer,
+  type GestureHost,
 } from '../../src/ui/timeline/gestures';
+import type { Pointer } from '../../src/ui/kit/pointer';
 import { UiState } from '../../src/ui/ui-state';
 import { fakeContext } from '../helpers/canvas';
 import { sampleRef, setup } from '../helpers/fixtures';

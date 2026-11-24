@@ -9,20 +9,11 @@ import { dragLoop, LOOP_CURSOR, loopPartAt, type LoopPart } from '../loop-drag';
 import {
   addedPlacements, cutOutRange, findPlacement, relocate, resizeMany, type PlacementRef, type Relocation, type ResizePlan,
 } from '../../store/selection-edits';
+import { CLICK_PX, moved, type Pointer } from '../kit/pointer';
 import type { UiState } from '../ui-state';
 import { placementsInBox, rulerZoom, snapTo, type Hit, type TimelineGeometry } from './geometry';
 import { paintBox, paintGhost } from './painters';
 import { planMove, planResizeMany, resolveSelection, snappedDelta } from './planning';
-
-export interface Pointer {
-  readonly x: number;
-  readonly y: number;
-  readonly shift: boolean;
-  /** Alt: no snapping to the grid. */
-  readonly alt: boolean;
-  /** Ctrl/Cmd: copy instead of move. */
-  readonly ctrl: boolean;
-}
 
 /** What a gesture can use of the view. */
 export interface GestureHost {
@@ -49,7 +40,6 @@ export interface Gesture {
   paint(g: CanvasRenderingContext2D, geo: TimelineGeometry): void;
 }
 
-const CLICK_PX = 3;
 const NONE: ReadonlySet<PlacementId> = new Set();
 
 const snapped = (host: GestureHost, p: Pointer, beat: Beats) => {
@@ -93,7 +83,7 @@ export class MoveClipsGesture implements Gesture {
   }
 
   move(p: Pointer): void {
-    if (!this.moved && Math.abs(p.x - this.origin.x) + Math.abs(p.y - this.origin.y) < CLICK_PX) return;
+    if (!this.moved && !moved(p, this.origin)) return;
     const { host, hit, range } = this;
     if (!this.moved) this.begin();
     this.moved = true;
@@ -284,7 +274,7 @@ export class MarqueeGesture implements Gesture {
   }
 
   private get dragged(): boolean {
-    return Math.abs(this.current.x - this.origin.x) + Math.abs(this.current.y - this.origin.y) >= CLICK_PX;
+    return moved(this.current, this.origin);
   }
 }
 
@@ -366,7 +356,7 @@ export class RulerZoomGesture implements Gesture {
   }
 
   move(p: Pointer): void {
-    if (!this.dragged && Math.abs(p.x - this.origin.x) + Math.abs(p.y - this.origin.y) < CLICK_PX) return;
+    if (!this.dragged && !moved(p, this.origin)) return;
     this.dragged = true;
     const zoomed = this.start.zoomed(this.start.pxPerBeat * rulerZoom(p.y - this.origin.y), this.origin.x);
     this.view(zoomed.scrolled(this.anchor - p.x / zoomed.pxPerBeat, zoomed.scrollY));

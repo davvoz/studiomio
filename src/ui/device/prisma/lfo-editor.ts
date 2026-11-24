@@ -7,7 +7,9 @@ import { LFO_POINTS, LFO_SHAPE, LFO_SHAPES, bend, drawnValue, isRandomShape, poi
 import type { ParamValues } from '../../../model/device';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../../context-menu';
 import { el } from '../../dom';
-import { ACCENT, BACKGROUND, drag, fit, GRID, LABEL } from './canvas';
+import { ACCENT, BACKGROUND, fit, GRID, LABEL } from '../../kit/canvas';
+import { nearest } from '../../kit/hit';
+import { below, drag, localPoint } from '../../kit/pointer';
 
 const PAD = 7, POINT = 4, HIT = 8;
 export const GRIDS = [0, 4, 8, 16, 32] as const;
@@ -94,8 +96,8 @@ export class LfoEditor {
       this.paint(true);
     };
     this.menuButton.onclick = () => {
-      const r = this.menuButton.getBoundingClientRect();
-      showContextMenu(r.left, r.bottom + 2, this.menu());
+      const at = below(this.menuButton);
+      showContextMenu(at.x, at.y, this.menu());
     };
     c.addEventListener('pointerdown', e => this.press(e));
     c.addEventListener('pointermove', e => {
@@ -153,25 +155,12 @@ export class LfoEditor {
   private hit(e: MouseEvent): Target | null {
     const points = this.points() ?? (isRandomShape(this.shape) ? null : pointsForShape(this.shape));
     if (!points) return null;
-    const r = this.canvas.getBoundingClientRect(), b = this.box(), mx = e.clientX - r.left, my = e.clientY - r.top;
-    let best: Target | null = null, dist = HIT;
-    points.forEach((p, i) => {
-      const d = Math.hypot(b.x(p.x) - mx, b.y(p.y) - my);
-      if (d < dist) {
-        dist = d;
-        best = { kind: 'point', index: i };
-      }
-    });
-    if (best) return best;
-    for (let i = 0; i < points.length - 1; i++) {
-      const [cx, cy] = this.curveHandle(points, i);
-      const d = Math.hypot(b.x(cx) - mx, b.y(cy) - my);
-      if (d < dist) {
-        dist = d;
-        best = { kind: 'curve', index: i };
-      }
-    }
-    return best;
+    const b = this.box(), m = localPoint(e, this.canvas);
+    const away = ([x, y]: readonly [number, number]) => Math.hypot(b.x(x) - m.x, b.y(y) - m.y);
+    const point = nearest(points.keys(), i => away([points[i].x, points[i].y]), HIT);
+    if (point !== null) return { kind: 'point', index: point };
+    const curve = nearest(points.slice(1).keys(), i => away(this.curveHandle(points, i)), HIT);
+    return curve === null ? null : { kind: 'curve', index: curve };
   }
 
   /** The dot of segment `i`: halfway, on the curve. */

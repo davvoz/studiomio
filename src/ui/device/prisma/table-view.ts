@@ -7,7 +7,7 @@ import { WARP, type OscKey } from '../../../devices/instruments/prisma/prisma';
 import { cyclesOf, FRAMES, LEVELS, STRIDE, TABLE_SIZE, wavetable } from '../../../devices/instruments/wavetable/tables';
 import type { ParamValues } from '../../../model/device';
 import { el } from '../../dom';
-import { ACCENT, BACKGROUND, fit, LABEL } from './canvas';
+import { ACCENT, BACKGROUND, fit, LABEL } from '../../kit/canvas';
 
 /** Points per shape in the drawing, and shapes drawn at most (of a long table some are
  *  skipped). */

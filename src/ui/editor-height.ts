@@ -1,4 +1,5 @@
 import { el } from './dom';
+import { readPref, writePref } from './kit/prefs';
 
 /** A height that's changed by dragging the top edge, as in Live, and remembered (it's in
  *  a CSS variable). */
@@ -40,7 +41,7 @@ const loaded = new Set<HeightSetting>();
 export function addHeightHandle(editor: HTMLElement, setting: HeightSetting = EDITOR_HEIGHT, fold?: Foldable): void {
   if (!loaded.has(setting)) {
     loaded.add(setting);
-    const saved = Number(read(setting.key));
+    const saved = Number(readPref(setting.key));
     if (saved >= setting.min) apply(setting, saved);
   }
   const handle = el('div', { className: 'editor-resize', title: 'Drag to change the height · double click: initial height' });
@@ -73,7 +74,7 @@ export function addHeightHandle(editor: HTMLElement, setting: HeightSetting = ED
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', end);
       handle.removeEventListener('pointercancel', end);
-      write(setting.key, String(current(setting)));
+      writePref(setting.key, String(current(setting)));
       if (!fold || !sunk) return;
       if (sunk <= FOLD_AT) void slide(editor, sunk, 0, BACK_MS);
       else {
@@ -90,7 +91,7 @@ export function addHeightHandle(editor: HTMLElement, setting: HeightSetting = ED
   handle.addEventListener('dblclick', () => {
     if (fold?.folded) fold.unfold();
     apply(setting, setting.initial);
-    write(setting.key, String(setting.initial));
+    writePref(setting.key, String(setting.initial));
   });
   editor.append(handle);
 }
@@ -122,12 +123,4 @@ function clamp(setting: HeightSetting, height: number, extra: number): number {
 
 function apply(setting: HeightSetting, height: number): void {
   document.documentElement.style.setProperty(setting.variable, `${height}px`);
-}
-
-function read(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-
-function write(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* niente */ }
 }

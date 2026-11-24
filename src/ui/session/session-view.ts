@@ -22,6 +22,7 @@ import { insertScene, moveScene, moveSlots, renameScene, updateSlotClip, type Sl
 import { acceptBrowserDrops } from '../browser/browser-drag';
 import { showContextMenu, type MenuItem } from '../context-menu';
 import { el } from '../dom';
+import { readPref, writePref } from '../kit/prefs';
 import { renameInline } from '../inline-rename';
 import { bindKeys } from '../keymap';
 import type { MeterBoard } from '../meters/meter-board';
@@ -85,12 +86,6 @@ const rowSpan = (r: DOMRect): Span => ({ start: r.top, end: r.bottom });
 
 /** Interface preferences of whoever uses this browser (if local storage is missing, never mind). */
 const MIXER_PREF = 'studiomio.session.mixer';
-const readPref = (key: string): string | null => {
-  try { return localStorage.getItem(key); } catch { return null; }
-};
-const writePref = (key: string, value: string): void => {
-  try { localStorage.setItem(key, value); } catch { /* niente */ }
-};
 
 /** A clip grabbed with the mouse: it becomes a drag after a few pixels. */
 interface SlotDrag {

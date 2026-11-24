@@ -7,6 +7,7 @@ import { autoGain, SHAPES, transfer } from '../../../devices/effects/drive/drive
 import { dbToGain } from '../../../devices/dsp/core';
 import type { DeviceSettings, ParamValues } from '../../../model/device';
 import { el } from '../../dom';
+import { fit } from '../../kit/canvas';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext, SpectrumTap } from '../displays';
 import { EqScale, FREQ_GRID, spectrumColumns, SPECTRUM_BOTTOM } from '../eq/eq-scale';
@@ -17,16 +18,6 @@ const GROUPS: readonly (readonly string[])[] = [['drive', 'bias', 'color'], ['lo
 /** How much is visible vertically in the curve's graph (beyond ±1 the curve can rise with the makeup). */
 const CURVE_RANGE = 1.3;
 const ACCENT = '#ff9d2e';
-
-/** A sharp canvas, resized to its place. */
-function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
-  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-  if (!w || !h) return null;
-  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) Object.assign(c, { width: Math.round(w * dpr), height: Math.round(h * dpr) });
-  const g = c.getContext('2d')!;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return g;
-}
 
 /** The curve y(x) for x in −1…1 in a w×h box (y in ±range). */
 function curvePath(fn: (x: number) => number, w: number, h: number, range: number, steps = 160): Path2D {

@@ -7,6 +7,7 @@ import { formatParam, paramFromUnit, paramToUnit, type ParamSpec } from '../../.
 import type { DeviceSettings, ParamValues } from '../../../model/device';
 import { SEPARATOR, showContextMenu, type MenuItem } from '../../context-menu';
 import { el } from '../../dom';
+import { localPoint } from '../../kit/pointer';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext, SpectrumTap } from '../displays';
 import { BAND_COLORS, EqGraph, type Spectrum } from './eq-graph';
@@ -143,16 +144,11 @@ export class EqDisplay implements DeviceDisplay {
 
   // ---------------------------------------------------------------- gestures on the graph
 
-  private local(e: MouseEvent): { x: number; y: number } {
-    const r = this.canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  }
-
   private bindGraph(): void {
     const c = this.canvas;
     c.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
-      const p = this.local(e), hit = this.graph.hit(this.bands, p.x, p.y);
+      const p = localPoint(e, this.canvas), hit = this.graph.hit(this.bands, p.x, p.y);
       if (hit === null) return;
       e.preventDefault();
       c.setPointerCapture(e.pointerId);
@@ -161,7 +157,7 @@ export class EqDisplay implements DeviceDisplay {
       this.drag = { band: hit, pointerId: e.pointerId, dx: p.x - node.x, dy: p.y - node.y, x: node.x, y: node.y, lastX: p.x, lastY: p.y, last: null };
     });
     c.addEventListener('pointermove', e => {
-      const p = this.local(e);
+      const p = localPoint(e, this.canvas);
       this.pointer = p;
       const d = this.drag;
       if (d?.pointerId === e.pointerId) this.dragTo(d, p, e.shiftKey);
@@ -187,7 +183,7 @@ export class EqDisplay implements DeviceDisplay {
       this.dirty = true;
     });
     c.addEventListener('dblclick', e => {
-      const p = this.local(e), hit = this.graph.hit(this.bands, p.x, p.y);
+      const p = localPoint(e, this.canvas), hit = this.graph.hit(this.bands, p.x, p.y);
       if (hit !== null) return this.toggle(hit);
       this.addAt(p);
     });
@@ -200,7 +196,7 @@ export class EqDisplay implements DeviceDisplay {
     }, { passive: false });
     c.addEventListener('contextmenu', e => {
       e.preventDefault();
-      const p = this.local(e), hit = this.graph.hit(this.bands, p.x, p.y);
+      const p = localPoint(e, this.canvas), hit = this.graph.hit(this.bands, p.x, p.y);
       const i = hit ?? this.selected;
       this.select(i);
       showContextMenu(e.clientX, e.clientY, this.bandMenu(i));

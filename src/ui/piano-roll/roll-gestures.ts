@@ -6,9 +6,9 @@ import {
   addNote, moveNotes, notesInBox, resizeNotes, setVelocity, type NoteChange, type Selection, type TimeRange,
 } from '../../model/note-edits';
 import {
-  frameCursor, frameGestureFor, frameHit, IdleGesture, moved, type ClipGesture, type ClipHost, type FrameHit,
+  frameCursor, frameGestureFor, frameHit, IdleGesture, type ClipGesture, type ClipHost, type FrameHit,
 } from '../clip-editor/clip-frame';
-import type { Pointer } from '../timeline/gestures';
+import { moved, type Pointer } from '../kit/pointer';
 import { snapTo } from '../timeline/geometry';
 import type { PitchAxis } from './pitch-axis';
 import { notesBottom, paintSelectionBox, ROLL } from './roll-painter';

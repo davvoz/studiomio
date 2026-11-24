@@ -20,6 +20,7 @@ import type { MacroSprings } from '../../store/macro-springs';
 import type { Edit, ProjectStore } from '../../store/project-store';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
+import { below } from '../kit/pointer';
 import { editInline, renameInline } from '../inline-rename';
 import { controlFor, registerControl, type ParamControl } from './controls';
 
@@ -88,8 +89,8 @@ export class RackPanel {
         () => o.onMapMode(o.mapping === undefined ? null : undefined),
         { className: `mini map${o.mapping !== undefined ? ' on' : ''}` }),
       button('+', 'Add an effect at the end of the rack', e => {
-        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        o.onAddEffect(r.left, r.bottom + 2);
+        const at = below(e.currentTarget as HTMLElement);
+        o.onAddEffect(at.x, at.y);
       }),
       button('◂', 'Move the rack earlier', () => this.apply(moveRack(o.owner, rack.id, -1)), { disabled: !o.canMove(-1) }),
       button('▸', 'Move the rack later', () => this.apply(moveRack(o.owner, rack.id, 1)), { disabled: !o.canMove(1) }),
@@ -330,8 +331,8 @@ export class RackPanel {
     const macro = o.rack.macros[index];
     const add = el<HTMLButtonElement>('button', { className: 'mini', textContent: '+ Parameter', title: 'Map a parameter to this macro' });
     add.onclick = () => {
-      const r = add.getBoundingClientRect();
-      this.chooseParam(p, index, r.left, r.bottom + 2);
+      const at = below(add);
+      this.chooseParam(p, index, at.x, at.y);
     };
     list.append(el('div', { className: 'rack-mappings-head' },
       el('span', { textContent: macroName(macro, index, x => mappingSpec(p, o.owner, x)?.label) }), add));

@@ -15,10 +15,11 @@ import { envelopeValueAt, scaleOf, snapToScale, type ClipEnvelope, type Envelope
 import type { BeatAxis } from '../clip-editor/clip-geometry';
 import { paintBeatGrid } from '../clip-editor/clip-frame';
 import { KEY, SEPARATOR, showContextMenu } from '../context-menu';
-import { drag as dragPointer } from '../device/prisma/canvas';
+import { drag as dragPointer, localPoint } from '../kit/pointer';
+import { readPref, writePref } from '../kit/prefs';
 import { el } from '../dom';
 import type { DrawMode } from '../draw-mode';
-import { Surface } from '../surface';
+import { Surface } from '../kit/canvas';
 import { snapTo } from '../timeline/geometry';
 import { COLORS, withAlpha } from '../timeline/painters';
 import { SHAPES, shapePoints, type ShapeChoice } from './envelope-shapes';
@@ -204,10 +205,8 @@ export class EnvelopeLane {
   }
 
   private bindHeight(grip: HTMLElement): void {
-    try {
-      const saved = Number(localStorage.getItem(LANE_HEIGHT.key));
-      if (saved) setLaneHeight(saved);
-    } catch { /* no preference */ }
+    const saved = Number(readPref(LANE_HEIGHT.key));
+    if (saved) setLaneHeight(saved);
     grip.addEventListener('pointerdown', e => {
       e.preventDefault();
       const start = this.element.offsetHeight;
@@ -215,9 +214,7 @@ export class EnvelopeLane {
       dragPointer(e, grip, (_, dy) => {
         height = Math.max(LANE_HEIGHT.min, Math.min(LANE_HEIGHT.max, start - dy));
         setLaneHeight(height);
-      }, () => {
-        try { localStorage.setItem(LANE_HEIGHT.key, String(height)); } catch { /* it stays for now */ }
-      });
+      }, () => writePref(LANE_HEIGHT.key, String(height)));
     });
   }
 
@@ -491,10 +488,7 @@ export class EnvelopeLane {
   }
 
   private bind(canvas: HTMLCanvasElement): void {
-    const pos = (e: MouseEvent) => {
-      const r = canvas.getBoundingClientRect();
-      return { x: e.clientX - r.left, y: e.clientY - r.top };
-    };
+    const pos = (e: MouseEvent) => localPoint(e, canvas);
     canvas.addEventListener('pointerdown', e => {
       if (e.button !== 0 || !this.target || !this.host.curves()) return;
       e.preventDefault();

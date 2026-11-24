@@ -12,6 +12,7 @@ import type { ParamSpec } from '../../../devices/params';
 import { sampleAt, type DeviceSettings, type ParamValues } from '../../../model/device';
 import { acceptBrowserDrops } from '../../browser/browser-drag';
 import { el } from '../../dom';
+import { fit } from '../../kit/canvas';
 import { pitchName } from '../../piano-roll/pitch-axis';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext } from '../displays';
@@ -31,16 +32,6 @@ const AUDITION_VELOCITY = 110;
 /** How much of the hit is drawn, at most and at least (in seconds). */
 const MAX_VIEW = 4;
 const MIN_VIEW = 0.12;
-
-/** A sharp canvas, resized to its place. */
-function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
-  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-  if (!w || !h) return null;
-  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) Object.assign(c, { width: Math.round(w * dpr), height: Math.round(h * dpr) });
-  const g = c.getContext('2d')!;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return g;
-}
 
 /** The chosen piece (it stays from one panel to the next). */
 const view = { piece: 0 };

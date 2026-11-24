@@ -6,7 +6,8 @@
  * play light up and the played keys blink. */
 import { noteName, zoneMap, zoneParam, type ZoneKey, type ZoneMap } from '../../../devices/instruments/sampler/sampler';
 import type { ParamValues } from '../../../model/device';
-import { ACCENT, BACKGROUND, drag, fit, GRID, LABEL } from '../prisma/canvas';
+import { ACCENT, BACKGROUND, fit, GRID, LABEL } from '../../kit/canvas';
+import { drag } from '../../kit/pointer';
 
 /** The keyboard at the top, the rows and the column of names. */
 const KEYS_H = 16, ROW_H = 14, NAME_W = 118;

@@ -7,6 +7,7 @@ import { paramActive, paramSpec, resolveParams } from '../../../devices/device-t
 import { FRAMES, LEVELS, STRIDE, TABLE_NAMES, TABLE_SIZE, wavetable } from '../../../devices/instruments/wavetable/tables';
 import type { DeviceSettings, ParamValues } from '../../../model/device';
 import { el } from '../../dom';
+import { fit } from '../../kit/canvas';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext } from '../displays';
 
@@ -15,16 +16,6 @@ const ACCENT = '#ff9d2e';
 const POINTS = 96;
 /** How much of the drawing's height the whole position is worth, when dragging. */
 const DRAG_PIXELS = 150;
-
-/** A sharp canvas, resized to its place. */
-function fit(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
-  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-  if (!w || !h) return null;
-  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) Object.assign(c, { width: Math.round(w * dpr), height: Math.round(h * dpr) });
-  const g = c.getContext('2d')!;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return g;
-}
 
 /** A table's drawing, with its draggable position. */
 class TableView {

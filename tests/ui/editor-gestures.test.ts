@@ -7,7 +7,7 @@ import { MarkerGesture, editorCursor, editorGestureFor, editorHit, type EditorHi
 import { LAYOUT, paintEditor } from '../../src/ui/clip-editor/editor-painter';
 import { PanGesture } from '../../src/ui/clip-editor/clip-frame';
 import type { Peaks } from '../../src/ui/waveform';
-import type { Pointer } from '../../src/ui/timeline/gestures';
+import type { Pointer } from '../../src/ui/kit/pointer';
 import { fakeContext } from '../helpers/canvas';
 import { sampleRef } from '../helpers/fixtures';
 

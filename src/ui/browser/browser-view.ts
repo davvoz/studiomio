@@ -9,6 +9,7 @@ import { searchSources } from '../../browser/search';
 import type { AudioData } from '../../dsp/types';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
 import { el } from '../dom';
+import { readPref, writePref } from '../kit/prefs';
 import { endBrowserDrag, startBrowserDrag } from './browser-drag';
 
 /** Previewing samples (the app does it with its audio context). */
@@ -499,9 +500,7 @@ export class BrowserView {
 
   private save(patch: Partial<BrowserSettings>): void {
     this.settings = { ...this.settings, ...patch };
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
-    } catch { /* without local storage it's remembered only while the app is open */ }
+    writePref(SETTINGS_KEY, JSON.stringify(this.settings));
   }
 }
 
@@ -514,7 +513,7 @@ const message = (e: unknown): string => (e instanceof Error ? e.message : String
 
 function loadSettings(): BrowserSettings {
   try {
-    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as Partial<BrowserSettings>;
+    const raw = JSON.parse(readPref(SETTINGS_KEY) ?? '{}') as Partial<BrowserSettings>;
     return {
       open: typeof raw.open === 'boolean' ? raw.open : DEFAULTS.open,
       width: typeof raw.width === 'number' ? Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, raw.width)) : DEFAULTS.width,

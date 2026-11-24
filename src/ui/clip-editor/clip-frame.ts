@@ -4,7 +4,7 @@
 import type { Beats, TimeSignature } from '../../core/music-time';
 import type { Clip } from '../../model/clip';
 import { dragLoop, LOOP_CURSOR, loopPartAt, type BeatRange, type LoopPart } from '../loop-drag';
-import type { Pointer } from '../timeline/gestures';
+import { moved, type Pointer } from '../kit/pointer';
 import { drawnGridStep, rulerZoom, snapTo } from '../timeline/geometry';
 import { COLORS } from '../timeline/painters';
 import { withLoopMoved, withLoopSafe, withRegionSafe, type BeatAxis } from './clip-geometry';
@@ -39,7 +39,7 @@ export type FrameHit =
   | { readonly kind: 'flag'; readonly edge: 'start' | 'end' }
   | { readonly kind: 'ruler' };
 
-const FLAG_PX = 8, CLICK_PX = 3;
+const FLAG_PX = 8;
 /** Length of the ruler's ticks per level (bar, beat, half, the rest). */
 const TICK_PX = [18, 8, 5, 3];
 
@@ -52,8 +52,6 @@ export function frameHit(axis: BeatAxis, clip: Clip, x: number, y: number): Fram
   if (Math.abs(xe - x) < FLAG_PX) return { kind: 'flag', edge: 'end' };
   return { kind: 'ruler' };
 }
-
-export const moved = (a: Pointer, b: Pointer): boolean => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) >= CLICK_PX;
 
 export const snappedBeat = <C extends Clip>(host: ClipHost<C>, p: Pointer, b: Beats): Beats => {
   const s = host.snapStep(p);

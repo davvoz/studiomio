@@ -3,6 +3,8 @@
  * parameters change; at every frame it's redrawn with the new spectrum. */
 import { BAND_TYPES, type EqBand } from '../../../devices/effects/eq/eq';
 import { bandResponseDb } from '../../../devices/effects/eq/eq-math';
+import { fit } from '../../kit/canvas';
+import { nearest } from '../../kit/hit';
 import { EqScale, FREQ_GRID, spectrumColumns, SPECTRUM_BOTTOM } from './eq-scale';
 
 export const BAND_COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
@@ -51,23 +53,18 @@ export class EqGraph {
 
   /** The band whose point is under (x, y), the nearest; null if none. */
   hit(bands: readonly EqBand[], x: number, y: number): number | null {
-    let best: number | null = null, bestD = HIT_R;
-    bands.forEach((b, i) => {
-      const p = this.nodeAt(b), d = Math.hypot(p.x - x, p.y - y);
-      if (d <= bestD) [best, bestD] = [i, d];
-    });
-    return best;
+    return nearest(bands.keys(), i => {
+      const p = this.nodeAt(bands[i]);
+      return Math.hypot(p.x - x, p.y - y);
+    }, HIT_R, true);
   }
 
   draw(state: GraphState, spectrum: Spectrum | null): void {
-    const c = this.canvas, dpr = window.devicePixelRatio || 1;
-    const w = c.clientWidth, h = c.clientHeight;
-    if (!w || !h) return;
-    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) Object.assign(c, { width: Math.round(w * dpr), height: Math.round(h * dpr) });
+    const g = fit(this.canvas);
+    if (!g) return;
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (this.scale.width !== w || this.scale.height !== h) this.scale = new EqScale(w, h);
     this.updateCurves(state);
-    const g = c.getContext('2d')!;
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = '#15181c';
     g.fillRect(0, 0, w, h);
     this.grid(g);

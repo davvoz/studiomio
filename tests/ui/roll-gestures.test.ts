@@ -12,7 +12,7 @@ import {
 import { rollMenu, type RollMenuActions } from '../../src/ui/piano-roll/roll-menu';
 import { paintRoll, ROLL } from '../../src/ui/piano-roll/roll-painter';
 import type { MenuAction, MenuItem } from '../../src/ui/context-menu';
-import type { Pointer } from '../../src/ui/timeline/gestures';
+import type { Pointer } from '../../src/ui/kit/pointer';
 import { fakeContext } from '../helpers/canvas';
 
 const at = (x: number, y: number, mods: Partial<Pointer> = {}): Pointer => ({ x, y, shift: false, alt: false, ctrl: false, ...mods });

@@ -10,7 +10,8 @@ import type { SampleData } from '../../../devices/dsp/core';
 import { LOOP, MODE, SLICE, SLICE_COUNT, sliceParam, sliceStarts, sliceValues } from '../../../devices/instruments/sampler/sampler';
 import type { ParamValues } from '../../../model/device';
 import { Peaks } from '../../waveform';
-import { BACKGROUND, drag, fit, GRID, LABEL } from '../prisma/canvas';
+import { BACKGROUND, fit, GRID, LABEL } from '../../kit/canvas';
+import { drag } from '../../kit/pointer';
 
 const START_COLOR = '#ff9d2e';
 const LOOP_COLOR = '#f2d14b';

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BeatAxis } from '../../src/ui/clip-editor/clip-geometry';
 import { PanGesture as ClipPanGesture, type ClipHost } from '../../src/ui/clip-editor/clip-frame';
 import type { Clip } from '../../src/model/clip';
-import { RulerZoomGesture, type GestureHost, type Pointer } from '../../src/ui/timeline/gestures';
+import type { Pointer } from '../../src/ui/kit/pointer';
+import { RulerZoomGesture, type GestureHost } from '../../src/ui/timeline/gestures';
 import { TimeSignature } from '../../src/core/music-time';
 import {
   ADAPTIVE_GRID, drawnGridStep, FIXED_GRIDS, geometryShowing, gridLabel, gridStep, MAX_PX_PER_BEAT, MIN_PX_PER_BEAT, nudgeGrid, rulerZoom, TimelineGeometry,

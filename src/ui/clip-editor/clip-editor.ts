@@ -8,8 +8,8 @@ import type { ProjectStore } from '../../store/project-store';
 import { KEY, SEPARATOR, showContextMenu, type MenuItem } from '../context-menu';
 import type { DrawMode } from '../draw-mode';
 import { addHeightHandle } from '../editor-height';
-import { Surface } from '../surface';
-import type { Pointer } from '../timeline/gestures';
+import { Surface } from '../kit/canvas';
+import { pointerIn, type Pointer } from '../kit/pointer';
 import type { UiState } from '../ui-state';
 import type { PeakStore } from '../waveform';
 import { BeatAxis, playheadIn, seekBeatOf } from './clip-geometry';
@@ -292,11 +292,6 @@ export class ClipEditor implements EditorHost {
     requestAnimationFrame(this.frame);
   };
 
-  private pointer(e: MouseEvent, el: HTMLElement): Pointer {
-    const r = el.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey };
-  }
-
   private hit(p: Pointer): { clip: AudioClip; hit: EditorHit } | null {
     const clip = this.clip();
     return clip ? { clip, hit: editorHit(this, clip, p.x, p.y) } : null;
@@ -305,7 +300,7 @@ export class ClipEditor implements EditorHost {
   private bind(el: HTMLCanvasElement): void {
     el.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
-      const p = this.pointer(e, el);
+      const p = pointerIn(e, el);
       const h = this.hit(p);
       if (!h) return;
       e.preventDefault();
@@ -318,7 +313,7 @@ export class ClipEditor implements EditorHost {
       this.sync();
     });
     el.addEventListener('pointermove', e => {
-      const p = this.pointer(e, el);
+      const p = pointerIn(e, el);
       if (this.gesture) return this.gesture.move(p);
       const h = this.hit(p);
       const hover = h?.hit.kind === 'transient' ? h.hit.t : null;
@@ -328,7 +323,7 @@ export class ClipEditor implements EditorHost {
     el.addEventListener('pointerup', e => {
       const g = this.gesture;
       this.gesture = null;
-      g?.end(this.pointer(e, el));
+      g?.end(pointerIn(e, el));
       el.style.cursor = '';
       this.invalidate();
     });
@@ -336,13 +331,13 @@ export class ClipEditor implements EditorHost {
     el.addEventListener('pointerleave', () => { if (this.hover !== null) { this.hover = null; this.invalidate(); } });
     // double click in the strip or on the waveform: a warp marker at that point
     el.addEventListener('dblclick', e => {
-      const p = this.pointer(e, el);
+      const p = pointerIn(e, el);
       if (p.y >= LAYOUT.ruler) this.addMarkerAt(p.x);
     });
     el.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (this.gesture) return;
-      const p = this.pointer(e, el);
+      const p = pointerIn(e, el);
       const h = this.hit(p);
       if (!h) return;
       this.element.focus();
@@ -351,7 +346,7 @@ export class ClipEditor implements EditorHost {
     });
     el.addEventListener('wheel', e => {
       e.preventDefault();
-      const a = this._axis, x = this.pointer(e, el).x;
+      const a = this._axis, x = pointerIn(e, el).x;
       if (e.ctrlKey || e.metaKey) this.setAxis(a.zoomed(a.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x));
       else this.setAxis(a.scrolled(a.startBeat + (e.shiftKey || !e.deltaX ? e.deltaY : e.deltaX) / a.pxPerBeat));
     }, { passive: false });

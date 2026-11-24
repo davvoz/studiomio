@@ -13,6 +13,7 @@ import type { DeviceSettings, EffectSettings, ParamValues } from '../../../model
 import { sameTarget, type ModTarget } from '../../../model/envelope';
 import { showContextMenu, SEPARATOR, type MenuItem } from '../../context-menu';
 import { el } from '../../dom';
+import { below } from '../../kit/pointer';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext, ModTargetHost } from '../displays';
 import { EnvView } from '../prisma/env-view';
@@ -124,8 +125,8 @@ export class ModulatorDisplay implements DeviceDisplay {
     const name = el('span', { className: 'mod-link-name' });
     const choose = el<HTMLButtonElement>('button', { className: 'mini', textContent: '▾', title: 'Choose what it moves (volume, pan, macro)' });
     choose.onclick = () => {
-      const r = choose.getBoundingClientRect();
-      showContextMenu(r.left, r.bottom + 2, this.choiceMenu(slot));
+      const at = below(choose);
+      showContextMenu(at.x, at.y, this.choiceMenu(slot));
     };
     const clear = el<HTMLButtonElement>('button', { className: 'mini', textContent: '×', title: 'Remove the target', onclick: () => this.host?.set(slot, null) });
     const element = el('div', { className: 'prisma-row mod-link' },

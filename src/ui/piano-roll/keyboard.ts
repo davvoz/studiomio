@@ -1,4 +1,4 @@
-import { Surface } from '../surface';
+import { Surface } from '../kit/canvas';
 import { isBlackKey, pitchName, type PitchAxis } from './pitch-axis';
 import { notesBottom, ROLL } from './roll-painter';
 

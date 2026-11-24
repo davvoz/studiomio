@@ -10,7 +10,8 @@ import { showContextMenu, SEPARATOR, type MenuItem } from '../../context-menu';
 import { el } from '../../dom';
 import { controlFor, setActive, type ParamControl } from '../controls';
 import type { DeviceDisplay, DisplayContext } from '../displays';
-import { ACCENT, BACKGROUND, drag, fit, GRID } from '../prisma/canvas';
+import { ACCENT, BACKGROUND, fit, GRID } from '../../kit/canvas';
+import { drag } from '../../kit/pointer';
 
 const PAD = 4;
 /** How many pixels you have to move for a click to become a drag. */

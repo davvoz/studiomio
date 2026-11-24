@@ -33,6 +33,7 @@ import { addEffectToRack, mapMacro, moveDevice } from '../../store/rack-edits';
 import { acceptBrowserDrops } from '../browser/browser-drag';
 import { SEPARATOR, showContextMenu } from '../context-menu';
 import { el } from '../dom';
+import { below } from '../kit/pointer';
 import { addHeightHandle, DEVICE_HEIGHT } from '../editor-height';
 import { ownedByField } from '../keymap';
 import type { ControlledDevice, UiState } from '../ui-state';
@@ -151,8 +152,8 @@ export class DeviceView {
     this.backButton.onclick = () => this.back?.();
     const add = el<HTMLButtonElement>('button', { textContent: '+ Effect', title: 'Add an effect at the end of the chain' });
     add.onclick = () => {
-      const r = add.getBoundingClientRect();
-      this.chooseEffect(r.left, r.bottom + 2);
+      const at = below(add);
+      this.chooseEffect(at.x, at.y);
     };
     const foldAll = el<HTMLButtonElement>('button', {
       textContent: '⇤⇥', title: 'Collapse all the devices (or reopen them, if they\'re all collapsed already)', onclick: () => this.foldAll(),

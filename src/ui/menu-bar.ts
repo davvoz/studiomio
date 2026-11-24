@@ -2,6 +2,7 @@
  * asked for every time a menu opens: so check marks, disabled items and names
  * («Undo: Move clip») are always those of the moment. The drop-downs are the context menus. */
 import { showContextMenu, type MenuItem } from './context-menu';
+import { below } from './kit/pointer';
 
 export interface Menu {
   readonly label: string;
@@ -56,9 +57,9 @@ export class MenuBar {
   }
 
   private show(i: number): void {
-    const b = this.titles[i], r = b.getBoundingClientRect();
+    const b = this.titles[i], at = below(b);
     const step = (dir: 1 | -1) => () => this.show((i + dir + this.menus.length) % this.menus.length);
-    showContextMenu(r.left, r.bottom + 2, this.menus[i].items(), {
+    showContextMenu(at.x, at.y, this.menus[i].items(), {
       keys: { ArrowLeft: step(-1), ArrowRight: step(1) },
       onClose: () => {
         b.classList.remove('open');
