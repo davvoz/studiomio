@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.74] - 2026-11-24
+
 ### Changed
 - Prisma: when the matrix is full, the red flash of its tab is darker, so the text on it stays readable.
 
