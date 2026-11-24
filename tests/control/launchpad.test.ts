@@ -233,6 +233,19 @@ describe('Launchpad X on the session', () => {
     expect(r.led('note', padNote(0, 0))).toEqual({ color: COLOR.redHalf, anim: 'fixed' });
   });
 
+  it('Pro MK3: Record turns overdub on (red) and off', () => {
+    const r = rig('pro');
+    r.start();
+    const record = r.m.buttons.record!;
+    expect(r.led('cc', record)).toEqual({ color: COLOR.whiteHalf, anim: 'fixed' });
+    r.button(record);
+    expect(r.recorder.overdub).toBe(true);
+    expect(r.led('cc', record)).toEqual({ color: COLOR.red, anim: 'fixed' });
+    r.button(record);
+    expect(r.recorder.overdub).toBe(false);
+    expect(r.said.some(t => t.includes('recording'))).toBe(false);
+  });
+
   it('arrows: the box moves by one and stays inside the project', () => {
     const r = rig('x', { tracks: 10, scenes: 12 });
     r.start();

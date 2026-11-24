@@ -27,23 +27,28 @@ function bar() {
   const ui = new UiState();
   const listeners: (() => void)[] = [];
   const engine = { playing: false, metronomeOn: false, position: 0, onStateChange: (f: () => void) => listeners.push(f) };
+  const changed: (() => void)[] = [];
+  const recording = { overdub: false, onChange: (f: () => void) => { changed.push(f); return () => undefined; } };
   const commands = {
-    togglePlay: vi.fn(), toggleLoop: vi.fn(), toggleMetronome: vi.fn(), toggleFollow: vi.fn(), toggleKeyMap: vi.fn(),
+    togglePlay: vi.fn(), toggleLoop: vi.fn(), toggleMetronome: vi.fn(), toggleOverdub: vi.fn(), toggleFollow: vi.fn(), toggleKeyMap: vi.fn(),
     toggleMidiMap: vi.fn(), toggleTriplet: vi.fn(), stopAndRewind: vi.fn(),
   };
-  const t = new TransportBar(store, ui, engine as unknown as PlaybackEngine, commands as unknown as Commands);
+  const t = new TransportBar(store, ui, engine as unknown as PlaybackEngine, commands as unknown as Commands, recording);
   document.body.append(t.element);
   const button = (title: string) => [...t.element.querySelectorAll('button')].find(b => b.title.startsWith(title))!;
   const bpm = t.element.querySelector<HTMLInputElement>('input[type=number]')!;
   const grid = t.element.querySelector<HTMLSelectElement>('select.grid')!;
-  return { t, store, ui, engine, commands, button, bpm, grid, engineChanged: () => listeners.forEach(f => f()) };
+  return {
+    t, store, ui, engine, commands, button, bpm, grid, recording,
+    engineChanged: () => listeners.forEach(f => f()), recordingChanged: () => changed.forEach(f => f()),
+  };
 }
 
 describe('transport bar', () => {
   it('each button runs its command', () => {
     const { button, commands } = bar();
     const titles: [string, keyof typeof commands][] = [
-      ['Play / Stop', 'togglePlay'], ['Stop and return', 'stopAndRewind'], ['Loop', 'toggleLoop'], ['Metronome', 'toggleMetronome'],
+      ['Play / Stop', 'togglePlay'], ['Stop and return', 'stopAndRewind'], ['Loop', 'toggleLoop'], ['Metronome', 'toggleMetronome'], ['Overdub', 'toggleOverdub'],
       ['Follow', 'toggleFollow'], ['Map the computer keyboard', 'toggleKeyMap'], ['Map any controller', 'toggleMidiMap'], ['Triplet', 'toggleTriplet'],
     ];
     for (const [title, command] of titles) {
@@ -73,6 +78,16 @@ describe('transport bar', () => {
     ui.pauseFollow();
     expect(follow.classList.contains('paused')).toBe(true);
     expect(follow.title).toContain('Follow is paused');
+  });
+
+  it('the overdub button lights up while overdub is on', () => {
+    const { button, recording, recordingChanged } = bar();
+    const overdub = button('Overdub');
+    expect(overdub.textContent).toBe('●');
+    expect(overdub.classList.contains('on')).toBe(false);
+    recording.overdub = true;
+    recordingChanged();
+    expect(overdub.classList.contains('on')).toBe(true);
   });
 
   it('the tempo: a valid value is applied (two decimals), a wrong one restored; Enter leaves the field', () => {

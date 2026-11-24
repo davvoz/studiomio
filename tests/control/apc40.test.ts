@@ -774,6 +774,25 @@ describe('APC40 mkII: recording into the slots', () => {
     expect(r.pad(padNote(0, 2))).toEqual({ mode: 0, color: COLOR.off });
   });
 
+  it('Session turns overdub on and off and lights up; the playing clip of an armed track blinks red', () => {
+    const r = rig({ tracks: 2, clips: [[0, 0], [1, 0]] });
+    r.start();
+    r.ui.toggleKeyboardTrack(r.t(0));
+    for (const t of [r.t(0), r.t(1)]) r.engine.states.set(t, { playing: { slot: 0, elapsed: 0 }, queued: null, followsArrangement: false });
+    expect(r.led(NOTE.session)).toBe(0);
+    expect(r.pad(padNote(0, 0))).toEqual({ mode: 0, color: COLOR.green });
+    r.press(NOTE.session);
+    expect(r.recorder.overdub).toBe(true);
+    expect(r.led(NOTE.session)).toBe(ON);
+    expect(r.out.filter(m => (m[0] & 0xf0) === 0x90 && m[1] === padNote(0, 0)).slice(-2)).toEqual([[0x90, padNote(0, 0), COLOR.red], [0x9e, padNote(0, 0), 0]]);
+    // the track that isn't armed keeps playing green
+    expect(r.pad(padNote(1, 0))).toEqual({ mode: 0, color: COLOR.green });
+    r.press(NOTE.session);
+    expect(r.recorder.overdub).toBe(false);
+    expect(r.pad(padNote(0, 0))).toEqual({ mode: 0, color: COLOR.green });
+    expect(r.led(NOTE.session)).toBe(0);
+  });
+
   it("with the app's recorder: the pad starts the take, the notes go in, the pad again makes the clip", () => {
     vi.useFakeTimers();
     try {
@@ -784,6 +803,7 @@ describe('APC40 mkII: recording into the slots', () => {
         get nextBoundary() { return Math.ceil(clock.sessionClock / 4 - 1e-9) * 4; },
         startRecording: () => { clock.playing = true; return clock.sessionClock; },
         launchSlot: (track: TrackId, slot: number) => { clock.launched.push(`${track} ${slot}`); },
+        sessionState: () => ({ playing: null, queued: null, followsArrangement: true }),
         onStateChange: () => () => undefined,
       };
       let app: SessionRecorder | null = null;

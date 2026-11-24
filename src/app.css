@@ -272,6 +272,9 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 
 /* the computer keyboard (KEY): a control's key at the top left; with KEY on you
  * see the controls that can be mapped and the one waiting for the key */
+/* overdub on: red, like the slots recording */
+.transport .overdub.on { background: #d43d33; border-color: #d43d33; color: #fff; }
+
 :root { --keys: #ffd447; }
 .transport .key-map.on { background: var(--keys); border-color: var(--keys); }
 [data-param][data-key] { position: relative; }
@@ -496,7 +499,7 @@ button.keyboard.on { background: var(--keys); border-color: var(--keys); color: 
 }
 .slot .record:hover { background: #0004; color: #ff6a5f; }
 .slot .record.on { background: #d43d33; color: #fff; animation: record-pulse 1s ease-in-out infinite; }
-.slot.recording { box-shadow: inset 0 0 0 1px #e0463c; }
+.slot.recording, .slot.overdub { box-shadow: inset 0 0 0 1px #e0463c; }
 @keyframes record-pulse { 50% { background: #8f2a24; } }
 .slot.selected { outline: 2px solid #fff; outline-offset: -2px; }
 .slot.playing .launch { background: #3ec46d; color: #0c1a10; }

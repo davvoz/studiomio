@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- Overdub, as Live's Session Record: ● in the top bar (Session on the APC40 mkII, Record on the
+  Launchpad Pro) turns it on. What you play on an armed MIDI track goes into its playing clip, where it
+  falls in the loop, next to the notes already there; you hear it at the next turn. A note held over
+  the loop's end stops there. From turning it on to turning it off is one undo step. The clip being
+  overdubbed has a red border in the session and blinks red on the controllers.
+
 ## [0.3.69] - 2026-11-24
 
 ### Added

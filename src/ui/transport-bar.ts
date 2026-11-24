@@ -1,3 +1,4 @@
+import type { Unsubscribe } from '../core/emitter';
 import type { PlaybackEngine } from '../engine/playback-engine';
 import { setTempo } from '../store/edits';
 import type { ProjectStore } from '../store/project-store';
@@ -8,7 +9,13 @@ import type { UiState } from './ui-state';
 const button = (text: string, title: string, onclick: () => void, className = '') =>
   Object.assign(document.createElement('button'), { textContent: text, title, onclick, className });
 
-/** The control bar: what's needed to play (transport, tempo, loop, metronome, follow).
+/** Whether overdub is on (app/session-recorder), and when it changes. */
+export interface OverdubState {
+  readonly overdub: boolean;
+  onChange(fn: () => void): Unsubscribe;
+}
+
+/** The control bar: what's needed to play (transport, tempo, loop, metronome, overdub, follow).
  *  Everything else is in the menu bar. */
 export class TransportBar {
   readonly element = Object.assign(document.createElement('header'), { className: 'transport' });
@@ -17,6 +24,7 @@ export class TransportBar {
   private readonly bpm: HTMLInputElement;
   private readonly loop: HTMLButtonElement;
   private readonly metro: HTMLButtonElement;
+  private readonly overdub: HTMLButtonElement;
   private readonly follow: HTMLButtonElement;
   private readonly keys: HTMLButtonElement;
   private readonly midi: HTMLButtonElement;
@@ -25,7 +33,10 @@ export class TransportBar {
   });
   private readonly triplet: HTMLButtonElement;
 
-  constructor(private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, commands: Commands) {
+  constructor(
+    private readonly store: ProjectStore, private readonly ui: UiState, private readonly engine: PlaybackEngine, commands: Commands,
+    private readonly recording: OverdubState,
+  ) {
     this.play = button('▶', 'Play / Stop (Space)', () => commands.togglePlay(), 'play');
     this.bpm = Object.assign(document.createElement('input'), { type: 'number', min: '20', max: '999', step: '0.01', title: 'Tempo (BPM)' });
     this.bpm.onchange = () => {
@@ -36,6 +47,8 @@ export class TransportBar {
     this.bpm.onkeydown = e => { if (e.key === 'Enter') this.bpm.blur(); };
     this.loop = button('⟲ Loop', 'Loop (Ctrl+L)', () => commands.toggleLoop());
     this.metro = button('♩ Metro', 'Metronome (Ctrl+Shift+M)', () => commands.toggleMetronome());
+    this.overdub = button('●', "Overdub, as Live's Session Record: what you play on the armed MIDI tracks (⌨) goes into their playing clips",
+      () => commands.toggleOverdub(), 'overdub');
     this.follow = button('↦ Follow', '', () => commands.toggleFollow(), 'follow');
     this.keys = button('KEY', 'Map the computer keyboard to the racks\' macros and the devices\' parameters (Ctrl+K)',
       () => commands.toggleKeyMap(), 'key-map');
@@ -49,12 +62,13 @@ export class TransportBar {
     this.triplet = button('3', 'Triplet grid (Ctrl+3)', () => commands.toggleTriplet(), 'triplet');
     this.element.append(
       group(this.play, button('■', 'Stop and return to the start (Enter)', () => commands.stopAndRewind()), this.pos, this.follow),
-      group(labelled('BPM', this.bpm), this.loop, this.metro, this.keys, this.midi),
+      group(labelled('BPM', this.bpm), this.loop, this.metro, this.overdub, this.keys, this.midi),
       group(labelled('Grid', this.grid), this.triplet),
     );
     store.onChange(() => this.render());
     ui.onChange(() => this.render());
     engine.onStateChange(() => this.render());
+    recording.onChange(() => this.render());
     this.render();
     const tick = () => {
       this.pos.textContent = this.store.project.signature.format(this.engine.position);
@@ -77,6 +91,7 @@ export class TransportBar {
     this.play.classList.toggle('on', this.engine.playing);
     this.loop.classList.toggle('on', p.loop.enabled);
     this.metro.classList.toggle('on', this.engine.metronomeOn);
+    this.overdub.classList.toggle('on', this.recording.overdub);
     this.keys.classList.toggle('on', this.ui.keyMapping);
     this.midi.classList.toggle('on', this.ui.midiMapping);
     this.renderGrid();

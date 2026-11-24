@@ -7,6 +7,7 @@ import type { SlotRef } from '../../src/store/session-edits';
 export class FakeRecorder implements SurfaceRecorder {
   readonly calls: string[] = [];
   readonly slots = new Map<TrackId, number>();
+  overdub = false;
 
   recordingSlot(track: TrackId): number | null {
     return this.slots.get(track) ?? null;
@@ -16,5 +17,10 @@ export class FakeRecorder implements SurfaceRecorder {
     this.calls.push(`record ${ref.track} ${ref.slot}`);
     if (this.slots.has(ref.track)) this.slots.delete(ref.track);
     else this.slots.set(ref.track, ref.slot);
+  }
+
+  toggleOverdub(): void {
+    this.calls.push('overdub');
+    this.overdub = !this.overdub;
   }
 }

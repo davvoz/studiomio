@@ -43,6 +43,15 @@ export const recordedClip = ({ track, slot }: SlotRef, id: ClipId, notes: readon
     return p.updatingTrack(track, x => x.withSlot(slot, clip));
   });
 
+/** Overdub: `notes` added to the MIDI clip `id` of the slot (it stays the same clip: the engine keeps
+ *  playing it). If the slot no longer holds that clip, nothing changes. */
+export const overdubNotes = ({ track, slot }: SlotRef, id: ClipId, notes: readonly Note[]): Edit =>
+  edit('Overdub', p => {
+    const clip = requireTrack(p, track).slots[slot];
+    if (!(clip instanceof MidiClip) || clip.id !== id) return p;
+    return p.updatingTrack(track, x => x.withSlot(slot, clip.addingNotes(...notes)));
+  });
+
 /** Empties several slots in a single step. */
 export const clearSlots = (refs: readonly SlotRef[]): Edit =>
   edit('Delete clip', p => refs.reduce((q, r) => q.updatingTrack(r.track, t => t.withSlot(r.slot, null)), p));

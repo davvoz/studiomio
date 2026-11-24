@@ -47,6 +47,9 @@ export interface SurfaceRecorder {
   recordingSlot(track: TrackId): number | null;
   /** Starts recording into the slot, or ends the track's take. */
   toggle(ref: SlotRef): void;
+  /** Overdub (Live's Session Record): the armed tracks record into their playing clips. */
+  readonly overdub: boolean;
+  toggleOverdub(): void;
 }
 
 /** What the app's bottom area shows. */
@@ -283,26 +286,30 @@ export abstract class SessionSurface {
     this.setRing(col * this.width, row * this.height);
   }
 
-  /** A track's slot: recording into it, the queued one, the playing one, the clip's colour, empty on an armed
-   *  track, off. */
+  /** A track's slot: recording into it (or overdubbing the clip playing there), the queued one, the playing
+   *  one, the clip's colour, empty on an armed track, off. */
   protected slotLight(track: Track | undefined, scene: number): SlotLight {
     if (!track || scene >= track.slots.length) return 'off';
-    const { engine } = this.host;
-    if (track instanceof GroupTrack) {
-      // a group's slot: from its tracks, in the group's colour
-      const members = this.project.soundingTracks(track.id).map(t => [t, engine.sessionState(t)] as const);
-      const g = groupSlotState(members, scene);
-      if (g.queued) return 'queued';
-      if (g.playing) return 'playing';
-      return g.clips ? { clip: track.color } : 'off';
-    }
+    if (track instanceof GroupTrack) return this.groupSlotLight(track, scene);
     if (this.host.recorder.recordingSlot(track.id) === scene) return 'recording';
-    const st = engine.sessionState(track);
+    const st = this.host.engine.sessionState(track);
     const clip = track.slots[scene];
+    const armed = isArmed(track, this.host.ui.keyboardTracks);
     if (st.queued && typeof st.queued === 'object' && st.queued.slot === scene) return 'queued';
-    if (st.playing?.slot === scene) return 'playing';
+    // overdubbing: the playing clip of an armed track records
+    if (st.playing?.slot === scene) return armed && this.host.recorder.overdub ? 'recording' : 'playing';
     if (clip) return { clip: clip.color };
-    return isArmed(track, this.host.ui.keyboardTracks) ? 'armed' : 'off';
+    return armed ? 'armed' : 'off';
+  }
+
+  /** A group's slot: from its tracks, in the group's colour. */
+  private groupSlotLight(group: GroupTrack, scene: number): SlotLight {
+    const { engine } = this.host;
+    const members = this.project.soundingTracks(group.id).map(t => [t, engine.sessionState(t)] as const);
+    const g = groupSlotState(members, scene);
+    if (g.queued) return 'queued';
+    if (g.playing) return 'playing';
+    return g.clips ? { clip: group.color } : 'off';
   }
 
   /** The button of the box's row `row`: queued if something in the row is, playing if

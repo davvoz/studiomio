@@ -17,6 +17,8 @@ export interface Commands {
   /** Copies the loop range right after and moves the loop there (Ctrl+Shift+D). */
   duplicateLoop(): void;
   toggleMetronome(): void;
+  /** Overdub, as Live's Session Record: the armed tracks record into their playing clips. */
+  toggleOverdub(): void;
   toggleSnap(): void;
   /** Ctrl+1 / Ctrl+2, as in Live: a narrower or wider grid. */
   narrowGrid(): void;

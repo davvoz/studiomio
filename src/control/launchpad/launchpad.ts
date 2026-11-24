@@ -46,7 +46,7 @@ const MIXER_COLUMN: readonly (Mode | 'sendA' | 'sendB' | 'arm')[] = ['volume', '
 
 const NOT_YET: Readonly<Partial<Record<Button | 'sendA' | 'sendB', string>>> = {
   note: 'The Note mode', custom: 'The Custom modes', captureMidi: 'Capture MIDI', drums: 'The Drums mode', keys: 'The Keys mode',
-  user: 'The User mode', user1: 'The User mode', user2: 'The User mode', record: 'The recording', arm: 'Record arm',
+  user: 'The User mode', user1: 'The User mode', user2: 'The User mode', arm: 'Record arm',
   sends: 'The sends', sendA: 'The sends', sendB: 'The sends', clear: 'Clear', duplicate: 'Duplicate',
   quantize: 'The quantization', fixedLength: 'Fixed length',
 };
@@ -273,6 +273,7 @@ export class Launchpad extends SessionSurface {
       case 'shift': this.shift = true; return;
       case 'mixer': return this.mk2Mixer();
       case 'play': return this.shift ? this.host.stopAndRewind() : this.host.togglePlay();
+      case 'record': return this.host.recorder.toggleOverdub();
     }
     if (this.model.id === 'pro' && this.proMode(b)) return;
     const missing = NOT_YET[b];
@@ -616,7 +617,8 @@ export class Launchpad extends SessionSurface {
     button('stopClip', lit('stop'));
     button('shift', COLOR.whiteHalf);
     button('play', this.host.engine.playing ? COLOR.green : COLOR.whiteHalf);
-    for (const b of ['record', 'clear', 'duplicate', 'quantize', 'fixedLength'] as const) button(b, COLOR.off);
+    button('record', this.host.recorder.overdub ? COLOR.red : COLOR.whiteHalf);
+    for (const b of ['clear', 'duplicate', 'quantize', 'fixedLength'] as const) button(b, COLOR.off);
   }
 
   /** The state of the modes, for messages and the report. */

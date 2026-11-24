@@ -226,7 +226,7 @@ export class App implements Commands, TimelineActions {
     this.arrangement.bindWheel(headers.element);
     const automation = this.automation = new MasterAutomation(this.store, this.ui, this.audio.engine, this.clipboard, this.drawMode);
     const master = new MasterStrip(this.store, headerActions, meters, automation);
-    const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this);
+    const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this.recorder);
     const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
     const main = this.arrangementArea;
     main.append(headers.element, this.arrangement.element, master.header, master.lane, automation.header, automation.lane);
@@ -398,6 +398,10 @@ export class App implements Commands, TimelineActions {
   toggleMetronome(): void {
     this.audio.engine.metronomeOn = !this.audio.engine.metronomeOn;
     this.transport.render();
+  }
+
+  toggleOverdub(): void {
+    this.recorder.toggleOverdub();
   }
 
   toggleView(): void {

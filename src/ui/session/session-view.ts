@@ -41,7 +41,8 @@ export type { SlotRecorder } from './session-commands';
 
 export interface SessionViewDeps {
   readonly store: ProjectStore;
-  readonly recorder: SlotRecorder;
+  /** Also whether overdub is on: the armed tracks' playing clips show it. */
+  readonly recorder: SlotRecorder & { readonly overdub: boolean };
   readonly ui: UiState;
   readonly engine: PlaybackEngine;
   readonly meters: MeterBoard;
@@ -542,13 +543,17 @@ export class SessionView {
    *  flows) and right after a launch. */
   private refreshState(): void {
     if (this.element.hidden) return;
-    const { engine, store } = this.deps;
+    const { engine, store, recorder, ui } = this.deps;
     const state = sessionPlayback(store.project, t => engine.sessionState(t));
     for (const [id, track] of state.tracks) {
+      // overdubbing: the playing clip of an armed track records
+      const t = store.project.track(id);
+      const overdub = recorder.overdub && !!t && isArmed(t, ui.keyboardTracks);
       track.slots.forEach((slot, s) => {
         const cell = this.slots.get(slotKey(id, s));
         if (!cell) return;
         cell.classList.toggle('playing', slot.playing);
+        cell.classList.toggle('overdub', overdub && slot.playing);
         cell.classList.toggle('queued', slot.queued);
         const bar = cell.querySelector<HTMLElement>('.progress');
         if (bar) bar.style.transform = `scaleX(${slot.progress})`;
