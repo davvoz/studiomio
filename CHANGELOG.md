@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.72] - 2026-11-24
+
 ### Changed
 - A recording started from a controller (APC40, Launchpad) or from the screen chooses its slot and brings
   it into view; when the clip is made it opens in the editor, unless you chose another slot meanwhile.
