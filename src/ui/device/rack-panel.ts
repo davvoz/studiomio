@@ -1,28 +1,30 @@
 /* A rack's panel, on the left of its devices as in Live: header, the 8 macros
  * and, with "Map" on, the mappings of the chosen macro (minimum, maximum, remove) and the way to
  * add some, also on the macros of the racks it has inside. Every change goes through the store. With ★
- * the rack is saved for the other projects. */
-import { activeSections } from '../../devices/device-type';
+ * the rack is saved for the other projects. This is the DOM: the menus are in rack-menus, the texts
+ * in rack-text, the saved racks in `RackLibrary`, the toggle and button macros in `MacroSwitch`. */
 import { formatParam, type NumberParam, type ParamSpec } from '../../devices/params';
-import { deviceAt, deviceTypeAt, macroSpec, mappingSpec } from '../../devices/rack-params';
-import { userRacks } from '../../devices/user-racks';
+import { mappingSpec } from '../../devices/rack-params';
 import type { ChainOwner, Project } from '../../model/project';
 import {
-  findRack, innerRacks, MACRO_MAX, MACRO_MODES, macroMode, macroName, macroParam, parseSpringTime, rackName, SPRING_TIMES, springOf,
-  springTimeLabel, type DeviceKey, type MacroMapping, type MacroSpring, type Rack,
+  findRack, MACRO_MAX, macroMode, macroName, macroParam, parseSpringTime, rackName, springOf, springTimeLabel,
+  type DeviceKey, type MacroMapping, type MacroSpring, type Rack,
 } from '../../model/rack';
-import { captureRack } from '../../model/rack-preset';
 import {
   mapMacro, moveRack, nestRack, removeRack, renameMacro, renameRack, setMacro, setMacroMode, setMacroSpring, setMappingRange,
-  springsAtRest, ungroupRack, unmapParam,
+  ungroupRack, unmapParam,
 } from '../../store/rack-edits';
 import type { MacroSprings } from '../../store/macro-springs';
 import type { Edit, ProjectStore } from '../../store/project-store';
-import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
+import { showContextMenu, type MenuItem } from '../context-menu';
 import { el } from '../dom';
-import { below } from '../kit/pointer';
 import { editInline, renameInline } from '../inline-rename';
+import { below } from '../kit/pointer';
 import { controlFor, registerControl, type ParamControl } from './controls';
+import { MacroSwitch } from './macro-switch';
+import { RackLibrary } from './rack-library';
+import { macroMenu, paramChoices, rackHeadMenu, springTimeMenu } from './rack-menus';
+import { draggedRest, macroTitle, springTexts } from './rack-text';
 
 export interface RackPanelOptions {
   readonly store: ProjectStore;
@@ -72,10 +74,12 @@ export class RackPanel {
   private readonly springChips = new Map<number, { readonly rest: HTMLElement; readonly time: HTMLElement }>();
   private readonly rows: MappingRow[] = [];
   private readonly name: HTMLElement;
+  private readonly library: RackLibrary;
 
   constructor(private readonly o: RackPanelOptions) {
     const { rack } = o;
     const project = o.store.project;
+    this.library = new RackLibrary({ store: o.store, owner: o.owner, rack, say: o.say });
     const button = (text: string, title: string, run: (e: MouseEvent) => void, extra: Record<string, unknown> = {}) =>
       el<HTMLButtonElement>('button', { className: 'mini', textContent: text, title, onclick: run, ...extra });
     const name = this.name = el('span', { className: 'device-name', textContent: rackName(rack), title: 'Double click to rename' });
@@ -101,14 +105,8 @@ export class RackPanel {
     );
     this.head.addEventListener('contextmenu', e => {
       e.preventDefault();
-      const clip = o.headMenu?.() ?? [];
-      showContextMenu(e.clientX, e.clientY, [
-        ...clip, ...(clip.length ? [SEPARATOR] : []),
-        { label: 'Put in the rack before', disabled: !o.canNest(-1), run: () => this.apply(nestRack(o.owner, rack.id, -1)) },
-        { label: 'Put in the rack after', disabled: !o.canNest(1), run: () => this.apply(nestRack(o.owner, rack.id, 1)) },
-        SEPARATOR,
-        ...this.saveMenu(),
-      ]);
+      showContextMenu(e.clientX, e.clientY, rackHeadMenu(o.headMenu?.() ?? [], o.canNest,
+        dir => this.apply(nestRack(o.owner, rack.id, dir)), this.library.menu(() => this.askName())));
     });
     const grid = el('div', { className: 'rack-macros' }, ...rack.macros.map((_, i) => this.macro(project, i)));
     const body = el('div', { className: 'rack-body' }, grid);
@@ -159,28 +157,46 @@ export class RackPanel {
     e.dataset.param = spec.id;
     e.classList.toggle('used', m.mappings.length > 0);
     e.classList.toggle('chosen', o.mapping === index);
-    const mappingLabel = (x: (typeof m.mappings)[number]) => `${o.deviceLabel(x.device)} · ${mappingSpec(p, o.owner, x)?.label ?? x.param}`;
-    e.title = m.mappings.length
-      ? `${spec.label}: moves ${m.mappings.map(x => mappingLabel(x)).join(', ')}`
-      : `${spec.label}: no mapped parameter (turn on Map, choose the macro and click a parameter)`;
+    e.title = macroTitle(spec.label, m.mappings.map(x => `${o.deviceLabel(x.device)} · ${mappingSpec(p, o.owner, x)?.label ?? x.param}`), !!spring);
     if (spring) {
-      e.title += '\nSpring: released it returns to rest (↺: drag it up and down) within the return time (click to choose it).';
       e.append(this.springRow(index, spring));
-      // the mouse on the knob holds it: until it's released it doesn't return
-      e.addEventListener('pointerdown', ev => {
-        const springs = o.springs;
-        if (ev.button !== 0 || !springs) return;
-        springs.hold(o.owner, o.rack.id, index, true);
-        const up = () => {
-          removeEventListener('pointerup', up, true);
-          removeEventListener('pointercancel', up, true);
-          springs.hold(o.owner, o.rack.id, index, false);
-        };
-        addEventListener('pointerup', up, true);
-        addEventListener('pointercancel', up, true);
-      });
+      this.holdSpring(e, index);
     }
-    // with KEY on a click chooses the macro for the keyboard, with Map on to map it, instead of turning it
+    this.interceptClicks(e, index);
+    e.addEventListener('contextmenu', ev => {
+      ev.preventDefault();
+      const label = e.querySelector<HTMLElement>('.knob-label');
+      showContextMenu(ev.clientX, ev.clientY, macroMenu({
+        first: o.macroMenu?.(index) ?? [], named: m.name !== null, mode, outer: o.outerMenu(index),
+        rename: () => label && renameInline(label, n => this.apply(renameMacro(o.owner, o.rack.id, index, n))),
+        autoName: () => this.apply(renameMacro(o.owner, o.rack.id, index, null)),
+        setMode: value => this.apply(setMacroMode(o.owner, o.rack.id, index, value)),
+        map: () => o.onMapMode(index),
+      }));
+    });
+    return e;
+  }
+
+  /** The mouse on a spring's knob holds it: until it's released it doesn't return. */
+  private holdSpring(e: HTMLElement, index: number): void {
+    const { o } = this;
+    e.addEventListener('pointerdown', ev => {
+      const springs = o.springs;
+      if (ev.button !== 0 || !springs) return;
+      springs.hold(o.owner, o.rack.id, index, true);
+      const up = () => {
+        removeEventListener('pointerup', up, true);
+        removeEventListener('pointercancel', up, true);
+        springs.hold(o.owner, o.rack.id, index, false);
+      };
+      addEventListener('pointerup', up, true);
+      addEventListener('pointercancel', up, true);
+    });
+  }
+
+  /** With KEY on a click chooses the macro for the keyboard, with Map on to map it, instead of turning it. */
+  private interceptClicks(e: HTMLElement, index: number): void {
+    const { o } = this;
     for (const type of ['pointerdown', 'click', 'dblclick', 'wheel']) {
       e.addEventListener(type, ev => {
         const keys = o.keyMapping();
@@ -192,25 +208,6 @@ export class RackPanel {
         else o.onMapMode(index);
       }, { capture: true, passive: false });
     }
-    e.addEventListener('contextmenu', ev => {
-      ev.preventDefault();
-      const label = e.querySelector<HTMLElement>('.knob-label');
-      const outer = o.outerMenu(index);
-      showContextMenu(ev.clientX, ev.clientY, [
-        ...(o.macroMenu?.(index) ?? []),
-        { label: 'Rename the macro', run: () => label && renameInline(label, n => this.apply(renameMacro(o.owner, o.rack.id, index, n))) },
-        { label: 'Automatic name', disabled: m.name === null, run: () => this.apply(renameMacro(o.owner, o.rack.id, index, null)) },
-        SEPARATOR,
-        ...MACRO_MODES.map(([value, label]) => ({
-          label, checked: mode === value, run: () => this.apply(setMacroMode(o.owner, o.rack.id, index, value)),
-        })),
-        SEPARATOR,
-        { label: 'Map…', run: () => o.onMapMode(index) },
-        // inside another rack, the macro maps to the macros of the surrounding ones
-        ...(outer.length ? [SEPARATOR, ...outer] : []),
-      ]);
-    });
-    return e;
   }
 
   /** Under a spring's knob: the rest (dragged up and down) and the return time (a
@@ -234,7 +231,7 @@ export class RackPanel {
       rest.setPointerCapture(ev.pointerId);
       let y = ev.clientY, value = current().rest;
       const move = (m: PointerEvent) => {
-        value = Math.max(0, Math.min(MACRO_MAX, value + ((y - m.clientY) * MACRO_MAX / 180) * (m.shiftKey ? 0.1 : 1)));
+        value = draggedRest(value, y - m.clientY, m.shiftKey);
         y = m.clientY;
         this.merge(setMacroSpring(o.owner, o.rack.id, index, { rest: Math.round(value) }), mergeKey, false);
       };
@@ -252,69 +249,19 @@ export class RackPanel {
       ev.stopPropagation();
       const s = current();
       const pick = (t: number, sync: boolean) => this.apply(setMacroSpring(o.owner, o.rack.id, index, { time: t, sync }));
-      const items = (sync: boolean): MenuItem[] => SPRING_TIMES.filter(([, x]) => x === sync)
-        .map(([t, x, label]) => ({ label, checked: s.time === t && s.sync === x, run: () => pick(t, x) }));
-      showContextMenu(ev.clientX, ev.clientY, [
-        ...items(true), SEPARATOR, ...items(false), SEPARATOR,
-        {
-          label: 'More…', run: () => editInline(time, springTimeLabel(s), text => {
-            const parsed = parseSpringTime(text);
-            if (parsed) pick(parsed.time, parsed.sync);
-            else o.say?.(`"${text}" isn't a return time: write for example 300 ms, 1.5 s, 3/16 or 2 bars.`);
-          }, 'e.g. 300 ms, 3/16, 2 bars'),
-        },
-      ]);
+      showContextMenu(ev.clientX, ev.clientY, springTimeMenu(s, pick, () => editInline(time, springTimeLabel(s), text => {
+        const parsed = parseSpringTime(text);
+        if (parsed) pick(parsed.time, parsed.sync);
+        else o.say?.(`"${text}" isn't a return time: write for example 300 ms, 1.5 s, 3/16 or 2 bars.`);
+      }, 'e.g. 300 ms, 3/16, 2 bars')));
     });
     return el('div', { className: 'macro-spring' }, rest, time);
-  }
-
-  // ---------------------------------------------------------------- saved racks
-
-  /** The header's menu: saving the rack, updating or deleting the one saved with its
-   *  name. */
-  private saveMenu(): MenuItem[] {
-    const name = rackName(this.o.rack);
-    const saved = userRacks.has(name);
-    return [
-      { label: 'Save the rack…', run: () => this.askName() },
-      { label: `Update the saved rack «${name}»`, disabled: !saved, run: () => void this.save(name) },
-      { label: `Delete the saved rack «${name}»`, disabled: !saved, run: () => void this.remove(name) },
-      ...(userRacks.canReveal ? [{ label: 'Open the racks folder', run: () => void userRacks.reveal().catch(e => this.o.say?.(message(e))) }] : []),
-    ];
   }
 
   /** The name is typed in place of the rack's; it starts from the rack's name. */
   private askName(): void {
     if (!this.name.isConnected) return;
-    editInline(this.name, rackName(this.o.rack), name => void this.save(name), 'Rack name');
-  }
-
-  /** Saves the rack as it is now; the rack takes the name it's saved with, as in Live. */
-  private async save(name: string): Promise<void> {
-    const { store, owner, rack, say } = this.o;
-    const existed = userRacks.has(name);
-    try {
-      await userRacks.save(captureRack(springsAtRest(store.project), owner, rack.id, name));
-    } catch (e) {
-      say?.(`Couldn't save the rack «${name}»: ${message(e)}`);
-      return;
-    }
-    const now = findRack(store.project.racksOf(owner), rack.id);
-    if (now && now.name !== name) this.apply(renameRack(owner, rack.id, name));
-    // the samples are project files: only the parameters remain in the saved rack
-    const samples = rack.devices.some(k => deviceAt(store.project, owner, k)?.samples);
-    const note = samples ? ' The loaded samples aren\'t in the saved rack.' : '';
-    say?.(existed ? `Rack «${name}» updated.${note}` : `Rack «${name}» saved: you'll find it in the browser, in all projects.${note}`);
-  }
-
-  private async remove(name: string): Promise<void> {
-    try {
-      await userRacks.remove(name);
-    } catch (e) {
-      this.o.say?.(`Couldn't delete the rack «${name}»: ${message(e)}`);
-      return;
-    }
-    this.o.say?.(`Saved rack «${name}» deleted (the one in the project stays).`);
+    editInline(this.name, rackName(this.o.rack), name => void this.library.save(name), 'Rack name');
   }
 
   // ---------------------------------------------------------------- mappings
@@ -355,41 +302,12 @@ export class RackPanel {
   /** Two menus: the rack's device (or a rack it has inside), then its parameter (or its macro). */
   private chooseParam(p: Project, index: number, x: number, y: number): void {
     const { o } = this;
-    const mapped = (device: DeviceKey, param: string) => o.rack.macros[index].mappings.some(m => m.device === device && m.param === param);
-    const racks = innerRacks(p.racksOf(o.owner), o.rack).map(rack => ({
-      label: o.deviceLabel(rack.id),
-      run: () => showContextMenu(x, y, this.macroItems(p, index, rack, mapped)),
+    showContextMenu(x, y, paramChoices({
+      project: p, owner: o.owner, rack: o.rack, deviceLabel: o.deviceLabel,
+      mapped: (device, param) => o.rack.macros[index].mappings.some(m => m.device === device && m.param === param),
+      map: (device, param) => this.apply(mapMacro(o.owner, o.rack.id, index, device, param)),
+      open: items => showContextMenu(x, y, items),
     }));
-    showContextMenu(x, y, [...o.rack.devices.map(device => {
-      const type = deviceTypeAt(p, o.owner, device);
-      return {
-        label: o.deviceLabel(device),
-        disabled: !type,
-        run: () => showContextMenu(x, y, this.paramItems(p, index, device, mapped)),
-      };
-    }), ...(racks.length ? [SEPARATOR, ...racks] : [])]);
-  }
-
-  /** The macros of a rack inside, to map to macro `index`. */
-  private macroItems(p: Project, index: number, rack: Rack, mapped: (device: DeviceKey, param: string) => boolean): MenuItem[] {
-    const { o } = this;
-    return rack.macros.map((_, i) => {
-      const spec = macroSpec(p, o.owner, rack, i);
-      return { label: spec.label, checked: mapped(rack.id, spec.id), run: () => this.apply(mapMacro(o.owner, o.rack.id, index, rack.id, spec.id)) };
-    });
-  }
-
-  /** The device's visible parameters, to map to macro `index` (prefixed with their section when it has several). */
-  private paramItems(p: Project, index: number, device: DeviceKey, mapped: (device: DeviceKey, param: string) => boolean): MenuItem[] {
-    const { o } = this;
-    const type = deviceTypeAt(p, o.owner, device), settings = deviceAt(p, o.owner, device);
-    if (!type) return [];
-    const several = type.sections.length > 1;
-    return activeSections(type, settings?.params ?? {}).flatMap(section => section.params.filter(spec => !spec.hidden).map(spec => ({
-      label: several ? `${section.label} · ${spec.label}` : spec.label,
-      checked: mapped(device, spec.id),
-      run: () => this.apply(mapMacro(o.owner, o.rack.id, index, device, spec.id)),
-    })));
   }
 
   private apply(edit: Edit): void {
@@ -403,59 +321,9 @@ export class RackPanel {
   }
 }
 
-const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
 /** The rest and the return time of a spring, under its knob. */
 function showSpring(chips: { readonly rest: HTMLElement; readonly time: HTMLElement }, s: MacroSpring): void {
-  const rest = `↺ ${Math.round(s.rest)}`, time = springTimeLabel(s);
+  const { rest, time } = springTexts(s);
   if (chips.rest.textContent !== rest) chips.rest.textContent = rest;
   if (chips.time.textContent !== time) chips.time.textContent = time;
-}
-
-/** A toggle or button macro: a key that lights up when it's on. The toggle
- *  changes at every click; the button is on while it's held down. A curve making it
- *  snap (past halfway) turns it on or off while it lasts. */
-class MacroSwitch implements ParamControl {
-  readonly element = el('div', { className: 'macro-switch' });
-  private readonly key: HTMLButtonElement;
-  private on = false;
-  private flipped = false;
-
-  constructor(label: string, value: number, mode: 'toggle' | 'button', press: (on: boolean) => void) {
-    this.key = el<HTMLButtonElement>('button', {
-      className: `macro-key ${mode}`, title: mode === 'toggle' ? 'Click: turn on or off' : 'Hold down: on until you release it',
-    });
-    this.element.append(this.key, el('div', { className: 'knob-label', textContent: label }));
-    if (mode === 'toggle') this.key.onclick = () => press(!this.on);
-    else {
-      this.key.addEventListener('pointerdown', e => {
-        if (e.button !== 0) return;
-        this.key.setPointerCapture(e.pointerId);
-        press(true);
-      });
-      const release = () => { if (this.on) press(false); };
-      this.key.addEventListener('pointerup', release);
-      this.key.addEventListener('pointercancel', release);
-      this.key.addEventListener('lostpointercapture', release);
-    }
-    this.set(value);
-  }
-
-  set(value: number): void {
-    this.on = value >= MACRO_MAX / 2;
-    this.render();
-  }
-
-  /** As in the engine (switchSink): on snaps down at −½, off snaps up at +½. */
-  modulate(offset: number): void {
-    const flipped = this.on ? offset <= -0.5 : offset >= 0.5;
-    if (flipped === this.flipped) return;
-    this.flipped = flipped;
-    this.render();
-  }
-
-  private render(): void {
-    this.key.classList.toggle('on', this.on !== this.flipped);
-    this.key.classList.toggle('automated', this.flipped);
-  }
 }
