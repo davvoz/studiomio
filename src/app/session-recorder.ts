@@ -16,7 +16,7 @@ import type { TrackSessionState } from '../engine/session';
 import { MidiClip } from '../model/midi-clip';
 import { NoteTake, takeLength } from '../model/note-take';
 import { clipSpan, overdubbedNote } from '../model/overdub';
-import { quantizeRecorded } from '../model/record-settings';
+import { quantizeRecorded, type NoteSpan } from '../model/record-settings';
 import { MidiTrack, type Track } from '../model/track';
 import type { ProjectStore } from '../store/project-store';
 import { overdubNotes, recordedClip, type SlotRef } from '../store/session-edits';
@@ -61,8 +61,6 @@ interface Recording {
 export interface RecorderOptions {
   readonly delay?: () => Beats;
   readonly armed?: () => ReadonlySet<TrackId>;
-  /** The time in ms (for when a moved control has been still long enough). */
-  readonly now?: () => number;
 }
 
 const NO_TRACKS: ReadonlySet<TrackId> = new Set();
@@ -73,11 +71,12 @@ export interface TakeEvent {
   readonly clip: ClipId | null;
 }
 
-/** Where an overdub on a track goes now: its playing MIDI clip, at the beat of its content. */
+/** Where an overdub on a track goes now: its playing MIDI clip, at the beat of its content, in its loop. */
 interface OverdubSpot {
   readonly ref: SlotRef;
   readonly clip: ClipId;
   readonly beat: Beats;
+  readonly span: NoteSpan;
 }
 
 /** A note held over a playing clip while overdubbing. */
@@ -116,7 +115,7 @@ export class SessionRecorder {
   ) {
     this.delay = opts.delay ?? (() => 0);
     this.armed = opts.armed ?? (() => NO_TRACKS);
-    this.moves = new MoveRecorder(store, track => this.moveSpot(track), () => `overdub ${this.pass}`, opts.now);
+    this.moves = new MoveRecorder(store, track => this.moveSpot(track), () => `overdub ${this.pass}`);
     engine.onStateChange(playing => {
       if (playing) return;
       // the notes held over a clip go with the clip that stopped
@@ -198,7 +197,7 @@ export class SessionRecorder {
     const clip = playing && t?.slots[playing.slot];
     if (!playing || !(clip instanceof MidiClip)) return null;
     const beat = clip.contentBeatAt(Math.max(0, playing.elapsed - this.delay()));
-    return beat === null ? null : { ref: { track, slot: playing.slot }, clip: clip.id, beat };
+    return beat === null ? null : { ref: { track, slot: playing.slot }, clip: clip.id, beat, span: clipSpan(clip) };
   }
 
   private pressOverdub(track: TrackId, pitch: number, velocity: number): void {

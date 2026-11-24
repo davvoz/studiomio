@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionRecorder } from '../../src/app/session-recorder';
 import { gestureCurve, trackKnobs } from '../../src/app/track-knobs';
-import { DEVICE_ON, INSTRUMENT_DEVICE, type ModTarget } from '../../src/model/envelope';
+import { DEVICE_ON, envelopeValueAt, INSTRUMENT_DEVICE, type ModTarget } from '../../src/model/envelope';
 import type { MidiClip } from '../../src/model/midi-clip';
 import { addEffect, setEffectEnabled, setMixer } from '../../src/store/edits';
 import { groupDevices, mapMacro } from '../../src/store/rack-edits';
-import { recordedClip } from '../../src/store/session-edits';
+import { recordedClip, touchCurve } from '../../src/store/session-edits';
 import { setup } from '../helpers/fixtures';
 import { FakeRecorderEngine } from '../helpers/recorder-engine';
 
@@ -17,14 +17,13 @@ function rig() {
   const midi = track(0);
   const engine = new FakeRecorderEngine();
   const armed = new Set([midi]);
-  let ms = 0;
-  const recorder = new SessionRecorder(engine, store, () => 4, () => undefined, { armed: () => armed, now: () => ms });
+  const recorder = new SessionRecorder(engine, store, () => 4, () => undefined, { armed: () => armed });
   recorder.recordMoves = true;
   const t = () => store.project.track(midi)!;
   const clipAt = (slot: number) => t().slots[slot] as MidiClip | null;
   const at = (clock: number) => { engine.sessionClock = clock; };
   const pan = (v: number) => store.apply(setMixer(midi, { pan: v }));
-  const wait = (time: number) => { ms += time; vi.advanceTimersByTime(time); };
+  const wait = (time: number) => { vi.advanceTimersByTime(time); };
   return { store, midi, engine, recorder, armed, t, clipAt, at, pan, wait };
 }
 
@@ -132,25 +131,59 @@ describe('recording movements: overdub', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('a gesture goes into the playing clip\'s curve once the control is still, then the control goes back', () => {
+  it("a touched control records up to the loop's end, also where it stays still (Live's latch); then it goes back", () => {
     const r = rig();
     const play = overdubbing(r);
+    // an old curve: a ramp from 0.5 to -0.5
+    r.store.apply(touchCurve({ track: r.midi, slot: 0 }, r.clipAt(0)!.id, PAN, [{ beat: 0, value: 0.5 }, { beat: 4, value: -0.5 }]));
+    const old = r.clipAt(0)!.envelope(PAN)!.points;
     play(5);
     r.pan(0.3);
     play(5.25);
     r.pan(0.6);
+    // still: nothing written until the loop comes round, the control where it was left
+    play(6);
     r.wait(100);
-    expect(r.clipAt(0)!.envelope(PAN)).toBeUndefined();
-    r.wait(300);
-    expect(r.clipAt(0)!.envelope(PAN)!.points).toEqual([{ beat: 1, value: 0 }, { beat: 1, value: 0.3 }, { beat: 1.25, value: 0.6 }]);
+    play(7);
+    r.wait(100);
+    expect(r.clipAt(0)!.envelope(PAN)!.points).toBe(old);
+    expect(r.t().mixer.pan).toBe(0.6);
+    // round: from the touch to the loop's end the gesture, then the value held; before the touch the old ramp
+    play(8.5);
+    r.wait(100);
+    const at = (beat: number) => envelopeValueAt(r.clipAt(0)!.envelope(PAN)!.points, beat);
+    expect(at(1.125)).toBeCloseTo(0.45, 9);
+    expect([2, 3, 3.99].map(at)).toEqual([0.6, 0.6, 0.6]);
+    expect(at(0.5)).toBeCloseTo(0.375, 9);
     expect(r.t().mixer.pan).toBe(0);
-    expect(r.clipAt(0)!.notes).toHaveLength(1);
     // the control put back isn't a movement
+    const points = r.clipAt(0)!.envelope(PAN)!.points;
+    play(10);
     r.wait(1000);
-    expect(r.clipAt(0)!.envelope(PAN)!.points).toHaveLength(3);
+    expect(r.clipAt(0)!.envelope(PAN)!.points).toBe(points);
   });
 
-  it('a gesture over the loop\'s end: the stretch so far is written, the gesture goes on from the same place', () => {
+  it("moved over the loop's end it goes on, up to the end of the loop where it last moved", () => {
+    const r = rig();
+    const play = overdubbing(r);
+    play(1);
+    r.pan(0.2);
+    play(4.5);
+    r.pan(0.4);
+    play(5.2);
+    r.pan(0.5);
+    // still in the second turn: held to its end
+    play(6);
+    r.wait(100);
+    expect(r.t().mixer.pan).toBe(0.5);
+    play(8.2);
+    r.wait(100);
+    expect(r.t().mixer.pan).toBe(0);
+    const at = (beat: number) => envelopeValueAt(r.clipAt(0)!.envelope(PAN)!.points, beat);
+    expect([0, 0.5, 1.2, 2, 3.99].map(at)).toEqual([0.2, 0.4, 0.5, 0.5, 0.5]);
+  });
+
+  it("a gesture over the loop's end: the stretch so far is written, the value held goes on from the loop's start", () => {
     const r = rig();
     const play = overdubbing(r);
     play(3.5);
@@ -165,8 +198,19 @@ describe('recording movements: overdub', () => {
     // turning overdub off writes what's left
     r.recorder.toggleOverdub();
     const points = r.clipAt(0)!.envelope(PAN)!.points;
-    expect(points.map(q => q.beat)).toEqual([0.5, 0.5, 0.75, 0.75, 3.5, 3.5, 3.75]);
-    expect(points.map(q => q.value)).toEqual([0, -0.5, expect.closeTo(-0.4, 9), 0, 0, 0.5, expect.closeTo(0.6, 9)]);
+    expect(points.map(q => q.beat)).toEqual([0, 0, 0.5, 0.75, 0.75, 3.5, 3.5, 3.75, 4]);
+    expect(points.map(q => q.value)).toEqual([0, 0.6, -0.5, expect.closeTo(-0.4, 9), 0, 0, 0.5, expect.closeTo(0.6, 9), expect.closeTo(0.6, 9)]);
+    expect(r.t().mixer.pan).toBe(0);
+  });
+
+  it('its clip stopping ends the gesture', () => {
+    const r = rig();
+    const play = overdubbing(r);
+    play(1);
+    r.pan(0.3);
+    r.engine.states.set(r.midi, { playing: null, queued: null, followsArrangement: false });
+    r.wait(100);
+    expect(r.clipAt(0)!.envelope(PAN)!.points.at(-1)).toEqual({ beat: 1, value: 0.3 });
     expect(r.t().mixer.pan).toBe(0);
   });
 
@@ -194,7 +238,9 @@ describe('recording movements: overdub', () => {
     play(1.5);
     r.recorder.release(r.midi, 60);
     r.wait(400);
+    r.recorder.toggleOverdub();
     expect(r.clipAt(0)!.notes).toHaveLength(2);
+    expect(r.clipAt(0)!.envelope(PAN)).toBeDefined();
     r.store.undo();
     expect(r.clipAt(0)!.notes).toHaveLength(1);
     expect(r.clipAt(0)!.envelope(PAN)).toBeUndefined();

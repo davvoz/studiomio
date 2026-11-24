@@ -1,14 +1,17 @@
 /* Recording the movements of the controls into the clips, as Live's Automation Arm in the session:
  * while it's on, a control of a recording track that moves (on screen, from a controller, a mapped
  * key, a macro: whatever changes it) is a gesture, in clip beats. In a take the gestures become the
- * new clip's curves when it's written; in overdub a gesture is written over the playing clip's curve
- * once the control stays still, and is heard at the next turn. Either way the control goes back where it
- * was and the curve moves it: the clip replays the gesture. What's recorded is found by comparing
- * the track before and after each change of the project. */
+ * new clip's curves when it's written. In overdub a gesture is written over the playing clip's curve
+ * (heard at the next turn), as Live's latch with a controller: a control touched records up to the
+ * end of the loop, also where it stays still (the old curve is replaced by its value); moved over the
+ * loop's end it goes on to the end of the next. Overdub off or the clip stopping end it before. Either way the control then goes back where it was
+ * and the curve moves it: the clip replays the gesture. What's recorded is found by comparing the
+ * track before and after each change of the project. */
 import type { ClipId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { scaleOf, targetKey, type ClipEnvelope } from '../model/envelope';
 import { thinned, touched } from '../model/move-take';
+import type { NoteSpan } from '../model/record-settings';
 import type { Project } from '../model/project';
 import { MidiTrack } from '../model/track';
 import type { ProjectStore } from '../store/project-store';
@@ -18,21 +21,31 @@ import { gestureCurve, trackKnobs, type Knob } from './track-knobs';
 /** Where a movement on a track falls now: in the take being recorded, or in the overdubbed clip. */
 export type MoveSpot =
   | { readonly kind: 'take'; readonly beat: Beats }
-  | { readonly kind: 'overdub'; readonly ref: SlotRef; readonly clip: ClipId; readonly beat: Beats };
+  | OverdubSpot;
+
+/** A movement in overdub: the clip, the beat of its content, its loop. */
+interface OverdubSpot {
+  readonly kind: 'overdub';
+  readonly ref: SlotRef;
+  readonly clip: ClipId;
+  readonly beat: Beats;
+  readonly span: NoteSpan;
+}
+
+type Into = Pick<OverdubSpot, 'ref' | 'clip' | 'span'>;
 
 interface Gesture {
   readonly track: TrackId;
   readonly base: Knob;
   /** Overdub: the clip it goes into (null: a take). */
-  into: { readonly ref: SlotRef; readonly clip: ClipId } | null;
+  into: Into | null;
   samples: { beat: Beats; knob: Knob }[];
-  /** When the control last moved (ms). */
-  last: number;
 }
 
-/** An overdub gesture is written when its control has been still this long (ms). */
-const IDLE_MS = 300;
+/** How often a still control in overdub writes its value (ms). */
 const CHECK_MS = 100;
+
+const intoOf = ({ ref, clip, span }: OverdubSpot): Into => ({ ref, clip, span });
 
 export class MoveRecorder {
   /** Movements are recorded (Options › Recording). */
@@ -48,7 +61,6 @@ export class MoveRecorder {
     private readonly spotOf: (track: TrackId) => MoveSpot | null,
     /** The undo step overdub gestures join. */
     private readonly overdubKey: () => string,
-    private readonly now: () => number = () => performance.now(),
   ) {
     this.snapshot = store.project;
     store.onChange(p => this.changed(p));
@@ -104,22 +116,28 @@ export class MoveRecorder {
     let g = this.gestures.get(id);
     if (g && !this.continues(g, spot)) {
       if (g.into && spot.kind === 'overdub') {
-        // the loop came round (or another clip plays): the stretch so far is written, the gesture goes on
-        this.writeCurve(g);
-        g.into = { ref: spot.ref, clip: spot.clip };
-        g.samples = [];
+        this.turn(g, spot);
       } else {
         this.finish(g);
         g = undefined;
       }
     }
     if (!g) {
-      g = { track, base: was, into: spot.kind === 'overdub' ? { ref: spot.ref, clip: spot.clip } : null, samples: [], last: 0 };
+      g = { track, base: was, into: spot.kind === 'overdub' ? intoOf(spot) : null, samples: [] };
       this.gestures.set(id, g);
     }
     g.samples.push({ beat: spot.beat, knob });
-    g.last = this.now();
     if (g.into) this.timer ??= setInterval(() => this.check(), CHECK_MS);
+  }
+
+  /** The loop came round (or another clip plays): the stretch so far is written, the gesture goes on.
+   *  Round the same loop the value held goes up to its end and on from its start. */
+  private turn(g: Gesture, spot: OverdubSpot): void {
+    const held = g.samples.at(-1)!.knob, round = spot.clip === g.into!.clip;
+    if (round) g.samples.push({ beat: g.into!.span.end, knob: held });
+    this.writeCurve(g);
+    g.into = intoOf(spot);
+    g.samples = round ? [{ beat: spot.span.start, knob: held }] : [];
   }
 
   private continues(g: Gesture, spot: MoveSpot): boolean {
@@ -127,11 +145,25 @@ export class MoveRecorder {
     return spot.kind === 'overdub' && spot.clip === g.into.clip && spot.beat >= g.samples.at(-1)!.beat;
   }
 
-  /** The overdub gestures whose control has been still long enough are written. */
+  /** The still controls in overdub write their value where the clip is now. */
   private check(): void {
-    const now = this.now();
-    for (const g of this.gestures.values()) if (g.into && now - g.last >= IDLE_MS) this.finish(g);
+    for (const g of this.gestures.values()) if (g.into) this.hold(g);
     this.stopTimer();
+  }
+
+  /** A still control: its value goes on replacing the curve where the clip is; when the loop comes
+   *  round it's held up to its end, and the gesture ends there (Live's latch). Overdub off or its clip
+   *  not playing end it before. */
+  private hold(g: Gesture): void {
+    const spot = this.spotOf(g.track), { span, clip } = g.into!;
+    if (spot?.kind !== 'overdub' || spot.clip !== clip) return this.finish(g);
+    const knob = g.samples.at(-1)!.knob;
+    if (this.continues(g, spot)) {
+      g.samples.push({ beat: spot.beat, knob });
+      return;
+    }
+    g.samples.push({ beat: span.end, knob });
+    this.finish(g);
   }
 
   /** An overdub gesture ends: its curve is written, and the control goes back where the curve wants it.
