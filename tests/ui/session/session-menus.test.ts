@@ -181,3 +181,26 @@ describe('session menus: scenes and headers', () => {
     h.store.apply(setBusFolded(bus.id, false));
   });
 });
+
+describe('session menus: every item runs', () => {
+  const runEverything = (items: readonly MenuItem[]) => {
+    for (const i of actions(items)) if (!i.disabled) i.run();
+    for (const i of items) if (typeof i === 'object' && 'colors' in i) (i as { pick(c: string | undefined): void }).pick('#123456');
+  };
+
+  it('slots, scenes and headers', () => {
+    const h = harness([[1, 0], [2, 0], [1, 1]]);
+    h.selection.select(h.ref(1, 0));
+    runEverything(slotMenu(h.deps, h.ref(1, 0), () => {}));
+    runEverything(slotMenu(h.deps, h.ref(2, 3), () => {}));
+    h.selection.pickRange(h.ref(1, 1), h.ref(2, 1));
+    h.store.apply(newSlotMidiClip(h.ref(2, 1)));
+    runEverything(slotMenu(h.deps, h.ref(1, 1), () => {}));
+    const scene = h.store.project.scenes[1];
+    runEverything(sceneMenu(h.deps, scene, 1, () => {}));
+    runEverything(trackHeadMenu(h.deps, h.store.project.track(h.track(1))!, () => {}));
+    h.store.apply(addBus());
+    runEverything(busHeadMenu(h.deps, h.store.project.buses[0], () => {}));
+    expect(h.calls).toEqual(expect.arrayContaining(['launch 0', 'open', 'record 0', 'stop', 'scene 1', 'devices']));
+  });
+});

@@ -241,3 +241,50 @@ describe('ProjectSession', () => {
     expect(await session.hasRecovery()).toBe(false);
   });
 });
+
+describe('ProjectSession: importing into the session', () => {
+  it('files go down a column (on a new track for the first), stop at the last scene, failures are said', async () => {
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    const { audio } = fakeAudio();
+    let broken = false;
+    const decode = audio.context.decodeAudioData;
+    audio.context.decodeAudioData = async b => {
+      if (broken) throw new Error('not audio');
+      return decode(b);
+    };
+    const session = new ProjectSession(store, audio, async () => new MemoryDirectory());
+    const said: string[] = [];
+    session.on('message', (t: string) => said.push(t));
+    const scenes = store.project.scenes.length;
+    await session.importFilesToSlots([fileOf('a.wav'), fileOf('b.wav')], null, scenes - 2);
+    await session.importFilesToSlots([fileOf('c.wav')], null, scenes);
+    expect(store.project.tracks).toHaveLength(1);
+    expect(store.project.tracks[0].slots.filter(Boolean)).toHaveLength(2);
+    broken = true;
+    await session.importFilesToSlots([fileOf('d.wav')], store.project.tracks[0].id, 0);
+    await session.importFiles([fileOf('e.wav')], null, 0);
+    await expect(session.importSampleFile(fileOf('f.wav'))).rejects.toThrow('not audio');
+    expect(said).toEqual([
+      'Imported "a.wav" into the session.', 'Imported "b.wav" into the session.',
+      'Couldn\'t import "d.wav": not audio', 'Couldn\'t import "e.wav": not audio',
+    ]);
+  });
+});
+
+describe('the demo project', () => {
+  it('four tracks with clips on the timeline, named scenes, the loop in the project folder', async () => {
+    const { buildDemoProject } = await import('../../src/demo/demo-project');
+    const store = new ProjectStore(Project.empty('p', randomIds), randomIds);
+    const { audio, loaded } = fakeAudio();
+    const session = new ProjectSession(store, audio, async () => new MemoryDirectory());
+    await buildDemoProject(store, session);
+    const p = store.project;
+    expect(p.tracks.map(t => t.name)).toEqual(['Drums', 'Bass', 'Accordi', 'Drum Machine']);
+    expect(p.tracks[0].arrangement.map(pl => pl.clip.name)).toEqual(['Complex', 'Beats', 'Complex +5', 'Re-Pitch']);
+    expect(p.scenes.slice(0, 5).map(s => s.name)).toEqual(['Intro', 'Groove', 'Full', 'Octave up', 'Drum Machine']);
+    expect(p.tracks[2].effects).toHaveLength(1);
+    expect(p.tracks[3].slots[4]?.name).toBe('Beat');
+    expect(p.samples.map(s => s.file)).toEqual(['audio/Loop demo 120.wav']);
+    expect(loaded.size).toBe(1);
+  });
+});

@@ -8,14 +8,16 @@ import { PlaybackEngine } from '../../src/engine/playback-engine';
 import { RenderCache } from '../../src/engine/render-cache';
 import { SampleLibrary, type DspBackend } from '../../src/engine/sample-library';
 import type { AudioClip } from '../../src/model/audio-clip';
+import { CLIP_TRANSPOSE } from '../../src/model/envelope';
 import type { MidiClip } from '../../src/model/midi-clip';
 import { Project } from '../../src/model/project';
 import type { MidiTrack } from '../../src/model/track';
 import type { SampleRef } from '../../src/model/sample';
 import {
-  addMidiClip, addSample, addTrack, followClipSound, placeSample, setInstrument, setInstrumentParam, setLoopRegion, setMixer, setTempo, updateClip,
+  addEffect, addMidiClip, addSample, addTrack, followClipSound, placeSample, removeEffect, removeTrack, setFades, setInstrument, setInstrumentParam, setLoopRegion, setMixer, setTempo, updateClip,
 } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
+import { newSlotMidiClip } from '../../src/store/session-edits';
 import { FakeEffects, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
 import { drumLoop } from '../helpers/signals';
 
@@ -358,5 +360,84 @@ describe('mixer', () => {
     expect(g.panners[0].pan.value).toBe(0.5);
     mixer.sync(r.store.project.removingTrack(r.t(0)));
     expect(g.gains[4].connected).toBe(false);
+  });
+});
+
+describe('PlaybackEngine: the rest of its surface', () => {
+  it('the real timer ticks until stopped', async () => {
+    const { intervalTimer } = await import('../../src/engine/playback-engine');
+    let ticks = 0;
+    const stop = intervalTimer.every(1, () => { ticks++; });
+    await new Promise(r => setTimeout(r, 20));
+    stop();
+    const seen = ticks;
+    await new Promise(r => setTimeout(r, 10));
+    expect(seen).toBeGreaterThan(0);
+    expect(ticks).toBe(seen);
+  });
+
+  it('metronome, levels, monitors, clock, playheads, hand-played notes', async () => {
+    const r = await rig();
+    r.engine.metronomeOn = true;
+    expect(r.engine.metronomeOn).toBe(true);
+    expect(r.engine.levels(r.t(0))).toBeNull();
+    expect(r.engine.effectMonitor(r.t(0), 'none' as never)).toBeNull();
+    r.graph.currentTime = 1.25;
+    expect(r.engine.audioTime).toBe(1.25);
+    expect(r.engine.playheads(r.t(1))).toEqual([]);
+    expect(r.engine.playheads('gone' as TrackId)).toEqual([]);
+    r.engine.pressNote(r.t(1), 60, 100);
+    r.engine.releaseNote(r.t(1), 60);
+    r.engine.audition(r.t(1), 62);
+  });
+
+  it('stopping a track with the transport stopped forgets its clip, and says so once', async () => {
+    const r = await rig();
+    let changes = 0;
+    const off = r.engine.onSessionChange(() => { changes++; });
+    r.store.apply(newSlotMidiClip({ track: r.t(1), slot: 0 }));
+    r.engine.launchSlot(r.t(1), 0);
+    r.engine.stop();
+    const before = changes;
+    r.engine.stopTrack(r.t(1));
+    r.engine.stopTrack(r.t(1));
+    expect(changes).toBe(before + 1);
+    off();
+  });
+
+  it('a removed track and a removed modulator leave the engine; scheduling needs a project; dispose stops', async () => {
+    const r = await rig();
+    r.store.apply(addEffect(r.t(1), 'lfo', 'LFO'));
+    r.store.apply(addMidiClip(r.t(1), 0, 4));
+    r.engine.play(0);
+    r.runUntil(0.5);
+    r.store.apply(removeEffect(r.t(1), r.store.project.tracks[1].effects[0].id));
+    r.store.apply(removeTrack(r.t(1)));
+    r.runUntil(1);
+    expect(r.store.project.tracks).toHaveLength(1);
+    r.engine.dispose();
+    expect(r.engine.playing).toBe(false);
+    const bare = new PlaybackEngine(new FakeGraph(), { clips: r.clips, instruments: new FakeInstruments(), effects: new FakeEffects() });
+    expect(() => bare.scheduleRange(0, 4)).toThrow('no project');
+  });
+});
+
+describe('PlaybackEngine: audio clip shapes', () => {
+  it('a transpose curve plays a piece per step; the placed fades add a gain; a jump cuts what plays', async () => {
+    const r = await rig();
+    r.store.apply(placeSample(r.t(0), r.sample.id, 0));
+    const id = r.store.project.tracks[0].arrangement[0].id;
+    r.store.apply(setFades(r.t(0), id, { fadeIn: 0.5, fadeOut: 1 }));
+    r.store.apply(updateClip<AudioClip>('curve', r.t(0), id, c => c.withEnvelope(CLIP_TRANSPOSE, [{ beat: 0, value: 0 }, { beat: 2, value: 7 }])));
+    await r.clips.prepare(r.store.project);
+    r.engine.play(0);
+    r.runUntil(0.3);
+    const pieces = starts(r.graph).length;
+    // the curve steps from 0 to +7 semitones at beat 2: at least two pieces
+    expect(pieces).toBeGreaterThanOrEqual(2);
+    r.engine.seek(1);
+    r.runUntil(1.8);
+    r.engine.stop();
+    expect(r.graph.sources.some(s => s.stoppedAt !== null)).toBe(true);
   });
 });

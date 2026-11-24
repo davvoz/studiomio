@@ -216,3 +216,13 @@ describe('session keys', () => {
     expect(h.store.project.scenes).toHaveLength(5);
   });
 });
+
+describe('session keys: all of them', () => {
+  it('every binding runs on the chosen slot', () => {
+    const h = harness([[1, 0], [2, 3]]);
+    const controls: SessionControls = { selection: h.selection, commands: h.commands };
+    h.selection.select(h.ref(1, 0));
+    for (const b of SESSION_KEYS) b.run(controls);
+    expect(h.selection.cursor).not.toBeNull();
+  });
+});

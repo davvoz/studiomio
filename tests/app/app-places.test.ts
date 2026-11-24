@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClipId } from '../../src/core/id';
-import type { Directory } from '../../src/persistence/directory';
-import { ProjectFiles, recentEntry, type ProjectFilesDeps } from '../../src/app/project-files';
+import { MemoryDirectory, type Directory } from '../../src/persistence/directory';
+import { DesktopDirectory } from '../../src/persistence/desktop-directory';
+import { FsAccessDirectory } from '../../src/persistence/fs-access-directory';
+import { ProjectFiles, diskFolders, projectPicker, recentEntry, reopenRecent, type ProjectFilesDeps } from '../../src/app/project-files';
 import { keepUiInProject } from '../../src/app/ui-upkeep';
 import { automationClip, browserTarget, importTarget } from '../../src/app/work-targets';
 import { addMidiClip, groupTracks, removeTrack, setGroupFolded } from '../../src/store/edits';
@@ -190,5 +192,31 @@ describe('work targets', () => {
     expect(automationClip(p(), t, undefined, 'c9' as ClipId)).toEqual(slotRef(t, 'c9' as ClipId));
     expect(automationClip(p(), t, placed, 'c9' as ClipId)).toEqual(placed);
     expect(automationClip(p(), t, slotRef(t, 'gone' as ClipId), undefined)).toEqual(slot);
+  });
+});
+
+describe('project folders on disk', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const handle = (perm: () => Promise<string>) => ({ name: 'Song', queryPermission: perm }) as unknown as FileSystemDirectoryHandle;
+
+  it('in the browser: folders by handle; a recent one gone or refused', async () => {
+    expect(projectPicker()).toBe(FsAccessDirectory.pick);
+    const dir = new FsAccessDirectory(handle(async () => 'granted'));
+    expect(recentEntry(dir)).toBe(dir.root);
+    expect(await reopenRecent('C:/x/Song')).toBeNull();
+    expect(await reopenRecent(handle(async () => 'granted'))).toBeInstanceOf(FsAccessDirectory);
+    expect(await reopenRecent(handle(async () => { throw new DOMException('gone', 'NotFoundError'); }))).toBeNull();
+    await expect(reopenRecent(handle(async () => { throw new Error('broken'); }))).rejects.toThrow('broken');
+    expect(diskFolders.pathFolder('C:/x')).toBeNull();
+    expect(await diskFolders.hasProject(new MemoryDirectory('empty'))).toBe(false);
+  });
+
+  it('in the desktop app: folders by path', async () => {
+    vi.stubGlobal('window', { studiomioDesktop: { folders: {} } });
+    expect(projectPicker()).not.toBe(FsAccessDirectory.pick);
+    const reopened = await reopenRecent('C:/x/Song');
+    expect(reopened).toBeInstanceOf(DesktopDirectory);
+    expect(recentEntry(reopened!)).toBe('C:/x/Song');
+    expect(diskFolders.pathFolder('C:/x')).toBeInstanceOf(DesktopDirectory);
   });
 });
