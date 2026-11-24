@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.68] - 2026-11-24
+
 ### Fixed
 - Shift+wheel scrolls the audio clip editor again (on Windows it did nothing).
 
