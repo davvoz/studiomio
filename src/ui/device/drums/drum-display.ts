@@ -4,6 +4,7 @@
  * file dropped on a pad becomes its sample (several files: on the following pads). A pad with an
  * instrument (Kick, Snare, Hat and Cymbals) shows that instrument's panel next to it, which
  * works on the pad's parameters as if it were the instrument alone. */
+import { oneAtATime } from '../../../core/async';
 import type { SampleId } from '../../../core/id';
 import { paramActive, paramSpec, resolveParams, type DeviceType } from '../../../devices/device-type';
 import { pieceOfNote } from '../../../devices/instruments/cymbals/cymbals';
@@ -359,15 +360,16 @@ export class DrumDisplay implements DeviceDisplay {
   private async loadFiles(first: number, files: readonly File[]): Promise<void> {
     const samples = this.ctx.samples;
     if (!samples) return;
-    for (const [k, file] of files.entries()) {
-      const i = first + k;
-      if (i >= DRUM_PADS) break;
-      try {
+    let loading = '';
+    try {
+      await oneAtATime(files.slice(0, DRUM_PADS - first), async (file, k) => {
+        const i = first + k;
+        loading = file.name;
         await samples.load(padSlot(i), file, asSamplePad(this.pads[i], i));
-      } catch (err) {
-        this.hint.textContent = `Can't load "${file.name}": ${err instanceof Error ? err.message : err}`;
-        return;
-      }
+      });
+    } catch (err) {
+      this.hint.textContent = `Can't load "${loading}": ${err instanceof Error ? err.message : err}`;
+      return;
     }
     if (files.length) {
       this.select(first);

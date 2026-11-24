@@ -5,6 +5,7 @@
  * SysEx is in Chrome and Edge: the first time the browser asks for permission (🎛 button),
  * then at startup it connects by itself. The other input ports (any controller, a
  * keyboard) go to the MIDI mappings (see app/midi-mapper), but they open only if needed. */
+import { oneAtATime } from '../core/async';
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import { Apc40 } from './apc40/apc40';
 import { PORT_NAME } from './apc40/protocol';
@@ -329,7 +330,9 @@ export class ControlSurfaces {
   /** The inputs that open, listened to: `forward` ones go to the controller, the others are only logged. */
   private async openInputs(inputs: readonly MIDIInput[], forward: boolean, controller: SessionSurface, liveness: Liveness): Promise<MIDIInput[]> {
     const opened: MIDIInput[] = [];
-    for (const input of inputs) if (await this.listenTo(input, forward, controller, liveness)) opened.push(input);
+    await oneAtATime(inputs, async input => {
+      if (await this.listenTo(input, forward, controller, liveness)) opened.push(input);
+    });
     return opened;
   }
 

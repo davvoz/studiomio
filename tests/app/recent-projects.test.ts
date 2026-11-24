@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_RECENT, recentName, RecentProjects } from '../../src/app/recent-projects';
+import { oneAtATime } from '../../src/core/async';
 
 /** A fake folder: two handles are the same folder if they have the same name. */
 const folder = (name: string) => ({ name, isSameEntry: async (o: { name: string }) => o.name === name }) as unknown as FileSystemDirectoryHandle;
@@ -8,10 +9,10 @@ describe('recent projects', () => {
   it('the most recent at the top, without duplicates, at most eight; they\'re removed and cleared', async () => {
     let changes = 0;
     const recent = new RecentProjects(() => changes++);
-    for (const n of ['a', 'b', 'c']) await recent.add(folder(n));
+    await oneAtATime(['a', 'b', 'c'], async n => { await recent.add(folder(n)); });
     await recent.add(folder('a')); // reopened: it goes back to the top
     expect(recent.list.map(recentName)).toEqual(['a', 'c', 'b']);
-    for (let i = 0; i < 10; i++) await recent.add(folder(`x${i}`));
+    await oneAtATime(Array.from({ length: 10 }, (_, i) => `x${i}`), async n => { await recent.add(folder(n)); });
     expect(recent.list).toHaveLength(MAX_RECENT);
     expect(recentName(recent.list[0])).toBe('x9');
     await recent.remove(folder('x9'));

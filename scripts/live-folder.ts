@@ -2,6 +2,7 @@
  * audio/, reads their format and duration from the WAV header, assembles the project and saves it. */
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { oneAtATime } from '../src/core/async';
 import { sequentialIds } from '../src/core/id';
 import { Project } from '../src/model/project';
 import type { SampleRef } from '../src/model/sample';
@@ -43,7 +44,7 @@ export async function buildLiveFolder<S extends string>(
   const sounds = {} as Record<S, SampleRef>;
   // the same file for several roles is copied once
   const copied = new Map<string, SampleRef>();
-  for (const key of Object.keys(files) as S[]) {
+  await oneAtATime(Object.keys(files) as S[], async key => {
     const path = join(soundsDir, files[key]), name = basename(path);
     let ref = copied.get(path);
     if (!ref) {
@@ -55,7 +56,7 @@ export async function buildLiveFolder<S extends string>(
     }
     sounds[key] = ref;
     console.log(`  ${key.padEnd(11)} ${name} (${(ref.frames / ref.sampleRate).toFixed(2)} s, ${ref.sampleRate} Hz)`);
-  }
+  });
   build(store, sounds);
   await folder.save(store.project);
   const p = store.project;

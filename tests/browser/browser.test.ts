@@ -10,7 +10,7 @@ import { deviceSource, kitSource, userPresetsSource, type UserPresetList, type U
 import { FACTORY_RACKS, TORNADO } from '../../src/devices/factory-racks';
 import { MACRO_COUNT } from '../../src/model/rack';
 import type { RackPreset } from '../../src/model/rack-preset';
-import { childrenOf, type BrowserItem } from '../../src/browser/item';
+import { childrenOf, type BrowserItem, type BrowserSource } from '../../src/browser/item';
 import { duration, folderSource, projectSamplesSource, type FolderEntry, type FolderReader } from '../../src/browser/sample-sources';
 import { search, searchSources } from '../../src/browser/search';
 import { addSample } from '../../src/store/edits';
@@ -191,6 +191,27 @@ describe('search', () => {
     const hits = await search(items, 'kick');
     expect(hits.map(h => [h.item.name, h.path])).toEqual([['kick 1', ['kick']], ['kick 2', ['kick']], ['kick 3', ['kick']]]);
     expect(await search(items, 'kick', { limit: 2 })).toHaveLength(2);
+  });
+
+  it('once the limit is reached no other folder is opened, nor another source asked', async () => {
+    const opened: string[] = [];
+    const dir = (name: string): BrowserItem => ({
+      id: name, name, icon: 'folder',
+      children: async () => {
+        opened.push(name);
+        return [{ id: `${name}/kick`, name: `kick ${name}`, icon: 'sample' }];
+      },
+    });
+    expect((await search([dir('a'), dir('b'), dir('c')], 'kick', { limit: 2 })).map(h => h.item.name)).toEqual(['kick a', 'kick b']);
+    expect(opened).toEqual(['a', 'b']);
+    const asked: string[] = [];
+    const source = (id: string): BrowserSource => ({
+      ...standardSources({ instruments: [], effects: [], user: user(), project: setup().store })[0], id, label: id,
+      locked: async () => { asked.push(id); return false; },
+      items: async () => [{ id: `${id}/kick`, name: 'kick', icon: 'sample' }],
+    });
+    expect(await searchSources([source('x'), source('y'), source('z')], 'kick', { limit: 2 })).toHaveLength(2);
+    expect(asked).toEqual(['x', 'y']);
   });
 });
 

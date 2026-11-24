@@ -1,6 +1,7 @@
 /* Moving music between the timeline and the session, as in Live: consolidate the selected clips
  * into one per track (Ctrl+J), copy them to a new scene, copy a scene to the timeline. Audio
  * that must be rendered goes through `render` (the app's offline mix and project folder). */
+import { oneAtATime } from '../core/async';
 import type { Beats } from '../core/music-time';
 import type { PlaybackEngine } from '../engine/playback-engine';
 import type { Placement } from '../model/arrangement';
@@ -82,18 +83,18 @@ export class ClipRendering {
       const source = range ? cutAt(base, store, spans, range) : base;
       if (spans.some(s => placementsIn(source, s).some(pl => pl.clip instanceof AudioClip))) this.deps.say('Consolidating the audio…');
       const items: Consolidated[] = [];
-      for (const span of spans) {
+      await oneAtATime(spans, async span => {
         const pls = placementsIn(source, span);
-        if (!pls.length) continue;
+        if (!pls.length) return;
         const clipId = ids.next('clip'), placement = ids.next('placement');
         if (pls[0].clip instanceof MidiClip) {
           items.push({ span, placement, clip: consolidatedMidiClip(clipId, pls as Placement<MidiClip>[], span.start, span.end) });
-          continue;
+          return;
         }
         const audioPls = pls as Placement<AudioClip>[];
         const sample = await this.deps.render(source, audioPls, span);
         items.push({ span, placement, sample, clip: consolidatedAudioClip(clipId, audioPls, sample, source.tempo.bpm, span.start, span.end) });
-      }
+      });
       if (store.project !== base) return this.deps.say('The project changed during consolidation: try again.');
       store.apply(edit('Consolidate', (_p, ctx) => withConsolidated(source, items, ctx.ids)));
       ui.select(items.map(i => i.placement));
@@ -116,19 +117,19 @@ export class ClipRendering {
       // clips are split at the range's edges: only what plays there stays inside
       const source = cutAt(base, store, spans, range);
       const clips: SceneClip[] = [];
-      for (const span of spans) {
+      await oneAtATime(spans, async span => {
         const pls = placementsIn(source, span);
-        if (!pls.length) continue;
+        if (!pls.length) return;
         const clipId = ids.next('clip'), clip = sessionClip(clipId, pls, range.start, range.end);
         if (clip) {
           clips.push({ track: span.track, clip });
-          continue;
+          return;
         }
         this.deps.say('Rendering the audio…');
         const audioPls = pls as Placement<AudioClip>[];
         const sample = await this.deps.render(source, audioPls, span);
         clips.push({ track: span.track, sample, clip: consolidatedAudioClip(clipId, audioPls, sample, source.tempo.bpm, range.start, range.end) });
-      }
+      });
       if (store.project !== base) return this.deps.say('The project changed during rendering: try again.');
       const name = barsName(range, base.signature.beatsPerBar);
       store.apply(arrangementToScene(name, clips));

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { oneAtATime } from '../../src/core/async';
 import { asId } from '../../src/core/id';
 import type { WarpJob } from '../../src/dsp/stretch/warp-renderer';
 import { RenderCache, renderKey } from '../../src/engine/render-cache';
@@ -20,7 +21,7 @@ describe('RenderCache', () => {
   it('beyond the budget it discards the least recently used renders', async () => {
     const cache = new RenderCache(async (_s, j) => [new Float32Array(j.outLength)], 1300); // three renders of ~400 bytes fit, not four
     const keys = [100, 101, 102].map(n => renderKey(sid, job(n)));
-    for (const [i, n] of [100, 101, 102].entries()) await cache.ensure(keys[i], sid, job(n));
+    await oneAtATime([100, 101, 102], async (n, i) => { await cache.ensure(keys[i], sid, job(n)); });
     cache.get(keys[0]); // the first becomes the most recent again
     await cache.ensure(renderKey(sid, job(103)), sid, job(103));
     expect(cache.get(keys[0])).toBeDefined();

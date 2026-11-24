@@ -1,3 +1,4 @@
+import { oneAtATime } from '../core/async';
 import { Emitter, type Unsubscribe } from '../core/emitter';
 import type { SampleId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
@@ -76,7 +77,7 @@ export class ProjectSession {
   /** Imports audio files: copy into the project folder, analysis and clips on the timeline.
    *  Several files go on new tracks, one below the other. */
   async importFiles(files: readonly File[], target: TrackId | null, start: Beats): Promise<void> {
-    for (const [i, file] of files.entries()) {
+    await oneAtATime(files, async (file, i) => {
       try {
         const sample = await this.loadFile(file);
         this.store.apply(importSample(sample, i === 0 ? target : null, start));
@@ -84,15 +85,15 @@ export class ProjectSession {
       } catch (e) {
         this.say(`Couldn't import "${file.name}": ${e instanceof Error ? e.message : e}`);
       }
-    }
+    });
   }
 
   /** Imports audio files into session slots, from `slot` down in the same column (on
    *  a new audio track if `target` isn't one). Files past the last scene are skipped. */
   async importFilesToSlots(files: readonly File[], target: TrackId | null, slot: number): Promise<void> {
     let track = target;
-    for (const [i, file] of files.entries()) {
-      if (slot + i >= this.store.project.scenes.length) break;
+    await oneAtATime(files, async (file, i) => {
+      if (slot + i >= this.store.project.scenes.length) return;
       try {
         const sample = await this.loadFile(file);
         const before = this.store.project;
@@ -103,7 +104,7 @@ export class ProjectSession {
       } catch (e) {
         this.say(`Couldn't import "${file.name}": ${e instanceof Error ? e.message : e}`);
       }
-    }
+    });
   }
 
   /** Copies an audio file into the project folder and loads it in the engine, without putting it
@@ -173,12 +174,12 @@ export class ProjectSession {
     const lost = chosen.samples.filter(s => missing.some(m => m.id === s.id));
     if (lost.length) throw new Error(`audio files are missing in "${dir.name}": ${lost.map(s => s.file).join(', ')}`);
     let part = withFreshIds(chosen, this.store.ids);
-    for (const s of part.samples) {
+    await oneAtATime(part.samples, async s => {
       const bytes = await folder.readAudio(s);
       const file = await this.folder.adoptAudio(s.file, bytes);
       await this.audio.addSample(s.id, await this.decode(bytes));
       if (file !== s.file) part = part.updatingSample(s.id, x => ({ ...x, file }));
-    }
+    });
     this.store.apply(edit(`Import from ${dir.name}`, p => mergingImport(p, part)));
     const audio = part.samples.length ? ` (${part.samples.length} audio files copied)` : '';
     this.say(`Imported ${importSummary(part)} from "${dir.name}"${audio}.`);
@@ -258,10 +259,10 @@ export class ProjectSession {
 
   /** Loads the project's audio files in the engine, except those in `skip`. */
   private async loadSamples(folder: ProjectFolder, project: Project, skip: readonly SampleRef[]): Promise<void> {
-    for (const s of project.samples) {
-      if (skip.includes(s)) continue;
-      await this.audio.addSample(s.id, await this.decode(await folder.readAudio(s)));
-    }
+    await oneAtATime(project.samples.filter(s => !skip.includes(s)), async s => {
+      const bytes = await folder.readAudio(s);
+      await this.audio.addSample(s.id, await this.decode(bytes));
+    });
   }
 
   private async loadFile(file: File): Promise<SampleRef> {
@@ -296,7 +297,7 @@ export class ProjectSession {
 }
 
 async function copyFiles(from: Directory, to: Directory, paths: readonly string[]): Promise<void> {
-  for (const p of new Set(paths)) {
+  await oneAtATime([...new Set(paths)], async p => {
     if (!(await to.exists(p))) await to.writeBytes(p, await from.readBytes(p));
-  }
+  });
 }

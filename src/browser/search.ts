@@ -1,3 +1,4 @@
+import { oneAtATime } from '../core/async';
 import { childrenOf, searchKey, type BrowserItem, type BrowserPayload, type BrowserSource } from './item';
 
 /** A found item, with the folders containing it (to show where it comes from). */
@@ -25,11 +26,11 @@ export async function search(roots: readonly BrowserItem[], query: string, { lim
     return words.every(w => name.includes(w));
   };
   const walk = async (items: readonly BrowserItem[], path: readonly string[], level: number): Promise<void> => {
-    for (const item of items) {
+    await oneAtATime(items, async item => {
       if (hits.length >= limit) return;
       if ((item.payload || !item.children) && matches(item)) hits.push({ item, path });
       if (item.children && level < depth) await walk(await childrenOf(item), [...path, item.name], level + 1);
-    }
+    });
   };
   await walk(roots, [], 0);
   return hits;
@@ -56,15 +57,15 @@ function payloadKey(item: BrowserItem): string {
 export async function searchSources(sources: readonly BrowserSource[], query: string, { limit = 200, depth = 6 }: SearchOptions = {}): Promise<SearchHit[]> {
   const hits: SearchHit[] = [];
   const seen = new Set<string>();
-  for (const source of sources) {
-    if (hits.length >= limit) break;
-    if (source.locked && await source.locked()) continue;
+  await oneAtATime(sources, async source => {
+    if (hits.length >= limit) return;
+    if (source.locked && await source.locked()) return;
     for (const h of await search(await source.items(), query, { limit, depth })) {
       const key = payloadKey(h.item);
       if (seen.has(key) || hits.length >= limit) continue;
       seen.add(key);
       hits.push({ item: h.item, path: [source.label, ...h.path] });
     }
-  }
+  });
   return hits;
 }
