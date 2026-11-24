@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.70] - 2026-11-24
+
 ### Added
 - Overdub, as Live's Session Record: ● in the top bar (Session on the APC40 mkII, Record on the
   Launchpad Pro) turns it on. What you play on an armed MIDI track goes into its playing clip, where it
