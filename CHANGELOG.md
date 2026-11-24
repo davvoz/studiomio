@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.73] - 2026-11-24
+
 ### Fixed
 - Recording movements in overdub, as Live's latch with a controller: a control you touch now records up to
   the end of the loop, also where you hold it still (the old curve is replaced by its value, it no longer
