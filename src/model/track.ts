@@ -299,7 +299,8 @@ export class GroupTrack extends Track<never, GroupTrackProps> {
   get folded(): boolean { return this.props.folded ?? false; }
 
   withFolded(folded: boolean): this {
-    return folded === this.folded ? this : this.with({ folded });
+    const unchanged = folded === this.folded;
+    return unchanged ? this : this.with({ folded });
   }
 
   accepts(_clip: Clip): _clip is never {
@@ -337,7 +338,8 @@ export class BusTrack extends Track<never, BusTrackProps> {
   get folded(): boolean { return this.props.folded ?? false; }
 
   withFolded(folded: boolean): this {
-    return folded === this.folded ? this : this.with({ folded });
+    const unchanged = folded === this.folded;
+    return unchanged ? this : this.with({ folded });
   }
 
   accepts(_clip: Clip): _clip is never {

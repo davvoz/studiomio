@@ -173,11 +173,9 @@ export async function unpackProject(zip: Uint8Array, name: string): Promise<Memo
   if (top === undefined) throw new Error(`"${name}" doesn't contain a studiomio project`);
   const prefix = top.slice(0, top.lastIndexOf('/') + 1);
   const dir = new MemoryDirectory(prefix ? prefix.slice(0, -1).split('/').pop() : name);
-  for (const e of entries) {
-    const path = e.name.slice(prefix.length);
+  const kept = entries.map(e => ({ inside: e.name.startsWith(prefix), path: e.name.slice(prefix.length), data: e.data }))
     // nothing outside the project folder (nor "..": splitPath would reject it)
-    if (!e.name.startsWith(prefix) || path === BACKUP_FILE || path === RECOVERY_FILE || path.split('/').includes('..')) continue;
-    await dir.writeBytes(path, e.data);
-  }
+    .filter(({ inside, path }) => inside && path !== BACKUP_FILE && path !== RECOVERY_FILE && !path.split('/').includes('..'));
+  await Promise.all(kept.map(({ path, data }) => dir.writeBytes(path, data)));
   return dir;
 }

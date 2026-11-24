@@ -1,4 +1,4 @@
-import { it } from 'vitest';
+import { expect, it } from 'vitest';
 import { resolveParams } from '../../src/devices/device-type';
 import { PRISMA, SRC, WARP } from '../../src/devices/instruments/prisma/prisma';
 import { PrismaCore } from '../../src/devices/instruments/prisma/prisma-core';
@@ -31,5 +31,10 @@ it('Prisma: cost of a chord of 8 notes', () => {
         [SRC.lfo3, 'bPos', 50], [SRC.env3, 'aWarpAmt', 30]),
     }],
   ];
-  for (const [name, params] of cases) console.log(`${name}: ${speed(params).toFixed(1)}× real time`);
+  for (const [name, params] of cases) {
+    const times = speed(params);
+    console.log(`${name}: ${times.toFixed(1)}× real time`);
+    // slower than real time it can't be played
+    expect(times, name).toBeGreaterThan(1);
+  }
 });

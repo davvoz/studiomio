@@ -1,4 +1,4 @@
-import { it } from 'vitest';
+import { expect, it } from 'vitest';
 import { onsetEnvelope } from '../src/dsp/analysis/onset';
 import { detectTransients } from '../src/dsp/analysis/transients';
 import { mixMono } from '../src/dsp/signal';
@@ -48,4 +48,6 @@ it('DSP benchmark', () => {
   }])));
   const [, tsMs] = rows[0], [, wasmMs] = rows[1];
   console.log(`WebAssembly is ${(tsMs / wasmMs).toFixed(2)}x relative to TypeScript on the Complex mode\n`);
+  // slower than real time it can't keep up with the playback
+  for (const [name, ms] of rows) expect(ms, name).toBeLessThan(seconds * 1000);
 }, 300_000);

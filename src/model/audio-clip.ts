@@ -150,7 +150,7 @@ export class AudioClip extends Clip<AudioClipProps> {
     const toSeconds = (b: Beats) => (warp ? this.warp.markers.timeOf(b) : tempo.secondsAt(b) * rate);
     const t0 = Math.max(0, toSeconds(start)), t1 = Math.min(duration, toSeconds(end));
     const lasts = t1 - t0 > 1e-3;
-  if (!lasts) return null;
+    if (!lasts) return null;
     // without warp the new file restarts from beat 0: everything shifts back by as much as is cut
     const shift = warp ? 0 : tempo.beatAt(t0 / rate);
     const cropped = this.warp.markers.cropped(t0, t1);

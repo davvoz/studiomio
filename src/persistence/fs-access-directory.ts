@@ -84,12 +84,12 @@ export class FsAccessDirectory implements Directory {
   }
 
   private async dirHandle(dirs: string[], create: boolean): Promise<FileSystemDirectoryHandle> {
-    let h = this.root;
-    for (const d of dirs) {
-      const parent = h;
-      h = await FsAccessDirectory.notFound(dirs.join('/'), () => parent.getDirectoryHandle(d, { create }));
-    }
-    return h;
+    const walk = async (depth: number): Promise<FileSystemDirectoryHandle> => {
+      if (depth === 0) return this.root;
+      const parent = await walk(depth - 1);
+      return parent.getDirectoryHandle(dirs[depth - 1], { create });
+    };
+    return FsAccessDirectory.notFound(dirs.join('/'), () => walk(dirs.length));
   }
 
   private static async notFound<T>(path: string, fn: () => Promise<T>): Promise<T> {

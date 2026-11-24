@@ -237,8 +237,8 @@ export class PrismaFilter {
   }
 
   private comb(ch: Channel, x: number): number {
-    let buf = ch.comb;
-    if (!buf) buf = ch.comb = new Float32Array(COMB_SIZE);
+    ch.comb ??= new Float32Array(COMB_SIZE);
+    const buf = ch.comb;
     const mask = COMB_SIZE - 1, read = ch.combAt - this.combDelay;
     const i = Math.floor(read), t = read - i;
     const a = buf[i & mask], delayed = a + (buf[(i + 1) & mask] - a) * t;

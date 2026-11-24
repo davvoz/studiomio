@@ -28,7 +28,7 @@ export class WarpMarkers {
   /** Sorted markers, without duplicates and with increasing beats. */
   static of(markers: readonly WarpMarker[], baseBpm: number): WarpMarkers {
     const positive = baseBpm > 0;
-  if (!positive) throw new RangeError(`invalid base tempo: ${baseBpm}`);
+    if (!positive) throw new RangeError(`invalid base tempo: ${baseBpm}`);
     const sorted = [...markers].sort((p, q) => p.t - q.t);
     const out: WarpMarker[] = [];
     for (const m of sorted) {
