@@ -57,13 +57,6 @@ export interface LaneHost {
   readonly drawMode: DrawMode;
 }
 
-/** The wheel on the lane: Ctrl zooms the time, otherwise it scrolls it. */
-export function wheelTime(e: WheelEvent, x: number, axis: BeatAxis): BeatAxis {
-  e.preventDefault();
-  if (e.ctrlKey || e.metaKey) return axis.zoomed(axis.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x);
-  return axis.scrolled(axis.startBeat + (e.deltaX || e.deltaY) / axis.pxPerBeat);
-}
-
 /** Height of the lane (by dragging its top edge), remembered by this browser: it's in
  *  a CSS variable, because the editor hosting it must also grow with it. */
 const LANE_HEIGHT = { key: 'studiomio.mod-lane.height', variable: '--lane-h', min: 60, max: 360 } as const;
@@ -81,12 +74,13 @@ export class EnvelopeLane {
   private last: { axis: BeatAxis; curves: LaneCurves | null; playhead: Beats | null; grid: Beats } | null = null;
 
   constructor(private readonly host: LaneHost, private readonly onDrawMode: (on: boolean) => void, private readonly onShapes: (on: boolean) => void) {
-    const lane = this;
+    // the shapes' state is a property: read it through a function (no alias of this)
+    const shapes = () => this.shapes;
     this.editing = new LaneEditing({
       host,
       geometry: () => this.geometry(),
       width: () => this.surface.width,
-      get shapes() { return lane.shapes; },
+      get shapes() { return shapes(); },
       setShapes: on => this.setShapes(on),
       focus: () => this.surface.canvas.focus({ preventScroll: true }),
       invalidate: () => this.invalidate(),

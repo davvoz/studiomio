@@ -16,7 +16,7 @@ import { BeatAxis, playheadIn, seekBeatOf } from './clip-geometry';
 import { ClipPanel } from './clip-panel';
 import { editorCursor, editorGestureFor, editorHit, type EditorGesture, type EditorHit, type EditorHost } from './editor-gestures';
 import { LAYOUT, paintEditor } from './editor-painter';
-import { wheelTime } from '../envelopes/envelope-lane';
+import { takeWheel, wheelBeats, wheelZoom } from '../kit/wheel';
 import { ModulationEditor } from '../envelopes/modulation-editor';
 import { targetDevices, trackChain } from '../envelopes/mod-targets';
 import type { Clipboard } from '../../store/clipboard';
@@ -87,7 +87,7 @@ export class ClipEditor implements EditorHost {
       playhead: () => { const t = this.target(); return t ? playheadIn(t.found, deps.engine) : null; },
       drawMode: deps.drawMode,
       commit: (label, target, points) => this.commit(label, c => c.withEnvelope(target, points) as AudioClip),
-      wheel: (e, x) => this.setAxis(wheelTime(e, x, this._axis)),
+      wheel: (e, x) => this.setAxis(wheelBeats(this._axis, takeWheel(e), x)),
       devices: () => { const t = this.target()?.found.track ?? null; return t && targetDevices(t); },
       chain: () => { const t = this.target()?.found.track ?? null; return t && trackChain(t); },
       layout: visible => this.element.classList.toggle('with-lane', visible),
@@ -345,10 +345,9 @@ export class ClipEditor implements EditorHost {
       showContextMenu(e.clientX, e.clientY, this.menu(h.clip, h.hit, p));
     });
     el.addEventListener('wheel', e => {
-      e.preventDefault();
-      const a = this._axis, x = pointerIn(e, el).x;
-      if (e.ctrlKey || e.metaKey) this.setAxis(a.zoomed(a.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x));
-      else this.setAxis(a.scrolled(a.startBeat + (e.shiftKey || !e.deltaX ? e.deltaY : e.deltaX) / a.pxPerBeat));
+      const w = takeWheel(e), a = this._axis, x = pointerIn(e, el).x;
+      if (w.ctrl) this.setAxis(a.zoomed(wheelZoom(a.pxPerBeat, w.deltaY), x));
+      else this.setAxis(a.scrolled(a.startBeat + (w.shift || !w.deltaX ? w.deltaY : w.deltaX) / a.pxPerBeat));
     }, { passive: false });
     // the editor's keys: they take priority over the timeline's
     this.element.addEventListener('keydown', e => {

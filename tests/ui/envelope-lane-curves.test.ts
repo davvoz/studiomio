@@ -1,36 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MOD_SCALES } from '../../src/model/envelope';
-import { BeatAxis } from '../../src/ui/clip-editor/clip-geometry';
-import { wheelTime } from '../../src/ui/envelopes/envelope-lane';
 import { clearRange, paintStep, rescalePoints, simplify, valueBefore } from '../../src/ui/envelopes/envelope-points';
 
 const pts = (...p: [number, number][]) => p.map(([beat, value]) => ({ beat, value }));
-
-const wheel = (over: Partial<WheelEvent>) =>
-  ({ deltaX: 0, deltaY: 0, ctrlKey: false, metaKey: false, preventDefault: vi.fn(), ...over }) as unknown as WheelEvent;
-
-describe('the wheel on a lane', () => {
-  it('scrolls the time by the wheel distance in beats and stops the page from scrolling', () => {
-    const e = wheel({ deltaY: 80 });
-    const out = wheelTime(e, 100, new BeatAxis(40, 2));
-    expect(e.preventDefault).toHaveBeenCalled();
-    expect(out.startBeat).toBeCloseTo(4, 9);
-    expect(out.pxPerBeat).toBe(40);
-  });
-
-  it('a horizontal wheel takes priority over the vertical one', () => {
-    expect(wheelTime(wheel({ deltaX: 40, deltaY: 400 }), 0, new BeatAxis(40, 0)).startBeat).toBeCloseTo(1, 9);
-  });
-
-  it('Ctrl or Meta zooms around the pointer: wheel up zooms in, the beat under it stays', () => {
-    const axis = new BeatAxis(40, 2);
-    const up = wheelTime(wheel({ deltaY: -100, ctrlKey: true }), 200, axis);
-    expect(up.pxPerBeat).toBeGreaterThan(40);
-    expect(up.xToBeat(200)).toBeCloseTo(axis.xToBeat(200), 9);
-    const down = wheelTime(wheel({ deltaY: 100, metaKey: true }), 200, axis);
-    expect(down.pxPerBeat).toBeLessThan(40);
-  });
-});
 
 describe('reading a curve', () => {
   const ramp = pts([0, 0], [4, 1]);

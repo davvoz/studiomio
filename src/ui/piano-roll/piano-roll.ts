@@ -1,33 +1,32 @@
 import type { TrackId } from '../../core/id';
 import type { Beats } from '../../core/music-time';
 import type { PlaybackEngine } from '../../engine/playback-engine';
-import { resolveParams } from '../../devices/device-type';
-import { instrumentType } from '../../devices/registry';
 import { MidiClip, type Note } from '../../model/midi-clip';
-import {
-  addNote, deleteNotes, duplicateNotes, duplicateSpan, moveNotes, quantizeNotes, type NoteChange, type Selection, type TimeRange,
-} from '../../model/note-edits';
+import type { NoteChange, Selection, TimeRange } from '../../model/note-edits';
 import { MidiTrack } from '../../model/track';
-import { copyNotes, pasteNotes, type Clipboard } from '../../store/clipboard';
-import { duplicateLoopAt, findClip, scaleMidiClipAt, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
-import type { ProjectStore } from '../../store/project-store';
+import type { Clipboard } from '../../store/clipboard';
+import { findClip, updateClipAt, type ClipRef, type FoundClip } from '../../store/clip-ref';
+import type { Edit, ProjectStore } from '../../store/project-store';
 import { BeatAxis, playheadIn, seekBeatOf } from '../clip-editor/clip-geometry';
-import { addHeightHandle } from '../editor-height';
-import { bindKeys, type Binding } from '../keymap';
 import { showContextMenu } from '../context-menu';
+import type { DrawMode } from '../draw-mode';
+import { addHeightHandle } from '../editor-height';
+import { targetDevices, trackChain } from '../envelopes/mod-targets';
+import { ModulationEditor } from '../envelopes/modulation-editor';
+import { bindKeys, type Binding } from '../keymap';
 import { Surface } from '../kit/canvas';
-import { rollMenu } from './roll-menu';
 import { pointerIn, type Pointer } from '../kit/pointer';
+import { takeWheel, wheelBeats } from '../kit/wheel';
 import type { UiState } from '../ui-state';
 import { RollKeyboard } from './keyboard';
-import { foldRows, PitchAxis, sameRows } from './pitch-axis';
+import { PitchAxis } from './pitch-axis';
+import { RollCommands } from './roll-commands';
 import { rollCursor, rollGestureFor, rollHit, type RollGesture, type RollHit, type RollHost } from './roll-gestures';
+import { rollMenu } from './roll-menu';
 import { notesBottom, paintRoll, ROLL } from './roll-painter';
 import { RollPanel } from './roll-panel';
-import { wheelTime } from '../envelopes/envelope-lane';
-import { ModulationEditor } from '../envelopes/modulation-editor';
-import type { DrawMode } from '../draw-mode';
-import { targetDevices, trackChain } from '../envelopes/mod-targets';
+import { fitRows, followRows, instrumentLabel, noteNames, sameNames, type NoteNames } from './roll-rows';
+import { rollWheel } from './roll-wheel';
 
 export interface PianoRollDeps {
   readonly store: ProjectStore;
@@ -52,15 +51,8 @@ interface Target {
   readonly found: FoundClip;
 }
 
-/** Height of the rows when the notes have a name (the pads): the tallest fitting all the
- *  pads, between these two (below the minimum the names can't be read). */
-const NAMED_ROW = { min: 10, max: 16 } as const;
-
-/** With Fold the rows widen to fill the view, up to this height. */
-const FOLD_ROW_MAX = 20;
-
 /** The piano roll's keyboard commands: they take priority over the timeline's. */
-const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
+const ROLL_KEYS: readonly Binding<RollCommands>[] = [
   { key: 'delete', run: r => r.deleteSelected() },
   { key: 'backspace', run: r => r.deleteSelected() },
   { key: 'a', ctrl: true, run: r => r.selectAll() },
@@ -83,13 +75,15 @@ const ROLL_KEYS: readonly Binding<PianoRoll>[] = [
 
 /** Note editor of a MIDI clip: keyboard on the left, notes on the grid, velocity at the
  *  bottom, ruler with loop and flags as in the audio editor. Every change goes through the
- *  store (it can be undone and is heard right away). */
+ *  store (it can be undone and is heard right away). This is the DOM: the commands are in
+ *  `RollCommands`, the rows in roll-rows, the wheel in roll-wheel, the gestures in roll-gestures. */
 export class PianoRoll implements RollHost {
   readonly element = Object.assign(document.createElement('section'), { className: 'clip-editor piano-roll', hidden: true, tabIndex: -1 });
   private readonly surface = new Surface('roll-canvas');
   private readonly keyboard: RollKeyboard;
   private readonly panel: RollPanel;
   private readonly mods: ModulationEditor;
+  private readonly commands: RollCommands;
   private ref: ClipRef | null = null;
   private _axis = new BeatAxis();
   private _pitches = new PitchAxis(12, 0, ROLL.ruler);
@@ -101,21 +95,48 @@ export class PianoRoll implements RollHost {
   private dirty = true;
   private fitPending = false;
   /** The notes' names given by the instrument (the drum machine), or null. */
-  private names: ReadonlyMap<number, string> | null = null;
+  private names: NoteNames | null = null;
   noteLength: Beats = 0.25;
   /** Fold (as in Live): only the rows of the pitches that have notes. It stays from one clip to the next. */
   folded = false;
 
   constructor(private readonly deps: PianoRollDeps) {
     this.keyboard = new RollKeyboard(pitch => this.audition(pitch, 100));
+    const commands = this.commands = new RollCommands({
+      clip: () => this.clip(),
+      selection: () => this._selection,
+      time: () => this.time,
+      insert: () => this.insert,
+      grid: () => this.grid,
+      noteLength: () => this.noteLength,
+      clipboard: deps.clipboard,
+      drawMode: deps.drawMode,
+      pasteDevices: () => {
+        if (!deps.pasteDevices) return false;
+        deps.pasteDevices();
+        return true;
+      },
+      commitNotes: (label, change) => this.commitNotes(label, change),
+      select: (notes, time) => this.select(notes, time),
+      setInsertPoint: beat => this.setInsertPoint(beat),
+      audition: (pitch, velocity) => this.audition(pitch, velocity),
+      say: text => deps.say(text),
+      apply: (label, edit) => this.apply(label, edit),
+      refit: () => {
+        this.fit();
+        this.invalidate();
+      },
+      toggleFold: () => this.toggleFold(),
+      close: () => this.close(),
+    });
     this.panel = new RollPanel({
       rename: name => this.commit('Rename clip', c => c.withName(name)),
-      toggleDraw: () => this.toggleDraw(),
-      toggleFold: () => this.toggleFold(),
-      quantize: () => this.quantize(),
-      transpose: n => this.transpose(n),
-      scaleTime: f => this.scaleTime(f),
-      duplicateLoop: () => this.duplicateLoop(),
+      toggleDraw: () => commands.toggleDraw(),
+      toggleFold: () => commands.toggleFold(),
+      quantize: () => commands.quantize(),
+      transpose: n => commands.transpose(n),
+      scaleTime: f => commands.scaleTime(f),
+      duplicateLoop: () => commands.duplicateLoop(),
       openInstrument: () => { const t = this.target(); if (t) deps.openInstrument(t.track.id); },
       takeSound: () => { const t = this.target(); if (t) this.commit('Clip sound', c => c.withSound(t.track.instrument)); },
       clearSound: () => this.commit('Remove the clip sound', c => c.withSound(null)),
@@ -133,7 +154,7 @@ export class PianoRoll implements RollHost {
       playhead: () => { const t = this.target(); return t ? playheadIn(t.found, deps.engine) : null; },
       drawMode: deps.drawMode,
       commit: (label, target, points) => this.commit(label, c => c.withEnvelope(target, points) as MidiClip),
-      wheel: (e, x) => this.setAxis(wheelTime(e, x, this._axis)),
+      wheel: (e, x) => this.setAxis(wheelBeats(this._axis, takeWheel(e), x)),
       devices: () => { const t = this.target()?.track ?? null; return t && targetDevices(t); },
       chain: () => { const t = this.target()?.track ?? null; return t && trackChain(t); },
       layout: visible => this.element.classList.toggle('with-lane', visible),
@@ -155,7 +176,7 @@ export class PianoRoll implements RollHost {
     this.bind(this.surface.canvas);
     this.keyboard.element.addEventListener('wheel', e => this.wheel(e, 0, true), { passive: false });
     this.keyboard.element.title = 'Ctrl+wheel: vertical zoom';
-    bindKeys(this.element, this, ROLL_KEYS, true);
+    bindKeys(this.element, commands, ROLL_KEYS, true);
     deps.store.onChange(() => this.sync());
     deps.drawMode.onChange(() => this.sync());
     deps.ui.onGridChange(() => this.invalidate());
@@ -225,13 +246,7 @@ export class PianoRoll implements RollHost {
   }
 
   commit(label: string, fn: (c: MidiClip) => MidiClip): void {
-    const ref = this.ref;
-    if (!ref || !this.target()) return;
-    try {
-      this.deps.store.apply(updateClipAt<MidiClip>(label, ref, fn));
-    } catch (e) {
-      this.deps.say(`${label}: ${e instanceof Error ? e.message : e}`);
-    }
+    this.apply(label, ref => updateClipAt<MidiClip>(label, ref, fn));
   }
 
   commitNotes(label: string, change: NoteChange): void {
@@ -274,137 +289,30 @@ export class PianoRoll implements RollHost {
     this.dirty = true;
   }
 
-  // ---------------------------------------------------------------- commands
-
-  deleteSelected(): void {
-    const c = this.clip();
-    if (c && this._selection.size) this.commitNotes('Delete notes', deleteNotes(c.notes, this._selection));
-  }
-
-  /** All the notes, with the time selection on the loop (without loop, the clip): Ctrl+A and then Ctrl+D
-   *  repeats the whole clip. */
-  selectAll(): void {
-    const c = this.clip();
-    if (!c) return;
-    const { start, end } = c.loop.enabled ? c.loop : c.region;
-    this.select(c.notes, { start, end });
-  }
-
-  /** Copies the chosen notes after the end of the time selection (the box), or after the notes if
-   *  there isn't one; the time selection moves onto the copy, so Ctrl+D again continues in a row. */
-  duplicate(): void {
-    const c = this.clip(), time = this.time;
-    if (!c || !this._selection.size) return;
-    const span = duplicateSpan(c.notes, this._selection, this.grid, time);
-    this.commitNotes('Duplicate notes', duplicateNotes(c.notes, this._selection, this.grid, time));
-    if (time) this.select(this._selection, { start: time.end, end: time.end + span });
-  }
-
-  copy(): void {
-    const c = this.clip();
-    const copied = c && copyNotes(c.notes, this._selection);
-    if (!copied) return this.deps.say('Select some notes to copy.');
-    this.deps.clipboard.content = copied;
-    const n = copied.notes.length;
-    const message = n === 1 ? 'Copied 1 note: Ctrl+V pastes it' : `Copied ${n} notes: Ctrl+V pastes them`;
-    this.deps.say(`${message} at the insertion point (click in empty space to choose it).`);
-  }
-
-  cut(): void {
-    const c = this.clip();
-    const copied = c && copyNotes(c.notes, this._selection);
-    if (!c || !copied) return this.deps.say('Select some notes to cut.');
-    this.deps.clipboard.content = copied;
-    this.commitNotes('Cut notes', deleteNotes(c.notes, this._selection));
-  }
-
-  /** Pastes at point `at`, at the insertion point or, if there isn't one, right after the copied notes. */
-  paste(at?: Beats): void {
-    const c = this.clip(), copied = this.deps.clipboard.notes;
-    if (!c) return;
-    if (this.deps.clipboard.devices && this.deps.pasteDevices) return this.deps.pasteDevices();
-    if (!copied) return this.deps.say(this.deps.clipboard.clips ? 'The clipboard holds clips: paste them on the timeline.' : 'The clipboard is empty.');
-    const start = at ?? this.insert ?? copied.origin + copied.span;
-    this.commitNotes('Paste notes', pasteNotes(c.notes, copied, start));
-    // the insertion point goes to the end: pasting again continues in a row
-    this.setInsertPoint(start + copied.span);
-  }
-
-  get canPaste(): boolean {
-    return this.deps.clipboard.notes !== null;
-  }
-
-  cellStart(beat: Beats): Beats {
-    return Math.max(0, Math.floor(beat / this.grid + 1e-9) * this.grid);
-  }
-
-  /** Transposes the selected notes (or all, if none is selected). */
-  transpose(semitones: number): void {
-    const c = this.clip();
-    if (!c?.notes.length) return;
-    const sel = this._selection.size ? this._selection : new Set(c.notes);
-    const change = moveNotes(c.notes, sel, 0, semitones);
-    this.commitNotes('Transpose notes', this._selection.size ? change : { ...change, selected: [] });
-    if (this._selection.size === 1) this.audition([...this._selection][0].pitch, 100);
-  }
-
-  /** :2 or ×2: the whole clip (notes, loop, modulations) lasts half or twice as long. */
-  scaleTime(factor: number): void {
-    const ref = this.ref;
-    if (!ref || !this.target()) return;
-    const label = factor > 1 ? 'Length ×2' : 'Length :2';
-    try {
-      this.deps.store.apply(scaleMidiClipAt(label, ref, factor));
-    } catch (e) {
-      this.deps.say(`${label}: ${e instanceof Error ? e.message : e}`);
-    }
-  }
-
-  /** Live's "Dupl. Loop": the loop doubles, with the copy of its notes right after. */
-  duplicateLoop(): void {
-    const ref = this.ref;
-    if (!ref || !this.target()) return;
-    try {
-      this.deps.store.apply(duplicateLoopAt(ref));
-      // the clip is twice as long: it's framed whole, copy included
-      this.fit();
-      this.invalidate();
-    } catch (e) {
-      this.deps.say(`Duplicate loop: ${e instanceof Error ? e.message : e}`);
-    }
-  }
-
-  /** Moves the selected notes by one grid step. */
-  nudge(direction: 1 | -1): void {
-    const c = this.clip();
-    if (c && this._selection.size) this.commitNotes('Move notes', moveNotes(c.notes, this._selection, direction * this.grid, 0));
-  }
-
-  quantize(): void {
-    const c = this.clip();
-    if (c?.notes.length) this.commitNotes('Quantize notes', quantizeNotes(c.notes, this._selection, Math.min(this.grid, 1)));
-  }
-
   get drawMode(): boolean {
     return this.deps.drawMode.on;
   }
 
-  toggleDraw(): void {
-    this.deps.drawMode.toggle();
+  // ---------------------------------------------------------------- state
+
+  /** Applies an edit of the open clip (one undo step); false if there's none or it fails (and it's said). */
+  private apply(label: string, edit: (ref: ClipRef) => Edit): boolean {
+    const ref = this.ref;
+    if (!ref || !this.target()) return false;
+    try {
+      this.deps.store.apply(edit(ref));
+      return true;
+    } catch (e) {
+      this.deps.say(`${label}: ${e instanceof Error ? e.message : e}`);
+      return false;
+    }
   }
 
-  toggleFold(): void {
+  private toggleFold(): void {
     this.folded = !this.folded;
     this.fitPitches();
     this.sync();
   }
-
-  escape(): void {
-    if (this._selection.size) this.select([]);
-    else this.close();
-  }
-
-  // ---------------------------------------------------------------- state
 
   private get grid(): Beats {
     return this.deps.ui.gridStep(this._axis.pxPerBeat, this.deps.store.project.signature, 12);
@@ -431,9 +339,6 @@ export class PianoRoll implements RollHost {
     if (!t) return this.close();
     const notes = new Set(t.clip.notes);
     if ([...this._selection].some(n => !notes.has(n))) this._selection = new Set([...this._selection].filter(n => notes.has(n)));
-    const instrument = t.track.instrument;
-    const name = instrumentType(instrument.type)?.label ?? instrument.type;
-    const label = instrument.preset ? `${name} · ${instrument.preset}` : name;
     const names = this.noteNames();
     if (!sameNames(names, this.names)) {
       const hadNames = this.names !== null;
@@ -444,17 +349,13 @@ export class PianoRoll implements RollHost {
     this.keyboard.setNames(this.names);
     this.element.classList.toggle('named-keys', this.names !== null);
     this.mods.sync();
-    this.panel.update(t.clip, label, this.drawMode, this.folded, this._selection.size, this.deps.store.project.signature.beatsPerBar);
+    this.panel.update(t.clip, instrumentLabel(t.track.instrument), this.drawMode, this.folded, this._selection.size, this.deps.store.project.signature.beatsPerBar);
     this.invalidate();
   }
 
-  /** The names the track's instrument gives the notes (the drum machine's pads), or null. */
-  private noteNames(): ReadonlyMap<number, string> | null {
-    const instrument = this.target()?.track.instrument;
-    const type = instrument && instrumentType(instrument.type);
-    const names = type && instrument
-      ? type.noteNames?.(resolveParams(type, instrument.params), this.deps.store.project.sampleNames(instrument)) : undefined;
-    return names?.size ? names : null;
+  private noteNames(): NoteNames | null {
+    const t = this.target();
+    return t ? noteNames(t.track, this.deps.store.project) : null;
   }
 
   /** Frames the clip and its notes (with the pads, all the pads). */
@@ -466,29 +367,16 @@ export class PianoRoll implements RollHost {
     this.fitPending = false;
   }
 
-  /** Vertically: with Fold all the rows, as tall as they can be; without, the notes in the centre. */
   private fitPitches(): void {
     const c = this.clip();
-    if (!c) return;
-    const folded = this.folded ? foldRows(c.notes.map(n => n.pitch)) : null;
-    if (folded) {
-      const h = Math.max(this.names ? NAMED_ROW.min : 8, Math.min(FOLD_ROW_MAX, Math.floor(this.notesHeight / folded.length)));
-      return this.setPitches(new PitchAxis(h, 0, ROLL.ruler, folded).scrolled(0, this.notesHeight));
-    }
-    const pitches = [...c.notes.map(n => n.pitch), ...(this.names?.keys() ?? [])];
-    const [lo, hi] = pitches.length ? [Math.min(...pitches), Math.max(...pitches)] : [60, 72];
-    const fitting = Math.floor(this.notesHeight / (hi - lo + 2));
-    const rows = new PitchAxis(this.names ? Math.max(NAMED_ROW.min, Math.min(NAMED_ROW.max, fitting)) : 12, 0, ROLL.ruler);
-    this.setPitches(rows.centeredOn(lo, hi, this.notesHeight));
+    if (c) this.setPitches(fitRows(c.notes.map(n => n.pitch), this.names, this.folded, this.notesHeight));
   }
 
-  /** With Fold the rows follow the notes: a note at a new pitch adds one, the last
-   *  note removed from a pitch removes it. Without notes all the rows are shown. */
+  /** With Fold the rows follow the notes. */
   private followFold(clip: MidiClip): void {
-    const rows = this.folded ? foldRows(clip.notes.map(n => n.pitch)) : null;
-    if (sameRows(rows, this._pitches.rows)) return;
-    if ((rows === null) !== (this._pitches.rows === null)) this.fitPitches();
-    else this.setPitches(this._pitches.withRows(rows, this.notesHeight));
+    const rows = followRows(this._pitches, clip.notes.map(n => n.pitch), this.folded, this.notesHeight);
+    if (rows === 'refit') this.fitPitches();
+    else if (rows) this.setPitches(rows);
   }
 
   private setPitches(p: PitchAxis): void {
@@ -555,16 +443,8 @@ export class PianoRoll implements RollHost {
     el.addEventListener('pointercancel', () => { this.gesture?.cancel(); this.gesture = null; });
     // double click: new note on empty space, deletion on a note
     el.addEventListener('dblclick', e => {
-      if (this.drawMode) return;
       const h = this.hit(pointerIn(e, el));
-      if (h?.hit.kind === 'empty') {
-        const b = this.cellStart(h.hit.beat);
-        this.commitNotes('Add note', addNote(h.clip.notes, { pitch: h.hit.pitch, start: b, duration: this.noteLength, velocity: 100 }));
-        this.audition(h.hit.pitch, 100);
-      } else if (h?.hit.kind === 'note') {
-        const note = h.hit.note;
-        this.commitNotes('Delete note', deleteNotes(h.clip.notes, new Set([note])));
-      }
+      if (h) this.commands.doubleClick(h.hit);
     });
     el.addEventListener('wheel', e => this.wheel(e, pointerIn(e, el).x), { passive: false });
     el.addEventListener('contextmenu', e => {
@@ -573,29 +453,18 @@ export class PianoRoll implements RollHost {
       const h = this.hit(pointerIn(e, el));
       if (!h) return;
       this.element.focus();
-      const note = h.hit.kind === 'note' || h.hit.kind === 'velocity' ? h.hit.note : null;
       // right click on an unselected note: it becomes the selection
-      if (note && !this._selection.has(note)) this.select([note]);
-      showContextMenu(e.clientX, e.clientY, rollMenu(this, h.hit));
+      this.commands.pick(h.hit);
+      showContextMenu(e.clientX, e.clientY, rollMenu(this.commands, h.hit));
     });
   }
 
-  /** Wheel: vertically scrolls the notes; Shift horizontally; Ctrl zooms the time, Alt the rows. */
-  /** Wheel: scrolls vertically (Shift: horizontally). With Ctrl it zooms: horizontally on the
-   *  grid, vertically on the piano keys (`keys`), as on the axes underneath. With
-   *  Ctrl+Shift or Alt it zooms vertically also from the grid. */
+  /** Wheel: scrolls the rows (Shift: the time); with Ctrl it zooms, on the piano keys (`keys`) the rows. */
   private wheel(e: WheelEvent, x: number, keys = false): void {
-    e.preventDefault();
-    const a = this._axis, pa = this._pitches;
+    const w = takeWheel(e);
     const y = e.clientY - this.surface.canvas.getBoundingClientRect().top;
-    const ctrl = e.ctrlKey || e.metaKey;
-    // Shift+wheel: Chromium on Windows already delivers it as deltaX (with deltaY at 0)
-    if (e.altKey || (ctrl && (keys || e.shiftKey))) this.setPitches(pa.zoomed(pa.rowHeight * Math.exp(-(e.deltaY || e.deltaX) * 0.002), y, this.notesHeight));
-    else if (ctrl) this.setAxis(a.zoomed(a.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x));
-    else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) this.setAxis(a.scrolled(a.startBeat + (e.deltaX || e.deltaY) / a.pxPerBeat));
-    else this.setPitches(pa.scrolled(pa.scrollY + e.deltaY, this.notesHeight));
+    const move = rollWheel(w, { axis: this._axis, pitches: this._pitches, x, y, notesHeight: this.notesHeight, keys });
+    if ('axis' in move) this.setAxis(move.axis);
+    else this.setPitches(move.pitches);
   }
 }
-
-const sameNames = (a: ReadonlyMap<number, string> | null, b: ReadonlyMap<number, string> | null): boolean =>
-  a === b || (!!a && !!b && a.size === b.size && [...a].every(([k, v]) => b.get(k) === v));

@@ -5,6 +5,7 @@ import type { Beats } from '../../core/music-time';
 import { placementEnd } from '../../model/arrangement';
 import type { TimeRange } from '../../model/note-edits';
 import type { Project } from '../../model/project';
+import { wheelZoom } from '../kit/wheel';
 import type { TimelineGeometry } from './geometry';
 
 /** How many views X can go back through. */
@@ -62,7 +63,7 @@ export type WheelMove =
   | { readonly kind: 'scroll'; readonly beat: Beats; readonly y: number; readonly horizontal: boolean };
 
 export function wheelMove(g: TimelineGeometry, w: Wheel): WheelMove {
-  if (w.zoom) return { kind: 'zoom', geometry: g.zoomed(g.pxPerBeat * Math.exp(-w.deltaY * 0.0025), Math.max(0, w.x)) };
+  if (w.zoom) return { kind: 'zoom', geometry: g.zoomed(wheelZoom(g.pxPerBeat, w.deltaY), Math.max(0, w.x)) };
   const dx = w.shift ? w.deltaX || w.deltaY : w.deltaX, dy = w.shift ? 0 : w.deltaY;
   return { kind: 'scroll', beat: g.scrollBeat + dx / g.pxPerBeat, y: g.scrollY + dy, horizontal: !!dx };
 }

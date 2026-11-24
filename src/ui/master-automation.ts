@@ -12,6 +12,7 @@ import type { ProjectStore } from '../store/project-store';
 import { BeatAxis } from './clip-editor/clip-geometry';
 import { el } from './dom';
 import type { DrawMode } from './draw-mode';
+import { takeWheel, wheelStep, wheelZoom } from './kit/wheel';
 import type { LaneCurves } from './envelopes/envelope-lane';
 import { masterChain, masterTargetDevices } from './envelopes/mod-targets';
 import { ModulationEditor } from './envelopes/modulation-editor';
@@ -107,11 +108,10 @@ export class MasterAutomation {
 
   /** The wheel on the lane moves the timeline: Ctrl zooms, otherwise it scrolls horizontally. */
   private wheel(e: WheelEvent, x: number): void {
-    e.preventDefault();
-    const g = this.ui.geometry;
+    const w = takeWheel(e), g = this.ui.geometry;
     if (this.engine.playing) this.ui.pauseFollow();
-    if (e.ctrlKey || e.metaKey) this.ui.setGeometry(g.zoomed(g.pxPerBeat * Math.exp(-e.deltaY * 0.0025), x));
-    else this.ui.setGeometry(g.scrolled(g.scrollBeat + (e.deltaX || e.deltaY) / g.pxPerBeat, g.scrollY));
+    if (w.ctrl) this.ui.setGeometry(g.zoomed(wheelZoom(g.pxPerBeat, w.deltaY), x));
+    else this.ui.setGeometry(g.scrolled(g.scrollBeat + wheelStep(w) / g.pxPerBeat, g.scrollY));
   }
 
   private sync(): void {
