@@ -2,15 +2,20 @@
  * column, their content as a tree next to it, the sample preview at the bottom. A click chooses
  * an item (and plays the sample, with 🎧 on), a double click or Enter loads it where you're
  * working, dragging it takes it to a track, a slot or the device chain. The
- * browser doesn't know what a track is: loading and preview belong to the app (`BrowserViewDeps`). */
+ * browser doesn't know what a track is: loading and preview belong to the app (`BrowserViewDeps`).
+ * This is the DOM: the tree is in browser-tree, the keys and the menu in browser-actions, the search's
+ * rows in browser-search, the remembered settings in browser-settings, the waveform in browser-wave. */
 import type { BrowserCatalog } from '../../browser/catalog';
-import { childrenOf, type BrowserItem, type BrowserPayload, type BrowserSource } from '../../browser/item';
-import { searchSources } from '../../browser/search';
+import type { BrowserItem, BrowserPayload, BrowserSource } from '../../browser/item';
 import type { AudioData } from '../../dsp/types';
-import { showContextMenu, SEPARATOR, type MenuItem } from '../context-menu';
+import { showContextMenu, type MenuItem } from '../context-menu';
 import { el } from '../dom';
-import { readPref, writePref } from '../kit/prefs';
+import { browserKey, itemMenu, type BrowserAction } from './browser-actions';
 import { endBrowserDrag, startBrowserDrag } from './browser-drag';
+import { searchRows } from './browser-search';
+import { clampWidth, loadSettings, saveSettings, type BrowserSettings } from './browser-settings';
+import { BrowserTree, message, type Row } from './browser-tree';
+import { paintWave } from './browser-wave';
 
 /** Previewing samples (the app does it with its audio context). */
 export interface BrowserPreview {
@@ -30,48 +35,9 @@ export interface BrowserViewDeps {
   readonly say: (text: string) => void;
 }
 
-/** What the browser remembers from one start to the next. */
-interface BrowserSettings {
-  open: boolean;
-  width: number;
-  source: string;
-  preview: boolean;
-}
-
-const SETTINGS_KEY = 'studiomio.browser';
-const MIN_WIDTH = 250, MAX_WIDTH = 640;
-const DEFAULTS: BrowserSettings = { open: true, width: 330, source: 'instruments', preview: true };
-
-/** A row of the list: an item (at a depth, and where it comes from if it's a search
- *  result) or a notice (loading, empty list, permission to give). */
-type Row =
-  | { readonly item: BrowserItem; readonly depth: number; readonly path?: readonly string[] }
-  | { readonly note: string; readonly depth: number; readonly action?: { readonly label: string; readonly run: () => void } };
-
-/** A row with an item. */
-type ListRow = Extract<Row, { readonly item: BrowserItem }>;
-
-/** A folder's content: the items, or how far along it is. */
-type Loaded = readonly BrowserItem[] | 'loading' | 'locked' | Error;
-
 const ICONS: Readonly<Record<BrowserItem['icon'], string>> = {
   instrument: '♫', effect: '≋', preset: '◦', 'user-preset': '★', rack: '▦', sample: '∿', folder: '▤',
 };
-
-/** The lowest and highest sample of [from, to) (and 0): each column looks at 64 samples at most,
- *  so a long file is drawn right away anyway. */
-function columnPeaks(channels: readonly Float32Array[], from: number, to: number): [number, number] {
-  let lo = 0, hi = 0;
-  const step = Math.max(1, Math.floor((to - from) / 64));
-  for (const ch of channels) {
-    for (let i = from; i < to; i += step) {
-      const v = ch[i];
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
-    }
-  }
-  return [lo, hi];
-}
 
 export class BrowserView {
   readonly element = el('aside', { className: 'browser' });
@@ -84,9 +50,7 @@ export class BrowserView {
   private readonly previewName = el('span', { className: 'browser-preview-name muted', textContent: 'Choose a sample to hear it' });
   private readonly wave = el<HTMLCanvasElement>('canvas', { className: 'browser-wave' });
   private settings: BrowserSettings;
-  /** The content of the folders already read: "source:id" for the first level, the item's id for the others. */
-  private readonly loaded = new Map<string, Loaded>();
-  private readonly expanded = new Set<string>();
+  private readonly tree = new BrowserTree(() => this.renderList());
   private selected: string | null = null;
   private rows: Row[] = [];
   /** The search results (null: no search, the tree is shown). */
@@ -187,7 +151,7 @@ export class BrowserView {
 
   /** A source's content must be reread. */
   private invalidate(sourceId: string): void {
-    for (const key of this.loaded.keys()) if (key === rootKey(sourceId) || key.startsWith(`${sourceId}/`)) this.loaded.delete(key);
+    this.tree.invalidate(sourceId);
     if (this.source?.id === sourceId) {
       if (this.searchInput.value.trim()) this.runSearch();
       else this.renderList();
@@ -196,42 +160,9 @@ export class BrowserView {
 
   // ---------------------------------------------------------------- list
 
-  /** A folder's content: the one already read, or it reads it and redraws. */
-  private contents(key: string, read: () => Promise<readonly BrowserItem[]>, source?: BrowserSource): Loaded {
-    const known = this.loaded.get(key);
-    if (known) return known;
-    this.loaded.set(key, 'loading');
-    void (async () => {
-      try {
-        if (source?.locked && await source.locked()) return this.loaded.set(key, 'locked');
-        this.loaded.set(key, await read());
-      } catch (e) {
-        this.loaded.set(key, e instanceof Error ? e : new Error(String(e)));
-      }
-    })().finally(() => this.renderList());
-    return 'loading';
-  }
-
-  private treeRows(): Row[] {
-    const source = this.source;
-    if (!source) return [];
-    const rows: Row[] = [];
-    const add = (state: Loaded, depth: number, empty: string) => {
-      if (state === 'loading') rows.push({ note: 'Reading…', depth });
-      else if (state === 'locked') rows.push({ note: 'Reading this folder needs your permission.', depth, action: { label: 'Allow', run: () => void this.unlock(source) } });
-      else if (state instanceof Error) rows.push({ note: `Can't read it: ${state.message}`, depth });
-      else if (!state.length) rows.push({ note: empty, depth });
-      else for (const item of state) {
-        rows.push({ item, depth });
-        if (item.children && this.expanded.has(item.id)) add(this.contents(item.id, () => childrenOf(item)), depth + 1, 'Empty');
-      }
-    };
-    add(this.contents(rootKey(source.id), () => source.items(), source), 0, source.empty ?? 'Empty');
-    return rows;
-  }
-
   private renderList(): void {
-    this.rows = this.hits ?? this.treeRows();
+    const source = this.source;
+    this.rows = this.hits ?? (source ? this.tree.rows(source, s => void this.unlock(s)) : []);
     if (this.selected && !this.rows.some(r => 'item' in r && r.item.id === this.selected)) this.selected = null;
     const scroll = this.list.scrollTop;
     this.list.replaceChildren(...this.rows.map((r, i) => this.rowElement(r, i)));
@@ -246,7 +177,7 @@ export class BrowserView {
       return note;
     }
     const { item, depth, path } = row;
-    const open = this.expanded.has(item.id);
+    const open = this.tree.isOpen(item.id);
     const where = path?.length ? `${path.join(' › ')} › ` : '';
     const hint = path?.length ? path.join(' › ') : item.hint;
     let twist = '';
@@ -300,64 +231,34 @@ export class BrowserView {
   }
 
   private itemMenu(item: BrowserItem, flat: boolean): MenuItem[] {
-    const items: MenuItem[] = [];
-    if (item.payload) items.push({ label: 'Load', shortcut: 'Enter', run: () => this.deps.load(item) });
-    if (isAudio(item.payload) && this.deps.preview) items.push({ label: 'Listen', run: () => void this.preview(item, true) });
-    if (item.children && !flat) items.push(...(items.length ? [SEPARATOR] : []), { label: this.expanded.has(item.id) ? 'Close' : 'Open', shortcut: this.expanded.has(item.id) ? '◂' : '▸', run: () => this.toggleItem(item) });
-    return items;
+    return itemMenu(item, flat, {
+      open: this.tree.isOpen(item.id),
+      canListen: isAudio(item.payload) && !!this.deps.preview,
+      load: () => this.deps.load(item),
+      listen: () => void this.preview(item, true),
+      toggle: () => this.toggleItem(item),
+    });
   }
 
   /** The arrows scroll the items and open or close the folders, Enter loads. The keys used here
    *  don't reach the app's shortcuts (Enter would otherwise stop the transport). */
   private key(e: KeyboardEvent): void {
-    const items = this.rows.flatMap((r, i) => ('item' in r ? [{ row: r, i }] : []));
-    const at = items.findIndex(x => x.row.item.id === this.selected);
-    const current = at >= 0 ? items[at].row : undefined;
-    const go = (k: number) => {
-      const next = items[Math.max(0, Math.min(items.length - 1, k))];
-      if (next) this.select(next.row.item, true);
-    };
-    const handled = () => { e.preventDefault(); e.stopPropagation(); };
-    switch (e.key) {
-      case 'ArrowDown': handled(); return go(at + 1);
-      case 'ArrowUp':
-        handled();
-        if (at <= 0 && !current) return go(0);
-        return at === 0 ? this.searchInput.focus() : go(at - 1);
-      case 'Home': handled(); return go(0);
-      case 'End': handled(); return go(items.length - 1);
-      case 'ArrowRight':
-        handled();
-        return this.openFolder(current, () => go(at + 1));
-      case 'ArrowLeft':
-        handled();
-        return this.closeFolder(current, items.slice(0, at));
-      case 'Enter':
-        handled();
-        if (current?.item.payload) this.deps.load(current.item);
-        else if (current?.item.children) this.toggleItem(current.item);
-        return;
-    }
+    const action = browserKey(e.key, this.rows, this.selected, id => this.tree.isOpen(id));
+    if (!action) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this.act(action);
   }
 
-  /** → on a closed folder opens it; on an open one goes to its first item (`down`). */
-  private openFolder(current: ListRow | undefined, down: () => void): void {
-    if (!current?.item.children || current.path) return;
-    if (!this.expanded.has(current.item.id)) this.toggleItem(current.item);
-    else down();
-  }
-
-  /** ← on an open folder closes it; otherwise it goes to the folder containing the item (among `above`). */
-  private closeFolder(current: ListRow | undefined, above: readonly { row: ListRow }[]): void {
-    if (!current || current.path) return;
-    if (current.item.children && this.expanded.has(current.item.id)) return this.toggleItem(current.item);
-    const parent = [...above].reverse().find(x => x.row.depth < current.depth);
-    if (parent) this.select(parent.row.item, true);
+  private act(action: BrowserAction): void {
+    if (action.kind === 'select') this.select(action.item, true);
+    else if (action.kind === 'toggle') this.toggleItem(action.item);
+    else if (action.kind === 'load') this.deps.load(action.item);
+    else if (action.kind === 'search') this.searchInput.focus();
   }
 
   private toggleItem(item: BrowserItem): void {
-    if (this.expanded.has(item.id)) this.expanded.delete(item.id);
-    else this.expanded.add(item.id);
+    this.tree.toggle(item.id);
     this.renderList();
   }
 
@@ -412,14 +313,7 @@ export class BrowserView {
     this.hits = [{ note: 'Searching…', depth: 0 }];
     this.renderList();
     void (async () => {
-      let rows: Row[];
-      try {
-        const others = this.deps.catalog.sources.filter(s => s !== source);
-        const found = await searchSources([source, ...others], query);
-        rows = found.length ? found.map(h => ({ item: h.item, depth: 0, path: h.path })) : [{ note: `Nothing for «${query}».`, depth: 0 }];
-      } catch (e) {
-        rows = [{ note: `Can't be read: ${message(e)}`, depth: 0 }];
-      }
+      const rows = await searchRows(this.deps.catalog.sources, source, query);
       if (run !== this.searchRun) return;
       this.hits = rows;
       this.renderList();
@@ -461,17 +355,7 @@ export class BrowserView {
     c.height = h;
     const g = c.getContext('2d');
     if (!g) return;
-    g.clearRect(0, 0, w, h);
-    const channels = audio?.channels ?? [];
-    const n = channels[0]?.length ?? 0;
-    if (!n) return;
-    g.fillStyle = getComputedStyle(this.element).getPropertyValue('--accent').trim() || '#ff9d2e';
-    const per = n / w, mid = h / 2;
-    for (let x = 0; x < w; x++) {
-      const from = Math.floor(x * per), to = Math.min(n, Math.max(from + 1, Math.floor((x + 1) * per)));
-      const [lo, hi] = columnPeaks(channels, from, to);
-      g.fillRect(x, mid - hi * mid, 1, Math.max(1, (hi - lo) * mid));
-    }
+    paintWave(g, w, h, audio?.channels ?? [], () => getComputedStyle(this.element).getPropertyValue('--accent').trim() || '#ff9d2e');
   }
 
   // ---------------------------------------------------------------- width and settings
@@ -483,7 +367,7 @@ export class BrowserView {
       const x0 = e.clientX, w0 = this.element.getBoundingClientRect().width;
       handle.classList.add('dragging');
       const move = (m: PointerEvent) => {
-        const width = Math.round(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, w0 + m.clientX - x0)));
+        const width = Math.round(clampWidth(w0 + m.clientX - x0));
         this.element.style.width = `${width}px`;
         this.settings.width = width;
       };
@@ -500,27 +384,9 @@ export class BrowserView {
 
   private save(patch: Partial<BrowserSettings>): void {
     this.settings = { ...this.settings, ...patch };
-    writePref(SETTINGS_KEY, JSON.stringify(this.settings));
+    saveSettings(this.settings);
   }
 }
-
-const rootKey = (sourceId: string) => `source:${sourceId}`;
 
 const isAudio = (p: BrowserPayload | undefined): p is Extract<BrowserPayload, { kind: 'sample' | 'file' }> =>
   p?.kind === 'sample' || p?.kind === 'file';
-
-const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
-function loadSettings(): BrowserSettings {
-  try {
-    const raw = JSON.parse(readPref(SETTINGS_KEY) ?? '{}') as Partial<BrowserSettings>;
-    return {
-      open: typeof raw.open === 'boolean' ? raw.open : DEFAULTS.open,
-      width: typeof raw.width === 'number' ? Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, raw.width)) : DEFAULTS.width,
-      source: typeof raw.source === 'string' ? raw.source : DEFAULTS.source,
-      preview: typeof raw.preview === 'boolean' ? raw.preview : DEFAULTS.preview,
-    };
-  } catch {
-    return { ...DEFAULTS };
-  }
-}

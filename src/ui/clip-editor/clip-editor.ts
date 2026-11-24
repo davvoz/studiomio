@@ -16,7 +16,7 @@ import { BeatAxis, playheadIn, seekBeatOf } from './clip-geometry';
 import { ClipPanel } from './clip-panel';
 import { editorCursor, editorGestureFor, editorHit, type EditorGesture, type EditorHit, type EditorHost } from './editor-gestures';
 import { LAYOUT, paintEditor } from './editor-painter';
-import { takeWheel, wheelBeats, wheelZoom } from '../kit/wheel';
+import { takeWheel, wheelBeats } from '../kit/wheel';
 import { ModulationEditor } from '../envelopes/modulation-editor';
 import { targetDevices, trackChain } from '../envelopes/mod-targets';
 import type { Clipboard } from '../../store/clipboard';
@@ -344,11 +344,8 @@ export class ClipEditor implements EditorHost {
       if (h.hit.kind === 'marker') this.selectMarker(h.hit.index);
       showContextMenu(e.clientX, e.clientY, this.menu(h.clip, h.hit, p));
     });
-    el.addEventListener('wheel', e => {
-      const w = takeWheel(e), a = this._axis, x = pointerIn(e, el).x;
-      if (w.ctrl) this.setAxis(a.zoomed(wheelZoom(a.pxPerBeat, w.deltaY), x));
-      else this.setAxis(a.scrolled(a.startBeat + (w.shift || !w.deltaX ? w.deltaY : w.deltaX) / a.pxPerBeat));
-    }, { passive: false });
+    // as on its modulation lane: Ctrl zooms, otherwise it scrolls the time (Shift+wheel on Windows comes as deltaX)
+    el.addEventListener('wheel', e => this.setAxis(wheelBeats(this._axis, takeWheel(e), pointerIn(e, el).x)), { passive: false });
     // the editor's keys: they take priority over the timeline's
     this.element.addEventListener('keydown', e => {
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return;
