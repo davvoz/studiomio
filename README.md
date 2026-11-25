@@ -145,12 +145,14 @@ Short tutorials made in the app, with its factory instruments.
 
 <table>
   <tr>
-    <td align="center" width="25%"><a href="https://www.youtube.com/shorts/8qigcKNuqm4"><img src="https://i.ytimg.com/vi/8qigcKNuqm4/oar2.jpg" width="190" alt="Video: four kinds of macro"></a></td>
-    <td align="center" width="25%"><a href="https://www.youtube.com/shorts/uOZxWOy7Fvg"><img src="https://i.ytimg.com/vi/uOZxWOy7Fvg/oar2.jpg" width="190" alt="Video: an acid line with no notes drawn"></a></td>
-    <td align="center" width="25%"><a href="https://www.youtube.com/shorts/COXqZ12rhGY"><img src="https://i.ytimg.com/vi/COXqZ12rhGY/oar2.jpg" width="190" alt="Video: wobble bass modulation routing"></a></td>
-    <td align="center" width="25%"><a href="https://www.youtube.com/shorts/4d6gxcUzk7o"><img src="https://i.ytimg.com/vi/4d6gxcUzk7o/oar2.jpg" width="190" alt="Video: hard techno rumble kick"></a></td>
+    <td align="center" width="20%"><a href="https://www.youtube.com/shorts/16uQhePKlOo"><img src="https://i.ytimg.com/vi/16uQhePKlOo/oar2.jpg" width="138" alt="Video: a rap beat from scratch in the session"></a></td>
+    <td align="center" width="20%"><a href="https://www.youtube.com/shorts/8qigcKNuqm4"><img src="https://i.ytimg.com/vi/8qigcKNuqm4/oar2.jpg" width="138" alt="Video: four kinds of macro"></a></td>
+    <td align="center" width="20%"><a href="https://www.youtube.com/shorts/uOZxWOy7Fvg"><img src="https://i.ytimg.com/vi/uOZxWOy7Fvg/oar2.jpg" width="138" alt="Video: an acid line with no notes drawn"></a></td>
+    <td align="center" width="20%"><a href="https://www.youtube.com/shorts/COXqZ12rhGY"><img src="https://i.ytimg.com/vi/COXqZ12rhGY/oar2.jpg" width="138" alt="Video: wobble bass modulation routing"></a></td>
+    <td align="center" width="20%"><a href="https://www.youtube.com/shorts/4d6gxcUzk7o"><img src="https://i.ytimg.com/vi/4d6gxcUzk7o/oar2.jpg" width="138" alt="Video: hard techno rumble kick"></a></td>
   </tr>
   <tr>
+    <td align="center"><b>Rap beat from scratch</b><br><sub>recording and overdub</sub></td>
     <td align="center"><b>Four kinds of macro</b><br><sub>knob, button, toggle, spring</sub></td>
     <td align="center"><b>Acid, no notes drawn</b><br><sub>Analog's sequencer in a rack</sub></td>
     <td align="center"><b>Wobble routing</b><br><sub>modulations in Prisma</sub></td>
