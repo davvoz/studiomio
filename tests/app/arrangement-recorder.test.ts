@@ -3,7 +3,7 @@ import { ArrangementRecorder, type ArrangementRecorderEngine } from '../../src/a
 import type { TrackId } from '../../src/core/id';
 import type { Moment } from '../../src/model/arrangement-take';
 import { MidiClip } from '../../src/model/midi-clip';
-import { addMidiClip, setMixer, setRecordQuantize } from '../../src/store/edits';
+import { addMidiClip, setLoopRegion, setMixer, setRecordQuantize } from '../../src/store/edits';
 import { edit } from '../../src/store/project-store';
 import { setup } from '../helpers/fixtures';
 
@@ -208,5 +208,38 @@ describe('recording onto the timeline (● Rec)', () => {
     r.recorder.toggle();
     expect(r.clips(r.midi)).toEqual([]);
     expect(r.store.project.track(r.midi)!.mixer.pan).toBe(0.5);
+  });
+
+  it('a released note is in the clip at once (seen, and heard at the next round); the take stays one undo step, one clip', () => {
+    const r = rig();
+    r.store.apply(setLoopRegion({ enabled: true, start: 0, end: 4 }));
+    const before = r.store.project;
+    r.recorder.toggle();
+    r.engine.beat = 1;
+    r.recorder.press(r.midi, 60, 100);
+    r.engine.beat = 1.5;
+    r.recorder.release(r.midi, 60);
+    // still recording: the note is already on the timeline
+    expect(r.recorder.recording).toBe(true);
+    expect(r.notes(r.midi)).toEqual([[60, 1, 0.5]]);
+    const first = r.clips(r.midi)[0];
+    // a round of the loop: the clip covers the loop, the next note goes into the same clip
+    r.engine.beat = 3.9;
+    vi.advanceTimersByTime(60);
+    r.engine.shift = 4;
+    r.engine.beat = 2;
+    r.recorder.press(r.midi, 64, 90);
+    r.recorder.press(r.midi, 67, 90);
+    r.engine.beat = 2.5;
+    r.recorder.release(r.midi, 64);
+    expect(r.clips(r.midi).map(p => [p.id, p.clip.id, p.start, p.length])).toEqual([[first.id, first.clip.id, 0, 4]]);
+    // the note still held isn't there yet: it goes in when released
+    expect(r.notes(r.midi)).toEqual([[60, 1, 0.5], [64, 2, 0.5]]);
+    r.engine.beat = 3;
+    r.recorder.toggle();
+    expect(r.notes(r.midi)).toEqual([[60, 1, 0.5], [64, 2, 0.5], [67, 2, 1]]);
+    expect(r.store.undoLabel).toBe('Record');
+    r.store.undo();
+    expect(r.store.project).toBe(before);
   });
 });

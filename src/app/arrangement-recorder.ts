@@ -2,7 +2,9 @@
  * starts playing from the cursor, while playing it punches in where the playhead is. What's played on
  * the armed MIDI tracks (⌨ or a MIDI keyboard) goes into a take (model/arrangement-take.ts); ● again or
  * Stop ends it, and each track that got notes gets a clip over the stretch recorded, in place of what
- * was there. With the loop on it goes on recording round after round, the notes adding up; a jump of
+ * was there. Each note goes into the clip as soon as it's released, so it's seen at once and heard at
+ * the next round of the loop; the whole take stays one undo step (unless something else is edited
+ * meanwhile). With the loop on it goes on recording round after round, the notes adding up; a jump of
  * the playhead (a click on the ruler) writes the take so far and starts a new one there.
  * With "Record the movements" on (Options › Recording) what's moved on an armed track (instrument,
  * effects, macros, volume, pan: on screen or from a controller) becomes the clip's curves, as Live's
@@ -11,7 +13,7 @@
  * round's movement wins.
  * What's played is timed as it's heard: the latency compensation (Options › Recording) moves it back. */
 import { Emitter, type Unsubscribe } from '../core/emitter';
-import type { TrackId } from '../core/id';
+import type { ClipId, PlacementId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { playingLoop, TimelineTake, type Moment, type TakeClip, type TakeLoop } from '../model/arrangement-take';
 import { MidiTrack } from '../model/track';
@@ -68,8 +70,10 @@ export class ArrangementRecorder {
   private readonly movesBusy: (track: TrackId) => boolean;
   /** The movements of the controls (Options › Recording). */
   private readonly moves: MoveRecorder;
-  /** The takes written so far: each one is an undo step. */
+  /** The takes so far: each one is an undo step. */
   private count = 0;
+  /** The ids of the take's clips, per track: written again at each note, they stay the same clip. */
+  private ids = new Map<TrackId, { readonly clip: ClipId; readonly placement: PlacementId }>();
 
   constructor(
     private readonly engine: ArrangementRecorderEngine,
@@ -82,7 +86,7 @@ export class ArrangementRecorder {
     this.armed = opts.armed ?? (() => NO_TRACKS);
     this.movesBusy = opts.movesBusy ?? this.busy;
     // only takes: there's no overdub on the timeline
-    this.moves = new MoveRecorder(store, track => this.moveSpot(track), () => `arrangement record ${this.count}`);
+    this.moves = new MoveRecorder(store, track => this.moveSpot(track), () => this.key);
     engine.onStateChange(playing => {
       if (!playing && this.on) this.finish();
     });
@@ -100,6 +104,11 @@ export class ArrangementRecorder {
   /** ● Rec is on. */
   get recording(): boolean {
     return this.on;
+  }
+
+  /** The undo step of the take running (its writes merge into it). */
+  private get key(): string {
+    return `arrangement record ${this.count}`;
   }
 
   onChange(fn: () => void): Unsubscribe {
@@ -125,7 +134,9 @@ export class ArrangementRecorder {
   release(track: TrackId, pitch: number): void {
     if (!this.on) return;
     const m = this.now();
-    if (m) this.take?.release(track, pitch, m);
+    if (!m || !this.take) return;
+    this.take.release(track, pitch, m);
+    this.show(this.take);
   }
 
   private records(track: TrackId): boolean {
@@ -143,6 +154,8 @@ export class ArrangementRecorder {
   }
 
   private begin(m: Moment | null): void {
+    this.count++;
+    this.ids = new Map();
     this.last = m;
     this.take = m && new TimelineTake(m, playingLoop(this.store.project.loop, m.beat));
   }
@@ -169,15 +182,31 @@ export class ArrangementRecorder {
     return m && this.take.follow(m) ? { kind: 'take', beat: m.beat } : null;
   }
 
+  /** The ids of `track`'s clip in the take running. */
+  private idsOf(track: TrackId): { clip: ClipId; placement: PlacementId } {
+    let ids = this.ids.get(track);
+    if (!ids) {
+      ids = { clip: this.store.ids.next('clip'), placement: this.store.ids.next('placement') };
+      this.ids.set(track, ids);
+    }
+    return ids;
+  }
+
+  /** The notes released so far into the take's clips: seen now, heard at the next round. */
+  private show(take: TimelineTake): void {
+    const clips = take.released().map(c => ({ ...c, ids: this.idsOf(c.track) }));
+    if (clips.length) this.store.apply(recordedTakes(clips), { mergeKey: this.key });
+  }
+
   /** The take's clips: the tracks with notes and those with movements, over the stretch recorded; the
    *  controls moved go back where they were, in the same undo step. */
   private write(take: TimelineTake, end: Moment): void {
     const { start, end: stop } = take.span, length = stop - start;
-    const key = `arrangement record ${++this.count}`, moved = this.moves.takeTracks();
+    const key = this.key, moved = this.moves.takeTracks();
     const notes = new Map(take.clips(end).map(c => [c.track, c]));
     const clips = length < MIN_LENGTH ? [] : [...new Set([...notes.keys(), ...moved])].flatMap((track): TakeClip[] => {
       const envelopes = this.moves.takeCurves(track, length, start), played = notes.get(track);
-      return played || envelopes.length ? [{ track, start, length, notes: played?.notes ?? [], envelopes }] : [];
+      return played || envelopes.length ? [{ track, start, length, notes: played?.notes ?? [], envelopes, ids: this.idsOf(track) }] : [];
     });
     if (clips.length) {
       this.store.apply(recordedTakes(clips), { mergeKey: key });
@@ -197,7 +226,7 @@ export class ArrangementRecorder {
     this.timer = null;
     if (take && end) this.write(take, end);
     // without a take nothing is written: the controls moved go back anyway
-    else for (const track of this.moves.takeTracks()) this.moves.endTake(track, `arrangement record ${++this.count}`);
+    else for (const track of this.moves.takeTracks()) this.moves.endTake(track, this.key);
     const n = this.written;
     if (n === 0) this.say('Recording stopped: nothing was played or moved on the armed MIDI tracks (⌨).');
     else this.say(n === 1 ? 'Recorded: a new clip on the timeline.' : `Recorded: ${n} new clips on the timeline.`);

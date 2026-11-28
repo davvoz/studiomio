@@ -18,7 +18,7 @@ import {
 } from '../../src/store/edits';
 import { ProjectStore } from '../../src/store/project-store';
 import { newSlotMidiClip } from '../../src/store/session-edits';
-import { FakeEffects, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
+import { FakeEffects, FakeGain, FakeGraph, FakeInstruments } from '../helpers/fake-audio';
 import { drumLoop } from '../helpers/signals';
 
 /** DSP in the same thread, with the real renderer. */
@@ -99,6 +99,31 @@ describe('PlaybackEngine: clip audio', () => {
     await r.ready();
     r.engine.play(1); // a beat = 0.5 s into the clip
     expect(starts(r.graph)).toEqual([{ when: 0.05, offset: 0.5, duration: 1.5 }]);
+  });
+
+  it('changes in a row (dragging a fade): a stretch cut by the first stays cut, the later ones don\'t bring it back', async () => {
+    const r = await rig();
+    r.store.apply(placeSample(r.t(0), r.sample.id, 0));
+    await r.ready();
+    r.engine.play(0);
+    r.runUntil(0.3);
+    const pl = () => r.store.project.tracks[0].arrangement[0];
+    // three changes 16 ms apart: each one resumes the track 50 ms later, before the previous cut has ended
+    for (const fadeOut of [0.5, 0.6, 0.7]) {
+      r.store.apply(setFades(r.t(0), pl().id, { fadeOut }), { mergeKey: 'fade-drag' });
+      r.graph.currentTime += 0.016;
+    }
+    const [first, ...later] = r.graph.sources;
+    expect(later).toHaveLength(3);
+    // the first stretch ends at the first cut (0.3 + 0.05 + 2 ms) and its volume goes down to 0 there for good
+    expect(first.stoppedAt).toBeCloseTo(0.352, 6);
+    const amp = first.outputs[0] as FakeGain;
+    const last = amp.gain.events.at(-1)!;
+    expect(last).toMatchObject({ type: 'ramp', value: 0 });
+    expect(last.time).toBeCloseTo(0.352, 6);
+    // so does each one cut by the next
+    for (const [i, s] of later.slice(0, -1).entries()) expect(s.stoppedAt).toBeCloseTo(0.352 + 0.016 * (i + 1), 6);
+    expect(later.at(-1)!.stoppedAt).toBeCloseTo(2.05, 6);
   });
 
   it('timeline loop: each round restarts from the start of the loop', async () => {

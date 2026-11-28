@@ -2,8 +2,9 @@
  * the punch-in on, at the timeline's beats where they're heard. It follows the playhead: a round of
  * the loop goes on recording (the notes of every round stay, on top of each other), a jump elsewhere
  * (a click on the ruler) ends it. When it ends, each track that got notes gets a clip covering the
- * whole stretch recorded. Pure data: it receives the moments, it knows nothing of the engine. */
-import type { TrackId } from '../core/id';
+ * whole stretch recorded; while it goes on, the notes released so far make the same clips (shown and
+ * heard at the next round). Pure data: it receives the moments, it knows nothing of the engine. */
+import type { ClipId, PlacementId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import type { ClipEnvelope } from './envelope';
 import type { Note } from './midi-clip';
@@ -29,6 +30,8 @@ export interface TakeClip {
   readonly length: Beats;
   readonly notes: readonly Note[];
   readonly envelopes?: readonly ClipEnvelope[];
+  /** The ids its clip and placement keep while it's written again and again during the take (absent: new ones). */
+  readonly ids?: { readonly clip: ClipId; readonly placement: PlacementId };
 }
 
 /** The shortest note kept (pressed and released in the same instant). */
@@ -121,11 +124,21 @@ export class TimelineTake {
   /** The clips of the take ended at `m` (the notes still held end there), one per track with notes
    *  inside the stretch; none if the stretch is empty. */
   clips(m: Moment): TakeClip[] {
+    return this.clipsOf(track => [...(this.held.get(track) ?? [])].map(([pitch, h]): Played => ({ ...h, pitch, duration: this.limited(h, m.clock - h.clock) })));
+  }
+
+  /** The clips so far, while recording: only the notes already released (a held note goes in when
+   *  it's released, as long as it was held). */
+  released(): TakeClip[] {
+    return this.clipsOf(() => []);
+  }
+
+  /** A clip per track with notes in the stretch: those released and those `held` gives for it. */
+  private clipsOf(held: (track: TrackId) => Played[]): TakeClip[] {
     const { start, end } = this.span, length = end - start;
     if (length < MIN_DURATION) return [];
     return this.tracks.flatMap(track => {
-      const held = [...(this.held.get(track) ?? [])].map(([pitch, h]): Played => ({ ...h, pitch, duration: this.limited(h, m.clock - h.clock) }));
-      const notes = [...(this.played.get(track) ?? []), ...held]
+      const notes = [...(this.played.get(track) ?? []), ...held(track)]
         .filter(n => n.beat >= start - EPS && n.beat < end - EPS)
         .map((n): Note => {
           const at = Math.max(0, n.beat - start);

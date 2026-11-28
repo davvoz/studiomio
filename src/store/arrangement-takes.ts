@@ -41,10 +41,11 @@ function withTake(p: Project, take: TakeClip, ctx: EditContext): Project {
   if (!(track instanceof MidiTrack)) return p;
   const { notes, envelopes } = content(track, take, p);
   const clip = MidiClip.create({
-    id: ctx.ids.next('clip'), name: track.name, color: track.color, ...fullRange(0, take.length), notes,
+    id: take.ids?.clip ?? ctx.ids.next('clip'), name: track.name, color: track.color, ...fullRange(0, take.length), notes,
     ...(envelopes.length ? { envelopes } : {}),
   });
-  const placement: Placement<MidiClip> = { id: ctx.ids.next('placement'), clip, start: take.start, length: take.length, offset: 0 };
+  // the same placement again: it replaces its previous version (place() takes it out first)
+  const placement: Placement<MidiClip> = { id: take.ids?.placement ?? ctx.ids.next('placement'), clip, start: take.start, length: take.length, offset: 0 };
   return p.updatingTrack<MidiTrack>(track.id, t => t.placing(placement, ctx.ids));
 }
 

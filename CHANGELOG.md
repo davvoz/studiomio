@@ -6,6 +6,13 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Fixed
+- Recording in the arrangement (● Rec): each note goes into the clip as soon as you release it, so you see
+  it at once and, with the loop, hear it from the next round, instead of only after stopping.
+- Audio clips crackled ("farted") while dragging a fade, or changing a clip in any way, during playback: the
+  stretches cut by one change came back with the next, and piled up. Also gone: a one-sample click when
+  an audio stretch starts (playback, loop rounds, changes).
+
 ## [0.3.75] - 2026-11-28
 
 ### Added

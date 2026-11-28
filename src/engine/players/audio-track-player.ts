@@ -101,6 +101,9 @@ export class AudioTrackPlayer implements TrackPlayer {
     const amp = graph.createGain();
     const g = dbToGain(clip.gainDb);
     const fade = Math.min(FADE, duration / 4);
+    // silent from the very beginning: a gain is 1 until its first event, and the source's first sample
+    // falls just before `when` (sub-sample start), so it went out at full volume, a click at each start
+    amp.gain.value = 0;
     amp.gain.setValueAtTime(0, when);
     amp.gain.linearRampToValueAtTime(g, when + fade);
     amp.gain.setValueAtTime(g, when + duration - fade);
@@ -120,16 +123,25 @@ export class AudioTrackPlayer implements TrackPlayer {
     } else amp.connect(output);
     src.start(when, offset, duration * rate);
     src.stop(when + duration);
-    const ends = when + duration;
+    /** Where the node ends: at its natural end, or earlier where it was cut. A later cut or retake can
+     *  only bring it earlier: one after it would bring back the volume and move the stop on (the last
+     *  stop() wins), and the nodes cut by a run of changes (dragging a fade) would all play together. */
+    let ends = when + duration;
+    const endAt = (at: number) => {
+      stopQuietly(src, at);
+      ends = at;
+    };
     /** Fade from `from` to `to`, then the node stops; if it hadn't started yet it doesn't play. */
     const fadeOut = (from: number, to: number) => {
       if (from >= ends) return;
-      if (to > when) {
-        amp.gain.cancelScheduledValues(from);
-        amp.gain.setValueAtTime(g, Math.max(when, from));
-        amp.gain.linearRampToValueAtTime(0, to);
+      const silentAt = Math.min(to, ends);
+      if (silentAt > when) {
+        const fadeFrom = Math.max(when, from);
+        amp.gain.cancelScheduledValues(fadeFrom);
+        amp.gain.setValueAtTime(g, fadeFrom);
+        amp.gain.linearRampToValueAtTime(0, silentAt);
       }
-      stopQuietly(src, Math.max(to, when));
+      endAt(Math.max(silentAt, when));
     };
     this.active.add(src, () => {
       src.disconnect();
@@ -139,7 +151,7 @@ export class AudioTrackPlayer implements TrackPlayer {
       cut: at => fadeOut(at - FADE, at),
       // the new stretch comes in from `at` with its fade and this one goes out at the same time:
       // a crossfade, without gaps
-      retake: at => (at <= when ? stopQuietly(src, when) : fadeOut(at, at + FADE)),
+      retake: at => (at <= when ? endAt(Math.min(when, ends)) : fadeOut(at, at + FADE)),
     });
   }
 }
