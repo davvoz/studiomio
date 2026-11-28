@@ -1,0 +1,6 @@
+{
+    "sonarlint.connectedMode.project": {
+        "connectionId": "davvoz",
+        "projectKey": "davvoz_studiomio"
+    }
+}
