@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.76] - 2026-11-28
+
 ### Fixed
 - Recording in the arrangement (● Rec): each note goes into the clip as soon as you release it, so you see
   it at once and, with the loop, hear it from the next round, instead of only after stopping.
