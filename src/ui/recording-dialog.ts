@@ -68,8 +68,8 @@ function movesControls(s: RecordingSettings): Node[] {
     section('Movements'),
     row('Record them', moves),
     el('p', {
-      textContent: 'While recording (● or overdub), what you move on the track (instrument, effects, macros, volume, pan: '
-        + "on screen or from a controller) becomes the clip's curve, and the clip replays it.",
+      textContent: 'While recording (● in a slot, overdub, or ● Rec on the timeline), what you move on the track (instrument, '
+        + "effects, macros, volume, pan: on screen or from a controller) becomes the clip's curve, and the clip replays it.",
     }),
   ];
 }

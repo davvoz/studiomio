@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld('studiomioDesktop', {
     reveal: () => ipcRenderer.invoke('racks:reveal'),
   },
   folders: {
-    pick: () => ipcRenderer.invoke('folders:pick'),
+    pick: (title?: string) => ipcRenderer.invoke('folders:pick', title),
     exists: (root: string, path: string) => ipcRenderer.invoke('folders:exists', root, path),
     read: (root: string, path: string) => ipcRenderer.invoke('folders:read', root, path),
     write: (root: string, path: string, data: Uint8Array) => ipcRenderer.invoke('folders:write', root, path, data),

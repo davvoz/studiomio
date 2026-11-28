@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MOD_SCALES } from '../../src/model/envelope';
-import { thinned, touched } from '../../src/model/move-take';
+import { overRounds, thinned, touched } from '../../src/model/move-take';
 
 const p = (beat: number, value: number) => ({ beat, value });
 
@@ -29,5 +29,14 @@ describe('recorded movements: points', () => {
     expect(touched(old, [p(1, -0.5), p(3, -0.5)], 0)).toEqual([p(0, 0), p(1, 0.2), p(1, -0.5), p(3, -0.5), p(3, 0.2), p(4, 0)]);
     // ending where the old curve is: no step
     expect(touched(old, [p(1, 0.2), p(3, 0.2)], 0)).toEqual([p(0, 0), p(1, 0.2), p(3, 0.2), p(4, 0)]);
+  });
+
+  it('overRounds: in one run it is touched over nothing; when the beat goes back (a loop round) the later round wins', () => {
+    const one = [p(1, 0.2), p(2, 0.4)];
+    expect(overRounds(one, MOD_SCALES.param, 0)).toEqual(touched([], thinned(one, MOD_SCALES.param), 0));
+    // first round 1 → 3, second round over 2 → 2.5 only
+    const rounds = [p(1, 0.2), p(3, 0.6), p(2, -0.5), p(2.5, -0.5)];
+    expect(overRounds(rounds, MOD_SCALES.param, 0)).toEqual([p(1, 0), p(1, 0.2), p(2, 0.4), p(2, -0.5), p(2.5, -0.5), p(2.5, 0.5), p(3, 0.6)]);
+    expect(overRounds([], MOD_SCALES.param, 0)).toEqual([]);
   });
 });

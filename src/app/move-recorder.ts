@@ -10,7 +10,7 @@
 import type { ClipId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { scaleOf, targetKey, type ClipEnvelope } from '../model/envelope';
-import { thinned, touched } from '../model/move-take';
+import { overRounds, thinned } from '../model/move-take';
 import type { NoteSpan } from '../model/record-settings';
 import type { Project } from '../model/project';
 import { MidiTrack } from '../model/track';
@@ -66,17 +66,25 @@ export class MoveRecorder {
     store.onChange(p => this.changed(p));
   }
 
-  /** The curves of the take recorded on `track`, for its clip `length` beats long. */
-  takeCurves(track: TrackId, length: Beats): ClipEnvelope[] {
+  /** The curves of the take recorded on `track`, for its clip `length` beats long starting at beat
+   *  `start` of the take's beats (on the timeline the take's beats are the timeline's; with the loop
+   *  they go back at each round, and the last round wins). */
+  takeCurves(track: TrackId, length: Beats, start: Beats = 0): ClipEnvelope[] {
     const out: ClipEnvelope[] = [];
     for (const g of this.gestures.values()) {
       if (g.track !== track || g.into) continue;
-      const curve = gestureCurve(g.base, g.samples.filter(s => s.beat < length));
+      const inside = g.samples.filter(s => s.beat >= start && s.beat < start + length).map(s => ({ ...s, beat: s.beat - start }));
+      const curve = gestureCurve(g.base, inside);
       const scale = scaleOf(g.base.target);
-      const points = touched([], thinned(curve.points, scale), scale.neutral * curve.scale);
+      const points = overRounds(curve.points, scale, scale.neutral * curve.scale);
       if (points.length) out.push({ target: g.base.target, points });
     }
     return out;
+  }
+
+  /** The tracks with movements recorded in a take. */
+  takeTracks(): TrackId[] {
+    return [...new Set([...this.gestures.values()].filter(g => !g.into).map(g => g.track))];
   }
 
   /** The take on `track` is written: its controls go back (in its undo step `key`), its gestures end. */

@@ -282,6 +282,9 @@ button.on { background: var(--accent); color: #141414; border-color: var(--accen
 
 /* overdub on: red, like the slots recording */
 .transport .overdub.on { background: #d43d33; border-color: #d43d33; color: #fff; }
+/* Arrangement Record: the dot red even when off, the whole button red when on */
+.transport .arrangement-record:not(.on) { color: #e0463c; }
+.transport .arrangement-record.on { background: #d43d33; border-color: #d43d33; color: #fff; }
 
 .transport .key-map.on { background: var(--keys); border-color: var(--keys); }
 [data-param][data-key] { position: relative; }

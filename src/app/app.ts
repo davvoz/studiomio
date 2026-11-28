@@ -1,6 +1,7 @@
 import { randomIds, type TrackId } from '../core/id';
 import { ClipRendering, SCENE_MAX_BARS } from './clip-rendering';
-import { diskFolders, projectPicker, ProjectFiles, recentEntry } from './project-files';
+import { diskFolders, exportPicker, projectPicker, ProjectFiles, recentEntry } from './project-files';
+import { TrackAudio } from './track-audio';
 import { TimelineCommands } from './timeline-commands';
 import { keepUiInProject } from './ui-upkeep';
 import { automationClip, browserTarget, importTarget, type WorkPlace } from './work-targets';
@@ -65,6 +66,7 @@ import { MidiMapper } from './midi-mapper';
 import { MidiNoteInput } from './midi-note-input';
 import { RecordingPrefs } from './recording-prefs';
 import { SessionRecorder, type TakeEvent } from './session-recorder';
+import { ArrangementRecorder } from './arrangement-recorder';
 import { mainMenu } from './main-menu';
 import { RecentProjects, type RecentProject } from './recent-projects';
 import { ProjectSession } from './project-session';
@@ -107,6 +109,8 @@ export class App implements Commands, TimelineActions {
   readonly noteKeys: NoteKeys;
   /** Recording what's played into the session's slots. */
   readonly recorder: SessionRecorder;
+  /** Recording what's played onto the timeline (● Rec, F9). */
+  readonly arrangementRecorder: ArrangementRecorder;
   readonly keyMapper: KeyMapper;
   readonly midiMapper: MidiMapper;
   readonly midiTargets: MidiTargets;
@@ -124,6 +128,8 @@ export class App implements Commands, TimelineActions {
   /** The timeline's editing commands, moving music between timeline and session, the project's files. */
   private readonly timeline: TimelineCommands;
   private readonly rendering: ClipRendering;
+  /** The tracks as audio with their effects: exported files, new audio tracks. */
+  private readonly trackAudio: TrackAudio;
   private readonly files: ProjectFiles;
 
   constructor(root: HTMLElement) {
@@ -134,6 +140,15 @@ export class App implements Commands, TimelineActions {
     });
     this.rendering = new ClipRendering({
       store: this.store, ui: this.ui, engine: this.audio.engine, render: (source, pls, span) => this.renderClips(source, pls, span), run, say,
+    });
+    this.trackAudio = new TrackAudio({
+      store: this.store,
+      sampleRate: () => this.audio.context.sampleRate,
+      render: (from, to, project, tail) => this.audio.exportMix(from, to, project, tail),
+      addAudio: (name, data, wav) => this.session.addAudio(name, data, wav),
+      pickFolder: exportPicker(),
+      projectName: () => this.session.name,
+      run, say,
     });
     this.files = new ProjectFiles({
       session: this.session, recent: this.recent, choose, chooseImport, ...diskFolders, download, run, say,
@@ -166,6 +181,8 @@ export class App implements Commands, TimelineActions {
       dropItem,
       contextMenu: (hit, x, y) => showContextMenu(x, y, timelineMenu(this, hit)),
       rulerMenu: (x, y) => showContextMenu(x, y, rulerMenu(this)),
+      // painted from the next frame on, when the recorder is there
+      recording: () => this.arrangementRecorder.current,
     });
     this.editor = new ClipEditor({
       store: this.store, engine: this.audio.engine, peaks: this.peaks,
@@ -206,7 +223,8 @@ export class App implements Commands, TimelineActions {
     this.clipEditors = { audio: this.editor, midi: this.pianoRoll };
     const showAutomation = (owner: ChainOwner, target: ModTarget) => this.showAutomation(owner, target);
     const pasteDeviceItems = (owner: ChainOwner) => this.pasteDeviceItems(owner);
-    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner), dropItem, showAutomation, pasteDeviceItems };
+    const renderToAudio = (tracks: readonly TrackId[]) => this.trackAudio.bounce(tracks);
+    const headerActions = { openDevices: (owner: ChainOwner) => this.openDevices(owner), dropItem, showAutomation, pasteDeviceItems, renderToAudio };
     const meters = new MeterBoard(owner => this.audio.engine.levels(owner));
     this.recorder = new SessionRecorder(this.audio.engine, this.store, () => {
       const p = this.store.project;
@@ -216,6 +234,14 @@ export class App implements Commands, TimelineActions {
       armed: () => this.ui.keyboardTracks,
     });
     this.recorder.recordMoves = this.recording.moves;
+    this.arrangementRecorder = new ArrangementRecorder(this.audio.engine, this.store, t => this.say(t), {
+      delay: () => this.recording.beats(this.store.project.tempo.bpm),
+      busy: track => this.recorder.recordingSlot(track) !== null,
+      armed: () => this.ui.keyboardTracks,
+      // in overdub the session records an armed track's movements into its playing clip
+      movesBusy: track => this.recorder.recordingSlot(track) !== null || this.recorder.overdub,
+    });
+    this.arrangementRecorder.recordMoves = this.recording.moves;
     this.sessionView = new SessionView({
       recorder: this.recorder,
       store: this.store, ui: this.ui, engine: this.audio.engine, meters, clipboard: this.clipboard, showAutomation,
@@ -235,7 +261,7 @@ export class App implements Commands, TimelineActions {
     this.arrangement.bindWheel(headers.element);
     const automation = this.automation = new MasterAutomation(this.store, this.ui, this.audio.engine, this.clipboard, this.drawMode);
     const master = new MasterStrip(this.store, headerActions, meters, automation);
-    const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this.recorder);
+    const transport = this.transport = new TransportBar(this.store, this.ui, this.audio.engine, this, this.recorder, this.arrangementRecorder);
     const menuBar = this.menuBar = new MenuBar(mainMenu(this), () => `${this.session.name}${this.session.changed ? ' •' : ''}`);
     const main = this.arrangementArea;
     main.append(headers.element, this.arrangement.element, master.header, master.lane, automation.header, automation.lane);
@@ -285,10 +311,12 @@ export class App implements Commands, TimelineActions {
       press: (track: TrackId, pitch: number, velocity: number) => {
         this.audio.pressNote(track, pitch, velocity);
         this.recorder.press(track, pitch, velocity);
+        this.arrangementRecorder.press(track, pitch, velocity);
       },
       release: (track: TrackId, pitch: number) => {
         this.audio.releaseNote(track, pitch);
         this.recorder.release(track, pitch);
+        this.arrangementRecorder.release(track, pitch);
       },
     };
     // before mapped keys: with ⌨ on the note keys play, even if they're mapped
@@ -413,8 +441,12 @@ export class App implements Commands, TimelineActions {
     this.recorder.toggleOverdub();
   }
 
+  toggleArrangementRecord(): void {
+    this.arrangementRecorder.toggle();
+  }
+
   recordingSettings(): void {
-    const { store, recording, recorder } = this;
+    const { store, recording, recorder, arrangementRecorder } = this;
     void showRecordingSettings({
       get quantize() { return store.project.recordQuantize; },
       setQuantize: q => store.apply(setRecordQuantize(q)),
@@ -425,6 +457,7 @@ export class App implements Commands, TimelineActions {
       set moves(on: boolean) {
         recording.moves = on;
         recorder.recordMoves = on;
+        arrangementRecorder.recordMoves = on;
       },
     });
   }
@@ -621,6 +654,16 @@ export class App implements Commands, TimelineActions {
     });
   }
 
+  /** One WAV file per track, with its effects (File › Export the tracks). */
+  exportTracks(): void {
+    this.trackAudio.exportStems();
+  }
+
+  /** Every track with clips on the timeline into a new audio track, with its effects. */
+  renderAllToAudio(): void {
+    this.trackAudio.bounce();
+  }
+
   /** The audio of scene `index`, as long as needed for its loops to come round. */
   exportScene(index: number): void {
     this.run(async () => {
@@ -654,7 +697,7 @@ export class App implements Commands, TimelineActions {
   private controlSurfaces(): ControlSurfaces {
     const openDetail = () => this.bottom.open, devices = () => this.device;
     const surfaces = new ControlSurfaces({
-      store: this.store, ui: this.ui, engine: this.audio.engine, recorder: this.recorder,
+      store: this.store, ui: this.ui, engine: this.audio.engine, recorder: this.recorder, arrangementRecorder: this.arrangementRecorder,
       togglePlay: () => this.togglePlay(),
       stopAndRewind: () => this.stopAndRewind(),
       toggleMetronome: () => this.toggleMetronome(),

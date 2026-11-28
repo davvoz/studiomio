@@ -6,6 +6,22 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+### Added
+- MIDI recording in the arrangement, as Live's Arrangement Record: ● Rec in the top bar (F9, or REC on the
+  APC40). Stopped, it plays from the cursor; playing, it starts where the playhead is. What you play on the
+  armed MIDI tracks (⌨ or a MIDI keyboard) becomes a clip on the timeline, in place of what was there; the
+  take grows in red while recording. With the loop on, the notes of every round add up; ● Rec again or Stop
+  ends it. Input quantization and latency compensation apply as for the session. With "Record them"
+  on (Options › Recording › Movements) what you move on an armed track (instrument, effects, macros,
+  volume, pan: on screen or from a controller) becomes the new clip's curves, and the controls go back
+  where they were; a track where you only moved controls keeps the notes it had there, with the
+  movements over them. With the loop the last round's movement wins.
+- Export the tracks as WAV (File menu): one file per track in the mix, with its effects, volume, pan, groups
+  and sends (not the master's effects), all as long as the mix, 32-bit float, in a new folder.
+- Render to audio track (right click on a track header, or Edit › Render all tracks to audio tracks), as
+  Live's Freeze and Flatten: the track with its instrument and effects becomes a new audio track right below,
+  with the same volume, pan, sends and group; the original stays, muted.
+
 ### Changed
 - Opening a project loads up to four of its samples together, instead of one at a time.
 

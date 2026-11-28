@@ -63,8 +63,9 @@ function rig(opts: { tracks?: number; scenes?: number; clips?: readonly (readonl
   let detail: DetailView = null;
   let clock = 0;
   const out: number[][] = [];
+  const arrangement = { recording: false, toggle() { this.recording = !this.recording; } };
   const host = {
-    store, ui, engine, recorder,
+    store, ui, engine, recorder, arrangementRecorder: arrangement,
     togglePlay: () => { engine.playing = !engine.playing; },
     stopAndRewind: () => { engine.playing = false; engine.position = 0; },
     toggleMetronome: () => { engine.metronomeOn = !engine.metronomeOn; },
@@ -109,7 +110,7 @@ function rig(opts: { tracks?: number; scenes?: number; clips?: readonly (readonl
     return out.findLast(m => m[0] === 0xb0 && m[1] === n)?.[2];
   };
   return {
-    store, ui, engine, recorder: fake, apc, out, said, start, opened, t, press, release, cc, led, pad, ring, settle,
+    store, ui, engine, recorder: fake, arrangement, apc, out, said, start, opened, t, press, release, cc, led, pad, ring, settle,
     advance: (ms: number) => { clock += ms; },
     setDetail: (d: DetailView) => { detail = d; },
   };
@@ -653,8 +654,20 @@ describe('APC40 on the session', () => {
   it('what studiomio doesn\'t have yet it says in the status bar', () => {
     const r = rig();
     r.start();
+    r.press(NOTE.sends);
+    expect(r.said.at(-1)).toContain('The sends');
+    expect(r.led(NOTE.sends)).toBe(0);
+  });
+
+  it('REC is Arrangement Record: it turns it on and off, and lights up while recording', () => {
+    const r = rig();
+    r.start();
+    expect(r.led(NOTE.record)).toBe(0);
     r.press(NOTE.record);
-    expect(r.said.at(-1)).toContain('Recording');
+    expect(r.arrangement.recording).toBe(true);
+    expect(r.led(NOTE.record)).toBeGreaterThan(0);
+    r.press(NOTE.record);
+    expect(r.arrangement.recording).toBe(false);
     expect(r.led(NOTE.record)).toBe(0);
   });
 

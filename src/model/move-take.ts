@@ -34,6 +34,19 @@ function stepped(samples: readonly EnvelopePoint[]): EnvelopePoint[] {
   return out;
 }
 
+/** A take's gesture made into a curve: its points (thinned) in runs, a new run where the beat goes back
+ *  (the loop came round on the timeline), each written over what the earlier ones left, so the last
+ *  round wins where they overlap. Before the first, the knob's value (`neutral`). */
+export function overRounds(points: readonly EnvelopePoint[], scale: ModScale, neutral: number): EnvelopePoint[] {
+  const runs: EnvelopePoint[][] = [];
+  for (const p of points) {
+    const run = runs.at(-1);
+    if (run && p.beat >= run.at(-1)!.beat) run.push(p);
+    else runs.push([p]);
+  }
+  return runs.reduce<EnvelopePoint[]>((old, run) => touched(old, thinned(run, scale), neutral), []);
+}
+
 /** The curve after a gesture written over `old` (Live's touch): before the gesture the old curve stays
  *  (a step at its start), in its stretch the gesture, after it the old curve again (a step back to it).
  *  Without an old curve the value before the gesture is the knob's (`neutral`), and after it the

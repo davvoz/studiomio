@@ -19,6 +19,8 @@ export interface Commands {
   toggleMetronome(): void;
   /** Overdub, as Live's Session Record: the armed tracks record into their playing clips. */
   toggleOverdub(): void;
+  /** Arrangement Record (F9): what's played on the armed tracks goes onto the timeline. */
+  toggleArrangementRecord(): void;
   /** Options › Recording: input quantization and latency compensation. */
   recordingSettings(): void;
   toggleSnap(): void;
@@ -86,6 +88,7 @@ export const KEYMAP: readonly Binding<Commands>[] = [
   { key: 'a', ctrl: true, run: c => c.selectAll() },
   { key: 'l', ctrl: true, run: c => c.toggleLoop() },
   { key: 'm', ctrl: true, shift: true, run: c => c.toggleMetronome() },
+  { key: 'f9', run: c => c.toggleArrangementRecord() },
   { key: '1', ctrl: true, run: c => c.narrowGrid() },
   { key: '2', ctrl: true, run: c => c.widenGrid() },
   { key: '3', ctrl: true, run: c => c.toggleTriplet() },

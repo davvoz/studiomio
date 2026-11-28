@@ -61,6 +61,8 @@ export interface SurfaceHost {
   readonly ui: UiState;
   readonly engine: SurfaceEngine;
   readonly recorder: SurfaceRecorder;
+  /** Recording onto the timeline (Live's Arrangement Record). */
+  readonly arrangementRecorder?: { readonly recording: boolean; toggle(): void };
   togglePlay(): void;
   stopAndRewind(): void;
   toggleMetronome(): void;

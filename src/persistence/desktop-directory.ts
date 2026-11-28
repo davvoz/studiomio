@@ -7,8 +7,9 @@ import { FileNotFoundError, splitPath, type Directory } from './directory';
 /** What the main process does on the disk folders: `root` an absolute folder, `path` relative
  *  to it with "/". */
 export interface DesktopFolders {
-  /** Asks the user to choose (or create) a folder; null if they give up. */
-  pick(): Promise<string | null>;
+  /** Asks the user to choose (or create) a folder (`title`: the dialog's, by default the project folder's);
+   *  null if they give up. */
+  pick(title?: string): Promise<string | null>;
   exists(root: string, path: string): Promise<boolean>;
   /** null: the file isn't there. */
   read(root: string, path: string): Promise<Uint8Array | null>;
@@ -45,8 +46,8 @@ export class DesktopDirectory implements Directory {
 
   /** Asks the user to choose (or create) the project folder; giving up is an AbortError, as for
    *  the browser's picker. */
-  static async pick(folders: DesktopFolders): Promise<DesktopDirectory> {
-    const path = await folders.pick();
+  static async pick(folders: DesktopFolders, title?: string): Promise<DesktopDirectory> {
+    const path = await folders.pick(title);
     if (!path) throw new DOMException('no folder chosen', 'AbortError');
     return new DesktopDirectory(path, folders);
   }

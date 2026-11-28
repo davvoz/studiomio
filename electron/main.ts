@@ -179,9 +179,9 @@ function handleProjectFolders(window: () => BrowserWindow | null, launched: stri
     if (!(v instanceof Uint8Array)) throw new TypeError('expected bytes');
     return v;
   };
-  handle('folders:pick', async () => {
+  handle('folders:pick', async title => {
     const win = window();
-    const options: OpenDialogOptions = { title: 'Project folder', properties: ['openDirectory', 'createDirectory', 'promptToCreate'] };
+    const options: OpenDialogOptions = { title: typeof title === 'string' && title ? title : 'Project folder', properties: ['openDirectory', 'createDirectory', 'promptToCreate'] };
     const { canceled, filePaths } = await (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options));
     return canceled ? null : filePaths[0] ?? null;
   });

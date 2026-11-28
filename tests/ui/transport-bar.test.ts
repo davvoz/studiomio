@@ -29,17 +29,18 @@ function bar() {
   const engine = { playing: false, metronomeOn: false, position: 0, onStateChange: (f: () => void) => listeners.push(f) };
   const changed: (() => void)[] = [];
   const recording = { overdub: false, onChange: (f: () => void) => { changed.push(f); return () => undefined; } };
+  const arrangement = { recording: false, onChange: (f: () => void) => { changed.push(f); return () => undefined; } };
   const commands = {
-    togglePlay: vi.fn(), toggleLoop: vi.fn(), toggleMetronome: vi.fn(), toggleOverdub: vi.fn(), recordingSettings: vi.fn(), toggleFollow: vi.fn(), toggleKeyMap: vi.fn(),
+    togglePlay: vi.fn(), toggleLoop: vi.fn(), toggleMetronome: vi.fn(), toggleOverdub: vi.fn(), toggleArrangementRecord: vi.fn(), recordingSettings: vi.fn(), toggleFollow: vi.fn(), toggleKeyMap: vi.fn(),
     toggleMidiMap: vi.fn(), toggleTriplet: vi.fn(), stopAndRewind: vi.fn(),
   };
-  const t = new TransportBar(store, ui, engine as unknown as PlaybackEngine, commands as unknown as Commands, recording);
+  const t = new TransportBar(store, ui, engine as unknown as PlaybackEngine, commands as unknown as Commands, recording, arrangement);
   document.body.append(t.element);
   const button = (title: string) => [...t.element.querySelectorAll('button')].find(b => b.title.startsWith(title))!;
   const bpm = t.element.querySelector<HTMLInputElement>('input[type=number]')!;
   const grid = t.element.querySelector<HTMLSelectElement>('select.grid')!;
   return {
-    t, store, ui, engine, commands, button, bpm, grid, recording,
+    t, store, ui, engine, commands, button, bpm, grid, recording, arrangement,
     engineChanged: () => listeners.forEach(f => f()), recordingChanged: () => changed.forEach(f => f()),
   };
 }
@@ -49,6 +50,7 @@ describe('transport bar', () => {
     const { button, commands } = bar();
     const titles: [string, keyof typeof commands][] = [
       ['Play / Stop', 'togglePlay'], ['Stop and return', 'stopAndRewind'], ['Loop', 'toggleLoop'], ['Metronome', 'toggleMetronome'], ['Overdub', 'toggleOverdub'],
+      ['Arrangement Record', 'toggleArrangementRecord'],
       ['Follow', 'toggleFollow'], ['Map the computer keyboard', 'toggleKeyMap'], ['Map any controller', 'toggleMidiMap'], ['Triplet', 'toggleTriplet'],
     ];
     for (const [title, command] of titles) {
@@ -90,12 +92,24 @@ describe('transport bar', () => {
     expect(overdub.classList.contains('on')).toBe(true);
   });
 
-  it('the right click on ● opens the recording settings', () => {
+  it('● Rec (Arrangement Record) lights up while recording onto the timeline', () => {
+    const { button, arrangement, recordingChanged } = bar();
+    const rec = button('Arrangement Record');
+    expect(rec.textContent).toBe('● Rec');
+    expect(rec.classList.contains('on')).toBe(false);
+    arrangement.recording = true;
+    recordingChanged();
+    expect(rec.classList.contains('on')).toBe(true);
+  });
+
+  it('the right click on ● or ● Rec opens the recording settings', () => {
     const { button, commands } = bar();
-    const right = new MouseEvent('contextmenu', { cancelable: true });
-    button('Overdub').dispatchEvent(right);
-    expect(right.defaultPrevented).toBe(true);
-    expect(commands.recordingSettings).toHaveBeenCalledOnce();
+    for (const title of ['Overdub', 'Arrangement Record']) {
+      const right = new MouseEvent('contextmenu', { cancelable: true });
+      button(title).dispatchEvent(right);
+      expect(right.defaultPrevented).toBe(true);
+    }
+    expect(commands.recordingSettings).toHaveBeenCalledTimes(2);
   });
 
   it('the tempo: a valid value is applied (two decimals), a wrong one restored; Enter leaves the field', () => {

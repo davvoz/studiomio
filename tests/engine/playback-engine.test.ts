@@ -441,3 +441,22 @@ describe('PlaybackEngine: audio clip shapes', () => {
     expect(r.graph.sources.some(s => s.stoppedAt !== null)).toBe(true);
   });
 });
+
+describe('PlaybackEngine: what is heard (recording onto the timeline)', () => {
+  it('the beat and the clock a latency ago; at a round of the loop only the beat goes back', async () => {
+    const r = await rig();
+    r.store.apply(setLoopRegion({ enabled: true, start: 0, end: 4 }));
+    expect(r.engine.heard(0)).toBeNull();
+    r.engine.play(0);
+    // 120 BPM: half a second per beat, from 50 ms (the start latency)
+    r.runUntil(1.05);
+    expect(r.engine.heard(0)).toEqual({ beat: 2, clock: 2 });
+    expect(r.engine.heard(1)).toEqual({ beat: 1, clock: 1 });
+    r.runUntil(2.3);
+    const now = r.engine.heard(0)!, before = r.engine.heard(2)!;
+    expect([now.beat, now.clock].map(x => +x.toFixed(6))).toEqual([0.5, 4.5]);
+    expect([before.beat, before.clock].map(x => +x.toFixed(6))).toEqual([2.5, 2.5]);
+    r.engine.stop();
+    expect(r.engine.heard(0)).toBeNull();
+  });
+});

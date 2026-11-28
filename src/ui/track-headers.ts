@@ -27,9 +27,19 @@ export interface HeaderActions {
   showAutomation?(owner: ChainOwner, target: ModTarget): void;
   /** The menu items to paste devices onto `owner` (none if the clipboard has none). */
   pasteDeviceItems?(owner: ChainOwner): MenuItem[];
+  /** Renders the tracks with their effects into new audio tracks (Freeze and Flatten). */
+  renderToAudio?(tracks: readonly TrackId[]): void;
 }
 
 const kindBadge = (text: string) => () => el('span', { className: 'kind', textContent: text });
+
+/** "Render to audio track" for the chosen tracks (a group stands for its tracks). */
+function renderItems(actions: HeaderActions, tracks: readonly TrackId[]): MenuItem[] {
+  const render = actions.renderToAudio;
+  if (!render) return [];
+  const label = tracks.length > 1 ? `Render ${tracks.length} tracks to audio` : 'Render to audio track';
+  return [{ label, run: () => render(tracks) }];
+}
 
 /** Next to the name: the track's kind or, for MIDI tracks, their instrument (a click opens it). */
 const BADGES: Readonly<Record<string, (t: Track, actions: HeaderActions) => HTMLElement>> = {
@@ -197,6 +207,7 @@ class HeaderRow {
         ...(actions.pasteDeviceItems?.(id) ?? []),
         { label: t.mixer.mute ? 'Unmute' : 'Mute', run: () => this.mixer({ mute: !t.mixer.mute }) },
         { label: t.mixer.solo ? 'Unsolo' : 'Solo', run: () => this.mixer({ solo: !t.mixer.solo }) },
+        ...renderItems(actions, ui.selectedTracks.has(id) ? [...ui.selectedTracks] : [id]),
         SEPARATOR,
         ...groupMenuItems(store, ui, t),
         SEPARATOR,

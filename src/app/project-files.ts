@@ -19,6 +19,12 @@ export function projectPicker(): () => Promise<Directory> {
   return folders ? () => DesktopDirectory.pick(folders) : FsAccessDirectory.pick;
 }
 
+/** The folder where exported files go (not a project). */
+export function exportPicker(): () => Promise<Directory> {
+  const folders = desktopFolders();
+  return folders ? () => DesktopDirectory.pick(folders, 'Where to export the tracks') : () => FsAccessDirectory.pick('studiomio-export');
+}
+
 /** What the recent list remembers of a folder: the browser's handle or the desktop path. */
 export function recentEntry(dir: Directory): RecentProject | null {
   if (dir instanceof FsAccessDirectory) return dir.root;

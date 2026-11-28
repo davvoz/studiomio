@@ -44,7 +44,6 @@ type SetNote = (n: number, v: number | boolean, channel?: number) => void;
 const TRACK_BUTTONS: ReadonlySet<number> = new Set([NOTE.clipStop, NOTE.trackSelect, NOTE.activator, NOTE.solo, NOTE.recordArm]);
 
 const NOT_YET: Readonly<Record<number, string>> = {
-  [NOTE.record]: 'Recording',
   [NOTE.crossfadeAssign]: 'Il crossfader', [NOTE.sends]: 'The sends', [NOTE.user]: 'The User mode',
   [NOTE.nudgeMinus]: 'The nudge', [NOTE.nudgePlus]: 'The nudge',
 };
@@ -181,6 +180,7 @@ export class Apc40 extends SessionSurface {
         return true;
       case NOTE.metronome: this.host.toggleMetronome(); return true;
       case NOTE.session: this.host.recorder.toggleOverdub(); return true;
+      case NOTE.record: this.host.arrangementRecorder?.toggle(); return true;
       case NOTE.tapTempo: this.tap(); return true;
       case NOTE.pan: return true;
       case NOTE.deviceLeft: this.moveDevice(-1); return true;
@@ -314,7 +314,7 @@ export class Apc40 extends SessionSurface {
     // transport and navigation
     note(NOTE.play, engine.playing);
     note(NOTE.metronome, engine.metronomeOn);
-    note(NOTE.record, false);
+    note(NOTE.record, !!this.host.arrangementRecorder?.recording);
     note(NOTE.session, this.host.recorder.overdub);
     note(NOTE.up, this.canMove('up'));
     note(NOTE.down, this.canMove('down'));

@@ -3,6 +3,7 @@ import type { ClipId, DeviceId, TrackId } from '../core/id';
 import type { Beats } from '../core/music-time';
 import { INSTRUMENT_DEVICE, scaleOf, targetKey, type ModTarget } from '../model/envelope';
 import { mappingSpec, mappingTravel } from '../devices/rack-params';
+import type { Moment } from '../model/arrangement-take';
 import { launchQuantumBeats } from '../model/launch';
 import { findRack, isSwitchMacro, MACRO_MAX, macroIndex, type Rack } from '../model/rack';
 import { isArpType } from '../devices/arp/arp';
@@ -232,6 +233,16 @@ export class PlaybackEngine {
   /** The continuous clock now, in beats: it doesn't jump back with the loop (recordings are timed on it). */
   get sessionClock(): number {
     return this.clock;
+  }
+
+  /** What's heard now, `delay` beats behind the clock (the latency): the timeline's beat and the
+   *  continuous clock at that instant, null when stopped. Their difference changes only when the
+   *  playhead goes back to the loop's start or jumps elsewhere. */
+  heard(delay: Beats): Moment | null {
+    if (!this.playing || !this.project) return null;
+    const time = this.graph.currentTime - this.project.tempo.secondsAt(Math.max(0, delay));
+    const beat = this.scheduler.positionAt(time), clock = this.scheduler.clockAt(time);
+    return beat === null || clock === null ? null : { beat, clock };
   }
 
   /** Where something asked for now happens while playing: the next launch boundary. */

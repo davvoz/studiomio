@@ -6,10 +6,11 @@ export class FsAccessDirectory implements Directory {
   constructor(readonly root: FileSystemDirectoryHandle) {}
 
   /** Asks the user to choose (or create) the project folder. */
-  static async pick(): Promise<FsAccessDirectory> {
+  /** `id`: the browser remembers the last folder chosen for each purpose. */
+  static async pick(id = 'studiomio-project'): Promise<FsAccessDirectory> {
     const picker = (window as unknown as { showDirectoryPicker?: (o: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker;
     if (!picker) throw new Error('this browser doesn\'t allow choosing a folder: use Chrome or Edge');
-    return new FsAccessDirectory(await picker({ mode: 'readwrite', id: 'studiomio-project' }));
+    return new FsAccessDirectory(await picker({ mode: 'readwrite', id }));
   }
 
   /** A remembered folder (a recent project): after a restart the browser may ask

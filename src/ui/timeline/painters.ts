@@ -20,6 +20,7 @@ export const COLORS = {
   ruler: '#1d2025', rulerNumbers: '#23272d', rulerText: '#9aa0aa', loop: 'rgba(255,157,46,0.85)', loopOff: 'rgba(154,160,170,0.45)',
   loopShade: 'rgba(255,157,46,0.06)', playhead: '#ff9d2e', cursor: 'rgba(232,234,238,0.6)',
   select: '#ffffff', clipText: '#111317', ghost: 'rgba(255,255,255,0.35)', box: 'rgba(91,141,239,0.18)',
+  recording: '#d43d33',
 };
 
 

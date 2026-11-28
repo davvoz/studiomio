@@ -14,7 +14,7 @@ import { geometryShowing, hitTest, type Hit } from './geometry';
 import type { Pointer } from '../kit/pointer';
 import { LoopRegionGesture, PanGesture, RulerZoomGesture, ScrubGesture, type Gesture, type GestureHost } from './gestures';
 import { dropPlace, gestureFor, hoverCursor, isPan, newClipAt, rulerCursor } from './lane-actions';
-import { paintLanes, paintPlayhead, paintRuler, rulerZoneAt, type RulerZone } from './painters';
+import { COLORS, paintGhost, paintLanes, paintPlayhead, paintRuler, rulerZoneAt, type RulerZone } from './painters';
 import { TimelineScrollbar } from './scrollbar';
 import { ZoomHistory, fitRange, revealing, scrollbarRange, scrolledWithin, selectionSpan, wheelMove } from './timeline-nav';
 
@@ -33,6 +33,8 @@ export interface ArrangementDeps {
   readonly contextMenu: (hit: Hit, x: number, y: number) => void;
   /** Right click on the ruler, (x, y) the point in the window. */
   readonly rulerMenu?: (x: number, y: number) => void;
+  /** The take being recorded onto the timeline (● Rec): the stretch so far and the tracks with notes. */
+  readonly recording?: () => { readonly span: { readonly start: Beats; readonly end: Beats }; readonly tracks: readonly TrackId[] } | null;
 }
 
 /** The timeline: ruler with loop and playhead, lanes with the clips, mouse gestures.
@@ -153,7 +155,18 @@ export class ArrangementView implements GestureHost {
     const o = this.overlay;
     o.g.clearRect(0, 0, o.width, o.height);
     this.gesture?.paint(o.g, this.geo);
+    this.paintRecording(o.g);
     paintPlayhead(o.g, this.geo, o.height, engine.position, engine.playing ? engine.position : null);
+  }
+
+  /** The take being recorded: a red clip growing on the armed tracks (and those that got notes). */
+  private paintRecording(g: CanvasRenderingContext2D): void {
+    const take = this.deps.recording?.();
+    if (!take || take.span.end <= take.span.start) return;
+    const tracks = new Set([...this.ui.keyboardTracks, ...take.tracks]);
+    this.store.project.visibleTracks.forEach((t, i) => {
+      if (tracks.has(t.id) && t.kind === 'midi') paintGhost(g, this.geo, i, take.span.start, take.span.end, COLORS.recording);
+    });
   }
 
   // ---------------------------------------------------------------- pointer

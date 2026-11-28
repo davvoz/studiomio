@@ -42,6 +42,24 @@ export async function renderMix(
   return Array.from({ length: out.numberOfChannels }, (_, i) => out.getChannelData(i).slice());
 }
 
+/** Below this the tail of a render is silence (about −100 dB). */
+const SILENCE = 1e-5;
+
+/** The mixdown without the silence at the end, but at least `minFrames` long (the tail of reverbs
+ *  and delays stays as long as it's heard). */
+export function trimSilence(channels: readonly Float32Array[], minFrames: number): Float32Array[] {
+  let end = Math.min(minFrames, channels[0]?.length ?? 0);
+  for (const c of channels) {
+    for (let i = c.length - 1; i >= end; i--) {
+      if (Math.abs(c[i]) > SILENCE) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  return channels.map(c => c.slice(0, end));
+}
+
 /** A loop of `frames` samples from a longer mixdown: the tail (reverbs, delays) beyond the
  *  end is added to the start, as when the loop repeats, so it restarts seamlessly. */
 export function foldTail(channels: readonly Float32Array[], frames: number): Float32Array[] {
