@@ -6,6 +6,8 @@ Sections: Added, Changed, Fixed.
 
 ## [Unreleased]
 
+## [0.3.75] - 2026-11-28
+
 ### Added
 - MIDI recording in the arrangement, as Live's Arrangement Record: ● Rec in the top bar (F9, or REC on the
   APC40). Stopped, it plays from the cursor; playing, it starts where the playhead is. What you play on the
